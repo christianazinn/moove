@@ -40,7 +40,8 @@ public struct PropPlacer: Sendable {
     /// Categories that are props whenever they're small enough.
     static let propCategories: Set<String> = ["decor", "lamp", "light", "lighting", "books", "book", "photos", "electronics", "trading_cards", "plant", "plants"]
     /// Builders that are furniture (or floor things) at any size.
-    static let floorKinds: Set<VoxelModels.Kind> = [.sofa, .bed, .mattress, .desk, .chair, .table, .dresser, .bookshelf, .rug, .appliance, .beanBag, .quiltRack, .box]
+    static let floorKinds: Set<VoxelModels.Kind> = [.sofa, .bed, .mattress, .desk, .chair, .table, .dresser, .bookshelf, .rug, .appliance, .beanBag, .quiltRack, .box,
+                                                         .guitar, .piano, .keyboard, .drums, .vacuum, .scooter, .bag, .fitness, .board]
 
     /// `elevationM`: a known height (a scanned wall-mounted TV is a wall item whatever its name).
     public static func role(of spec: VoxelItemSpec, elevationM: Double? = nil) -> Role {
