@@ -163,18 +163,16 @@ import Testing
         #expect(s.payments.filter(\.simulated).allSatisfy { $0.explorerURL == nil })
         #expect(s.payments.contains { $0.rail == .visa && $0.status == .failed && $0.simulated })
 
-        // Listings: every group has a row, and the ones that didn't post say why.
-        for status in [ListingStatus.awaitingApproval, .posted, .draft, .sold, .rejected, .failed] {
-            #expect(s.listings.contains { $0.status == status }, "no \(status) listing")
-        }
+        // Listings: only what the sort agent sells, the mesh chair, posted (simulated) under the
+        // threshold. Any that didn't post would say why.
+        #expect(s.listings.map(\.status) == [.posted])
         for l in s.listings where l.status == .failed || l.status == .rejected {
             #expect(s.problem(for: l) != nil, "listing \(l.id) has no reason")
         }
 
-        // Approvals: one pending listing and one pending purchase, both resolvable, plus a denial.
+        // Approvals: one pending purchase, resolvable, plus a denial (no listing is over $100).
         let pending = s.pendingApprovals
-        #expect(pending.count == 2)
-        #expect(pending.contains { $0.kind == .listing && s.listing(for: $0) != nil })
+        #expect(pending.count == 1)
         #expect(pending.contains { $0.kind == .purchase && s.deal(for: $0) != nil })
         #expect(s.decidedApprovals.contains { $0.status == .denied })
 

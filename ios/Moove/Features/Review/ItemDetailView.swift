@@ -288,5 +288,5 @@ struct ItemDetailView: View {
 }
 
 #Preview {
-    NavigationStack { ItemDetailView(itemId: 11) }.environment(MooveStore.preview())
+    NavigationStack { ItemDetailView(itemId: 17) }.environment(MooveStore.preview())
 }

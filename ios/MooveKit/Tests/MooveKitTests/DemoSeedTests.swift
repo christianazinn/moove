@@ -30,10 +30,6 @@ import Testing
         .init(name: "Yamaha acoustic guitar", category: "instrument", dims: (0.38, 1.02, 0.12), estimateCents: 10_900, disposition: .undecided, sentimental: true),
     ]
 
-    /// Offline-only items that carry the commerce story (listings, the approval, the sold bean bag).
-    /// The Aeron is the seed's opt-in SEED_COMMERCE chair.
-    static let commerceOnly: Set<String> = ["Office chair", "Nightstand", "Bean bag"]
-
     let items = DemoFixtures.inventory(owner: "me").items
 
     @Test func everySeededItemIsInTheOfflineBedroom() {
@@ -51,17 +47,24 @@ import Testing
         }
     }
 
-    @Test func everythingElseIsTheCommerceStory() {
-        let seeded = Set(Self.seed.map(\.name))
-        let extra = Set(items.map(\.name)).subtracting(seeded)
-        #expect(extra == Self.commerceOnly)
-        #expect(items.count == Self.seed.count + Self.commerceOnly.count)
-        // Each extra is set to sell and has a listing, so it's in the demo for the commerce screens.
-        let s = DemoFixtures.inventory(owner: "me")
-        for it in items where extra.contains(it.name) {
-            #expect(it.disposition == .sell, "\(it.name)")
-            #expect(s.listings.contains { $0.itemId == it.id }, "\(it.name) has no listing")
-        }
+    @Test func theBedroomIsExactlyTheSeed() {
+        // No offline-only items: the Offline demo sells only what the seeded room has.
+        #expect(Set(items.map(\.name)) == Set(Self.seed.map(\.name)))
+        #expect(items.count == Self.seed.count)
+    }
+
+    @Test func listingsAreOnlyForWhatTheSortAgentSells() {
+        // Every listing (and its comps) hangs off a real room item the sort agent sorted to sell.
+        let s = DemoFixtures.demo(owner: "me")
+        let sell = Set(items.filter { $0.disposition == .sell }.map(\.id))
+        #expect(sell == [17])  // the mesh chair
+        #expect(!s.listings.isEmpty)
+        for l in s.listings { #expect(sell.contains(l.itemId), "listing \(l.id) -> item \(l.itemId)") }
+        for c in s.comps { #expect(items.contains { $0.id == c.itemId }, "comp \(c.id) -> item \(c.itemId)") }
+        // Every sell item has a listing.
+        for id in sell { #expect(s.listings.contains { $0.itemId == id }, "item \(id) has no listing") }
+        // The mesh chair's $30 is under the $100 threshold: no listing approvals.
+        #expect(!s.approvals.contains { $0.kind == .listing })
     }
 
     @Test func seededTotalsAgreeWithTheDemoBackend() {

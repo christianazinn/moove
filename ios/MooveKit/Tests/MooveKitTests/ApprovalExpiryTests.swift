@@ -81,8 +81,8 @@ import Testing
         var it = backend.snapshots().makeAsyncIterator()
         let s = try #require(await it.next())
 
-        // Pending stays the Aeron listing and the Wayfair sofa (UI tests and the demo script rely on it).
-        #expect(s.pendingApprovals.map(\.amountCents).sorted() == [41_000, 42_999])
+        // Pending stays the Wayfair sofa (UI tests and the demo script rely on it).
+        #expect(s.pendingApprovals.map(\.amountCents) == [42_999])
         #expect(s.pendingApprovals.allSatisfy { !s.asks(for: $0).isReask })
 
         let expired = s.decidedApprovals.filter { $0.status == .expired }

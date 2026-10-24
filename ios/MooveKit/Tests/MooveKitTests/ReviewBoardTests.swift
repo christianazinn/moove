@@ -51,7 +51,7 @@ import Testing
     @Test func pilesAreFourInOrderWithoutDeckItems() {
         let piles = Review.piles(items)
         #expect(piles.map(\.destination) == [.keep, .sell, .donate, .trash])
-        #expect(piles.map(\.count) == [7, 4, 0, 0])
+        #expect(piles.map(\.count) == [7, 1, 0, 0])
         #expect(!piles.flatMap(\.items).contains { $0.id == 18 })
         #expect(piles.map(\.count).reduce(0, +) + Review.deck(items).count == items.count)
     }
@@ -60,7 +60,7 @@ import Testing
         let piles = Review.piles(items)
         let sell = piles[1]
         #expect(sell.valueCents == Review.totals(items).expectedSaleCents)
-        #expect(sell.items.first?.id == 11) // the Aeron, most valuable first
+        #expect(sell.items.map(\.id) == [17]) // the mesh chair, the one item the sort agent sells
         #expect(sell.kg > 0)
         #expect(abs(piles[0].volumeM3 - Review.totals(items).volumeToMoveM3) < 1e-9)
         #expect(piles[2].valueCents == 0 && piles[2].kg == 0)
@@ -110,8 +110,8 @@ import Testing
     // MARK: Value range
 
     @Test func valueRangeFromComps() {
-        let chair = items.first { $0.id == 11 }!
-        #expect(Review.valueRange(chair, comps: snapshot.comps) == 38_000...45_000)
+        let chair = items.first { $0.id == 17 }!
+        #expect(Review.valueRange(chair, comps: snapshot.comps) == 1_900...4_000)
         #expect(Review.valueRange(items.first { $0.id == 18 }!, comps: snapshot.comps) == nil)
     }
 

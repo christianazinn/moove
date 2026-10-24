@@ -50,8 +50,7 @@ import Testing
         // Only things being moved show up.
         let moving = Set(items.filter { $0.disposition == .keep || ($0.disposition == .undecided && $0.maybeSentimental) }.map(\.id))
         #expect(boxedIds.union(p.furniture.map(\.id)).isSubset(of: moving))
-        #expect(!boxedIds.contains(11)) // sold office chair
-        #expect(!boxedIds.contains(17)) // trashed mirror
+        #expect(!boxedIds.contains(17)) // the mesh chair, being sold
 
         // Typical contents are marked so the UI can label them.
         #expect(p.boxes.flatMap(\.contents).contains { $0.itemId == nil })

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Demo inventory for previews and the offline demo. Its Bedroom matches the seeded Demo
-/// backend room (`agents/scripts/demo-room.ts`, docs/demo.md) plus three commerce-only items.
+/// backend room (`agents/scripts/demo-room.ts`, docs/demo.md), item for item.
 public enum DemoFixtures {
     public static func inventory(owner: IdentityHex) -> SyncSnapshot {
         var s = SyncSnapshot(me: owner)
@@ -23,15 +23,11 @@ public enum DemoFixtures {
         // The 9 seeded Bedroom items (agents/scripts/demo-room.ts, the Demo backend's join code
         // 4RZ9G8), with the live estimates from docs/demo.md and the sort agent's decisions and
         // reasons for them (agents/src/agents/sort.ts). Seeded items have no photos, so no brand,
-        // material or condition; the guitar is flagged sentimental. Ids 11, 19 and 20 are extra,
-        // offline-only items that carry the commerce story: the Aeron (the seed's opt-in
-        // SEED_COMMERCE chair), a nightstand and a bean bag, set to sell as if by the user.
-        // DemoSeedTests checks the seeded part against the seed list.
+        // material or condition; the guitar is flagged sentimental. Nothing is added or set to sell
+        // by hand: the listings below are only for what the sort agent sells (today just the mesh
+        // chair). DemoSeedTests checks this list against the seed.
         s.items = [
             item(10, "Full size metal bed frame", "bed", (1.4, 0.36, 1.95), value: 7_700, .keep, reason: "Beds rarely resell (~$77); ~$59 to move: keep"),
-            item(11, "Office chair", "chair", (0.7, 1.1, 0.7), material: "mesh", brand: "Herman Miller", condition: 4, value: 42_000, .sell, reason: "Resells well ($380-$460 comps); new place has a built-in desk nook.",
-                 attributes: ["ChairType.swivel", "ChairArmType.existing", "ChairBackType.existing", "ChairLegType.star"],
-                 colors: ItemColors(primary: 0x3A3D42, secondary: 0x1E1F21)),
             item(12, "IKEA Micke desk", "table", (1.05, 0.75, 0.5), value: 6_000, .keep, reason: "Worth ~$60, ~$24 to move: keep",
                  attributes: ["TableShapeType.rectangular"]),
             item(13, "IKEA Kallax shelf", "storage", (0.77, 1.47, 0.39), value: 5_000, .keep, reason: "Worth ~$50, ~$26 to move: keep",
@@ -42,50 +38,25 @@ public enum DemoFixtures {
             item(17, "Mesh office chair", "chair", (0.64, 1.02, 0.62), value: 3_000, .sell, reason: "Worth ~$30, ~$24 to move: barely worth moving, sell",
                  attributes: ["ChairType.swivel", "ChairArmType.existing", "ChairBackType.existing", "ChairLegType.star"]),
             item(18, "Yamaha acoustic guitar", "instrument", (0.38, 1.02, 0.12), value: 10_900, .undecided, reason: "possibly sentimental - your call", sentimental: true),
-            item(19, "Nightstand", "storage", (0.45, 0.55, 0.4), material: "pine", condition: 3, value: 3_000, .sell, reason: "The new bedroom has built-in shelves; easy to sell locally.",
-                 attributes: ["StorageType.cabinet"]),
-            item(20, "Bean bag", "sofa", (0.9, 0.7, 0.9), material: "fabric", condition: 3, value: 2_000, .sell, reason: "Bulky for its value."),
             item(21, "Mini fridge", "refrigerator", (0.48, 0.85, 0.5), value: 3_800, .keep, reason: "Worth ~$38, ~$12 to move: keep"),
         ]
+        // Three of the mesh chair's real cached comps (agents/fixtures/comps/mesh-office-chair.json).
         s.comps = [
-            Comp(id: 100, itemId: 11, source: "ebay", title: "Herman Miller Aeron size B", priceCents: 45_000, url: "https://www.ebay.com/"),
-            Comp(id: 101, itemId: 11, source: "craigslist", title: "Aeron chair, good condition", priceCents: 38_000, url: "https://sfbay.craigslist.org/"),
-            Comp(id: 102, itemId: 11, source: "fb", title: "Herman Miller office chair", priceCents: 42_500, url: "https://www.facebook.com/marketplace/"),
+            Comp(id: 100, itemId: 17, source: "fb", title: "Mesh Ergonomic Office Chair", priceCents: 3_000,
+                 url: "https://www.facebook.com/marketplace/item/2615122692300842"),
+            Comp(id: 101, itemId: 17, source: "fb", title: "Mesh Back Ergonomic Office Chair", priceCents: 4_000,
+                 url: "https://www.facebook.com/marketplace/item/1614255130478432"),
+            Comp(id: 102, itemId: 17, source: "ebay", title: "Gray Mesh High-Back Office/Desk Chair, Headrest, Armrests, White Frame",
+                 priceCents: 1_900, url: "https://www.ebay.com/itm/800628282566"),
         ]
-        // As if the listing agent (#11) had run. All simulated: the demo never posts to eBay.
-        // 198 and 199 are earlier attempts the agent replaced (200 and 203 are the current ones):
-        // one the user denied, one whose post failed, so the "Not posted" group has real rows.
+        // As if the listing agent (#11) had run on the one item the sort agent sells. Simulated: the
+        // demo never posts to eBay. At $30 it's under the $100 approval threshold, so it posted
+        // without asking and there are no listing approvals. Purchase approvals point at deals, so
+        // they're seeded with the shopping rows (`addShopping`).
         s.listings = [
-            Listing(id: 198, owner: owner, itemId: 11, title: "Herman Miller Aeron Chair Size B - Excellent",
-                    description: "Size B Aeron, fully loaded.\n\nFirst draft, priced at the top of the comps.",
-                    priceCents: 48_000, status: .rejected, updatedAt: Date.now.addingTimeInterval(-50 * 60)),
-            Listing(id: 199, owner: owner, itemId: 19, title: "Pine Nightstand with Drawer",
-                    description: "Solid pine nightstand with one drawer.",
-                    priceCents: 3_000, status: .failed, updatedAt: Date.now.addingTimeInterval(-40 * 60)),
-            Listing(id: 200, owner: owner, itemId: 11, title: "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition",
-                    description: "Fully adjustable Aeron in size B with lumbar support. Mesh seat and back are intact with no tears.\n\nLight wear on the armrests. Smoke-free home.\n\nLocal pickup in SF, or I can ship.",
-                    priceCents: 41_000, status: .awaitingApproval),
             Listing(id: 201, owner: owner, itemId: 17, title: "Mesh Office Chair with Arms, Black - Good Condition",
                     description: "Swivel desk chair with a breathable mesh back, armrests and adjustable height.\n\nLight wear on the seat, nothing torn. Local pickup.",
-                    priceCents: 3_000, status: .posted, externalId: "395718204163"),
-            Listing(id: 202, owner: owner, itemId: 20, title: "Large Fabric Bean Bag Chair, Gray - Clean, Comfortable",
-                    description: "Oversized bean bag with a removable, washable cover.\n\nCover was washed last month. Pickup only, it's bulky.",
-                    priceCents: 1_800, status: .sold, externalId: "395718209877"),
-            Listing(id: 203, owner: owner, itemId: 19, title: "Solid Pine Nightstand, 1 Drawer - Good Condition",
-                    description: "Sturdy pine nightstand with a drawer and an open shelf. A few small dings on the top.\n\nPerfect for a dorm or bedroom.",
-                    priceCents: 3_000, status: .draft),
-        ]
-        // Approval gate (#12): the Aeron listing is over the $100 default threshold.
-        // Purchase approvals point at deals, so they're seeded with the shopping rows (`addShopping`).
-        let now = Date.now
-        s.approvals = [
-            Approval(id: 300, owner: owner, kind: .listing, refId: 200, amountCents: 41_000,
-                     summary: "Sell \"Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition\" for $410",
-                     requestedAt: now.addingTimeInterval(-6 * 60)),
-            // The user turned down the first, pricier Aeron draft; the agent re-priced it (listing 200).
-            Approval(id: 301, owner: owner, kind: .listing, refId: 198, amountCents: 48_000,
-                     summary: "Sell \"Herman Miller Aeron Chair Size B - Excellent\" for $480", status: .denied,
-                     requestedAt: now.addingTimeInterval(-55 * 60), updatedAt: now.addingTimeInterval(-50 * 60)),
+                    priceCents: 3_000, status: .posted, externalId: "395718204163", updatedAt: Date.now.addingTimeInterval(-40 * 60)),
         ]
         s.payments = payments(owner: owner)
         s.agentEvents = paymentEvents(owner: owner) + listingEvents(owner: owner)
@@ -102,9 +73,9 @@ public enum DemoFixtures {
     public static func payments(owner: IdentityHex, now: Date = .now) -> [Payment] {
         func ago(_ minutes: Double) -> Date { now.addingTimeInterval(-minutes * 60) }
         return [
-            Payment(id: 500, owner: owner, agent: "pricing", purpose: "Premium comps for \"Herman Miller Aeron\"",
+            Payment(id: 500, owner: owner, agent: "pricing", purpose: "Premium comps for \"Mesh office chair\"",
                     payee: realX402Payee, amountUsdMicros: 10_000, txHash: realX402TxHash, status: .settled,
-                    simulated: false, refTable: "item", refId: 11, createdAt: ago(25)),
+                    simulated: false, refTable: "item", refId: 17, createdAt: ago(25)),
             Payment(id: 501, owner: owner, agent: "pricing", purpose: "Premium comps for \"IKEA Micke desk\"",
                     payee: "simulated", amountUsdMicros: 10_000, status: .settled, simulated: true,
                     refTable: "item", refId: 12, createdAt: ago(18)),
@@ -128,11 +99,11 @@ public enum DemoFixtures {
         }
         return [
             AgentEvent(id: 600, owner: owner, agent: "pricing", kind: .toolCall,
-                       message: "Paying $0.01 for premium comps for \"Herman Miller Aeron\"", refTable: "item", refId: 11,
+                       message: "Paying $0.01 for premium comps for \"Mesh office chair\"", refTable: "item", refId: 17,
                        dataJson: #"{\#(rail("paying", remaining: 4_990_000)),"payee":"\#(realX402Payee)","amountUsdMicros":"10000"}"#,
                        createdAt: ago(25.1)),
             AgentEvent(id: 601, owner: owner, agent: "pricing", kind: .payment,
-                       message: "Paid $0.01 USDC for premium comps for \"Herman Miller Aeron\"", refTable: "item", refId: 11,
+                       message: "Paid $0.01 USDC for premium comps for \"Mesh office chair\"", refTable: "item", refId: 17,
                        dataJson: #"{\#(rail("settled", remaining: 4_990_000)),"payee":"\#(realX402Payee)","amountUsdMicros":"10000","txHash":"\#(realX402TxHash)","network":"base-sepolia","explorer":"\#(explorer)"}"#,
                        createdAt: ago(25)),
             AgentEvent(id: 602, owner: owner, agent: "pricing", kind: .payment,
@@ -162,22 +133,17 @@ public enum DemoFixtures {
 }
 
 extension DemoFixtures {
-    /// The listing agent's notes on the two listings that didn't post (198 denied, 199 failed),
-    /// so the Listings screen can say why. Same wording as agents/src/agents/listing.ts.
+    /// The listing agent's steps for the mesh chair's listing (201): under the threshold, so it
+    /// posted without an approval. Same wording as agents/src/agents/listing.ts.
     public static func listingEvents(owner: IdentityHex, now: Date = .now) -> [AgentEvent] {
         func ago(_ minutes: Double) -> Date { now.addingTimeInterval(-minutes * 60) }
         return [
-            AgentEvent(id: 620, owner: owner, agent: "listing", kind: .approval,
-                       message: "$480 is over the $100 threshold, asking for approval", refTable: "listing", refId: 198,
-                       createdAt: ago(55)),
-            AgentEvent(id: 621, owner: owner, agent: "listing", kind: .approval,
-                       message: "Not posting: denied", refTable: "listing", refId: 198, createdAt: ago(50)),
             AgentEvent(id: 622, owner: owner, agent: "listing", kind: .plan,
-                       message: "Posting \"Pine Nightstand with Drawer\" to eBay at $30 (simulated)",
-                       refTable: "listing", refId: 199, createdAt: ago(41)),
-            AgentEvent(id: 623, owner: owner, agent: "listing", kind: .error,
-                       message: "Posting failed: eBay needs at least one public https photo URL (simulated)",
-                       refTable: "listing", refId: 199, dataJson: #"{"simulated":true}"#, createdAt: ago(40)),
+                       message: "Posting \"Mesh Office Chair with Arms, Black - Good Condition\" to eBay at $30 (simulated)",
+                       refTable: "listing", refId: 201, createdAt: ago(41)),
+            AgentEvent(id: 623, owner: owner, agent: "listing", kind: .result,
+                       message: "Live as item #395718204163 (simulated)",
+                       refTable: "listing", refId: 201, dataJson: #"{"simulated":true}"#, createdAt: ago(40)),
         ]
     }
 }

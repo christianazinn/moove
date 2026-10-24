@@ -14,9 +14,9 @@ import Testing
     }
 
     @Test func countsTheDemoApprovals() {
-        // Listings 300 (pending) and 301 (denied); purchases 299 (expired, re-asked as 302), 302 (denied),
-        // 303 (approved), 85 (pending).
-        #expect(demo.approvals == .init(requested: 6, approved: 1, denied: 2, pending: 2, expired: 1, thresholdCents: 10_000))
+        // Purchases only (the one listing, the $30 mesh chair, is under the threshold): 299 (expired,
+        // re-asked as 302), 302 (denied), 303 (approved), 85 (pending).
+        #expect(demo.approvals == .init(requested: 4, approved: 1, denied: 1, pending: 1, expired: 1, thresholdCents: 10_000))
     }
 
     @Test func countsSentimentalItems() {
@@ -46,7 +46,7 @@ import Testing
         #expect(!demo.isEmpty)
         #expect(demo.lines.map(\.text) == [
             "1 scam deal blocked · fraud score 0.85",
-            "6 approvals asked · 1 approved · 2 denied · 2 waiting · 1 expired",
+            "4 approvals asked · 1 approved · 1 denied · 1 waiting · 1 expired",
             "1 sentimental item left for you",
             "Spent $0.025 of $10.00 data budget ($0.015 simulated)",
             "Spent $179.99 of $1,500.00 card budget (simulated)",
@@ -63,7 +63,7 @@ import Testing
             #expect(line.spoken.contains("simulated"))
         }
         #expect(byKind[.x402]?.spoken.hasPrefix("Spent 2.5 cents of $10.00 data budget, 1.5 cents simulated") == true)
-        #expect(byKind[.approvals]?.spoken.hasPrefix("6 approvals asked, 1 approved") == true)
+        #expect(byKind[.approvals]?.spoken.hasPrefix("4 approvals asked, 1 approved") == true)
     }
 
     @Test func emptyWithoutCommerceData() {

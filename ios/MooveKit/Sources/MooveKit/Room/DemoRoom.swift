@@ -27,9 +27,8 @@ extension DemoFixtures {
                 .init(id: "floor", outline: [SIMD2(-w / 2, -d / 2), SIMD2(w / 2, -d / 2), SIMD2(w / 2, d / 2), SIMD2(-w / 2, d / 2)], elevation: 0),
             ],
             objects: [
-                // North wall: bed, nightstand, guitar on its stand, lamp, mini fridge with the TV on it.
+                // North wall: bed, guitar on its stand, lamp, mini fridge with the TV on it.
                 object(10, "bed", SIMD3(1.4, 0.36, 1.95), -1.25, -0.75),
-                object(19, "storage", SIMD3(0.45, 0.55, 0.4), -0.25, -1.5),
                 object(18, "instrument", SIMD3(0.38, 1.02, 0.12), 0.19, -1.65),
                 object(14, "lamp", SIMD3(0.3, 1.7, 0.3), 0.55, -1.55),
                 object(21, "refrigerator", SIMD3(0.48, 0.85, 0.5), 1.0, -1.45),
@@ -38,9 +37,7 @@ extension DemoFixtures {
                 object(12, "table", SIMD3(1.05, 0.75, 0.5), 1.7, 0.4, yaw: quarter),
                 object(16, "electronics", SIMD3(0.61, 0.45, 0.18), 1.8, 0.4, yaw: quarter, y: 0.75 + 0.225),
                 object(17, "chair", SIMD3(0.64, 1.02, 0.62), 1.0, 0.4),
-                // South side: the Aeron, the bean bag, and the Kallax on the west wall.
-                object(11, "chair", SIMD3(0.7, 1.1, 0.7), 1.0, 1.3),
-                object(20, "sofa", SIMD3(0.9, 0.7, 0.9), 0.0, 1.1),
+                // West wall: the Kallax.
                 object(13, "storage", SIMD3(0.77, 1.47, 0.39), -1.8, 1.0, yaw: quarter),
             ]
         )
@@ -61,7 +58,6 @@ extension DemoFixtures {
             floorColor: 0xC49A6C,  // oak boards
             objectColors: [
                 "demo-10": c(0x2E2F31, 0xE9E3D6),  // black metal bed frame, linen bedding
-                "demo-11": c(0x3A3D42, 0x1E1F21),  // Aeron: graphite mesh, black base
                 "demo-12": c(0xF2F0EB),  // white Micke desk
                 "demo-13": c(0xF1EFEA),  // white Kallax
                 "demo-14": c(0x2B2B2D, 0xF1E6CF),  // black metal floor lamp, cream shade
@@ -69,8 +65,6 @@ extension DemoFixtures {
                 "demo-16": c(0x222326, 0x9EA3A8),  // monitor: black, silver stand
                 "demo-17": c(0x2A2B2E, 0x1E1F21),  // black mesh chair, black base
                 "demo-18": c(0xD9B27C, 0x5A3A22),  // spruce top, mahogany neck
-                "demo-19": c(0xD9B47F, 0x8A6A45),  // pine nightstand, dark knob
-                "demo-20": c(0x8A8D91),  // gray fabric bean bag
                 "demo-21": c(0x262729, 0x8E9093),  // black mini fridge, silver handle
             ]
         )

@@ -177,6 +177,11 @@ import Testing
         let s = DemoFixtures.demo(owner: me)
         checkMoneyAgrees(s)
         let summary = MoveSummary(snapshot: s)
+        // docs/demo-commerce.md, Step 6: only the mesh chair sells ($30, posted), nothing sold yet.
+        #expect(summary.soldCents == 0)
+        #expect(summary.pendingSalesCents == 3_000)
+        #expect(summary.spentMicros == 180_015_000)
+        #expect(summary.netMicros == -150_015_000)  // Net −$150.02
         // Every rail line is tagged: Visa all simulated, x402 partly (the real $0.01 isn't).
         let visa = summary.rails.first { $0.rail == "visa" }
         let x402 = summary.rails.first { $0.rail == "x402" }
@@ -190,10 +195,8 @@ import Testing
         let before = try await latest(backend)
         let threshold = try #require(before.users.first { $0.identity == me }?.approvalThresholdCents)
 
-        // Step 3: approve the $410 Aeron listing.
-        let aeron = try #require(before.pendingApprovals.first { $0.kind == .listing })
-        #expect(aeron.refId == 200)
-        try await backend.decideApproval(approvalId: aeron.id, status: .approved)
+        // The only listing, the mesh chair's, is $30, under the threshold: nothing to approve.
+        #expect(!before.pendingApprovals.contains { $0.kind == .listing })
 
         // Step 4: choose the Target chair (under the threshold, so it's paid right away).
         let chairItem = try #require(before.shoppingItems.first { $0.name == "Desk chair" })
@@ -208,7 +211,7 @@ import Testing
 
         let after = try await latest(backend)
         #expect(after.pendingApprovals.isEmpty)
-        #expect(after.listings.first { $0.id == 200 }?.status == .posted)
+        #expect(after.listings.first { $0.id == 201 }?.status == .posted)
         #expect(after.shoppingItems.first { $0.id == chairItem.id }?.status == .bought)
         #expect(after.shoppingItems.first { $0.id == sofaDeal.shoppingItemId }?.status == .bought)
 
@@ -222,9 +225,11 @@ import Testing
         let logBefore = before.spendingLog(), logAfter = after.spendingLog()
         #expect(logAfter.realSpentUsdMicros == logBefore.realSpentUsdMicros)
         #expect(logAfter.simulatedSpentUsdMicros == logBefore.simulatedSpentUsdMicros + sum(new))
-        // Approving the Aeron moves it from awaiting approval to posted: still selling, same price.
+        // The posted mesh chair is still selling at the same price.
         #expect(MoveSummary(snapshot: after).pendingSalesCents == MoveSummary(snapshot: before).pendingSalesCents)
         #expect(MoveSummary(snapshot: after).netMicros == MoveSummary(snapshot: before).netMicros - sum(new))
+        #expect(MoveSummary(snapshot: after).spentMicros == 689_995_000)  // Spent $689.995
+        #expect(MoveSummary(snapshot: after).netMicros == -659_995_000)  // Net −$660
         checkMoneyAgrees(after)
         checkRows(after)
     }
