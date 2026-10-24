@@ -49,6 +49,18 @@ export interface AgentEventRecord {
   dataJson: string;
 }
 
+/** What one x402 step amounted to: about to pay, paid, failed after trying, or refused by our budget. */
+export type X402Outcome = "paying" | "settled" | "failed" | "refused";
+
+/** Keys present in `data_json` of every agent_event the x402 rail writes (amounts are USD-micro strings). */
+export interface X402EventData {
+  rail: "x402";
+  outcome: X402Outcome;
+  simulated: boolean;
+  remainingUsdMicros: string;
+  capUsdMicros: string;
+}
+
 /** Where payment and event rows go. Wired to the SpacetimeDB reducers by the worker. */
 export interface PaymentSink {
   recordPayment(p: PaymentRecord): Promise<void>;
@@ -188,6 +200,8 @@ export class X402Rail {
     const requirements = pickRequirements(paymentRequired);
     if (!requirements) {
       await this.event(ctx, "error", `No USDC payment option on Base Sepolia for ${request.url}`, {
+        ...this.railData(ctx, "failed"),
+        url: request.url,
         accepts: paymentRequired.accepts.map((a) => ({ network: a.network, asset: a.asset, amount: a.amount })),
       });
       throw new SpendRefusedError("server does not accept Base Sepolia USDC", ctx.agent, 0n);
@@ -197,6 +211,7 @@ export class X402Rail {
 
     let settled: PaymentRecord;
     let response: Response;
+    let released = false;
     try {
       // Sign only the option we budgeted for.
       const payload = await this.signer!.createPaymentPayload({ ...paymentRequired, accepts: [requirements] });
@@ -215,7 +230,10 @@ export class X402Rail {
         status: ok ? "settled" : "failed",
         simulated: false,
       });
-      if (!ok) this.ledger.release(ctx.agent, amount);
+      if (!ok) {
+        this.ledger.release(ctx.agent, amount);
+        released = true;
+      }
       await this.sink.recordPayment(settled);
       await this.event(
         ctx,
@@ -223,11 +241,24 @@ export class X402Rail {
         ok
           ? `Paid ${formatUsd(settled.amountUsdMicros)} USDC for ${ctx.purpose}`
           : `x402 payment for ${ctx.purpose} failed (HTTP ${response.status}${settle?.errorReason ? `, ${settle.errorReason}` : ""})`,
-        { url: request.url, txHash: settled.txHash, network: requirements.network, explorer: settled.txHash ? EXPLORER_TX_URL + settled.txHash : undefined },
+        {
+          ...this.railData(ctx, ok ? "settled" : "failed"),
+          url: request.url,
+          payee: settled.payee,
+          amountUsdMicros: settled.amountUsdMicros.toString(),
+          txHash: settled.txHash,
+          network: requirements.network,
+          explorer: settled.txHash ? EXPLORER_TX_URL + settled.txHash : undefined,
+        },
       );
     } catch (err) {
-      this.ledger.release(ctx.agent, amount);
-      await this.event(ctx, "error", `x402 payment for ${ctx.purpose} failed: ${(err as Error).message}`, { url: request.url });
+      if (!released) this.ledger.release(ctx.agent, amount);
+      await this.event(ctx, "error", `x402 payment for ${ctx.purpose} failed: ${(err as Error).message}`, {
+        ...this.railData(ctx, "failed"),
+        url: request.url,
+        payee: requirements.payTo,
+        amountUsdMicros: amount.toString(),
+      });
       throw err;
     }
     return { response, payment: settled };
@@ -240,7 +271,12 @@ export class X402Rail {
     const response = await this.fetchImpl(input, init);
     const payment = this.record(ctx, { payee: "simulated", amount, txHash: "", status: "settled", simulated: true });
     await this.sink.recordPayment(payment);
-    await this.event(ctx, "payment", `[SIMULATED] Paid ${formatUsd(amount)} USDC for ${ctx.purpose}`, { url, simulated: true });
+    await this.event(ctx, "payment", `[SIMULATED] Paid ${formatUsd(amount)} USDC for ${ctx.purpose}`, {
+      ...this.railData(ctx, "settled"),
+      url,
+      payee: payment.payee,
+      amountUsdMicros: amount.toString(),
+    });
     return { response, payment };
   }
 
@@ -250,21 +286,35 @@ export class X402Rail {
     } catch (err) {
       if (err instanceof SpendRefusedError) {
         await this.event(ctx, "error", `Refused x402 payment for ${ctx.purpose}: ${err.message}`, {
+          ...this.railData(ctx, "refused"),
           url,
           payee,
           amountUsdMicros: amount.toString(),
-          remainingUsdMicros: this.ledger.remaining(ctx.agent).toString(),
           refused: true,
         });
       }
       throw err;
     }
     await this.event(ctx, "tool_call", `Paying ${formatUsd(amount)} for ${ctx.purpose}`, {
+      ...this.railData(ctx, "paying"),
       url,
       payee,
       amountUsdMicros: amount.toString(),
-      simulated: this.simulated,
     });
+  }
+
+  /**
+   * Fields on every x402 `agent_event.data_json`, so the app can show the live budget and tell
+   * x402 payment failures apart from other errors. Budget is read after this step's reserve/release.
+   */
+  private railData(ctx: PaidCallContext, outcome: X402Outcome): X402EventData {
+    return {
+      rail: "x402",
+      outcome,
+      simulated: this.simulated,
+      remainingUsdMicros: this.ledger.remaining(ctx.agent).toString(),
+      capUsdMicros: this.ledger.capPerAgentMicros.toString(),
+    };
   }
 
   private record(

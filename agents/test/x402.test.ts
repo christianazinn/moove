@@ -69,6 +69,26 @@ const fakeSigner = {
   },
 };
 
+const throwingSigner = {
+  async createPaymentPayload(): Promise<PaymentPayload> {
+    throw new Error("signer offline");
+  },
+};
+
+/** Every x402 event carries rail/outcome/simulated and the agent's budget after that step. */
+function assertRailData(
+  e: AgentEventRecord,
+  want: { outcome: "paying" | "settled" | "failed" | "refused"; remaining: bigint; cap: bigint; simulated: boolean },
+) {
+  const d = JSON.parse(e.dataJson);
+  assert.equal(d.rail, "x402");
+  assert.equal(d.outcome, want.outcome);
+  assert.equal(d.simulated, want.simulated);
+  assert.equal(d.remainingUsdMicros, want.remaining.toString());
+  assert.equal(d.capUsdMicros, want.cap.toString());
+  return d;
+}
+
 const ctx = { owner: "user-1", agent: "pricing", purpose: "comps for 'IKEA Poang chair'", refTable: "item", refId: 7n };
 
 test("pays a 402, retries with a signature, and records a settled payment with the tx hash", async () => {
@@ -100,6 +120,16 @@ test("pays a 402, retries with a signature, and records a settled payment with t
   assert.deepEqual(events.map((e) => e.kind), ["tool_call", "payment"]);
   assert.match(JSON.parse(events[1].dataJson).explorer, /sepolia\.basescan\.org\/tx\/0xabc123$/);
   assert.equal(rail.remaining("pricing"), usdToMicros(1) - 10_000n);
+  const cap = usdToMicros(1);
+  const paying = assertRailData(events[0], { outcome: "paying", remaining: cap - 10_000n, cap, simulated: false });
+  assert.equal(paying.amountUsdMicros, "10000");
+  assert.equal(paying.payee, PAY_TO);
+  assert.equal(paying.url, "https://paid.example/comps?q=chair");
+  const paid = assertRailData(events[1], { outcome: "settled", remaining: cap - 10_000n, cap, simulated: false });
+  assert.equal(paid.txHash, TX);
+  assert.equal(paid.amountUsdMicros, "10000");
+  assert.equal(paid.payee, PAY_TO);
+  assert.equal(paid.url, "https://paid.example/comps?q=chair");
 });
 
 test("does not pay when the server returns no 402", async () => {
@@ -124,7 +154,11 @@ test("refuses a call over the per-call max, signs nothing, and logs the refusal"
   assert.equal(events.length, 1);
   assert.equal(events[0].kind, "error");
   assert.match(events[0].message, /^Refused x402 payment.*per-call max/);
-  assert.equal(JSON.parse(events[0].dataJson).refused, true);
+  const d = assertRailData(events[0], { outcome: "refused", remaining: usdToMicros(5), cap: usdToMicros(5), simulated: false });
+  assert.equal(d.refused, true);
+  assert.equal(d.amountUsdMicros, "500000");
+  assert.equal(d.payee, PAY_TO);
+  assert.equal(d.url, "https://paid.example/comps");
 });
 
 test("refuses once the agent's budget is used up", async () => {
@@ -134,10 +168,15 @@ test("refuses once the agent's budget is used up", async () => {
 
   await rail.paidFetch(ctx, "https://paid.example/comps");
   await rail.paidFetch(ctx, "https://paid.example/comps");
+  assert.equal(JSON.parse(events.at(-1)!.dataJson).remainingUsdMicros, "20000");
   await assert.rejects(rail.paidFetch(ctx, "https://paid.example/comps"), /would exceed the pricing budget/);
   assert.equal(events.at(-1)!.kind, "error");
+  const d = assertRailData(events.at(-1)!, { outcome: "refused", remaining: 20_000n, cap: usdToMicros(0.1), simulated: false });
+  assert.equal(d.refused, true);
+  assert.equal(d.amountUsdMicros, "40000");
   // Budgets are per agent.
   await rail.paidFetch({ ...ctx, agent: "buy" }, "https://paid.example/comps");
+  assertRailData(events.at(-1)!, { outcome: "settled", remaining: 60_000n, cap: usdToMicros(0.1), simulated: false });
 });
 
 test("concurrent calls from one agent cannot overspend the budget", async () => {
@@ -150,12 +189,19 @@ test("concurrent calls from one agent cannot overspend the budget", async () => 
 });
 
 test("refuses servers that don't take Base Sepolia USDC", async () => {
-  const { sink } = memorySink();
+  const { sink, payments, events } = memorySink();
   const server = fakeX402Server(paymentRequired("10000", "eip155:8453")); // Base mainnet
   fakeSigner.signed = [];
   const rail = new X402Rail({ sink, ledger: new SpendLedger(1_000_000n, 100_000n), signer: fakeSigner, fetch: server.fetch });
   await assert.rejects(rail.paidFetch(ctx, "https://paid.example/comps"), /Base Sepolia USDC/);
   assert.equal(fakeSigner.signed.length, 0);
+  assert.equal(payments.length, 0);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].kind, "error");
+  const d = assertRailData(events[0], { outcome: "failed", remaining: 1_000_000n, cap: 1_000_000n, simulated: false });
+  assert.equal(d.url, "https://paid.example/comps");
+  assert.equal(d.refused, undefined);
+  assert.equal(d.accepts[0].network, "eip155:8453");
 });
 
 test("a failed settlement is recorded as failed and refunds the budget", async () => {
@@ -168,6 +214,30 @@ test("a failed settlement is recorded as failed and refunds the budget", async (
   assert.equal(events.at(-1)!.kind, "error");
   assert.match(events.at(-1)!.message, /insufficient_funds/);
   assert.equal(rail.remaining("pricing"), usdToMicros(1));
+  const cap = usdToMicros(1);
+  assertRailData(events[0], { outcome: "paying", remaining: cap - 10_000n, cap, simulated: false });
+  const d = assertRailData(events.at(-1)!, { outcome: "failed", remaining: cap, cap, simulated: false });
+  assert.equal(d.amountUsdMicros, "10000");
+  assert.equal(d.payee, PAY_TO);
+  assert.equal(d.txHash, "");
+});
+
+test("a signer that throws after reserving logs a full failed event and refunds the budget", async () => {
+  const { sink, payments, events } = memorySink();
+  const server = fakeX402Server(paymentRequired("10000"));
+  const cap = usdToMicros(1);
+  const rail = new X402Rail({ sink, ledger: new SpendLedger(cap, usdToMicros(0.1)), signer: throwingSigner, fetch: server.fetch });
+  await assert.rejects(rail.paidFetch(ctx, "https://paid.example/comps"), /signer offline/);
+  assert.equal(server.seen.length, 1);
+  assert.equal(payments.length, 0);
+  assert.deepEqual(events.map((e) => e.kind), ["tool_call", "error"]);
+  assertRailData(events[0], { outcome: "paying", remaining: cap - 10_000n, cap, simulated: false });
+  const d = assertRailData(events[1], { outcome: "failed", remaining: cap, cap, simulated: false });
+  assert.match(events[1].message, /signer offline/);
+  assert.equal(d.url, "https://paid.example/comps");
+  assert.equal(d.payee, PAY_TO);
+  assert.equal(d.amountUsdMicros, "10000");
+  assert.equal(rail.remaining("pricing"), cap);
 });
 
 test("simulated rail labels every payment and event as simulated", async () => {
@@ -180,13 +250,23 @@ test("simulated rail labels every payment and event as simulated", async () => {
   assert.equal(payment!.txHash, "");
   assert.equal(payments[0].simulated, true);
   assert.match(events.at(-1)!.message, /^\[SIMULATED\]/);
+  const cap = usdToMicros(1);
+  assert.deepEqual(events.map((e) => e.kind), ["tool_call", "payment"]);
+  assertRailData(events[0], { outcome: "paying", remaining: cap - 10_000n, cap, simulated: true });
+  const d = assertRailData(events[1], { outcome: "settled", remaining: cap - 10_000n, cap, simulated: true });
+  assert.equal(d.payee, "simulated");
+  assert.equal(d.amountUsdMicros, "10000");
+  assert.equal(d.url, "https://paid.example/comps");
 });
 
 test("simulated rail still enforces budgets", async () => {
-  const { sink } = memorySink();
+  const { sink, events } = memorySink();
   const fetch = (async () => new Response("{}")) as typeof globalThis.fetch;
   const rail = new X402Rail({ sink, ledger: new SpendLedger(usdToMicros(1), usdToMicros(0.1)), fetch });
   await assert.rejects(rail.paidFetch({ ...ctx, quotedUsdMicros: usdToMicros(0.5) }, "https://x/"), SpendRefusedError);
+  const d = assertRailData(events[0], { outcome: "refused", remaining: usdToMicros(1), cap: usdToMicros(1), simulated: true });
+  assert.equal(d.refused, true);
+  assert.equal(d.payee, "simulated");
 });
 
 test("createX402Rail is simulated without CDP keys or with X402_SIMULATE=1", async () => {
