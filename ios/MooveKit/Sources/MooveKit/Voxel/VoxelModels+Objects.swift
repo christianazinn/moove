@@ -447,9 +447,10 @@ extension Canvas {
     }
 
     func decor(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
+        if VoxelModels.isPillow(name) { pillow(X, Y, Z, name); return }
         let cx = D(X - 1) / 2, cz = D(Z - 1) / 2, R = D(min(X, Z)) / 2
         if name.has("candle") {
-            cyl(cx, cz, max(1, R * 0.7), 0, max(1, Y - 1), P.cream)
+            cyl(cx, cz, max(1, R), 0, max(1, Y - 1), P.cream)
             set(rd(cx), Y - 1, rd(cz), P.bulb, flat: true)
             return
         }
@@ -458,13 +459,45 @@ extension Canvas {
         let vc = colorFromName(name, P.sage)
         for y in upTo(0, vh) {
             let t = D(y) / D(max(1, vh - 1))
-            cyl(cx, cz, max(1, R * (0.55 + 0.25 * sin(t * Double.pi)) - (t > 0.8 ? 0.4 : 0)), y, y + 1, vc)
+            // the belly fills the scanned footprint, the neck narrows
+            cyl(cx, cz, max(1, R * (0.6 + 0.4 * sin(t * Double.pi)) - (t > 0.8 ? 0.4 : 0)), y, y + 1, vc)
         }
         for _ in 0..<5 {
             let ex = clampD(cx + (rand() - 0.5) * D(X) * 0.8, 0, D(X - 1))
             let ez = clampD(cz + (rand() - 0.5) * D(Z) * 0.8, 0, D(Z - 1))
             line(D(rd(cx)), D(vh), D(rd(cz)), ex, D(Y - 2), ez, 0x9A8A62)
             ellipsoid(ex, D(Y) - 1.5, ez, 1, 1, 1, 0xE3D3B0)
+        }
+    }
+
+    /// Throw pillow / cushion filling its box: puffed in the middle, thin pinched seams at the
+    /// edges, corners tucked in. Lying flat when the box is low, standing up (face toward +z,
+    /// propped against a sofa back) when it is taller than deep. A seeded few get stripes.
+    func pillow(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
+        let fab = colorFromName(name, accentPair(avoiding: P.linen).0)
+        let seam = shade(fab, 0.84), stripe = shade(fab, 0.86)
+        let upright = Y > Z
+        // face axes (x, f) and the thickness axis t: f = y, t = z standing up; f = z, t = y lying
+        let F = upright ? Y : Z, T = upright ? Z : Y
+        let tm = D(T - 1) / 2
+        let striped = !name.has("plain", "solid", "velvet", "leather") && hash3(3, 1, 4, seed) < 0.3
+        let cut = X >= 4 && F >= 4
+        for f in 0..<F {
+            for x in 0..<X {
+                let edgeX = x == 0 || x == X - 1, edgeF = f == 0 || f == F - 1
+                if cut && edgeX && edgeF { continue } // tucked corners
+                let u = abs(D(x) - D(X - 1) / 2) / max(0.5, D(X) / 2), v = abs(D(f) - D(F - 1) / 2) / max(0.5, D(F) / 2)
+                let half = tm * (1 - u * u * u) * (1 - v * v * v)
+                let c = edgeX || edgeF ? seam : striped && (x / 2) % 2 == 0 ? stripe : fab
+                for t in thru(rd(tm - half), rd(tm + half)) {
+                    if upright { set(x, f, t, c) } else { set(x, t, f, c) }
+                }
+            }
+        }
+        // a button in the middle of the face when it is big enough to show
+        if X >= 6 && F >= 6 && T >= 3 {
+            let bx = (X - 1) / 2, bf = (F - 1) / 2
+            if upright { set(bx, bf, T - 1, shade(fab, 0.7)) } else { set(bx, T - 1, bf, shade(fab, 0.7)) }
         }
     }
 
