@@ -41,6 +41,10 @@ struct VoxelRoutingTests {
             ("other", "Blue road bike", .bike),
             ("other", "Black hard-shell suitcase", .suitcase),
             ("nightstand", "Two-drawer nightstand", .dresser),
+            ("furniture", "Oak computer armoire", .desk),
+            ("furniture", "Antique roll top", .desk),
+            ("furniture", "Walnut secretary", .desk),
+            ("furniture", "White makeup vanity", .desk),
         ]
         for (cat, name, want) in cases { #expect(kind(cat, name) == want, "\(cat)/\(name)") }
     }
