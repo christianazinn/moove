@@ -100,7 +100,9 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
                     case let .disconnected(reason):
                         fail(reason ?? "disconnected")
                     case let .error(error):
-                        if pending != nil { fail("\(error)") }
+                        // The SDK's only error event: it gave up auto-reconnecting. Without
+                        // this the status would stay "reconnecting" forever.
+                        if pending != nil { fail("\(error)") } else { self.broadcast(status: .failed("\(error)")) }
                     }
                 }
                 fail("connection closed")

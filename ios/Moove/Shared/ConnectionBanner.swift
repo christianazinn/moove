@@ -4,6 +4,8 @@ import MooveKit
 /// Thin status strip: shows offline-demo mode, reconnects and write errors.
 struct ConnectionBanner: View {
     @Environment(MooveStore.self) private var store
+    @Environment(AuthService.self) private var auth
+    @State private var retrying = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -16,7 +18,11 @@ struct ConnectionBanner: View {
             case .reconnecting(let attempt):
                 strip("Reconnecting (attempt \(attempt))…", systemImage: "arrow.clockwise", tint: Theme.ochreInk)
             case .failed(let why):
-                strip("Offline: \(why)", systemImage: "wifi.exclamationmark", tint: Theme.danger)
+                // The SDK gave up reconnecting (or the first connect failed): tap to try again.
+                strip(retrying ? "Connecting…" : "Offline: \(why). Tap to retry.", systemImage: "wifi.exclamationmark", tint: Theme.danger)
+                    .onTapGesture { retry() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint("Reconnects to the server")
             case .connected, .disconnected:
                 EmptyView()
             }
@@ -24,6 +30,15 @@ struct ConnectionBanner: View {
                 strip(error, systemImage: "exclamationmark.triangle", tint: Theme.danger)
                     .onTapGesture { store.lastError = nil }
             }
+        }
+    }
+
+    private func retry() {
+        guard !retrying else { return }
+        retrying = true
+        Task {
+            await store.connect(token: await auth.spacetimeToken())
+            retrying = false
         }
     }
 

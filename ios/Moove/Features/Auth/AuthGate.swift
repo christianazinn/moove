@@ -19,6 +19,22 @@ struct AuthGate: View {
             }
         }
         .task(id: auth.state) { await sessionChanged() }
+        // Register once the connection is up: after sign-in, and again after a
+        // banner retry, since a write before that would only fail.
+        .onChange(of: store.status) { _, status in
+            if status == .connected { Task { await registerUser() } }
+        }
+    }
+
+    private func registerUser() async {
+        switch auth.state {
+        case .signedIn(let profile):
+            await store.registerUser(name: profile.name, email: profile.email, auth0Sub: profile.sub)
+        case .guest:
+            if store.me == nil { await store.registerUser(name: "Guest", email: nil, auth0Sub: nil) }
+        case .checking, .signedOut:
+            break
+        }
     }
 
     #if DEBUG
@@ -31,14 +47,10 @@ struct AuthGate: View {
             return
         case .signedOut:
             await store.disconnect()
-        case .signedIn(let profile):
+        case .signedIn:
             await store.connect(token: await auth.spacetimeToken())
-            await store.registerUser(name: profile.name, email: profile.email, auth0Sub: profile.sub)
         case .guest:
             await store.connect(token: nil)
-            if store.me == nil {
-                await store.registerUser(name: "Guest", email: nil, auth0Sub: nil)
-            }
         }
         #if DEBUG
         // Test hook: import the demo scan through the live backend once connected.
