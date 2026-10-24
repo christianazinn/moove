@@ -49,6 +49,8 @@ Status values:
 - **`my_user`**: your own `user` row.
 - **`my_listing`** (#200): your listings plus the listings of items in rooms you own or joined.
 - **`my_approval`** (#200): your approvals plus `kind = listing` approvals for the listings in `my_listing`. Other users' purchase approvals are never included. (Subscriptions can't join 3 tables, so use these instead of `listing JOIN item JOIN room_member`.)
+- **`my_payment`** (#254): your payments plus the `ref_table = item` payments (the pricing agent's x402 comps) for items in rooms you own or joined. Purchase payments stay owner-only.
+- **`my_agent_event`** (#254): your events plus the `ref_table = item` events for those items and the `ref_table = listing` events for listings in `my_listing`. Buy, fraud and approval-decision events stay owner-only.
 - **`worker_room`** / **`worker_user`**: every `room` / `user` row for the registered worker, empty for anyone else. The worker reads owners' approval thresholds and Auth0 subjects here.
 
 `room` and `user` are private, so join codes, emails and Auth0 subjects aren't world-readable: a client subscribing to `SELECT * FROM room` or `user` is refused (`npm run e2e` checks it). Views have no index accessors and an updated row arrives as delete + insert. One-off SQL queries against views return no rows (SDK behavior); use subscriptions. App builds older than #176 subscribe to `room`/`user` directly and fail to sync; rebuild from main.
