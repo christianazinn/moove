@@ -33,6 +33,11 @@ export interface Sam3dResult {
 
 export class Sam3dError extends Error {}
 
+/** fal itself can't run it right now (bad key, "Exhausted balance", rate limit, outage): not the
+ *  photo's fault, so the agent leaves the item pending and retries later instead of failing it. */
+export class Sam3dUnavailableError extends Sam3dError {}
+const unavailable = (status: number) => status === 401 || status === 402 || status === 403 || status === 429 || status >= 500;
+
 type Fetch = typeof fetch;
 
 /** Pulls the mesh URL out of a SAM 3D result: the single/combined GLB, else the first per-object GLB. */
@@ -67,7 +72,10 @@ export async function reconstruct(
     body: JSON.stringify(requestBody(req)),
     signal: AbortSignal.timeout(60_000),
   });
-  if (!submit.ok) throw new Sam3dError(`submit: ${submit.status} ${await submit.text()}`);
+  if (!submit.ok) {
+    const msg = `submit: ${submit.status} ${(await submit.text()).slice(0, 300)}`;
+    throw unavailable(submit.status) ? new Sam3dUnavailableError(msg) : new Sam3dError(msg);
+  }
   const queued = (await submit.json()) as { request_id: string; status_url: string; response_url: string };
 
   for (;;) {
