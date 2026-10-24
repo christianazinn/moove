@@ -75,7 +75,7 @@ Budgets
 
 Photos for eBay (only for a real sandbox post)
 - [ ] eBay needs public **https** photo URLs. Uploads are served at `PUBLIC_UPLOAD_BASE_URL/files/<name>` on `UPLOAD_PORT` (8787). `agents/src/integrations/ebay.ts` throws "eBay needs at least one public https photo URL: set PUBLIC_UPLOAD_BASE_URL to an https tunnel, or EBAY_FALLBACK_IMAGE_URL". So either point `PUBLIC_UPLOAD_BASE_URL` at an https tunnel to port 8787 (the repo doesn't pick a tunnel tool) or set `EBAY_FALLBACK_IMAGE_URL`. Without eBay keys, the listing is simulated and needs no tunnel.
-- [ ] **The tunnel URL changes** whenever the tunnel restarts, so don't copy one from this file. The current one is in the latest comments on issue #2 (`gh issue view 2 --comments`). The worker also writes it to the public `service_config` table on every start (`spacetime sql -s maincloud moove "SELECT * FROM service_config"`, key `upload_base_url`). The app on main does **not** read that table yet: it uploads to the build-time `MOOVE_UPLOAD_BASE_URL` (`ios/Config/Local.xcconfig`), so the phone build has to match the worker's current URL.
+- [ ] **The tunnel URL changes** whenever the tunnel restarts, so don't copy one from this file. The current one is in the latest comments on issue #2 (`gh issue view 2 --comments`). The worker also writes it to the public `service_config` table on every start (`spacetime sql -s maincloud moove "SELECT * FROM service_config"`, key `upload_base_url`), and since #122 the app reads it from there, so a tunnel restart needs no rebuild (the build-time `MOOVE_UPLOAD_BASE_URL` is only the fallback).
 
 Phone
 - [ ] On launch the login screen appears (merged, #25). Tap **"Continue without an account"** unless you are demoing a real sign-in. End-to-end sign-in was not verified in #25 ("Callback URL mismatch").
@@ -83,6 +83,7 @@ Phone
 - [ ] **Live dry run (10:00, unverified on device so far):** with the maincloud worker running, Data source on live, Settings > Status should say Connected (no banner when connected; "Connecting…", "Reconnecting (attempt N)…" or "Offline: ..." otherwise). Pick a home in Move > New Home ("Use this home"), then check Sell & Buy > Shopping fills with items and deals, each deal with a fraud chip, and that Sell & Buy > Spending shows the worker's payment rows. If a commerce screen shows "Connecting…" with a spinner and then **"Can't reach the backend"** (with the reason and "Check the server address in Settings > Backend, or switch Data source to "Offline demo (fixtures)" to see sample data."), the phone isn't reaching maincloud. A connected but empty live account shows an empty state with a next step instead ("No listings yet", "Nothing to approve", "Nothing to buy yet" with an Add item button, and so on), never a blank list. If anything is missing or slow, use Offline demo for the whole segment.
 - [ ] For Offline demo, pick **"Offline demo (fixtures)"**. The banner should read "Offline demo: fixture data, nothing is synced".
 - [ ] Tabs visible: **Scan, Items, Sell & Buy, Move, Summary** (#136; there is no More tab). Sell & Buy has the segments Listings, Shopping, Approvals · 2 and Spending, and its tab icon shows a badge of 2 (the pending approvals) on the fixture.
+- [ ] **Hidden rooms (#271) don't hide money.** Items > Inventory > Hide room only filters Inventory, Review, Scan, New Home, Pack and the Summary's item lists on that phone. Listings, Approvals and Spending still show every row, including ones for items in a hidden room, because those payments and approvals are real; Shopping is per new home, not per room, so hiding a room doesn't change it. On the Summary, Spent and "Agents kept you safe" count every row too, but Sold and Still selling only count items in visible rooms. `CommerceHiddenRoomTests` in MooveKit checks it.
 - [ ] To reset the fixture between rehearsals, relaunch the app (that's what the #140 test plan uses). Switching Data source to live and back is untested.
 
 ## Step 1: The pricing agent pays for data over x402
@@ -216,7 +217,7 @@ Merged (#31, restyled in #49). **Tap:** the Summary tab.
   - "1 sentimental item left for you" (the guitar, #243)
   - "Spent $0.025 of $10.00 data budget ($0.015 simulated)" (Sim tag), with "2 agents · $5.00 cap each · 1 payment refused"
   - "Spent $179.99 of $1,500.00 card budget (simulated)" (Sim tag)
-  - On live data, when the worker announces `spend_today` (#220), a last line "AI today: $X of $5.00 daily cap (estimate)".
+  - "AI today: $0.54 of $5.00 daily cap (estimate)", last. The Offline demo seeds a sample `spend_today` (#221); on live data the line shows when the worker announces `spend_today` (#220), with its figure.
 - After the scripted actions the approvals line reads "6 approvals asked · 3 approved · 2 denied · 1 expired" and the card line "Spent $689.97 of $1,500.00 card budget (simulated)"; the rest is unchanged. (The Target chair is under the $100 limit, so it adds no approval.)
 
 **Fallback:** Offline demo.

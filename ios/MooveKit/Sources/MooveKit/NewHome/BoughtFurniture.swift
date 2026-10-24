@@ -66,7 +66,7 @@ public enum BoughtFurniture {
         (["tv stand", "television stand", "media console", "tv console", "entertainment center", "sideboard", "credenza"],
          .init(category: "dresser", widthM: 1.5, depthM: 0.45, heightM: 0.55)),
         (["tv", "television"], .init(category: "tv", widthM: 1.2, depthM: 0.25, heightM: 0.7)),
-        (["desk chair", "office chair", "task chair", "gaming chair"], .init(category: "chair", widthM: 0.65, depthM: 0.65, heightM: 1.1)),
+        (["desk chair", "office chair", "task chair", "gaming chair", "aeron"], .init(category: "chair", widthM: 0.65, depthM: 0.65, heightM: 1.1)),
         (["chair", "stool"], .init(category: "chair", widthM: 0.5, depthM: 0.55, heightM: 0.9)),
         (["desk"], .init(category: "desk", widthM: 1.2, depthM: 0.6, heightM: 0.75)),
         (["dining table", "kitchen table"], .init(category: "table", widthM: 1.5, depthM: 0.9, heightM: 0.75)),

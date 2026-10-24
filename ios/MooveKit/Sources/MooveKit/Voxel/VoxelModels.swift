@@ -363,6 +363,8 @@ public enum VoxelModels {
             // not a bicycle, a "toy chest" not a dresser
             if let k = householdKind(n) { return k }
             if n.word("lamp", "lamps", "sconce", "lantern") { return .lamp }
+            // a dining set ("Farmhouse dining table + 4 chairs") is drawn as its table
+            if n.word("table", "tables") && n.word("chairs") { return .table }
             if n.word("chair", "chairs", "stool", "stools", "recliner") { return .chair }
             if n.has("tv stand", "tv console", "tv cabinet", "tv unit", "media console", "entertainment center") { return .dresser }
             if n.has("desk", "workstation", "computer armoire", "roll top", "rolltop", "roll-top", "dressing table")
