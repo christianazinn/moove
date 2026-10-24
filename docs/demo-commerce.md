@@ -2,12 +2,22 @@
 
 The commerce part of the Sunday live demo (judging Sun 10:30, live demo plus a 2-minute pitch). It covers agents paying over x402, the spending log, listing approval, the buy agent, Visa checkout and the summary.
 
-Read the "Today's reality" box first. Labels like **(needs PR #40)** mean the step depends on a PR that was still open when this was written. Check before the demo with `gh pr view <N> --json state`.
+Read the "Today's reality" box first. Before the demo, check any PR still marked open with `gh pr view <N> --json state`.
 
 > **Today's reality (origin/main, Sat):**
-> - **The phone cannot show live worker data yet.** `ios/Moove/Sync/SpacetimeBackend+Contract.swift` on main subscribes to no tables, and every reducer call throws "waiting on the SpacetimeDB module". So every phone screen in this segment runs in **Offline demo** mode (fixture data). Draft PR #28 wires some tables (listing, approval) but not `payment` or `agent_event`, so even with #28 the spending log stays offline.
+> - **The phone cannot show live worker data yet.** `ios/Moove/Sync/SpacetimeBackend+Contract.swift` on main subscribes to no tables, and every reducer call throws "waiting on the SpacetimeDB module". So every phone screen in this segment, including the Shopping Choose, approve and checkout flow, runs in **Offline demo** mode (fixture data) until Rio's live bindings (#10) land. Draft PR #28 wires some tables (listing, approval), but not `payment` or `agent_event`.
 > - **Live proof comes from the laptop:** terminal output from `npm run x402:demo` or the worker, and the basescan tx page.
-> - Open PRs this runbook depends on: #40 (buy agent, Visa, Shopping tab, draft), #52 (live Apify deals, draft), #28 (scan + live sync, draft). Merged: #46 (pricing pays over x402), #55 (paywall start-up failure falls back to unpaid Apify, no double Apify run), #38 (security pass, seeded budgets, payee allowlist), #25 (login), #53 (amount-first push text), #36 (spending log), #31 (summary), #51 (worker no longer crashes on rejected reducer calls).
+> - Still open: #28 (scan + live sync, draft), #58 (CIBA fail-closed), #10 (live iOS bindings). Merged:
+>   - #40: buy agent, Visa checkout, Shopping tab, live Apify deals folded in from #52
+>   - #46: pricing pays over x402
+>   - #55: if the paywall fails to start, pricing falls back to unpaid Apify; no double Apify run
+>   - #38: security pass, seeded budgets, payee allowlist
+>   - #63: Herman Miller comps replay
+>   - #25: login
+>   - #53: amount-first push text
+>   - #36: spending log
+>   - #31 and #67: summary
+>   - #51: worker no longer crashes on rejected reducer calls
 
 ## Setup at the table
 - **Laptop A (Christian's):** the only worker against maincloud. One terminal running the worker, one free terminal in `agents/`.
@@ -29,16 +39,20 @@ Required env vars (names only; values live in the repo-root `.env.local`, which 
 - [ ] Approvals: `AUTH0_DOMAIN`, `AUTH0_CIBA_CLIENT_ID`, `AUTH0_CIBA_CLIENT_SECRET`. Keep `APPROVAL_SIM_AUTO_APPROVE_SEC=0`. `APPROVAL_THRESHOLD_CENTS_DEFAULT` defaults to 10000 ($100).
 - [ ] eBay (real sandbox posting only; otherwise listings are simulated and labeled): `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, `EBAY_RUNAME`, `EBAY_REFRESH_TOKEN`, `EBAY_FULFILLMENT_POLICY_ID`, `EBAY_PAYMENT_POLICY_ID`, `EBAY_RETURN_POLICY_ID`, `EBAY_LOCATION_KEY`, plus optional `EBAY_FALLBACK_IMAGE_URL`.
 - [ ] Pricing pays over x402: `X402_PORT` (default 8402), `PRICING_PAY_X402` (on unless set to `0`/`false`/`off`). Merged in #46.
-- [ ] Visa: `VISA_PROVIDER`, `VISA_ACCEPTANCE_MERCHANT_ID`, `VISA_ACCEPTANCE_KEY_ID`, `VISA_ACCEPTANCE_SECRET`, `VISA_ACCEPTANCE_HOST`, `VISA_SPEND_CAP_USD` (500), `VISA_MAX_PER_PURCHASE_USD` (300), `BUY_AUTO_CHOOSE`, `BUY_FRAUD_BLOCK` **(needs PR #40; on main, `.env.example` only has the unused `VISA_API_KEY`)**.
+- [ ] Visa and buy agent (merged, #40):
+  - **Leave `VISA_PROVIDER` empty or set it to `simulated`.** Do **not** set `VISA_PROVIDER=acceptance` for the demo while the CyberSource sandbox returns HTTP 502. With an explicit `acceptance`, every checkout would fail (retried 3 times, then given up) instead of being simulated.
+  - With no provider and no `VISA_ACCEPTANCE_*` keys, checkout is simulated and labeled.
+  - Defaults: `VISA_SPEND_CAP_USD` 1500, `VISA_MAX_PER_PURCHASE_USD` 750, `VISA_SIM_DELAY_MS` 400, `BUY_AUTO_CHOOSE` 0 (the user chooses), `BUY_FRAUD_BLOCK` 0.7, `BUY_RETRY_DELAY_MS` 60000.
+  - Deals: `DEALS_SOURCE` (default `apify`), `DEALS_APIFY_SOURCES` (default `fb,ebay`), `DEALS_SEARCH_CONCURRENCY` (2), `DEALS_PER_SOURCE` (6), optional `DEALS_HOME_LAT` / `DEALS_HOME_LNG`. Deal search reuses `APIFY_TOKEN`.
 
 Worker
 - [ ] **Only one worker against maincloud**, on Christian's machine, with the token in `agents/.worker-token.maincloud`. Nobody else runs `npm start` / `npm run dev` with maincloud settings.
-- [ ] Start it from `agents/`: `npm start` (with the maincloud vars above). Expect `[spacetime] connected as ...`, `[agents] cache ready: N items`, and `[agents] started vision`, `pricing`, `listing`, `approval`.
+- [ ] Start it from `agents/`: `npm start` (with the maincloud vars above). Expect `[spacetime] connected as ...`, `[agents] cache ready: N items`, `[agents] started vision`, `pricing`, `listing`, `approval`, the shopping-list agent and `buy`, and `[visa] checkout ready (SIMULATED)` once the first checkout runs.
 - [ ] Don't run `npm run x402:e2e` against maincloud. It connects as a worker and is meant for a local `spacetime start` + `npm run publish:local`. `npm run x402:demo` is fine anywhere because it doesn't touch SpacetimeDB.
 
 Budgets
 - [ ] **Budgets survive a restart** (merged, #38). With `X402_SEED_BUDGETS=1` (the default) the worker counts the last 24 h of x402 `payment` rows against each agent's $5 budget at startup (`agents/src/payments.ts`), so a restart does not hand out a fresh budget.
-- [ ] **Budget reset after rehearsals:** start the demo worker with `X402_SEED_BUDGETS=0` so rehearsal spend doesn't count against the demo. Every agent then starts at $0 of $5.
+- [ ] **Budget reset after rehearsals:** start the demo worker with `X402_SEED_BUDGETS=0 VISA_SEED_BUDGETS=0 npm start`. Every agent then starts at $0 of $5 (x402) and $0 of $1,500 (card). Card seeding only counts non-simulated (sandbox or real) card payments from the last 24 h, so simulated rehearsals never use up the card cap anyway.
 - [ ] `X402_ALLOWED_PAYEES` (merged, #38) is an optional comma-separated `payTo` allowlist. If you set it, include the comps paywall receiver `0x6644b110FD0B1671599E36db749d09b1EAeEF952`, or every pricing payment is refused.
 
 Photos for eBay (only for a real sandbox post)
@@ -47,7 +61,7 @@ Photos for eBay (only for a real sandbox post)
 Phone
 - [ ] On launch the login screen appears (merged, #25). Tap **"Continue without an account"** unless you are demoing a real sign-in. End-to-end sign-in was not verified in #25 ("Callback URL mismatch").
 - [ ] Settings (gear icon, top right) > Backend > Data source: **"Offline demo (fixtures)"**. The banner should read "Offline demo: fixture data, nothing is synced".
-- [ ] Tabs visible: Scan, Review, Spending, New Home, then **More** for Inventory, Listings, Approvals, Summary (and Shopping **(needs PR #40)**). The Approvals tab shows a badge with the pending count.
+- [ ] Tabs visible: Scan, Review, Spending, New Home, then **More** for Inventory, Listings, Approvals, Summary and Shopping. The Approvals tab shows a badge with the pending count.
 - [ ] To reset the fixture between rehearsals, switch Data source to live and back, or relaunch the app. Untested; check once.
 
 ## Step 1: The pricing agent pays for data over x402
@@ -72,7 +86,7 @@ The rail refuses before signing: `Refused x402 payment for comps for 'IKEA Poang
 **Fallback:**
 1. `X402_SIMULATE=1 npm run x402:demo`: same flow, nothing signed, every message starts with `[SIMULATED]`. Say it's simulated.
 2. Open the proof tx links (below) and say "this is the same call, settled earlier".
-3. Worker pricing has no replay fallback: no `agents/fixtures/comps/*.json` is committed, so with Apify down or no `APIFY_TOKEN` it errors with "APIFY_TOKEN not set and no cached comps for this query". Show pricing results on the phone's Offline demo instead.
+3. Worker pricing without Apify: comps are cached in `agents/fixtures/comps/`. The committed replay `herman-miller-office-chair.json` (#63, 18 real comps) covers the demo Herman Miller office chair and is labeled `[REPLAYED]`. Any other item with Apify down or no `APIFY_TOKEN` errors with "APIFY_TOKEN not set and no cached comps for this query". Show those on the phone's Offline demo instead.
 
 ## Step 2: The spending log
 Merged (PR #36), but **offline only** today: the live backend doesn't subscribe to `payment` / `agent_event` yet.
@@ -106,31 +120,47 @@ Merged: eBay listing agent (#30, real sandbox posting #34), Auth0 CIBA + in-app 
 
 **Fallback:** if CIBA doesn't arrive, the in-app inbox is the designed fallback, so say "it falls back to the in-app inbox" and approve there. If Auth0 isn't configured at all, `APPROVAL_SIM_AUTO_APPROVE_SEC` exists but labels everything simulated. Keep it at 0 for the demo.
 
-## Step 4: The buy agent finds a deal (needs PR #40)
-Everything in this step needs PR #40 (draft, branch `aiden/15-visa-checkout`). Live Apify deals are a further draft, #52. Without #40 there is no buy agent, no Shopping tab and no deal fixtures on main.
+## Step 4: The buy agent finds a deal
+Merged (#40, with the live Apify deals from #52 folded in).
 
-**With #40, worker side:** when a `new_home` row appears, the shopping agent lists what the new home still needs. The buy agent then ranks deals from `agents/fixtures/deals.json` (a cached replay, labeled "cached replay"), writes the top 5, and picks the best card-checkout deal (`BUY_AUTO_CHOOSE=1`). A fraud score at or above `BUY_FRAUD_BLOCK` (0.7) is never bought. FB and Craigslist sellers get a drafted message instead of a payment.
+**Worker side:**
+1. When a `new_home` row appears, the shopping-list agent lists what the new home still needs.
+2. The buy agent searches deals for each item. With `DEALS_SOURCE=apify` it searches live FB Marketplace and eBay listings through Apify. Without `APIFY_TOKEN` it replays committed live searches ("cached replay", REPLAY). Otherwise it uses hand-made sample data ("sample data", SAMPLE).
+3. Live and replayed results always include labeled sample retail rows, so every item has a card-checkout option.
+4. It ranks the deals, writes the top 5 and recommends the best card-checkout deal. With `BUY_AUTO_CHOOSE=0` (the default) the user chooses. Set `BUY_AUTO_CHOOSE=1` on the worker to let the agent choose its recommendation; until #10 lands, the phone can't send a choice to the live worker.
+5. FB and Craigslist sellers get a drafted message instead of a payment. Sellers show as "FB Marketplace seller, <city>" or "eBay seller", and "distance unknown" appears when a listing has no coordinates.
 
-**Tap (Offline demo, with #40):** More > Shopping. "Still to buy" lists Mattress (Bought), Sofa, Desk chair and Dining table. Tap **Desk chair** to see the deals with **REPLAY** badges. The Craigslist "Herman Miller Aeron size B" for $95 is flagged by the fraud screen (score 0.81: "Price is 75% under comparable listings", "Seller asks for payment before pickup"). Tap **Choose** on a deal.
+**Live deals are verified for the mattress only:** a real Apify run returned 9 listings (4 FB Marketplace, 5 eBay), committed as `agents/fixtures/deals-live-mattress.json`. Other items use sample data unless searched live.
 
-**Fallback:** if #40 hasn't merged, skip this step and say it in one line ("the buy agent ranks deals and screens them for fraud; it's in review"). Don't show a screen that doesn't exist on the build.
+**Tap (Offline demo):**
+1. More > Shopping. "Still to buy" lists Mattress (Bought), Sofa, Desk chair and Dining table.
+2. Tap **Desk chair** to see its deals. The Craigslist "Herman Miller Aeron size B" for $95 shows a high fraud score (0.81: "Price is 75% under comparable listings", "Seller asks for payment before pickup").
+3. Say that this fraud score is **fixture data**. The fraud agent (#18) is still pending, so live deals are unscored ("Not fraud-screened yet").
+4. Tap **Choose** on a deal. Choose is locked while a hold or a purchase approval is pending for that item.
 
-## Step 5: Visa checkout (needs PR #40)
-**With #40:** at or under the threshold, the buy agent checks out right away. Over it, it asks first: the Sofa approval is "Buy "78" upholstered sofa, gray" from wayfair for $429.99", with Approve and Deny buttons and the note "Over your approval limit. The agent pays with Visa only after you approve."
+**Fallback:** the Offline demo is already the fallback. If a live search fails, the worker uses the replay or sample data, both labeled.
 
-**Terminal (with #40):**
+## Step 5: Visa checkout
+Merged (#40). **The demo checkout is the labeled simulation.** The real CyberSource sandbox charge has not succeeded: HTTP 502 `SYSTEM_ERROR`, request id `7928175635416253203813`, most likely because the sandbox account has no card processor enabled.
+
+**How it behaves:** at or under the $100 threshold, the buy agent checks out right away. Over it, it asks first: the worker's approval summary reads `Pay $X to <merchant> for: <title>`, and the phone push reads "Moove: buy X USD: <deal title>".
+
+**Tap (Offline demo):**
+1. More > Approvals (or the Sofa in Shopping). The Sofa request is for $429.99 from wayfair, with Approve and Deny and the note "Over your approval limit. The agent pays with Visa only after you approve." The fixture's summary text uses an older wording ("Buy ... from wayfair for $429.99").
+2. Tap **Approve**.
+3. Spending shows the mattress as a Visa payment ($179.99, SIMULATED badge, rail "Visa").
+
+**Terminal:**
 ```sh
 VISA_PROVIDER=simulated npm run visa:demo -- 129.99
 ```
 It prints `Visa checkout: SIMULATED`, the payment row, every agent event (`[SIMULATED]` hold, then capture) and the result, and exits 0 when the status is `captured`. The default amount without an argument is $42.50.
 
-**Real sandbox (with #40, only if keys exist):** set `VISA_PROVIDER=acceptance`, the `VISA_ACCEPTANCE_*` keys and `VISA_ACCEPTANCE_HOST=apitest.cybersource.com`, then run `npm run visa:demo`. Expect `[VISA SANDBOX] Hold ... placed` and then `Paid`. Per the PR, no real sandbox call has been made yet.
+**Numbers:** Visa card cap $1,500 per agent, $750 max per purchase, approval threshold $100.
 
-**Phone (Offline demo, with #40):** Spending shows the mattress as a Visa payment ($179.99, SIMULATED badge, rail "Visa").
+**Don't** demo `VISA_PROVIDER=acceptance` until a `npm run visa:demo -- 1.00` with real keys succeeds. On success it would show `[VISA SANDBOX]` events, a `[Visa sandbox]` purpose and a VISA SANDBOX badge.
 
-**Numbers (with #40):** Visa card cap $500, max $300 per purchase (`.env.example` in #40), approval threshold $100.
-
-**Fallback:** the simulated Visa rail, always labeled. If #40 isn't merged, the Visa part is talk-track only.
+**Fallback:** the simulated Visa rail, always labeled. If the worker isn't cooperating, `visa:demo` in the terminal shows the full hold, re-check and capture sequence on its own.
 
 ## Step 6: Summary
 Merged (#31, restyled in #49). **Tap:** More > Summary.
@@ -140,9 +170,9 @@ Merged (#31, restyled in #49). **Tap:** More > Summary.
 **Fallback:** it's Offline demo already. Nothing to fall back to.
 
 ## 30-second talk track
-"Moving means pricing, selling and buying a whole household. Moove hands that to agents, and you stay in control. When our pricing agent needs comps, it pays for them itself: one cent in USDC over x402 on Base Sepolia, from a Coinbase server wallet. Here's the real transaction on basescan. A payment rail checks a per-agent budget and a per-call max before anything is signed, so a ten-cent cap means a twenty-five-cent request gets refused and logged. Every payment lands in a live spending log, and anything simulated is labeled. Big decisions come to you: a $410 listing needs your approval through Auth0 on your phone. The buy agent shops what the new place needs, screens out sketchy deals and checks out with Visa. The summary shows what you made, spent and kept out of the landfill."
+"Moving means pricing, selling and buying a whole household. Moove hands that to agents, and you stay in control. When our pricing agent needs comps, it pays for them itself: one cent in USDC over x402 on Base Sepolia, from a Coinbase server wallet. Here's the real transaction on basescan. A payment rail checks a per-agent budget and a per-call max before anything is signed, so a ten-cent cap means a twenty-five-cent request gets refused and logged. Every payment lands in a live spending log, and anything simulated is labeled. Big decisions come to you: a $410 listing needs your approval through Auth0 on your phone. The buy agent shops what the new place needs, recommends the best deal and, once you choose, checks out with Visa, re-checking your approval right before it captures. That checkout is simulated today, and it's labeled. The summary shows what you made, spent and kept out of the landfill."
 
-If #40 isn't merged, cut the buy-agent sentence down to "a buy agent for the new place is next".
+Don't claim fraud screening: the fraud agent (#18) is pending, and the fraud scores on screen are fixture data. If asked about the sandbox, say our CyberSource sandbox account returned a 502 (most likely no card processor provisioned yet), so we demo the labeled simulation.
 
 ## Proof to cite (backup if live payment fails)
 Both are real x402 payments of 0.01 USDC on Base Sepolia:
