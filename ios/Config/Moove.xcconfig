@@ -1,0 +1,13 @@
+// Shared, committed defaults. Put your own values in Config/Local.xcconfig
+// (gitignored; copy Local.xcconfig.example). Only public config here: the
+// Auth0 domain and native client id are not secrets.
+// Note: "//" starts a comment in xcconfig, so URLs use "/$()/".
+
+MOOVE_BUNDLE_ID = app.moove.Moove
+MOOVE_SPACETIME_HOST = https:/$()/maincloud.spacetimedb.com
+MOOVE_SPACETIME_DB = moove
+MOOVE_UPLOAD_BASE_URL = http:/$()/localhost:8787
+MOOVE_AUTH0_DOMAIN =
+MOOVE_AUTH0_CLIENT_ID =
+
+#include? "Local.xcconfig"

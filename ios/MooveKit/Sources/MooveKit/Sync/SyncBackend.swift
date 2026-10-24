@@ -1,0 +1,77 @@
+import Foundation
+
+/// Everything the app currently sees, as plain MooveKit models.
+/// Other lanes add their tables (payments, listings, approvals, ...) here.
+public struct SyncSnapshot: Sendable, Equatable {
+    public var me: IdentityHex?
+    public var users: [User] = []
+    public var rooms: [Room] = []
+    public var scans: [Scan] = []
+    public var items: [Item] = []
+    public var comps: [Comp] = []
+
+    public init(me: IdentityHex? = nil) { self.me = me }
+
+    public func comps(for itemId: UInt64) -> [Comp] { comps.filter { $0.itemId == itemId } }
+}
+
+/// One object from a RoomPlan scan, ready to become an `items` row.
+public struct ScanObject: Codable, Sendable, Hashable {
+    public var scanObjectId: String
+    public var category: String
+    public var widthM: Double
+    public var heightM: Double
+    public var depthM: Double
+    public var photoUrl: String?
+
+    public init(scanObjectId: String, category: String, widthM: Double, heightM: Double, depthM: Double, photoUrl: String? = nil) {
+        self.scanObjectId = scanObjectId
+        self.category = category
+        self.widthM = widthM
+        self.heightM = heightM
+        self.depthM = depthM
+        self.photoUrl = photoUrl
+    }
+}
+
+/// A whole scan, imported in one reducer call so the room, scan and items
+/// land in one transaction (reducers can't hand back the new room id).
+public struct ScanImport: Codable, Sendable, Hashable {
+    public var roomName: String
+    public var usdzUrl: String?
+    public var capturedRoomJsonUrl: String?
+    public var objects: [ScanObject]
+
+    public init(roomName: String, usdzUrl: String? = nil, capturedRoomJsonUrl: String? = nil, objects: [ScanObject]) {
+        self.roomName = roomName
+        self.usdzUrl = usdzUrl
+        self.capturedRoomJsonUrl = capturedRoomJsonUrl
+        self.objects = objects
+    }
+}
+
+public enum SyncStatus: Sendable, Equatable {
+    case disconnected
+    case connecting
+    case connected
+    case reconnecting(attempt: Int)
+    case failed(String)
+}
+
+/// The one seam between screens and the backend. The app has a SpacetimeDB
+/// implementation; `FixtureBackend` is the offline/demo/preview one.
+public protocol SyncBackend: AnyObject, Sendable {
+    /// Connects and returns the identity plus a token to persist for reconnects.
+    func connect(token: String?) async throws -> (identity: IdentityHex, token: String)
+    func disconnect() async
+
+    /// Emits a fresh snapshot after every change, starting with the current state.
+    func snapshots() -> AsyncStream<SyncSnapshot>
+    func statusUpdates() -> AsyncStream<SyncStatus>
+
+    func registerUser(name: String, email: String?, auth0Sub: String?) async throws
+    func importScan(_ scan: ScanImport) async throws
+    func addItemPhoto(itemId: UInt64, url: String) async throws
+    func setDisposition(itemId: UInt64, disposition: Disposition) async throws
+    func setSentimental(itemId: UInt64, maybeSentimental: Bool) async throws
+}

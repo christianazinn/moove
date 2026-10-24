@@ -1,0 +1,173 @@
+import Foundation
+
+/// In-memory backend with the same reducer semantics as the SpacetimeDB module.
+/// Used for SwiftUI previews, unit tests, and the "offline demo" debug toggle.
+public final class FixtureBackend: SyncBackend, @unchecked Sendable {
+    public enum Failure: Error, Equatable {
+        case notConnected
+        case noSuchItem
+        case unauthorized
+    }
+
+    private let lock = NSLock()
+    private var state: SyncSnapshot
+    private var nextId: UInt64
+    private var snapshotContinuations: [UUID: AsyncStream<SyncSnapshot>.Continuation] = [:]
+    private var statusContinuations: [UUID: AsyncStream<SyncStatus>.Continuation] = [:]
+    private let identity: IdentityHex
+
+    public init(identity: IdentityHex = "fixture-user", seed: SyncSnapshot = SyncSnapshot()) {
+        self.identity = identity
+        self.state = seed
+        let maxId = (seed.rooms.map(\.id) + seed.scans.map(\.id) + seed.items.map(\.id) + seed.comps.map(\.id)).max() ?? 0
+        self.nextId = maxId + 1
+    }
+
+    /// The bundled demo inventory (already priced and sorted, as if the agents had run).
+    public static func demo(identity: IdentityHex = "fixture-user") -> FixtureBackend {
+        FixtureBackend(identity: identity, seed: DemoFixtures.inventory(owner: identity))
+    }
+
+    // MARK: Connection
+
+    public func connect(token: String?) async throws -> (identity: IdentityHex, token: String) {
+        mutate { $0.me = identity }
+        broadcast(status: .connected)
+        return (identity, token ?? "fixture-token")
+    }
+
+    public func disconnect() async {
+        mutate { $0.me = nil }
+        broadcast(status: .disconnected)
+    }
+
+    public func snapshots() -> AsyncStream<SyncSnapshot> {
+        let (stream, continuation) = AsyncStream<SyncSnapshot>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        let key = UUID()
+        lock.sync {
+            snapshotContinuations[key] = continuation
+            continuation.yield(state)
+        }
+        continuation.onTermination = { [weak self] _ in
+            self?.lock.sync { _ = self?.snapshotContinuations.removeValue(forKey: key) }
+        }
+        return stream
+    }
+
+    public func statusUpdates() -> AsyncStream<SyncStatus> {
+        let (stream, continuation) = AsyncStream<SyncStatus>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        let key = UUID()
+        lock.sync {
+            statusContinuations[key] = continuation
+            continuation.yield(state.me == nil ? .disconnected : .connected)
+        }
+        continuation.onTermination = { [weak self] _ in
+            self?.lock.sync { _ = self?.statusContinuations.removeValue(forKey: key) }
+        }
+        return stream
+    }
+
+    // MARK: Reducers
+
+    public func registerUser(name: String, email: String?, auth0Sub: String?) async throws {
+        try mutateAuthed { s, me in
+            if let i = s.users.firstIndex(where: { $0.identity == me }) {
+                s.users[i].name = name
+                s.users[i].email = email
+                s.users[i].auth0Sub = auth0Sub
+            } else {
+                s.users.append(User(identity: me, auth0Sub: auth0Sub, name: name, email: email))
+            }
+        }
+    }
+
+    public func importScan(_ scan: ScanImport) async throws {
+        try mutateAuthed { s, me in
+            let roomId = takeId()
+            s.rooms.append(Room(id: roomId, owner: me, name: scan.roomName))
+            s.scans.append(Scan(id: takeId(), owner: me, roomId: roomId, usdzUrl: scan.usdzUrl, capturedRoomJsonUrl: scan.capturedRoomJsonUrl))
+            for object in scan.objects {
+                s.items.append(Item(
+                    id: takeId(), owner: me, roomId: roomId, scanObjectId: object.scanObjectId,
+                    name: object.category.capitalized, category: object.category,
+                    widthM: object.widthM, heightM: object.heightM, depthM: object.depthM,
+                    photoUrls: object.photoUrl.map { [$0] } ?? []
+                ))
+            }
+        }
+    }
+
+    public func addItemPhoto(itemId: UInt64, url: String) async throws {
+        try updateOwnedItem(itemId) { $0.photoUrls.append(url) }
+    }
+
+    public func setDisposition(itemId: UInt64, disposition: Disposition) async throws {
+        try updateOwnedItem(itemId) {
+            $0.disposition = disposition
+            $0.dispositionSource = .user
+            $0.dispositionReason = nil
+        }
+    }
+
+    public func setSentimental(itemId: UInt64, maybeSentimental: Bool) async throws {
+        try updateOwnedItem(itemId) { $0.maybeSentimental = maybeSentimental }
+    }
+
+    /// Worker-side reducer, exposed so tests can check user overrides survive an agent re-run.
+    public func setAutoDisposition(itemId: UInt64, disposition: Disposition, reason: String) throws {
+        try mutate { s in
+            guard let i = s.items.firstIndex(where: { $0.id == itemId }) else { throw Failure.noSuchItem }
+            guard s.items[i].dispositionSource != .user, !s.items[i].maybeSentimental else { return }
+            s.items[i].disposition = disposition
+            s.items[i].dispositionReason = reason
+            s.items[i].updatedAt = .now
+        }
+    }
+
+    // MARK: Internals
+
+    private func takeId() -> UInt64 {
+        defer { nextId += 1 }
+        return nextId
+    }
+
+    private func updateOwnedItem(_ itemId: UInt64, _ change: (inout Item) -> Void) throws {
+        try mutateAuthed { s, me in
+            guard let i = s.items.firstIndex(where: { $0.id == itemId }) else { throw Failure.noSuchItem }
+            guard s.items[i].owner == me else { throw Failure.unauthorized }
+            change(&s.items[i])
+            s.items[i].updatedAt = .now
+        }
+    }
+
+    private func mutateAuthed(_ change: (inout SyncSnapshot, IdentityHex) throws -> Void) throws {
+        try mutate { s in
+            guard let me = s.me else { throw Failure.notConnected }
+            try change(&s, me)
+        }
+    }
+
+    private func mutate(_ change: (inout SyncSnapshot) throws -> Void) rethrows {
+        try lock.sync {
+            var copy = state
+            try change(&copy)
+            state = copy
+            for c in snapshotContinuations.values { c.yield(copy) }
+        }
+    }
+
+    private func broadcast(status: SyncStatus) {
+        lock.sync {
+            for c in statusContinuations.values { c.yield(status) }
+        }
+    }
+}
+
+extension NSLock {
+    /// `withLock` isn't in every Linux Foundation, so roll our own.
+    func sync<T>(_ body: () throws -> T) rethrows -> T {
+        lock()
+        defer { unlock() }
+        return try body()
+    }
+}

@@ -31,3 +31,7 @@ uploads/
 # large local reference files (summarized in docs/tracks.md)
 13.0 Hacker Guide.md
 prizes.txt
+
+# ios local config
+ios/Config/Local.xcconfig
+ios/Moove/Resources/Info.plist
