@@ -10,6 +10,9 @@ export type ListingInput = {
   condition: string;
   category: string;
   photoUrls: string[];
+  itemName: string;
+  brand: string;
+  material: string;
 };
 
 export type PublishStep = { call: string; detail: string };
@@ -103,4 +106,299 @@ ${paragraphs}
 <div class="meta">Item number ${externalId} · Listed by Moove agent · ${esc(l.category || 'Other')}</div>
 </main></body></html>
 `;
+}
+
+// ---------- real eBay (sandbox by default) ----------
+// Plain fetch against the Sell Inventory / Account / Taxonomy REST APIs. Paths and fields were
+// checked against eBay's OpenAPI specs (developer.ebay.com/develop/api/spec/*.json, Oct 2026).
+// One-time seller setup (consent -> refresh token, business policies, location) lives in
+// scripts/ebay-setup.ts; this module only needs the resulting env keys.
+
+const env = (k: string) => process.env[k] ?? '';
+
+export const ebayEnv = {
+  production: env('EBAY_ENV') === 'production',
+  get api() {
+    return this.production ? 'https://api.ebay.com' : 'https://api.sandbox.ebay.com';
+  },
+  get site() {
+    return this.production ? 'https://www.ebay.com' : 'https://sandbox.ebay.com';
+  },
+  marketplaceId: env('EBAY_MARKETPLACE_ID') || 'EBAY_US',
+};
+
+const SCOPE = 'https://api.ebay.com/oauth/api_scope';
+export const USER_SCOPES = [SCOPE, `${SCOPE}/sell.inventory`, `${SCOPE}/sell.account`];
+
+const REQUIRED_KEYS = [
+  'EBAY_CLIENT_ID',
+  'EBAY_CLIENT_SECRET',
+  'EBAY_REFRESH_TOKEN',
+  'EBAY_FULFILLMENT_POLICY_ID',
+  'EBAY_PAYMENT_POLICY_ID',
+  'EBAY_RETURN_POLICY_ID',
+  'EBAY_LOCATION_KEY',
+];
+
+export function missingEbayKeys(): string[] {
+  return REQUIRED_KEYS.filter(k => !env(k));
+}
+
+export class EbayError extends Error {
+  constructor(
+    readonly status: number,
+    readonly body: unknown,
+    what: string
+  ) {
+    const errs = (body as { errors?: { errorId?: number; message?: string; longMessage?: string }[] })?.errors;
+    const detail = errs?.length ? errs.map(e => `${e.errorId}: ${e.longMessage ?? e.message}`).join('; ') : JSON.stringify(body).slice(0, 300);
+    super(`${what} -> HTTP ${status}: ${detail}`);
+  }
+}
+
+type Token = { value: string; expiresAt: number };
+const tokens = new Map<string, Token>();
+
+// grant_type=refresh_token (user token, for Sell APIs) or client_credentials (app token, for Taxonomy).
+export async function oauthToken(body: Record<string, string>): Promise<{ access_token: string; expires_in: number; refresh_token?: string; refresh_token_expires_in?: number }> {
+  const basic = Buffer.from(`${env('EBAY_CLIENT_ID')}:${env('EBAY_CLIENT_SECRET')}`).toString('base64');
+  const res = await fetch(`${ebayEnv.api}/identity/v1/oauth2/token`, {
+    method: 'POST',
+    headers: { authorization: `Basic ${basic}`, 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new EbayError(res.status, json, `oauth ${body.grant_type}`);
+  return json as never;
+}
+
+async function accessToken(kind: 'user' | 'app'): Promise<string> {
+  const cached = tokens.get(kind);
+  if (cached && cached.expiresAt > Date.now() + 60_000) return cached.value;
+  const t =
+    kind === 'user'
+      ? await oauthToken({ grant_type: 'refresh_token', refresh_token: env('EBAY_REFRESH_TOKEN'), scope: USER_SCOPES.join(' ') })
+      : await oauthToken({ grant_type: 'client_credentials', scope: SCOPE });
+  tokens.set(kind, { value: t.access_token, expiresAt: Date.now() + t.expires_in * 1000 });
+  return t.access_token;
+}
+
+export async function ebayCall<T = unknown>(
+  method: string,
+  pathAndQuery: string,
+  opts: { body?: unknown; token?: 'user' | 'app' | string; okStatuses?: number[] } = {}
+): Promise<T> {
+  const token = opts.token === 'app' || opts.token === 'user' || opts.token === undefined ? await accessToken(opts.token ?? 'user') : opts.token;
+  const res = await fetch(`${ebayEnv.api}${pathAndQuery}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${token}`,
+      accept: 'application/json',
+      'accept-language': 'en-US',
+      'content-language': 'en-US',
+      ...(opts.body === undefined ? {} : { 'content-type': 'application/json' }),
+    },
+    body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+  });
+  const text = await res.text();
+  const json = text ? JSON.parse(text) : {};
+  if (!res.ok && !opts.okStatuses?.includes(res.status)) throw new EbayError(res.status, json, `${method} ${pathAndQuery.split('?')[0]}`);
+  return json as T;
+}
+
+// ---- category: pick a leaf from the marketplace's real category tree ----
+// getCategorySuggestions isn't supported in sandbox, and sandbox trees can lag production, so
+// we pull a few subtrees once and match leaves by name. IDs never need to be hardcoded.
+const PARENT_CATEGORIES = ['3197' /* Furniture */, '11700' /* Home & Garden */, '293' /* Consumer Electronics */];
+
+// RoomPlan / vision categories -> words that appear in matching eBay leaf names.
+const CATEGORY_HINTS: Record<string, string[]> = {
+  chair: ['chairs', 'office chairs'],
+  sofa: ['sofas', 'loveseats', 'bean bags'],
+  table: ['desks', 'tables', 'home office desks'],
+  storage: ['bookcases', 'cabinets', 'dressers', 'shelving'],
+  bed: ['beds', 'bed frames'],
+  lamp: ['lamps', 'floor lamps'],
+  appliance: ['refrigerators', 'mini fridges', 'fans', 'appliances'],
+  refrigerator: ['refrigerators', 'mini fridges'],
+  television: ['televisions'],
+  decor: ['decor', 'mirrors', 'wall art'],
+  furniture: ['furniture'],
+  electronics: ['electronics'],
+};
+
+type Leaf = { id: string; name: string; path: string };
+let leavesPromise: Promise<Leaf[]> | undefined;
+
+type TreeNode = { category: { categoryId: string; categoryName: string }; leafCategoryTreeNode?: boolean; childCategoryTreeNodes?: TreeNode[] };
+
+async function loadLeaves(): Promise<Leaf[]> {
+  const { categoryTreeId } = await ebayCall<{ categoryTreeId: string }>(
+    'GET',
+    `/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=${ebayEnv.marketplaceId}`,
+    { token: 'app' }
+  );
+  const leaves: Leaf[] = [];
+  const walk = (n: TreeNode, path: string) => {
+    const p = path ? `${path} > ${n.category.categoryName}` : n.category.categoryName;
+    if (n.leafCategoryTreeNode) leaves.push({ id: n.category.categoryId, name: n.category.categoryName, path: p });
+    n.childCategoryTreeNodes?.forEach(c => walk(c, p));
+  };
+  for (const id of PARENT_CATEGORIES) {
+    try {
+      const sub = await ebayCall<{ categorySubtreeNode: TreeNode }>(
+        'GET',
+        `/commerce/taxonomy/v1/category_tree/${categoryTreeId}/get_category_subtree?category_id=${id}`,
+        { token: 'app' }
+      );
+      walk(sub.categorySubtreeNode, '');
+    } catch (err) {
+      console.warn(`[ebay] category subtree ${id} unavailable: ${String(err)}`);
+    }
+  }
+  if (leaves.length === 0) throw new Error('no eBay leaf categories could be loaded');
+  return [...new Map(leaves.map(l => [l.id, l])).values()];
+}
+
+const words = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2);
+
+export function pickLeaf(leaves: Leaf[], category: string, itemName: string): Leaf {
+  const hints = CATEGORY_HINTS[category.toLowerCase()] ?? [];
+  const want = new Set([...words(itemName), ...words(category), ...hints.flatMap(words)]);
+  let best = leaves[0];
+  let bestScore = -1;
+  for (const l of leaves) {
+    const nameWords = words(l.name);
+    let score = nameWords.filter(w => want.has(w) || want.has(w.replace(/s$/, ''))).length * 3;
+    score += words(l.path).filter(w => want.has(w)).length;
+    if (hints.some(h => l.name.toLowerCase() === h)) score += 5;
+    if (score > bestScore || (score === bestScore && l.path.length < best.path.length)) {
+      best = l;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+// ---- item specifics: fill every required aspect so publish doesn't fail ----
+type AspectMeta = {
+  localizedAspectName: string;
+  aspectConstraint: { aspectRequired?: boolean; aspectMode?: 'FREE_TEXT' | 'SELECTION_ONLY' };
+  aspectValues?: { localizedValue: string }[];
+};
+
+async function requiredAspects(categoryId: string, l: ListingInput): Promise<Record<string, string[]>> {
+  const { categoryTreeId } = await ebayCall<{ categoryTreeId: string }>(
+    'GET',
+    `/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=${ebayEnv.marketplaceId}`,
+    { token: 'app' }
+  );
+  const meta = await ebayCall<{ aspects?: AspectMeta[] }>(
+    'GET',
+    `/commerce/taxonomy/v1/category_tree/${categoryTreeId}/get_item_aspects_for_category?category_id=${categoryId}`,
+    { token: 'app', okStatuses: [204] }
+  );
+  const known: Record<string, string> = { brand: l.brand || 'Unbranded', material: l.material, type: l.itemName };
+  const text = `${l.itemName} ${l.material} ${l.title}`.toLowerCase();
+  const out: Record<string, string[]> = {};
+  for (const a of meta.aspects ?? []) {
+    if (!a.aspectConstraint.aspectRequired) continue;
+    const name = a.localizedAspectName;
+    const values = (a.aspectValues ?? []).map(v => v.localizedValue);
+    if (a.aspectConstraint.aspectMode === 'SELECTION_ONLY' && values.length) {
+      out[name] = [values.find(v => text.includes(v.toLowerCase())) ?? values.find(v => v === known[name.toLowerCase()]) ?? values[0]];
+    } else {
+      out[name] = [(known[name.toLowerCase()] || values.find(v => text.includes(v.toLowerCase())) || 'Does not apply').slice(0, 65)];
+    }
+  }
+  if (!out.Brand) out.Brand = [l.brand || 'Unbranded'];
+  return out;
+}
+
+// Vision agent condition -> Inventory API ConditionEnum. Most furniture/home leaves accept only
+// NEW or "Used" (USED_EXCELLENT = condition ID 3000), so used grades collapse to that; the
+// real grade is in the description.
+function conditionEnum(c: string): string {
+  return c === 'new' ? 'NEW' : 'USED_EXCELLENT';
+}
+
+function imageUrls(l: ListingInput): string[] {
+  const https = l.photoUrls.filter(u => u.startsWith('https://')).slice(0, 12);
+  if (https.length) return https;
+  if (env('EBAY_FALLBACK_IMAGE_URL')) return [env('EBAY_FALLBACK_IMAGE_URL')];
+  throw new Error('eBay needs at least one public https photo URL: set PUBLIC_UPLOAD_BASE_URL to an https tunnel, or EBAY_FALLBACK_IMAGE_URL');
+}
+
+type OfferSummary = { offerId: string; status?: string; listing?: { listingId?: string } };
+
+export const sandboxEbay: EbayPoster = {
+  simulated: false,
+  async publish(l, onStep) {
+    const sku = `MOOVE-${l.listingId}`;
+    const images = imageUrls(l);
+    leavesPromise ??= loadLeaves().catch(err => {
+      leavesPromise = undefined;
+      throw err;
+    });
+    const leaf = pickLeaf(await leavesPromise, l.category, l.itemName);
+    const aspects = await requiredAspects(leaf.id, l);
+    onStep({ call: 'getItemAspectsForCategory', detail: `${leaf.path} (#${leaf.id}), ${Object.keys(aspects).length} required item specific(s)` });
+
+    await ebayCall('PUT', `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, {
+      body: {
+        availability: { shipToLocationAvailability: { quantity: 1 } },
+        condition: conditionEnum(l.condition),
+        product: { title: l.title.slice(0, 80), description: l.description, aspects, imageUrls: images },
+      },
+    });
+    onStep({ call: 'createOrReplaceInventoryItem', detail: `SKU ${sku}, ${images.length} photo(s), ${conditionEnum(l.condition)}` });
+
+    const offer = {
+      sku,
+      marketplaceId: ebayEnv.marketplaceId,
+      format: 'FIXED_PRICE',
+      availableQuantity: 1,
+      categoryId: leaf.id,
+      listingDescription: l.description,
+      listingDuration: 'GTC',
+      merchantLocationKey: env('EBAY_LOCATION_KEY'),
+      pricingSummary: { price: { value: (Number(l.priceCents) / 100).toFixed(2), currency: 'USD' } },
+      listingPolicies: {
+        fulfillmentPolicyId: env('EBAY_FULFILLMENT_POLICY_ID'),
+        paymentPolicyId: env('EBAY_PAYMENT_POLICY_ID'),
+        returnPolicyId: env('EBAY_RETURN_POLICY_ID'),
+      },
+    };
+    // Retries reuse the SKU's existing offer (a second createOffer for the same SKU fails).
+    const existing = await ebayCall<{ offers?: OfferSummary[] }>('GET', `/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${ebayEnv.marketplaceId}`, {
+      okStatuses: [404],
+    });
+    let offerId = existing.offers?.[0]?.offerId;
+    const publishedId = existing.offers?.[0]?.status === 'PUBLISHED' ? existing.offers[0].listing?.listingId : undefined;
+    if (publishedId) {
+      onStep({ call: 'getOffers', detail: `SKU ${sku} is already live as #${publishedId}` });
+      return { externalId: publishedId, url: `${ebayEnv.site}/itm/${publishedId}`, simulated: false };
+    }
+    if (offerId) {
+      await ebayCall('PUT', `/sell/inventory/v1/offer/${offerId}`, { body: offer });
+    } else {
+      offerId = (await ebayCall<{ offerId: string }>('POST', '/sell/inventory/v1/offer', { body: offer })).offerId;
+    }
+    onStep({ call: 'createOffer', detail: `Offer ${offerId}: fixed price ${dollars(l.priceCents)} in ${leaf.name}` });
+
+    const { listingId } = await ebayCall<{ listingId: string }>('POST', `/sell/inventory/v1/offer/${offerId}/publish`);
+    onStep({ call: 'publishOffer', detail: `Live on eBay${ebayEnv.production ? '' : ' sandbox'} as #${listingId}` });
+    return { externalId: listingId, url: `${ebayEnv.site}/itm/${listingId}`, simulated: false };
+  },
+};
+
+// Real eBay when every key from scripts/ebay-setup.ts is set, otherwise the labeled simulation.
+export function chooseEbay(): EbayPoster {
+  const missing = missingEbayKeys();
+  if (missing.length === 0) {
+    console.log(`[ebay] using real eBay ${ebayEnv.production ? 'PRODUCTION' : 'sandbox'}`);
+    return sandboxEbay;
+  }
+  console.log(`[ebay] simulated posting (missing ${missing.join(', ')})`);
+  return simulatedEbay;
 }
