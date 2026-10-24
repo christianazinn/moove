@@ -124,6 +124,8 @@ public protocol SyncBackend: AnyObject, Sendable {
     func registerUser(name: String, email: String?, auth0Sub: String?) async throws
     func importScan(_ scan: ScanImport) async throws
     func addItemPhoto(itemId: UInt64, url: String) async throws
+    /// `add_scan_photo` (#92): a wide room photo for the worker's photo sweep.
+    func addScanPhoto(scanId: UInt64, url: String) async throws
     func setDisposition(itemId: UInt64, disposition: Disposition) async throws
     func setSentimental(itemId: UInt64, maybeSentimental: Bool) async throws
     /// `set_item_colors` (#110): colors sampled from the scan's frames. nil clears them.

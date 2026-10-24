@@ -18,6 +18,18 @@ import Testing
         #expect(snap.items[0].photoUrls == ["http://x/a.jpg"])
     }
 
+    @Test func addScanPhotoChecksLikeTheModule() async throws {
+        let backend = FixtureBackend()
+        _ = try await backend.connect(token: nil)
+        try await backend.importScan(ScanImport(roomName: "Bedroom", objects: []))
+        let scanId = try #require(await firstSnapshot(backend).scans.first?.id)
+        try await backend.addScanPhoto(scanId: scanId, url: "https://x/room-0.jpg")
+        await #expect(throws: FixtureBackend.Failure.invalidUrl) { try await backend.addScanPhoto(scanId: scanId, url: "file:///tmp/a.jpg") }
+        await #expect(throws: FixtureBackend.Failure.noSuchScan) { try await backend.addScanPhoto(scanId: 9999, url: "https://x/a.jpg") }
+        for i in 1..<FixtureBackend.maxScanPhotos { try await backend.addScanPhoto(scanId: scanId, url: "https://x/\(i).jpg") }
+        await #expect(throws: FixtureBackend.Failure.tooManyPhotos) { try await backend.addScanPhoto(scanId: scanId, url: "https://x/last.jpg") }
+    }
+
     @Test func importScanStoresRoomPlanAttributes() async throws {
         let backend = FixtureBackend()
         _ = try await backend.connect(token: nil)

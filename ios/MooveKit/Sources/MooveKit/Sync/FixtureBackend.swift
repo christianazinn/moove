@@ -16,11 +16,15 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         case invalidAttribute
         case invalidColors
         case noSuchRoomCode
+        case noSuchScan
+        case invalidUrl
+        case tooManyPhotos
     }
 
     private let lock = NSLock()
     private var state: SyncSnapshot
     private var nextId: UInt64
+    private var scanPhotoCounts: [UInt64: Int] = [:]
     private var snapshotContinuations: [UUID: AsyncStream<SyncSnapshot>.Continuation] = [:]
     private var statusContinuations: [UUID: AsyncStream<SyncStatus>.Continuation] = [:]
     private let identity: IdentityHex
@@ -168,6 +172,21 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
     public func addItemPhoto(itemId: UInt64, url: String) async throws {
         try updateOwnedItem(itemId) { $0.photoUrls.append(url) }
     }
+
+    /// Same checks as `add_scan_photo`. There's no sweep agent offline, so nothing
+    /// else happens; the count is kept only to enforce the module's cap.
+    public func addScanPhoto(scanId: UInt64, url: String) async throws {
+        guard let parsed = URL(string: url), ["http", "https"].contains(parsed.scheme?.lowercased() ?? "") else { throw Failure.invalidUrl }
+        try mutateAuthed { s, me in
+            guard let scan = s.scans.first(where: { $0.id == scanId }) else { throw Failure.noSuchScan }
+            guard scan.owner == me || memberRoomIds.contains(scan.roomId) else { throw Failure.unauthorized }
+            guard scanPhotoCounts[scanId, default: 0] < Self.maxScanPhotos else { throw Failure.tooManyPhotos }
+            scanPhotoCounts[scanId, default: 0] += 1
+        }
+    }
+
+    /// `MAX_SCAN_PHOTOS` in the module.
+    public static let maxScanPhotos = 12
 
     public func setDisposition(itemId: UInt64, disposition: Disposition) async throws {
         try updateOwnedItem(itemId) {
