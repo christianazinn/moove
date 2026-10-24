@@ -7,10 +7,12 @@ import MooveKit
 /// small room labels floating just above the low wall tops. World space matches RoomPlan
 /// (meters, Y-up; plan y is world z), so items drop straight in at `VoxelHouse.floorTopM`.
 ///
-/// Dollhouse walls: every wall is built up to `cutawayHeightM`; the exterior walls above that,
-/// up to the plan's wall height, are one entity per facing. `setViewDirection` shows only the
-/// facings that point away from the camera, so the back walls stand full height (with their
-/// windows and door heads) and the near ones stay low, following the camera as it orbits.
+/// Dollhouse walls: interior walls are cut at `cutawayHeightM`; each exterior facing (and each
+/// corner shared by two) has a tall and a low wall piece (`VoxelHouse.buildLayers`).
+/// `setViewDirection` shows the tall pieces of the facings that point away from the camera and
+/// the low pieces of the rest, so the back walls stand full height as one continuous wall (with
+/// their windows, door heads and curtains at the window head) and the near ones stay low with a
+/// cap, following the camera as it orbits.
 @MainActor
 final class NewHomeScene {
     /// Near walls (and all interior walls) are cut at this height so the camera can see in.
@@ -20,8 +22,8 @@ final class NewHomeScene {
     private(set) var plan: FloorPlan?
     private var colors: [VoxelColor?] = [nil, nil]
     private var houseTask: Task<Void, Never>?
-    /// Full-height exterior walls above the cut, by outward facing.
-    private var upperWalls: [VoxelHouse.Facing: Entity] = [:]
+    /// Exterior wall pieces (tall and low looks), toggled by the view direction.
+    private var wallPieces: [(layer: VoxelHouse.Layer, entity: Entity)] = []
     /// Horizontal direction from the orbit target to the camera, world (x, z).
     private var viewDirection = SIMD2<Double>(0, 1)
 
@@ -32,7 +34,7 @@ final class NewHomeScene {
         colors = [wallColor, floorColor]
         houseTask?.cancel()
         root.children.removeAll()
-        upperWalls = [:]
+        wallPieces = []
         for room in plan.rooms { root.addChild(Self.label(for: room)) }
 
         // Voxelizing and meshing the whole house is pure MooveKit work: do it off the main actor.
@@ -41,7 +43,7 @@ final class NewHomeScene {
             let meshes = await Task.detached(priority: .userInitiated) {
                 let layers = VoxelHouse.buildLayers(plan, cutawayHeightM: height, wallColor: wallColor, floorColor: floorColor)
                 return (base: VoxelMesher.mesh(layers.base, centered: false),
-                        upper: layers.upper.mapValues { (mesh: VoxelMesher.mesh($0.grid, centered: false), offset: $0.offset) })
+                        pieces: layers.layers.map { (layer: $0, mesh: VoxelMesher.mesh($0.grid, centered: false)) })
             }.value
             guard let self, !Task.isCancelled, self.plan == plan,
                   let house = VoxelEntity.entity(meshes.base, name: "house") else { return }
@@ -49,27 +51,28 @@ final class NewHomeScene {
             let origin = SIMD3<Float>(Float(o.x), Float(o.y), Float(o.z))
             house.position = origin
             self.root.addChild(house)
-            for (facing, layer) in meshes.upper {
-                guard let walls = VoxelEntity.entity(layer.mesh, name: "walls.\(facing)") else { continue }
+            for (n, piece) in meshes.pieces.enumerated() {
+                let layer = piece.layer
+                guard let walls = VoxelEntity.entity(piece.mesh, name: "walls.\(layer.tall ? "tall" : "low").\(n)") else { continue }
                 walls.position = origin + SIMD3<Float>(layer.offset) * Float(VoxelGrid.voxelSize)
                 self.root.addChild(walls)
-                self.upperWalls[facing] = walls
+                self.wallPieces.append((layer, walls))
             }
             self.applyViewDirection()
         }
     }
 
     /// The camera's horizontal direction from its target, world (x, z). Cheap: only toggles
-    /// which upper-wall entities are enabled.
+    /// which wall-piece entities are enabled.
     func setViewDirection(_ v: SIMD2<Double>) {
         viewDirection = v
         applyViewDirection()
     }
 
     private func applyViewDirection() {
-        for (facing, walls) in upperWalls {
-            let back = facing.isBack(viewFromTarget: viewDirection)
-            if walls.isEnabled != back { walls.isEnabled = back }
+        for (layer, walls) in wallPieces {
+            let shown = layer.isShown(viewFromTarget: viewDirection)
+            if walls.isEnabled != shown { walls.isEnabled = shown }
         }
     }
 
