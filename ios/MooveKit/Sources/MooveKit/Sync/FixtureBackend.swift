@@ -6,6 +6,7 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
     public enum Failure: Error, Equatable {
         case notConnected
         case noSuchItem
+        case noSuchNewHome
         case unauthorized
     }
 
@@ -19,7 +20,8 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
     public init(identity: IdentityHex = "fixture-user", seed: SyncSnapshot = SyncSnapshot()) {
         self.identity = identity
         self.state = seed
-        let maxId = (seed.rooms.map(\.id) + seed.scans.map(\.id) + seed.items.map(\.id) + seed.comps.map(\.id)).max() ?? 0
+        let maxId = (seed.rooms.map(\.id) + seed.scans.map(\.id) + seed.items.map(\.id) + seed.comps.map(\.id)
+                     + seed.newHomes.map(\.id) + seed.layouts.map(\.id)).max() ?? 0
         self.nextId = maxId + 1
     }
 
@@ -111,6 +113,20 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
 
     public func setSentimental(itemId: UInt64, maybeSentimental: Bool) async throws {
         try updateOwnedItem(itemId) { $0.maybeSentimental = maybeSentimental }
+    }
+
+    public func createNewHome(name: String, source: NewHomeSource, floorPlanJson: String) async throws {
+        try mutateAuthed { s, me in
+            s.newHomes.append(NewHome(id: takeId(), owner: me, name: name, source: source, floorPlanJson: floorPlanJson))
+        }
+    }
+
+    public func saveLayout(newHomeId: UInt64, name: String, placementsJson: String) async throws {
+        try mutateAuthed { s, me in
+            guard let home = s.newHomes.first(where: { $0.id == newHomeId }) else { throw Failure.noSuchNewHome }
+            guard home.owner == me else { throw Failure.unauthorized }
+            s.layouts.append(Layout(id: takeId(), owner: me, newHomeId: newHomeId, name: name, placementsJson: placementsJson))
+        }
     }
 
     /// Worker-side reducer, exposed so tests can check user overrides survive an agent re-run.

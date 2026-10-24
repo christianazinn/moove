@@ -19,6 +19,8 @@ struct RootView: View {
             NavigationStack { screen(ReviewView()) }
                 .tag("review")
                 .tabItem { Label("Review", systemImage: "checklist") }
+            NavigationStack { screen(NewHomeView()) }
+                .tabItem { Label("New Home", systemImage: "house") }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .task { await store.connect(token: nil) }

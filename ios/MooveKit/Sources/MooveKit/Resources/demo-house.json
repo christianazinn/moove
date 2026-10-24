@@ -1,0 +1,30 @@
+{
+  "name": "Demo house · 2 bed, 1 bath",
+  "wallHeightM": 2.6,
+  "rooms": [
+    { "name": "Living room", "kind": "living",   "polygon": [[0, 0], [6, 0], [6, 5], [0, 5]],             "widthM": 6.0, "depthM": 5.0 },
+    { "name": "Kitchen",     "kind": "kitchen",  "polygon": [[6, 0], [11, 0], [11, 5], [6, 5]],           "widthM": 5.0, "depthM": 5.0 },
+    { "name": "Hallway",     "kind": "hallway",  "polygon": [[0, 5], [11, 5], [11, 6.2], [0, 6.2]],       "widthM": 11.0, "depthM": 1.2 },
+    { "name": "Bedroom",     "kind": "bedroom",  "polygon": [[0, 6.2], [4.5, 6.2], [4.5, 10.2], [0, 10.2]], "widthM": 4.5, "depthM": 4.0 },
+    { "name": "Bathroom",    "kind": "bathroom", "polygon": [[4.5, 6.2], [7, 6.2], [7, 10.2], [4.5, 10.2]], "widthM": 2.5, "depthM": 4.0 },
+    { "name": "Bedroom 2",   "kind": "bedroom",  "polygon": [[7, 6.2], [11, 6.2], [11, 10.2], [7, 10.2]],  "widthM": 4.0, "depthM": 4.0 }
+  ],
+  "doors": [
+    { "from": [2.5, 0],   "to": [3.5, 0] },
+    { "from": [6, 1.5],   "to": [6, 3.5] },
+    { "from": [4.6, 5],   "to": [5.5, 5] },
+    { "from": [9.2, 5],   "to": [10.1, 5] },
+    { "from": [3.0, 6.2], "to": [3.9, 6.2] },
+    { "from": [5.3, 6.2], "to": [6.1, 6.2] },
+    { "from": [7.6, 6.2], "to": [8.5, 6.2] }
+  ],
+  "windows": [
+    { "from": [0.8, 0],   "to": [2.0, 0] },
+    { "from": [4.0, 0],   "to": [5.5, 0] },
+    { "from": [11, 1.0],  "to": [11, 2.5] },
+    { "from": [0, 7.5],   "to": [0, 9.0] },
+    { "from": [1.0, 10.2], "to": [3.0, 10.2] },
+    { "from": [5.2, 10.2], "to": [6.2, 10.2] },
+    { "from": [8.0, 10.2], "to": [10.0, 10.2] }
+  ]
+}
