@@ -13,6 +13,7 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         case unauthorized
         case noSuchShoppingItem
         case dealDoesNotMatchItem
+        case invalidAttribute
     }
 
     private let lock = NSLock()
@@ -93,16 +94,23 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
     }
 
     public func importScan(_ scan: ScanImport) async throws {
+        // import_scan_v2: validate every object's attributes before writing anything, de-duplicate.
+        let attributes = try scan.objects.map { object -> [String] in
+            guard object.attributes.count <= ScanObject.maxAttributes,
+                  object.attributes.allSatisfy(ScanObject.isValidAttribute) else { throw Failure.invalidAttribute }
+            var seen = Set<String>()
+            return object.attributes.filter { seen.insert($0).inserted }
+        }
         try mutateAuthed { s, me in
             let roomId = takeId()
             s.rooms.append(Room(id: roomId, owner: me, name: scan.roomName))
             s.scans.append(Scan(id: takeId(), owner: me, roomId: roomId, usdzUrl: scan.usdzUrl, capturedRoomJsonUrl: scan.capturedRoomJsonUrl))
-            for object in scan.objects {
+            for (object, attributes) in zip(scan.objects, attributes) {
                 s.items.append(Item(
                     id: takeId(), owner: me, roomId: roomId, scanObjectId: object.scanObjectId,
                     name: object.category.capitalized, category: object.category,
                     widthM: object.widthM, heightM: object.heightM, depthM: object.depthM,
-                    photoUrls: object.photoUrl.map { [$0] } ?? []
+                    photoUrls: object.photoUrl.map { [$0] } ?? [], attributes: attributes
                 ))
             }
         }

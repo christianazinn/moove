@@ -53,15 +53,35 @@ public struct ScanObject: Codable, Sendable, Hashable {
     public var heightM: Double
     public var depthM: Double
     public var photoUrl: String?
+    /// RoomPlan (iOS 17) attributes, type-prefixed raw values like "ChairLegType.star" (#110).
+    /// [] for objects RoomPlan didn't classify (manual / extra detections).
+    public var attributes: [String]
 
-    public init(scanObjectId: String, category: String, widthM: Double, heightM: Double, depthM: Double, photoUrl: String? = nil) {
+    public init(scanObjectId: String, category: String, widthM: Double, heightM: Double, depthM: Double,
+                photoUrl: String? = nil, attributes: [String] = []) {
         self.scanObjectId = scanObjectId
         self.category = category
         self.widthM = widthM
         self.heightM = heightM
         self.depthM = depthM
         self.photoUrl = photoUrl
+        self.attributes = attributes
     }
+
+    /// The module's rule for one attribute (`import_scan_v2`): `Type.value`, letters and digits.
+    public static func isValidAttribute(_ a: String) -> Bool {
+        let parts = a.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 2, let type = parts.first, let value = parts.last,
+              (1...41).contains(type.count), (1...40).contains(value.count),
+              let first = type.first, first.isASCII, first.isLetter else { return false }
+        func ascii(_ c: Character, underscore: Bool) -> Bool {
+            c.isASCII && (c.isLetter || c.isNumber || (underscore && c == "_"))
+        }
+        return type.allSatisfy { ascii($0, underscore: false) } && value.allSatisfy { ascii($0, underscore: true) }
+    }
+
+    /// At most this many attributes per object (`import_scan_v2`).
+    public static let maxAttributes = 32
 }
 
 /// A whole scan, imported in one reducer call so the room, scan and items

@@ -92,16 +92,18 @@ extension SpacetimeBackend {
         try await call(RegisterUserReducer(auth0sub: auth0Sub ?? "", nameArg: name, email: email ?? ""))
     }
 
+    /// `import_scan_v2` (#110): `import_scan` plus each object's RoomPlan attributes.
     func importScan(_ scan: ScanImport) async throws {
-        try await call(ImportScanReducer(
+        try await call(ImportScanV2Reducer(
             roomname: scan.roomName,
             home: Home.old.rawValue,
             usdzurl: scan.usdzUrl ?? "",
             capturedroomjsonurl: scan.capturedRoomJsonUrl ?? "",
             objects: scan.objects.map {
                 // name '' = the module names it from the category until vision runs.
-                ScanObjectInput(scanObjectId: $0.scanObjectId, name: "", category: $0.category,
-                                widthM: $0.widthM, heightM: $0.heightM, depthM: $0.depthM, photoUrl: $0.photoUrl ?? "")
+                ScanObjectInputV2(scanObjectId: $0.scanObjectId, name: "", category: $0.category,
+                                  widthM: $0.widthM, heightM: $0.heightM, depthM: $0.depthM, photoUrl: $0.photoUrl ?? "",
+                                  attributes: $0.attributes)
             }
         ))
     }
@@ -180,7 +182,8 @@ private extension Item {
             disposition: Disposition(rawValue: r.disposition) ?? .undecided,
             dispositionSource: DispositionSource(rawValue: r.dispositionSource) ?? .auto,
             dispositionReason: optional(r.dispositionReason),
-            fragile: r.fragile, maybeSentimental: r.maybeSentimental, updatedAt: r.updatedAt.date
+            fragile: r.fragile, maybeSentimental: r.maybeSentimental, updatedAt: r.updatedAt.date,
+            attributes: Item.attributes(json: r.attributesJson), colors: ItemColors(json: r.colorsJson)
         )
     }
 
