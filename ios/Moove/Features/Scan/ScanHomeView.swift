@@ -48,12 +48,15 @@ struct ScanHomeView: View {
             if !store.snapshot.rooms.isEmpty {
                 Section("Scanned rooms") {
                     ForEach(store.snapshot.rooms) { room in
-                        LabeledContent(room.name, value: "\(store.items.filter { $0.roomId == room.id }.count) items")
+                        NavigationLink(value: room) {
+                            LabeledContent(room.name, value: "\(store.items.filter { $0.roomId == room.id }.count) items")
+                        }
                     }
                 }
             }
         }
         .navigationTitle("Scan")
+        .navigationDestination(for: Room.self) { RoomDetailView(room: $0) }
         .fullScreenCover(isPresented: $scanning, onDismiss: {
             if !store.items.isEmpty { tab = "inventory" }
         }) {
