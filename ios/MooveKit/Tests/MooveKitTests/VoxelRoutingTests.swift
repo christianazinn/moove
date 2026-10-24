@@ -55,6 +55,14 @@ struct VoxelRoutingTests {
         #expect(kind("electronics", "Hair dryer") == .electronics)
         #expect(kind("sofa", "Sofa bed") == .sofa)
         #expect(kind("furniture", "Bedside table") == .dresser)
+        // a small-object category keeps its kind whatever furniture words describe it
+        #expect(kind("books", "Coffee table book") == .books)
+        #expect(kind("electronics", "TV remote") == .electronics)
+        #expect(kind("electronics", "Samsung TV") == .tv)
+        #expect(kind("clothes", "Bed sheets") == .clothes)
+        #expect(kind("decor", "Chair cushion") == .decor)
+        #expect(kind("kitchenware", "Microwave-safe bowls") == .kitchenware)
+        #expect(kind("decor", "Desk organizer") == .decor)
     }
 
     @Test func unnamedBroadCategoryGuessesFromShape() {
