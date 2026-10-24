@@ -45,6 +45,19 @@ export function filterSummary(f: FilterResult, total: number): string {
 }
 
 const inFlight = new Set<bigint>();
+// Items waiting out a transient failure (Apify's free plan allows 5 concurrent actor runs; a scan
+// that imports 30 items at once used to fail most of them).
+const coolingDown = new Set<bigint>();
+const attempts = new Map<bigint, number>();
+// Each item runs one actor per comps source (2 by default), so 2 items keep us under Apify's 5.
+const CONCURRENCY = Math.max(1, Number(process.env.PRICING_CONCURRENCY ?? 2));
+const MAX_ATTEMPTS = 3;
+const RETRY_BASE_MS = Number(process.env.PRICING_RETRY_BASE_MS ?? 30_000);
+
+/** Errors worth retrying later: rate/concurrency limits, upstream 5xx, network trouble. */
+export function isTransientPricingError(err: unknown): boolean {
+  return /concurrent-runs-limit|rate.?limit|too many requests|HTTP (?:429|5\d\d)\b|fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|socket hang up|timed? ?out|aborted/i.test(String(err));
+}
 
 // Price after vision has had its chance: details done/failed, or no photos to look at.
 // RoomPlan's catch-all categories. "other" or "storage" alone buys junk comps, so items named only
@@ -56,11 +69,11 @@ export function isGenericQuery(it: Item): boolean {
 }
 
 export function needsPricing(it: Item): boolean {
-  if (it.pricingStatus !== 'pending' || inFlight.has(it.id) || isGenericQuery(it)) return false;
+  if (it.pricingStatus !== 'pending' || inFlight.has(it.id) || coolingDown.has(it.id) || isGenericQuery(it)) return false;
   return it.detailsStatus === 'done' || it.detailsStatus === 'failed' || it.photoUrls.length === 0;
 }
 
-async function price(conn: Conn, it: Item): Promise<void> {
+async function price(conn: Conn, it: Item, retry: (it: Item, delayMs: number) => void): Promise<void> {
   inFlight.add(it.id);
   const q = queryFor(it);
   conn.reducers.setItemStage({ itemId: it.id, stage: 'running', field: 'pricing' });
@@ -123,8 +136,18 @@ async function price(conn: Conn, it: Item): Promise<void> {
       data: { query: q, replayed, n: comps.length, dropped, filter: f.mode, filterClaude: f.claude, ...e },
     });
   } catch (err) {
-    conn.reducers.setItemStage({ itemId: it.id, stage: 'failed', field: 'pricing' });
-    logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'error', message: String(err), refTable: 'item', refId: it.id });
+    const n = (attempts.get(it.id) ?? 0) + 1;
+    attempts.set(it.id, n);
+    if (isTransientPricingError(err) && n < MAX_ATTEMPTS) {
+      const delayMs = RETRY_BASE_MS * 3 ** (n - 1);
+      coolingDown.add(it.id);
+      conn.reducers.setItemStage({ itemId: it.id, stage: 'pending', field: 'pricing' });
+      logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'error', message: `Comps lookup busy, retrying in ${Math.round(delayMs / 1000)} s (attempt ${n}/${MAX_ATTEMPTS}): ${String(err).slice(0, 200)}`, refTable: 'item', refId: it.id });
+      retry(it, delayMs);
+    } else {
+      conn.reducers.setItemStage({ itemId: it.id, stage: 'failed', field: 'pricing' });
+      logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'error', message: String(err), refTable: 'item', refId: it.id });
+    }
   } finally {
     inFlight.delete(it.id);
   }
@@ -134,9 +157,39 @@ async function price(conn: Conn, it: Item): Promise<void> {
 export const pricingAgent: Agent = {
   name: 'pricing',
   start(conn) {
-    const maybe = (it: Item) => {
-      if (needsPricing(it)) void price(conn, it);
+    const queue: Item[] = [];
+    let running = 0;
+    const pump = () => {
+      while (running < CONCURRENCY && queue.length > 0) {
+        const it = queue.shift()!;
+        if (!needsPricing(it)) continue;
+        running++;
+        void price(conn, it, retry).finally(() => {
+          running--;
+          pump();
+        });
+      }
     };
+    const maybe = (it: Item) => {
+      if (needsPricing(it) && !queue.some(q => q.id === it.id)) {
+        queue.push(it);
+        pump();
+      }
+    };
+    function retry(it: Item, delayMs: number) {
+      setTimeout(() => {
+        coolingDown.delete(it.id);
+        const row = conn.db.item.id.find(it.id);
+        if (row) maybe(row);
+      }, delayMs).unref?.();
+    }
+    // PRICING_RETRY_FAILED=1: items an earlier run gave up on (e.g. the Apify concurrency limit
+    // before this queue existed) get one more try. Opt-in, since each retry spends Apify credit.
+    if (process.env.PRICING_RETRY_FAILED === '1') for (const it of conn.db.item.iter()) {
+      if (it.pricingStatus === 'failed' && !isGenericQuery(it)) {
+        conn.reducers.setItemStage({ itemId: it.id, stage: 'pending', field: 'pricing' });
+      }
+    }
     for (const it of conn.db.item.iter()) maybe(it);
     conn.db.item.onInsert((_ctx, it) => maybe(it));
     conn.db.item.onUpdate((_ctx, _old, it) => maybe(it));
