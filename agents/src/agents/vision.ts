@@ -8,7 +8,7 @@ import { loadImage, structuredCall } from '../integrations/anthropic.js';
 
 const ItemDetails = z.object({
   name: z.string().describe('Short, specific name a buyer would search for. Include the main visible color and any shape or style words, e.g. "white IKEA Kallax 2x4 shelf", "gray L-shaped sectional sofa", "black mesh office chair", "round walnut dining table", "tufted beige headboard bed". These words also drive the item\'s 3D look in the app: when visible, always include one color word and the shape word (round, oval, L-shaped, sectional, corner, standing, tufted, arc, torchiere, platform, cube...).'),
-  category: z.string().describe('One of the app\'s 3D model categories: sofa, bed, mattress, desk, chair, table, dresser, storage, lamp, tv, books, art, photos, plant, rug, kitchenware, clothes, electronics, appliance, decor. If none fits, a short plain noun (e.g. "instrument", "bicycle", "bag")'),
+  category: z.string().describe('One of the app\'s 3D model categories: sofa, bed, mattress, desk, chair, table, nightstand, dresser, bookshelf, storage, bench, ottoman, lamp, tv, books, art, photos, plant, rug, mirror, kitchenware, clothes, electronics, refrigerator, stove, microwave, dishwasher, washer, fan, bike, suitcase, appliance, decor. Keep the scan\'s category unless the photos show otherwise (a scanned "table" that is a desk is "desk"). If none fits, a short plain noun (e.g. "instrument", "bicycle", "bag")'),
   material: z.string().describe('Main material(s) with finish/color, e.g. "walnut veneer", "white laminate", "gray fabric", "black leather", "brushed steel"; "" if unclear'),
   brand: z.string().describe('Brand or maker if identifiable from logos/design, else ""'),
   condition: z.enum(['new', 'like_new', 'good', 'fair', 'poor']),
