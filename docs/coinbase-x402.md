@@ -2,6 +2,13 @@
 
 Submission notes for the Coinbase **Best Use of x402 / Payment Agents** track (Cal Hacks 13.0). The same text is pasted into Devpost.
 
+Where each submission item is:
+- **Summary:** the "Summary" section below.
+- **Demo:** shot 5 of [`docs/demo-video.md`](demo-video.md) (the Spending screen, the Basescan link, a refused call), with the live runbook in [`docs/demo.md`](demo.md). The video is recorded Sunday morning.
+- **Repo and setup:** https://github.com/christianazinn/moove, and the "Setup" section below.
+- **Architecture diagram:** the "Architecture diagram" section below (Mermaid, plus an ASCII fallback).
+- **Builder feedback:** the "Builder feedback" section at the end.
+
 ## Summary
 **Who it's for.** People in the middle of a move. Pricing, selling, buying and paying for a whole household is hours of tedious work, so Moove hands it to agents. The user stays in control: they set the limits, approve anything big, and watch every cent the agents spend.
 
@@ -79,10 +86,12 @@ Agent worker                                       |
 ```
 
 ## Controls
-- **Spend caps, enforced before signing.** There's a per-agent budget (`AGENT_SPEND_CAP_USDC`, default $5) and a per-call max (`X402_MAX_PER_CALL_USDC`, default $0.10). Amounts are reserved before signing and released on failure, so concurrent calls from one agent can't overspend (there's a test for this). Over-cap calls are refused and logged as `agent_event` rows that the app shows.
+- **Spend caps, enforced before signing.** There's a per-agent budget (`AGENT_SPEND_CAP_USDC`, default $5) and a per-call max (`X402_MAX_PER_CALL_USDC`, default $0.10). Amounts are reserved before signing and released on failure, so concurrent calls from one agent can't overspend (there's a test for this). Over-cap calls are refused and logged as `agent_event` rows that the app shows. A bad cap value (say `5usd` or a negative number) logs a warning and falls back to the default instead of breaking the rail (#143, `agents/src/integrations/caps.ts`). Budgets survive a restart: at startup the worker counts the last 24h of x402 `payment` rows against each agent (`agents/src/payments.ts`).
+- **Our own API spend is capped too.** Live Claude calls stop at `CLAUDE_MAX_USD_PER_DAY` (default $3, #169), and live Apify runs, for comps and for the buy agent's deal search, share `APIFY_MAX_USD_PER_DAY` (default $2, #170, #210). The worker publishes today's spend against both caps in `service_config.spend_today` (#220), and the app's Settings shows it (#232).
 - **Asset, network and payee allowlist.** The rail only pays USDC on Base Sepolia, and with `X402_ALLOWED_PAYEES` set (comma-separated) it refuses any `payTo` outside the list. The SDK's `spendControls` (per-payment max, a 24h cumulative cap, allowed networks and assets) sit underneath as a backstop.
-- **Human approval for big spends.** Purchases or listings above the user's `approvalThresholdCents` create an `approvals` row and need an Auth0 async authorization (CIBA) on the phone first (task #12). x402 data calls stay far below that threshold, and the per-call max keeps them there.
-- **Simulated labeling.** With no CDP keys, or with `X402_SIMULATE=1`, the rail signs nothing. Every `payment` row has `simulated: true`, every event message starts with `[SIMULATED]`, and the app shows a SIMULATED badge. Simulated payments are never shown as real.
+- **Human approval for big spends.** Purchases or listings above the user's `approvalThresholdCents` create an `approvals` row and need an Auth0 async authorization (CIBA) on the phone, or a tap in the in-app inbox, first (task #12). An approval nobody answers expires after `APPROVAL_EXPIRE_HOURS` (default 12) and is asked again at most `APPROVAL_MAX_REASKS` (2) times (#186, #199, #214; `agents/src/agents/approval-expiry.ts`). Room members may decide listing approvals, but purchases spend the owner's money and stay owner-only (#200, #239, #248; `decide_approval` in `spacetime/src/index.ts`). x402 data calls stay far below the threshold, and the per-call max keeps them there.
+- **Simulated labeling.** With no CDP keys, or with `X402_SIMULATE=1`, the rail signs nothing. Every `payment` row has `simulated: true`, every event message starts with `[SIMULATED]` (#154), and the app shows a SIMULATED badge. Simulated payments are never shown as real.
+- **Checked on every PR.** `npm run e2e -- --replay` (22 stages, #133) runs the worker on a local SpacetimeDB with a $0.05 budget and checks that pricing calls past it are refused before anything is signed, and that every rail event is labeled `[SIMULATED]` (`agents/scripts/e2e.ts`). It makes no paid calls, and the worker refuses `LLM_REPLAY` against maincloud (#157). CI also taps through Sell & Buy, Spending included, in an iOS Simulator on the Offline demo (#155; it runs when a PR touches `ios/` and on pushes to `main`).
 - **Keys in env only.** CDP keys live in the gitignored `.env.local` or in the worker's environment, never in git. CI runs gitleaks. The wallet is a CDP server wallet, so its private keys never touch our machines.
 - **Full audit trail.** Every step (tool call, payment, refusal, error) is an `agent_event` row, and every payment is a `payment` row with its tx hash.
 
@@ -119,15 +128,20 @@ To reuse the rail in another project, copy `agents/src/integrations/x402.ts` and
 A real x402 payment of 0.01 USDC from the agents' CDP wallet to the comps paywall settled on Base Sepolia in block 49461682:
 https://sepolia.basescan.org/tx/0xc7942646380456c56dde204434aeb6115338b521b6e91a0901ec05dde1fe136c
 
-That payment was made by `npm run x402:demo`. The pricing agent's payments in the worker go through the same rail and paywall, and each one lands as a `payment` row with its tx hash, shown in the app's spending log.
+That payment was made by `npm run x402:demo`. A second one came from the local end-to-end run `npm run x402:e2e` (PR #48), which landed its `payment` and `agent_event` rows in SpacetimeDB:
+https://sepolia.basescan.org/tx/0x9bf1f717c8901a4a5dfc137099cb4254e4dfd5d0b584873184b883924a8ff37d
+
+The pricing agent's payments in the worker go through the same rail and paywall, and with CDP keys each one lands as a `payment` row with its tx hash, shown in the app's spending log. The demo worker has no CDP keys, so its x402 rows are simulated (see "Known limitations").
 
 ## Known limitations
 - **Testnet only** (Base Sepolia, testnet USDC).
+- **No CDP keys on the demo worker.** The worker running against the Live and Demo databases has no CDP keys, so every x402 row there is simulated and labeled, with no Basescan link. The real settlements are the two proof txs above. The Offline demo's spending log includes the real $0.01 row with its Basescan link.
 - **One shared wallet for all agents.** Per-agent budgets are enforced in the worker process, not on-chain. A bug in the worker could bypass them. Only the SDK `spendControls` backstop would still apply.
 - **Budgets are tracked in the worker.** The spend ledger lives in memory. On startup it is seeded from the last 24h of `payment` rows (`X402_SEED_BUDGETS=1`, the default), so a restart doesn't reset an agent's budget, but the window is rolling rather than a fixed period.
 - **The comps endpoint is our own paywall.** No third-party x402 data service fit, so we pay ourselves. The flow and settlement are real, but the money goes between two of our own wallets.
 - **Only the pricing agent pays over x402 so far.** It buys its comps through the paywall (#46). If a payment fails it falls back to a direct (unpaid) Apify lookup, so not every pricing run is guaranteed to produce a payment. The buy agent doesn't use the rail yet.
-- **The live spending log is unverified on device.** Since PR #28 the app subscribes to `payment` and `agent_event` for the signed-in identity, so worker payments should appear live; nobody has checked it on a phone against the maincloud worker yet. The Offline demo (fixture data, including the real Basescan link) is the fallback. `npm run e2e` checks the worker side on a local SpacetimeDB (pricing writes one simulated x402 `payment` row per item).
+- **The live spending log is unverified on device.** Since PR #28 the app subscribes to `payment` and `agent_event` for the signed-in identity, so worker payments should appear live; nobody has checked it on a phone against the maincloud worker yet. The Offline demo (fixture data, including the real Basescan link) is the fallback, and CI opens its Spending screen in a Simulator (#155). `npm run e2e` checks the worker side on a local SpacetimeDB (pricing writes one simulated x402 `payment` row per item).
+- **A joined room member doesn't see the room's x402 payments yet.** Payments are read per identity, so a second phone in a shared room sees the owner's items but not the comps payments made for them. Views for that (`my_payment`, with purchases staying owner-only) are an open proposal (#254).
 
 ## Builder feedback
 **Biggest blocker: installing and type-checking the CDP x402 packages.**
