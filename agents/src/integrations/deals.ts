@@ -175,7 +175,8 @@ export function sellerInfo(d: RankedDeal): string {
     // The seller text already says "distance unknown" when a source has no coordinates.
     ...(d.seller.includes('distance unknown') ? [] : [distanceLabel(d)]),
     d.checkout === 'visa' ? 'Visa checkout' : 'message seller',
-    `score ${d.score.toFixed(2)}`,
+    // The rank score is left off a planted demo scam, so it can't be read as its fraud score (0.85).
+    ...(d.planted ? [] : [`score ${d.score.toFixed(2)}`]),
     ...(d.sample ? ['sample data'] : d.replay ? ['cached replay'] : []),
   ].join(' · ');
 }

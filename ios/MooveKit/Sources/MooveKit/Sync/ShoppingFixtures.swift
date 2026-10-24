@@ -72,9 +72,10 @@ extension DemoFixtures {
                  "https://www.ikea.com/us/en/search/?q=markus", "IKEA · new · ships · Visa checkout · score 0.61"),
             // The planted demo scam, same as the worker's (agents/fixtures/deals.json, "planted": true),
             // with the score and reasons its real fraud rules give it, so offline and live tell one story.
+            // Like the worker's, its seller info has no rank score, so 0.85 is the only score shown.
             deal(76, 52, "craigslist", "Herman Miller Aeron, brand new, $95, Zelle only, ship only", 9_500,
                  "https://example.invalid/moove-demo/planted-scam-aeron",
-                 "Planted demo scam (not a real listing) · new · ships · message seller · score 0.42",
+                 "Planted demo scam (not a real listing) · new · ships · message seller",
                  fraud: 0.85,
                  reasons: ["asks for payment by Zelle", "shipping only, no meetup"]),
 
