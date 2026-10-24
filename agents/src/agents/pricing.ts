@@ -47,8 +47,16 @@ export function filterSummary(f: FilterResult, total: number): string {
 const inFlight = new Set<bigint>();
 
 // Price after vision has had its chance: details done/failed, or no photos to look at.
-function needsPricing(it: Item): boolean {
-  if (it.pricingStatus !== 'pending' || inFlight.has(it.id)) return false;
+// RoomPlan's catch-all categories. "other" or "storage" alone buys junk comps, so items named only
+// that wait until vision (or the user, via rename_item) gives them a real name.
+const GENERIC_NAMES = new Set(['', 'other', 'unknown', 'object', 'item', 'storage']);
+
+export function isGenericQuery(it: Item): boolean {
+  return !it.brand && GENERIC_NAMES.has((it.name || it.category).trim().toLowerCase());
+}
+
+export function needsPricing(it: Item): boolean {
+  if (it.pricingStatus !== 'pending' || inFlight.has(it.id) || isGenericQuery(it)) return false;
   return it.detailsStatus === 'done' || it.detailsStatus === 'failed' || it.photoUrls.length === 0;
 }
 
