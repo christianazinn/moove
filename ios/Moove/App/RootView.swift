@@ -6,14 +6,18 @@ import MooveKit
 struct RootView: View {
     @Environment(MooveStore.self) private var store
     @State private var showSettings = false
+    @AppStorage("moove.tab") private var tab = "scan"
 
     var body: some View {
-        TabView {
+        TabView(selection: $tab) {
             NavigationStack { screen(ScanHomeView()) }
+                .tag("scan")
                 .tabItem { Label("Scan", systemImage: "camera.viewfinder") }
             NavigationStack { screen(InventoryView()) }
+                .tag("inventory")
                 .tabItem { Label("Inventory", systemImage: "shippingbox") }
             NavigationStack { screen(ReviewView()) }
+                .tag("review")
                 .tabItem { Label("Review", systemImage: "checklist") }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
