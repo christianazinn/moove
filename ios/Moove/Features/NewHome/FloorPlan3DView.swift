@@ -14,9 +14,12 @@ struct FloorPlan3DView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
+    /// Theme `surface`: warm paper in light mode, dark walnut in dark mode.
+    static var sceneBackground: UIColor { Theme.dynamicUIColor(0xEAE3D7, 0x26211B) }
+
     func makeUIView(context: Context) -> ARView {
         let view = ARView(frame: .zero, cameraMode: .nonAR, automaticallyConfigureSession: false)
-        view.environment.background = .color(UIColor(red: 0.95, green: 0.95, blue: 0.97, alpha: 1))
+        view.environment.background = .color(Self.sceneBackground.resolvedColor(with: view.traitCollection))
         context.coordinator.attach(to: view)
         context.coordinator.show(plan, focusRoom: focusRoom, animated: false)
         context.coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken)
@@ -24,6 +27,7 @@ struct FloorPlan3DView: UIViewRepresentable {
     }
 
     func updateUIView(_ view: ARView, context: Context) {
+        view.environment.background = .color(Self.sceneBackground.resolvedColor(with: view.traitCollection))
         context.coordinator.show(plan, focusRoom: focusRoom, animated: true)
         context.coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken)
     }
