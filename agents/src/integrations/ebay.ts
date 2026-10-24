@@ -24,6 +24,9 @@ export type PublishResult = { externalId: string; url: string; simulated: boolea
 export interface EbayPoster {
   readonly simulated: boolean;
   publish(l: ListingInput, onStep: (s: PublishStep) => void): Promise<PublishResult>;
+  // Real backends only: the listing if it is already live (looked up by SKU), else null. The
+  // listing agent calls it for a post a restart interrupted (#144), so it never posts twice.
+  findLive?(listingId: bigint): Promise<PublishResult | null>;
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -331,8 +334,23 @@ function imageUrls(l: ListingInput): string[] {
 
 type OfferSummary = { offerId: string; status?: string; listing?: { listingId?: string } };
 
+// The SKU's existing offer, if any. Retries reuse it (a second createOffer for the same SKU fails).
+async function existingOffer(sku: string): Promise<{ offerId?: string; publishedId?: string }> {
+  const existing = await ebayCall<{ offers?: OfferSummary[] }>('GET', `/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${ebayEnv.marketplaceId}`, {
+    okStatuses: [404],
+  });
+  const o = existing.offers?.[0];
+  return { offerId: o?.offerId, publishedId: o?.status === 'PUBLISHED' ? o.listing?.listingId : undefined };
+}
+
+const live = (listingId: string): PublishResult => ({ externalId: listingId, url: `${ebayEnv.site}/itm/${listingId}`, simulated: false });
+
 export const sandboxEbay: EbayPoster = {
   simulated: false,
+  async findLive(listingId) {
+    const { publishedId } = await existingOffer(`MOOVE-${listingId}`);
+    return publishedId ? live(publishedId) : null;
+  },
   async publish(l, onStep) {
     const sku = `MOOVE-${l.listingId}`;
     const images = imageUrls(l);
@@ -369,15 +387,12 @@ export const sandboxEbay: EbayPoster = {
         returnPolicyId: env('EBAY_RETURN_POLICY_ID'),
       },
     };
-    // Retries reuse the SKU's existing offer (a second createOffer for the same SKU fails).
-    const existing = await ebayCall<{ offers?: OfferSummary[] }>('GET', `/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${ebayEnv.marketplaceId}`, {
-      okStatuses: [404],
-    });
-    let offerId = existing.offers?.[0]?.offerId;
-    const publishedId = existing.offers?.[0]?.status === 'PUBLISHED' ? existing.offers[0].listing?.listingId : undefined;
-    if (publishedId) {
-      onStep({ call: 'getOffers', detail: `SKU ${sku} is already live as #${publishedId}` });
-      return { externalId: publishedId, url: `${ebayEnv.site}/itm/${publishedId}`, simulated: false };
+    // Retries reuse the SKU's existing offer, and an already-published one is returned as is.
+    const existing = await existingOffer(sku);
+    let offerId = existing.offerId;
+    if (existing.publishedId) {
+      onStep({ call: 'getOffers', detail: `SKU ${sku} is already live as #${existing.publishedId}` });
+      return live(existing.publishedId);
     }
     if (offerId) {
       await ebayCall('PUT', `/sell/inventory/v1/offer/${offerId}`, { body: offer });
@@ -388,7 +403,7 @@ export const sandboxEbay: EbayPoster = {
 
     const { listingId } = await ebayCall<{ listingId: string }>('POST', `/sell/inventory/v1/offer/${offerId}/publish`);
     onStep({ call: 'publishOffer', detail: `Live on eBay${ebayEnv.production ? '' : ' sandbox'} as #${listingId}` });
-    return { externalId: listingId, url: `${ebayEnv.site}/itm/${listingId}`, simulated: false };
+    return live(listingId);
   },
 };
 

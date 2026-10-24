@@ -133,7 +133,7 @@ public struct MoveSummary: Sendable, Equatable {
         listings.compactMap { l in
             switch l.status {
             case .sold: Sale(itemId: l.itemId, priceCents: l.priceCents, stage: .sold, simulated: l.simulated)
-            case .posted, .awaitingApproval: Sale(itemId: l.itemId, priceCents: l.priceCents, stage: .listed, simulated: l.simulated)
+            case .posted, .posting, .awaitingApproval: Sale(itemId: l.itemId, priceCents: l.priceCents, stage: .listed, simulated: l.simulated)
             case .draft, .rejected, .failed: nil
             }
         }

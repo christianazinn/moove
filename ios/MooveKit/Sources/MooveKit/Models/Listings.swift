@@ -3,7 +3,10 @@ import Foundation
 public enum ListingStatus: String, Codable, Sendable, CaseIterable {
     case draft
     case awaitingApproval = "awaiting_approval"
-    case rejected, posted, sold, failed
+    case rejected
+    /// The worker has claimed the post and is publishing it right now (#144).
+    case posting
+    case posted, sold, failed
 }
 
 /// Mirror of the `listing` table. `simulated` listings were never sent to eBay
