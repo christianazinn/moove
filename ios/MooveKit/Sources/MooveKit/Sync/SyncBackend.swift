@@ -34,9 +34,10 @@ public struct SyncSnapshot: Sendable, Equatable {
     /// The item's newest listing, if the listing agent has written one.
     public func listing(for itemId: UInt64) -> Listing? { listings.filter { $0.itemId == itemId }.max { $0.id < $1.id } }
 
-    /// Payments plus refusals, newest first, with per-agent budgets (#7).
+    /// The user's own payments plus refusals, newest first, with per-agent budgets (#7).
+    /// Shared-room rows (#254) are left out; `spendingSplit()` has them separately.
     public func spendingLog(capPerAgentUsdMicros: Int64 = UsdMicros.defaultAgentCap) -> SpendingLog {
-        SpendingLog(payments: payments, events: agentEvents, capPerAgentUsdMicros: capPerAgentUsdMicros)
+        SpendingLog(payments: myPayments, events: myAgentEvents, capPerAgentUsdMicros: capPerAgentUsdMicros)
     }
 
     /// Agent steps, newest first, optionally only those about one row (e.g. "item", 11).

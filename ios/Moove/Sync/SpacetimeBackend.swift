@@ -154,6 +154,9 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
             return true
         }
         if current { publish() }
+        // Views a module may not have yet (#254). Their own subscription, so if the server
+        // rejects them only this one fails; rows land in the cache like any other update.
+        if current { _ = try? await client.subscribe(Self.optionalSubscriptionQueries) }
     }
 
     private func apply(_ event: RowEvent, table: String, generation gen: UInt64) {
