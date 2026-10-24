@@ -81,6 +81,7 @@ struct NewHomePicker: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                MooveWordmark(height: 34).padding(.bottom, 22)
                 Text("New home").eyebrow().padding(.bottom, 10)
                 Text("Where are you moving?")
                     .font(.system(size: 26, weight: .semibold))
