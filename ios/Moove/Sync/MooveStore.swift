@@ -104,8 +104,12 @@ final class MooveStore {
         await run { try await $0.registerUser(name: name, email: email, auth0Sub: auth0Sub) }
     }
 
-    func importScan(_ scan: ScanImport) async {
-        await run { try await $0.importScan(scan) }
+    /// Returns false if the import failed (the error is in `lastError`). Callers check
+    /// this, not `lastError`, which may still hold an older write's error.
+    @discardableResult
+    func importScan(_ scan: ScanImport) async -> Bool {
+        lastError = nil
+        return await run { try await $0.importScan(scan) }
     }
 
     func addItemPhoto(itemId: UInt64, url: String) async {

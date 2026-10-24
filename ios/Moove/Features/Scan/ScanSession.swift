@@ -101,9 +101,26 @@ final class ScanSession {
         }
     }
 
+    /// Upload and import progress, kept across retries (see `ScanSubmission`).
+    private(set) var submission = ScanSubmission()
+    /// True when the room files were imported without a public URL: they're only
+    /// in this device's scan folder, and SpacetimeDB has '' for them.
+    private(set) var roomFilesLocalOnly = false
+
+    /// Call after a photo is (re)taken: its file is overwritten in place, so an
+    /// upload from an earlier failed attempt is stale.
+    func photoChanged(for object: DetectedObject) {
+        if let file = photos[object.id] { submission.forgetUpload(file) }
+    }
+
     /// Uploads the room files and photos, then creates the room, scan and
-    /// items in one reducer call.
+    /// items in one reducer call. Safe to call again after a failure: files
+    /// already uploaded aren't re-sent, and an imported scan isn't imported twice.
     func submit(to store: MooveStore, uploader: Uploader) async {
+        guard submission.begin() else {
+            if submission.isImported { phase = .finished }
+            return
+        }
         let total = 2 + photos.count
         var done = 0
         phase = .uploading(done: 0, total: total)
@@ -113,23 +130,26 @@ final class ScanSession {
                 done += 1
                 phase = .uploading(done: done, total: total)
             }
+            if let url = submission.uploaded[file] { return url }  // uploaded on an earlier attempt
             guard uploadProblem == nil else { return nil }  // server is down; don't wait out each timeout
             do {
-                return try await uploader.upload(file, contentType: type)
+                let url = try await uploader.upload(file, contentType: type)
+                submission.recordUpload(file, url: url)
+                return url
             } catch {
                 uploadProblem = error.localizedDescription
                 return nil
             }
         }
         // If the worker's upload server is unreachable, still import the scan:
-        // room files fall back to this device's copies (only the app reads them),
-        // and photos are left off so the vision agent never gets a URL it can't fetch.
-        let usdzUrl = await send(roomUSDZ, "model/vnd.usdz+zip") ?? roomUSDZ.absoluteString
-        let jsonUrl = await send(roomJSON, "application/json") ?? roomJSON.absoluteString
+        // room files stay local-only in this device's scan folder, and photos are
+        // left off so the vision agent never gets a URL it can't fetch.
+        let usdzUrl = await send(roomUSDZ, "model/vnd.usdz+zip")
+        let jsonUrl = await send(roomJSON, "application/json")
         var photoUrls: [UUID: String] = [:]
         for (id, file) in photos { photoUrls[id] = await send(file, "image/jpeg") }
 
-        await store.importScan(ScanImport(
+        var scan = ScanImport(
             roomName: roomName,
             usdzUrl: usdzUrl,
             capturedRoomJsonUrl: jsonUrl,
@@ -138,8 +158,15 @@ final class ScanSession {
                            widthM: $0.widthM, heightM: $0.heightM, depthM: $0.depthM,
                            photoUrl: photoUrls[$0.id])
             }
-        ))
-        if let error = store.lastError {
+        )
+        // Never sync a file:// URL (LocalUploader's) to SpacetimeDB. The offline
+        // fixture backend lives on this device, so it keeps them.
+        if store.backendKind != .fixture { scan = scan.syncable() }
+        roomFilesLocalOnly = scan.hasLocalOnlyRoomFiles && store.backendKind != .fixture
+
+        let imported = await store.importScan(scan)
+        submission.finish(error: imported ? nil : (store.lastError ?? "The import failed"))
+        if case .failed(let error) = submission.state {
             phase = .failed(error)
         } else {
             phase = .finished
