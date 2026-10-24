@@ -57,12 +57,12 @@ struct ApprovalsView: View {
                         .ruled()
                 }
                 if !shared.isEmpty {
-                    // Shared rooms (#195): the item's owner decides; members see who it's waiting on.
+                    // Shared rooms (#195, #200): any room member may decide a listing approval.
                     ListHeader(title: "Shared rooms", count: "\(shared.count)").padding(.top, 40)
                     ForEach(shared) { approval in
-                        SharedApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
-                                          item: item(for: approval),
-                                          approver: store.snapshot.approverName(for: approval))
+                        PendingApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
+                                           item: item(for: approval),
+                                           sharedOwner: store.snapshot.ownerName(approval.owner))
                     }
                 }
                 if !decided.isEmpty {
@@ -99,6 +99,8 @@ struct PendingApprovalRow: View {
     let listing: Listing?
     var deal: Deal? = nil
     let item: Item?
+    /// Set for a shared-room item someone else owns (#200): their name, for the caption.
+    var sharedOwner: String? = nil
     @State private var confirmDeny = false
     @State private var working = false
     @State private var approvedCount = 0
@@ -159,6 +161,11 @@ struct PendingApprovalRow: View {
                 CommerceProblem(text: "The fraud screen flagged this deal. The agent won't buy it even if you approve.",
                                 systemImage: "exclamationmark.shield")
             }
+            if let sharedOwner {
+                Label("Shared room: \(sharedOwner)'s item. Anyone in the room can decide.", systemImage: "person.2")
+                    .monoMeta()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if failed {
                 CommerceProblem(text: "Couldn't send your decision. Check the connection and try again.")
             }
@@ -209,41 +216,6 @@ struct PendingApprovalRow: View {
             failed = !ok
             working = false
         }
-    }
-}
-
-/// A pending listing approval for a shared-room item that someone else owns
-/// (#195). Read-only: `decide_approval` is owner-only until proposal #200.
-struct SharedApprovalRow: View {
-    let approval: Approval
-    let listing: Listing?
-    let item: Item?
-    let approver: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            ApprovalThumbnail(approval: approval, item: item, size: 44)
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 8) {
-                    ApprovalKindTag(kind: approval.kind)
-                    Spacer(minLength: 8)
-                    if listing?.simulated == true { SimulatedTag() }
-                }
-                Text(listing?.title ?? approval.summary)
-                    .blockTitle()
-                    .lineLimit(3)
-                Label("Waiting for \(approver)", systemImage: "hourglass")
-                    .monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Text(approval.formattedAmount).rowValue().amountText()
-        }
-        .padding(.vertical, 16)
-        .frame(minHeight: 44)
-        .ruled()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(approval.accessibilitySummary + ". Waiting for \(approver)")
     }
 }
 
