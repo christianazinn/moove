@@ -53,7 +53,7 @@ export async function structuredCall<S extends z.ZodType>(opts: {
   if (mode === 'replay') throw new Error(`LLM_REPLAY=replay: no recorded answer ${key} for ${opts.model} (record it with LLM_REPLAY=auto)`);
   const output = await liveCall(opts);
   mkdirSync(config.llmReplayDir, { recursive: true });
-  writeFileSync(file, JSON.stringify({ key, model: opts.model, output }, null, 2) + '\n');
+  writeFileSync(file, JSON.stringify({ model: opts.model, output }, null, 2) + '\n');
   console.log(`[llm] recorded ${key} (${opts.model})`);
   return output;
 }

@@ -1,0 +1,73 @@
+{
+  "model": "claude-opus-5-5",
+  "output": {
+    "items": [
+      {
+        "name": "Full size mattress",
+        "category": "mattress",
+        "room": "Bedroom",
+        "reason": "They are keeping a full bed frame but no mattress."
+      },
+      {
+        "name": "Dresser",
+        "category": "dresser",
+        "room": "Bedroom",
+        "reason": "The bedroom has no clothing storage."
+      },
+      {
+        "name": "Nightstand",
+        "category": "nightstand",
+        "room": "Bedroom",
+        "reason": "Nothing sits beside the bed for essentials."
+      },
+      {
+        "name": "Desk chair",
+        "category": "chair",
+        "room": "Bedroom",
+        "reason": "The kept Micke desk has no chair."
+      },
+      {
+        "name": "Bedside lamp",
+        "category": "lamp",
+        "room": "Bedroom",
+        "reason": "The only kept lamp is needed elsewhere, so the bedroom has no lighting."
+      },
+      {
+        "name": "Sofa",
+        "category": "sofa",
+        "room": "Living room",
+        "reason": "The living room has no seating."
+      },
+      {
+        "name": "Coffee table",
+        "category": "table",
+        "room": "Living room",
+        "reason": "There is no table near the living room seating."
+      },
+      {
+        "name": "TV stand",
+        "category": "tv stand",
+        "room": "Living room",
+        "reason": "The kept TV needs a surface to sit on."
+      },
+      {
+        "name": "Small dining table",
+        "category": "table",
+        "room": "Kitchen",
+        "reason": "There is no table for meals."
+      },
+      {
+        "name": "Dining chairs (set of 2)",
+        "category": "chair",
+        "room": "Kitchen",
+        "reason": "There is no seating for the dining table."
+      },
+      {
+        "name": "Full-size refrigerator",
+        "category": "refrigerator",
+        "room": "Kitchen",
+        "reason": "A mini fridge alone is too small for a kitchen's food storage."
+      }
+    ]
+  }
+}
