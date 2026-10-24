@@ -191,6 +191,7 @@ enum RoomScene {
 
     private static func sunlight(for geometry: RoomGeometry) -> Entity {
         let sun = DirectionalLight()
+        sun.name = "sun"
         sun.light.intensity = 2600
         sun.light.color = UIColor(red: 1, green: 0.97, blue: 0.92, alpha: 1)
         sun.shadow = DirectionalLightComponent.Shadow(maximumDistance: 12, depthBias: 1.5)
