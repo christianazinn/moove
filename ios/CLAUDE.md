@@ -9,7 +9,7 @@ Lanes: ios-capture (capture, review, sync, auth), ios-newhome (new home, fly-in,
 - RoomPlan needs a physical LiDAR iPhone. Keep a fixture scan in `agents/fixtures/` for Simulator and preview work.
 - SpacetimeDB from Swift: community SDK `ekscrypto/spacetimedb-swift-sdk` (spike passed, no gateway; see `docs/decisions/0020-swift-spacetimedb-sdk.md`). Screens only use `MooveStore` (`Moove/Sync/`), which drives a `SyncBackend`: `SpacetimeBackend` (live) or MooveKit's `FixtureBackend` (offline demo, previews, tests). How to regenerate the Swift bindings: `Moove/Sync/README.md`.
 - Per-developer config (signing team, bundle id, local server IP, Auth0 ids) goes in `Config/Local.xcconfig` (gitignored; copy `Local.xcconfig.example`).
-- Add your screen's tab in `Moove/App/RootView.swift` (one line) and keep the screen in your feature folder.
+- The app has five tabs (Scan · Items · Sell & Buy · Move · Summary, [#129](https://github.com/christianazinn/moove/issues/129)). To add a screen, add its key to a group in `Moove/App/TabGroups.swift` (`screens` + the `content` switch) and keep the screen in your feature folder. Jump to a screen from anywhere with `@AppStorage("moove.tab") var tab` and `tab = "<screen key>"`.
 - No secrets in the app bundle beyond public Auth0 client config.
 - Auth0 (#1): the app signs in with Auth0 Web Auth (custom URL scheme) and passes the **ID token** as the SpacetimeDB connection token, so `ctx.sender` is derived from the Auth0 user's `iss` + `sub`. If you change `MOOVE_BUNDLE_ID`, add `<bundle id>://dev-78lq8spq27b2bipk.us.auth0.com/ios/<bundle id>/callback` to the Moove iOS app's Allowed Callback and Logout URLs in the Auth0 dashboard. "Continue without an account" uses an anonymous SpacetimeDB identity saved in the Keychain.
 

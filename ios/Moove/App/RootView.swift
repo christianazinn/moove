@@ -7,45 +7,33 @@ struct RootView: View {
     @Environment(MooveStore.self) private var store
     @State private var showSettings = false
     @AppStorage("moove.tab") private var tab = "scan"
+    @State private var lastScreen: [TabGroup: String] = [:]
 
     var body: some View {
-        // iOS shows the first 4 tabs plus "More". Keep the demo flow
-        // (scan -> review -> spending -> new home) in the visible four.
-        TabView(selection: $tab) {
-            NavigationStack { screen(ScanHomeView()) }
-                .tag("scan")
-                .tabItem { Label("Scan", systemImage: "camera.viewfinder") }
-            NavigationStack { screen(ReviewView()) }
-                .tag("review")
-                .tabItem { Label("Review", systemImage: "checklist") }
-            NavigationStack { screen(SpendingView()) }
-                .tag("spending")
-                .tabItem { Label("Spending", systemImage: "creditcard") }
-            NavigationStack { screen(NewHomeView()) }
-                .tag("newhome")
-                .tabItem { Label("New Home", systemImage: "house") }
-            NavigationStack { screen(InventoryView()) }
-                .tag("inventory")
-                .tabItem { Label("Inventory", systemImage: "shippingbox") }
-            NavigationStack { screen(ListingsView()) }
-                .tag("listings")
-                .tabItem { Label("Listings", systemImage: "tag") }
-            NavigationStack { screen(ApprovalsView()) }
-                .tag("approvals")
-                .tabItem { Label("Approvals", systemImage: "checkmark.shield") }
-                .badge(store.pendingApprovals.count)
-            NavigationStack { screen(ShoppingView()) }
-                .tag("shopping")
-                .tabItem { Label("Shopping", systemImage: "cart") }
-            NavigationStack { screen(PackView()) }
-                .tag("pack")
-                .tabItem { Label("Pack", systemImage: "archivebox") }
-            NavigationStack { screen(SummaryView()) }
-                .tag("summary")
-                .tabItem { Label("Summary", systemImage: "chart.bar.doc.horizontal") }
+        // Five tabs that follow the move (#129). `tab` holds the screen key,
+        // so `tab = "inventory"` from any screen picks the tab and segment.
+        TabView(selection: groupBinding) {
+            ForEach(TabGroup.allCases, id: \.self) { group in
+                NavigationStack { screen(TabGroupView(group: group, screen: $tab)) }
+                    .tag(group)
+                    .tabItem { Label(group.title, systemImage: group.systemImage) }
+                    .badge(group == .sellBuy ? store.pendingApprovals.count : 0)
+            }
         }
         .tint(Theme.accentStrong)
         .sheet(isPresented: $showSettings) { SettingsView() }
+    }
+
+    /// Switching tabs returns to the last screen used in that tab.
+    private var groupBinding: Binding<TabGroup> {
+        Binding(
+            get: { TabGroup.containing(tab) },
+            set: { group in
+                guard group != TabGroup.containing(tab) else { return }
+                lastScreen[TabGroup.containing(tab)] = tab
+                tab = lastScreen[group] ?? group.screens[0]
+            }
+        )
     }
 
     private func screen(_ content: some View) -> some View {
