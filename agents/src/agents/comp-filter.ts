@@ -73,6 +73,8 @@ const SYSTEM = `You screen marketplace listings that will be used as price compa
 Keep a listing only if it sells the same kind of product as the item: the same product line or model when the item names one, as a complete unit.
 Drop accessories, parts, inserts and add-ons sold alone, bundles and lots, for-parts or broken units, wanted/ISO ads, and different products.
 Keep size or configuration variants of the same product unless they clearly differ from the item's dimensions.
+The item is an ordinary used one unless its description says otherwise. Drop collectible, antique or vintage-collector listings, designer or luxury versions, and premium smart/connected versions, unless the item is described that way: they sell at prices an ordinary used item won't get.
+Keep plain, generic listings of the same kind of product (e.g. "Lamp" or "Tall lamp" for a floor lamp) when the price and wording fit.
 ${UNTRUSTED_RULE}`;
 
 // Titles are scraped (untrusted, #17): cleaned and fenced like the listing agent's comps. The
@@ -100,10 +102,11 @@ export const claudeJudge: Judge = async (itemDesc, comps) => {
 
 type CacheEntry = Verdict & { item: string; n: number; model: string };
 
-// Same item description and same comps -> same verdict.
+// Same prompt, same item description and same comps -> same verdict. The prompt is part of the
+// key so a prompt change re-judges instead of replaying verdicts made under the old rules.
 const cacheKey = (itemDesc: string, comps: Comp[]) =>
   createHash('sha256')
-    .update(JSON.stringify([itemDesc, comps.map(c => [c.source, c.priceCents, c.title])]))
+    .update(JSON.stringify([SYSTEM, itemDesc, comps.map(c => [c.source, c.priceCents, c.title])]))
     .digest('hex')
     .slice(0, 16);
 

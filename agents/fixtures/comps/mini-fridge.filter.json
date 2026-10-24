@@ -1,0 +1,45 @@
+{
+  "d37abab256f04e23": {
+    "item": "Mini fridge; category refrigerator; 0.48 x 0.85 x 0.50 m (W x H x D)",
+    "n": 18,
+    "keep": [
+      1,
+      2,
+      6,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      18
+    ],
+    "reason": "Dropped Hello Kitty cooler, Frigidaire retro 6-can/4L coolers (4,5), upright freezer (7), and Magic Chef 4.5 cu ft fridge-freezer (17) as different products or sizes; kept general-purpose mini fridge…",
+    "model": "claude-haiku-5-5"
+  },
+  "667cfb655ec0692a": {
+    "item": "Mini fridge; category refrigerator; 0.48 x 0.85 x 0.50 m (W x H x D)",
+    "n": 18,
+    "keep": [
+      1,
+      2,
+      6,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "reason": "Dropped Hello Kitty novelty cooler (3), retro can coolers (4,5) as different small coolers, freezer upright (7), and kept generic/mini refrigerator listings including Frigidaire, Danby, NS and Magic …",
+    "model": "claude-haiku-5-5"
+  }
+}

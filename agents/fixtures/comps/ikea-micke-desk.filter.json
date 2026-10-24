@@ -1,0 +1,38 @@
+{
+  "8ccaf1c44d5807a2": {
+    "item": "IKEA Micke desk; category table; 1.05 x 0.75 x 0.50 m (W x H x D)",
+    "n": 12,
+    "keep": [
+      2,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "reason": "Dropped listings 1 and 3 as IKEA Micke corner desk workstations, a different product from the straight 105 cm Micke desk; kept the rest as Micke desk variants.",
+    "model": "claude-haiku-5-5"
+  },
+  "91b04d2ca5807694": {
+    "item": "IKEA Micke desk; category table; 1.05 x 0.75 x 0.50 m (W x H x D)",
+    "n": 12,
+    "keep": [
+      2,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "reason": "Dropped corner desk workstations (1, 3) as a different configuration from the straight 105 cm desk; kept plain Micke desks in the 105x50 size, including the 105x50 cm listing (4), while dropping noth…",
+    "model": "claude-haiku-5-5"
+  }
+}

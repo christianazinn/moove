@@ -1,0 +1,34 @@
+{
+  "3744bccc29be8282": {
+    "item": "Full size metal bed frame; category bed; 1.40 x 0.36 x 1.95 m (W x H x D)",
+    "n": 16,
+    "keep": [
+      3,
+      7,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "reason": "Dropped queen/king/multi-size and storage/LED headboard variants, the special-needs enclosed bed, mattress-included sets, and a listing for a different product; kept plain full-size metal bed frames,…",
+    "model": "claude-haiku-5-5"
+  },
+  "c011c7f162826dfc": {
+    "item": "Full size metal bed frame; category bed; 1.40 x 0.36 x 1.95 m (W x H x D)",
+    "n": 16,
+    "keep": [
+      3,
+      6,
+      7,
+      11,
+      13,
+      14,
+      15,
+      16
+    ],
+    "reason": "Dropped queen/king-focused and storage/charging/LED smart-style frames, the special-needs smart bed, bundles with mattresses, and the headboard-less frame (item 12) as a different configuration; kept…",
+    "model": "claude-haiku-5-5"
+  }
+}
