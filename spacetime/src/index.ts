@@ -608,7 +608,13 @@ export const importScan = spacetimedb.reducer(
       createdAt: ctx.timestamp,
       sweepStatus: 'none',
     });
-    for (const o of objects) insertItem(ctx, ctx.sender, r.id, s.id, o);
+    const skipped: { id: string; why: string }[] = [];
+    for (const o of objects) {
+      const why = importable(o);
+      if (why) skipped.push({ id: o.scanObjectId.slice(0, 64), why });
+      else insertItem(ctx, ctx.sender, r.id, s.id, o);
+    }
+    noteSkipped(ctx, ctx.sender, s.id, skipped);
   }
 );
 
@@ -685,7 +691,13 @@ export const importScanV2 = spacetimedb.reducer(
       createdAt: ctx.timestamp,
       sweepStatus: 'none',
     });
-    objects.forEach((o, i) => insertItem(ctx, ctx.sender, r.id, s.id, o, attrs[i]));
+    const skipped: { id: string; why: string }[] = [];
+    objects.forEach((o, i) => {
+      const why = importable(o);
+      if (why) skipped.push({ id: o.scanObjectId.slice(0, 64), why });
+      else insertItem(ctx, ctx.sender, r.id, s.id, o, attrs[i]);
+    });
+    noteSkipped(ctx, ctx.sender, s.id, skipped);
   }
 );
 
@@ -734,7 +746,13 @@ export const createScan = spacetimedb.reducer(
     for (const it of ctx.db.item.roomId.filter(roomId)) {
       if (it.scanObjectId) existing.set(it.scanObjectId, it);
     }
+    const skipped: { id: string; why: string }[] = [];
     for (const o of objects) {
+      const why = importable(o);
+      if (why) {
+        skipped.push({ id: o.scanObjectId.slice(0, 64), why });
+        continue;
+      }
       const prev = o.scanObjectId ? existing.get(o.scanObjectId) : undefined;
       if (prev) {
         ctx.db.item.id.update({
@@ -749,6 +767,7 @@ export const createScan = spacetimedb.reducer(
         insertItem(ctx, r.owner, roomId, s.id, o);
       }
     }
+    noteSkipped(ctx, r.owner, s.id, skipped);
   }
 );
 
@@ -778,6 +797,32 @@ function capLen(name: string, v: string, max: number): string {
 function checkObjects(objects: readonly unknown[]): void {
   if (objects.length > MAX_SCAN_OBJECTS) throw new SenderError(`at most ${MAX_SCAN_OBJECTS} objects per import`);
 }
+// Scan imports skip objects that fail the limits instead of rejecting the whole scan: one bad box
+// from on-device fitting (NaN, a 40 m wall mislabeled as an object, an overlong label) shouldn't
+// lose the rest of the room. The skips are recorded as one agent_event so they're visible.
+function importable(o: { scanObjectId: string; name: string; category: string; widthM: number; heightM: number; depthM: number }): string | null {
+  for (const [k, v] of [['width_m', o.widthM], ['height_m', o.heightM], ['depth_m', o.depthM]] as const) {
+    if (!Number.isFinite(v) || v < 0 || v > MAX_DIM_M) return `${k}=${v}`;
+  }
+  if ((o.name || o.category).length > MAX_NAME || o.category.length > MAX_NAME) return 'name too long';
+  if (o.scanObjectId.length > MAX_SCAN_OBJECT_ID) return 'scan_object_id too long';
+  return null;
+}
+function noteSkipped(ctx: Ctx, owner: Identity, scanId: bigint, skipped: { id: string; why: string }[]): void {
+  if (!skipped.length) return;
+  ctx.db.agentEvent.insert({
+    id: 0n,
+    owner,
+    agent: 'scan',
+    kind: 'error',
+    message: `Skipped ${skipped.length} scanned object(s) with impossible sizes or labels: ${skipped.slice(0, 5).map(x => x.why).join(', ')}`,
+    refTable: 'scan',
+    refId: scanId,
+    dataJson: JSON.stringify(skipped.slice(0, 50)),
+    createdAt: ctx.timestamp,
+  });
+}
+
 function checkScanUrls(usdzUrl: string, capturedRoomJsonUrl: string): void {
   capLen('usdz_url', usdzUrl, MAX_URL);
   capLen('captured_room_json_url', capturedRoomJsonUrl, MAX_URL);
