@@ -50,7 +50,7 @@ struct InventoryView: View {
                         LedgerRow(
                             title: item.name,
                             meta: item.category.capitalized,
-                            value: item.estValueCents?.usd ?? "pricing…",
+                            value: item.priceText,
                             valueTint: item.estValueCents == nil ? Theme.muted : Theme.text
                         ) {
                             ItemThumbnail(item: item, size: 56)
