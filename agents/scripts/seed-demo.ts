@@ -10,23 +10,45 @@
 //
 // --reset-commerce (implies SEED_COMMERCE=1) makes the commerce story single-use-proof: it denies the
 // chair's pending listing approval, deletes the chair and seeds it again, so the listing agent drafts a
-// fresh listing that waits for approval (one more live Claude call). The join code doesn't change.
+// fresh listing that waits for approval. It waits for that approval and prints its id. The join code
+// doesn't change. COST: one live Claude listing draft (MODEL_AGENT, Opus) per reset on a maincloud worker,
+// since the worker refuses LLM_REPLAY there. A user can't re-open the old listing (see planCommerceReset).
 //
 // Skips if this user already has a "Bedroom" (prints its join code) unless --force, which imports another.
 // --wait[=SEC] waits (default 90s) for the worker to price the items and prints the estimates.
 // The user's token lives in .user-token.<db> (SEED_USER_TOKEN_FILE overrides), so re-runs are the same user.
 // Refuses a maincloud URI unless --maincloud is passed.
-// Usage (from agents/): npm run seed:demo [-- --force] [-- --wait] [-- --maincloud] [-- --reset-commerce]
+// Usage (from agents/): npm run seed:demo [-- --force] [-- --wait] [-- --maincloud] [-- --reset-commerce] [-- --help]
 import "./env.js";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import type { Identity } from "spacetimedb";
 import { DbConnection, tables } from "../src/module_bindings/index.js";
 import type { Item, Room } from "../src/module_bindings/types.js";
 import { config } from "../src/config.js";
-import { DEMO_COMMERCE_OBJECTS, DEMO_HOME, DEMO_OBJECTS, DEMO_ROOM_NAME, demoQuery } from "./demo-room.js";
+import { DEMO_COMMERCE_OBJECTS, DEMO_HOME, DEMO_OBJECTS, DEMO_ROOM_NAME, demoQuery, freshCommerceApproval, planCommerceReset } from "./demo-room.js";
+
+const HELP = `npm run seed:demo -- [options]   (from agents/; SPACETIME_URI + SPACETIME_DB_NAME pick the DB)
+  --maincloud        required for a maincloud URI (the live demo DB)
+  --wait[=SEC]       wait for the worker to price the items (default 90 s) and print the estimates
+  --force            import another Bedroom (NEW join code: every doc that quotes it breaks)
+  --reset-commerce   re-arm the Herman Miller chair's approval beat in the existing Bedroom, same join code:
+                     denies its pending listing approval, deletes the chair, adds it back and taps Sell, then
+                     waits (--wait or 180 s) for the fresh pending approval and prints its id.
+                     COST: one live Claude listing draft (MODEL_AGENT, ~1 Opus call, a few cents) per reset
+                     on maincloud, counted in CLAUDE_MAX_USD_PER_DAY. Pricing replays (no Apify).
+  SEED_COMMERCE=1    also seed the chair (one live Claude listing draft on maincloud)
+  e.g. SPACETIME_URI=wss://maincloud.spacetimedb.com SPACETIME_DB_NAME=moove-demo npm run seed:demo -- --maincloud --reset-commerce`;
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(HELP);
+  process.exit(0);
+}
 
 const force = process.argv.includes("--force");
 const resetCommerce = process.argv.includes("--reset-commerce");
+if (force && resetCommerce) {
+  console.error("--reset-commerce keeps the existing room and join code; don't combine it with --force");
+  process.exit(1);
+}
 const commerce = process.env.SEED_COMMERCE === "1" || resetCommerce;
 const objects = commerce ? [...DEMO_OBJECTS, ...DEMO_COMMERCE_OBJECTS] : DEMO_OBJECTS;
 const waitArg = process.argv.find((a) => a === "--wait" || a.startsWith("--wait="));
@@ -102,22 +124,29 @@ async function applyUserEdits(room: Room, objs: typeof objects): Promise<void> {
 }
 
 let failed = false;
+let resetDeleted: bigint[] = [];
 try {
   const existing = myBedrooms();
   let room: Room;
+  // A reset that found no room would import a new one with a new join code: exactly what it's meant to avoid.
+  if (resetCommerce && !existing.length) throw new Error(`no "${DEMO_ROOM_NAME}" for this seed user (agents/${tokenFile}) to reset; seed it first`);
   if (existing.length && !force) {
     room = existing.reduce((a, b) => (b.id > a.id ? b : a)); // newest; iter() order isn't by id
     console.log(`\nAlready seeded: "${room.name}" (room #${room.id}, ${itemsIn(room).length} items). Use --force to import another.`);
     if (resetCommerce) {
-      for (const it of itemsIn(room).filter((i) => DEMO_COMMERCE_OBJECTS.some((o) => o.scanObjectId === i.scanObjectId))) {
-        const listingIds = new Set([...conn.db.listing.iter()].filter((l) => l.itemId === it.id).map((l) => l.id));
-        for (const a of conn.db.approval.iter()) {
-          if (a.kind === "listing" && a.status === "pending" && listingIds.has(a.refId)) await conn.reducers.decideApproval({ approvalId: a.id, status: "denied" });
-        }
-        await conn.reducers.deleteItem({ itemId: it.id });
-        console.log(`Reset: denied its pending listing approval and deleted #${it.id} ${it.name}`);
+      const plan = planCommerceReset(room.id, identity.toHexString(), conn.db.item.iter(), conn.db.listing.iter(), conn.db.approval.iter());
+      for (const approvalId of plan.deny) {
+        await conn.reducers.decideApproval({ approvalId, status: "denied" });
+        console.log(`Reset: denied pending listing approval #${approvalId}`);
       }
-      await waitFor("the reset", () => (itemsIn(room).some((i) => DEMO_COMMERCE_OBJECTS.some((o) => o.scanObjectId === i.scanObjectId)) ? undefined : true));
+      if (plan.inFlight.length) console.warn(`Reset: listing(s) ${plan.inFlight.map((id) => `#${id}`).join(", ")} are mid-post; they finish posting (simulated) on their own.`);
+      for (const itemId of plan.deleteItemIds) {
+        const name = conn.db.item.id.find(itemId)?.name ?? "(commerce item)";
+        await conn.reducers.deleteItem({ itemId });
+        console.log(`Reset: deleted #${itemId} ${name}`);
+      }
+      resetDeleted = plan.deleteItemIds;
+      await waitFor("the reset", () => (itemsIn(room).some((i) => resetDeleted.includes(i.id)) ? undefined : true));
     }
     const missing = commerce ? DEMO_COMMERCE_OBJECTS.filter((o) => !itemsIn(room).some((i) => i.scanObjectId === o.scanObjectId)) : [];
     for (const { sentimental: _s, sell: _sell, ...o } of missing) await conn.reducers.addItem({ roomId: room.id, object: o });
@@ -142,6 +171,21 @@ try {
     console.log(`\nSeeded "${room.name}" (room #${room.id}, home '${room.home}') with ${objects.length} items${commerce ? " (incl. SEED_COMMERCE=1)" : ""}.`);
   }
   console.log(`Join code: ${room.joinCode}   (in the app: join_room("${room.joinCode}"))`);
+
+  if (resetCommerce) {
+    // The worker prices the new chair (replay), the listing agent drafts it (one live Claude call on
+    // maincloud) and, over the $100 threshold, asks for approval.
+    const sec = waitSec || 180;
+    console.log(`\nWaiting up to ${sec}s for the listing agent to draft the chair and ask for approval (one Claude call)...`);
+    const fresh = () => freshCommerceApproval(room.id, identity.toHexString(), resetDeleted, conn.db.item.iter(), conn.db.listing.iter(), conn.db.approval.iter());
+    try {
+      const a = await waitFor("a fresh listing approval", fresh, sec * 1000);
+      console.log(`Reset done: approval #${a.id} pending (${a.summary}). Join code ${room.joinCode} (unchanged).`);
+    } catch {
+      console.warn("No fresh pending approval yet. Is the worker running? Check its log for the listing draft (a Claude error, or CLAUDE_MAX_USD_PER_DAY).");
+      failed = true;
+    }
+  }
 
   if (waitSec > 0) {
     console.log(`\nWaiting up to ${waitSec}s for the worker to price them...`);
