@@ -24,6 +24,8 @@ import Testing
         try await backend.importScan(ScanImport(roomName: "Bedroom", objects: []))
         let scanId = try #require(await firstSnapshot(backend).scans.first?.id)
         try await backend.addScanPhoto(scanId: scanId, url: "https://x/room-0.jpg")
+        let snap = await firstSnapshot(backend)
+        #expect(snap.latestScan(ofRoom: snap.rooms[0].id)?.sweepStatus == .pending)
         await #expect(throws: FixtureBackend.Failure.invalidUrl) { try await backend.addScanPhoto(scanId: scanId, url: "file:///tmp/a.jpg") }
         await #expect(throws: FixtureBackend.Failure.noSuchScan) { try await backend.addScanPhoto(scanId: 9999, url: "https://x/a.jpg") }
         for i in 1..<FixtureBackend.maxScanPhotos { try await backend.addScanPhoto(scanId: scanId, url: "https://x/\(i).jpg") }

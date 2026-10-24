@@ -173,15 +173,17 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         try updateOwnedItem(itemId) { $0.photoUrls.append(url) }
     }
 
-    /// Same checks as `add_scan_photo`. There's no sweep agent offline, so nothing
-    /// else happens; the count is kept only to enforce the module's cap.
+    /// Same checks and status change as `add_scan_photo`. There's no sweep agent
+    /// offline, so the scan stays `pending`; the count enforces the module's cap.
     public func addScanPhoto(scanId: UInt64, url: String) async throws {
         guard let parsed = URL(string: url), ["http", "https"].contains(parsed.scheme?.lowercased() ?? "") else { throw Failure.invalidUrl }
         try mutateAuthed { s, me in
-            guard let scan = s.scans.first(where: { $0.id == scanId }) else { throw Failure.noSuchScan }
+            guard let i = s.scans.firstIndex(where: { $0.id == scanId }) else { throw Failure.noSuchScan }
+            let scan = s.scans[i]
             guard scan.owner == me || memberRoomIds.contains(scan.roomId) else { throw Failure.unauthorized }
             guard scanPhotoCounts[scanId, default: 0] < Self.maxScanPhotos else { throw Failure.tooManyPhotos }
             scanPhotoCounts[scanId, default: 0] += 1
+            s.scans[i].sweepStatus = .pending
         }
     }
 
