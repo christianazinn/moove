@@ -47,6 +47,8 @@ Status values:
 ## Views (#41 part B)
 - **`my_room`**: rooms you own or joined through `room_member` (base `room` rows, including `join_code`).
 - **`my_user`**: your own `user` row.
+- **`my_listing`** (#200): your listings plus the listings of items in rooms you own or joined.
+- **`my_approval`** (#200): your approvals plus `kind = listing` approvals for the listings in `my_listing`. Other users' purchase approvals are never included. (Subscriptions can't join 3 tables, so use these instead of `listing JOIN item JOIN room_member`.)
 - **`worker_room`** / **`worker_user`**: every `room` / `user` row for the registered worker, empty for anyone else. The worker reads owners' approval thresholds and Auth0 subjects here.
 
 `room` and `user` are private, so join codes, emails and Auth0 subjects aren't world-readable: a client subscribing to `SELECT * FROM room` or `user` is refused (`npm run e2e` checks it). Views have no index accessors and an updated row arrives as delete + insert. One-off SQL queries against views return no rows (SDK behavior); use subscriptions. App builds older than #176 subscribe to `room`/`user` directly and fail to sync; rebuild from main.
@@ -67,7 +69,7 @@ Enforced in the module, so they hold for every client:
 - **Room photo sweep:** `add_scan_photo(scan_id, url)`: after a scan, attach a few wide room photos (upload each to the worker's `/upload` first). Each one sets `sweep_status = pending`, and the worker sweeps once photos stop arriving (~8 s). It renames scanned items it recognizes and adds items RoomPlan missed (`scan_object_id = "photo:<scan_id>"`: no RoomPlan box, size is an estimate).
 - **3D models (#65):** `set_item_model(item_id, url, source)`: the app after Object Capture (`capture`, USDZ) or the SAM 3D agent (`sam3d`, GLB). `url` must be http(s), or `''` to clear. A `sam3d` result never replaces a `capture` model. `add_item_photo` re-queues SAM 3D unless the item has a captured model.
 - **Review:** `set_disposition(item_id, disposition)` (marks it `user`; auto-sort never overrides it), `set_sentimental(item_id, value)`, `set_fragile(item_id, value)` (absolute setters, not toggles), `rename_item`
-- **Approvals:** `decide_approval(approval_id, status)`: **owner only** (not the worker), `status` must be `approved`\|`denied`, records `decided_via = 'app'` (#42)
+- **Approvals:** `decide_approval(approval_id, status)`: the owner, or (#200) for `kind = listing` only, the owner or a member of the room holding the listing's item. Never the worker, and purchases stay owner-only. `status` must be `approved`\|`denied`. It records `decided_via = 'app'` (#42), plus an `agent_event` (agent `approval`, kind `approval`, `ref_table = approval`) whose `data_json.decidedBy` is the decider's identity hex and `byOwner` says whether it was the owner.
 - **Shopping:** `add_shopping_item(owner, name, category, reason)`, `set_shopping_status`, `remove_shopping_item`, `choose_deal(shopping_item_id, deal_id)`
 - **New home:** `create_new_home(name, source, floor_plan_json)`, `save_layout(new_home_id, name, placements_json)`
 

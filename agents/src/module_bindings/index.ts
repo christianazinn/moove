@@ -92,6 +92,8 @@ import DealRow from "./deal_table";
 import ItemRow from "./item_table";
 import LayoutRow from "./layout_table";
 import ListingRow from "./listing_table";
+import MyApprovalRow from "./my_approval_table";
+import MyListingRow from "./my_listing_table";
 import MyRoomRow from "./my_room_table";
 import MyUserRow from "./my_user_table";
 import NewHomeRow from "./new_home_table";
@@ -334,6 +336,20 @@ const tablesSchema = __schema({
       { name: 'worker_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, WorkerRow),
+  myApproval: __table({
+    name: 'my_approval',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyApprovalRow),
+  myListing: __table({
+    name: 'my_listing',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyListingRow),
   myRoom: __table({
     name: 'my_room',
     indexes: [
