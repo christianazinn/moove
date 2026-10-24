@@ -21,7 +21,8 @@
     "status": "tsx scripts/status.ts",
     "smoke": "tsx scripts/smoke.ts",
     "comps:audit": "tsx scripts/comps-audit.ts",
-    "pricing:eval": "tsx scripts/pricing-eval.ts"
+    "pricing:eval": "tsx scripts/pricing-eval.ts",
+    "price:photo": "tsx scripts/price-photo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",

@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { estimate } from "../src/agents/pricing.js";
+import { estimate, queryFor } from "../src/agents/pricing.js";
+import type { Item } from "../src/module_bindings/types.js";
 import { pricePrior } from "../src/agents/price-prior.js";
 import type { Comp } from "../src/integrations/apify.js";
 
@@ -52,4 +53,13 @@ test("pricePrior is off with PRICING_PRIOR=0 and never calls Claude in cacheOnly
   const judge = async () => assert.fail("must not call Claude");
   assert.equal((await pricePrior(it, { enabled: false, judge })).status, "off");
   assert.equal((await pricePrior(it, { cacheFile: tmpCache(), cacheOnly: true, enabled: true, judge })).status, "missing");
+});
+
+test("the median of an even number of comps is the midpoint", () => {
+  assert.equal(estimate(comps(60, 160), "")!.est, 11000);
+});
+
+test("queryFor doesn't repeat a brand the name already has", () => {
+  assert.equal(queryFor({ brand: "EIZO", name: "EIZO 23-inch monitor", category: "electronics" } as Item), "EIZO 23-inch monitor");
+  assert.equal(queryFor({ brand: "IKEA", name: "Kallax shelf", category: "storage" } as Item), "IKEA Kallax shelf");
 });

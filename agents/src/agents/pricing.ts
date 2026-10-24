@@ -19,7 +19,12 @@ export function setCompsSource(src: CompsSource): void {
 // Comps are mostly used listings in "good" shape; scale for the item's condition.
 const CONDITION_FACTOR: Record<string, number> = { new: 1.15, like_new: 1.05, good: 1, fair: 0.8, poor: 0.55 };
 
-const quantile = (sorted: number[], q: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(q * (sorted.length - 1))))];
+// Linear interpolation between neighbors, so the median of 2 comps is their midpoint, not the higher one.
+const quantile = (sorted: number[], q: number) => {
+  const i = Math.min(sorted.length - 1, Math.max(0, q * (sorted.length - 1)));
+  const lo = Math.floor(i);
+  return sorted[lo] + (sorted[Math.min(lo + 1, sorted.length - 1)] - sorted[lo]) * (i - lo);
+};
 
 // How many comps the prior counts as: with 1-2 comps it dominates, with 15 it barely moves the median.
 export const PRIOR_WEIGHT = Number(process.env.PRICING_PRIOR_WEIGHT ?? 3);
@@ -58,7 +63,10 @@ export function estimate(comps: Comp[], condition: string, opts: EstimateOpts = 
 }
 
 export function queryFor(it: Item): string {
-  return [it.brand, it.name || it.category].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  const name = it.name || it.category;
+  // Vision often names the brand already ("EIZO 23-inch monitor"); don't search "EIZO EIZO ...".
+  const brand = it.brand && !name.toLowerCase().includes(it.brand.toLowerCase()) ? it.brand : '';
+  return [brand, name].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
 }
 
 // One line for the event log, e.g. "Kept 11 of 17 comps (5 by rules, 1 by Claude: ...)".
