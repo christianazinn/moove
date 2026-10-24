@@ -39,7 +39,7 @@ jobs:
       - name: swift test (skips until ios/MooveKit exists)
         run: |
           if [ ! -f ios/MooveKit/Package.swift ]; then echo "no MooveKit yet, skipping"; exit 0; fi
-          docker run --rm -v "$PWD/ios/MooveKit:/pkg" -w /pkg swift:6.1 swift test
+          docker run --rm -v "$PWD/ios/MooveKit:/pkg" -w /pkg swift:6.2 swift test
 
   ios:
     runs-on: macos-15
@@ -48,6 +48,9 @@ jobs:
       - name: Build app (skips until ios/project.yml exists)
         run: |
           if [ ! -f ios/project.yml ]; then echo "no project.yml yet, skipping"; exit 0; fi
+          # The Swift SpacetimeDB SDK needs Swift 6.2+ (SendableMetatype); use the newest Xcode on the runner.
+          XC=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1); echo "using $XC"; sudo xcode-select -s "$XC"
+          swift --version
           brew install xcodegen
           cd ios && xcodegen
           xcodebuild -scheme Moove -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
