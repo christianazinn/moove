@@ -258,7 +258,8 @@ public enum VoxelModels {
         if n.word("lamp", "lamps", "sconce", "lantern") { return .lamp }
         if n.word("chair", "chairs", "stool", "stools", "recliner") { return .chair }
         if n.has("tv stand", "tv console", "tv cabinet", "tv unit", "media console", "entertainment center") { return .dresser }
-        if n.has("desk", "workstation") || n.word("vanity") { return .desk }
+        if n.has("desk", "workstation", "computer armoire", "roll top", "rolltop", "roll-top", "dressing table")
+            || n.word("vanity", "secretary") { return .desk }
         if n.has("dresser", "chest of drawers", "nightstand", "night stand", "bedside", "sideboard", "credenza", "armoire", "wardrobe")
             || n.word("drawers", "cabinet") { return .dresser }
         if n.word("rug") || n.has("carpet") { return .rug }
