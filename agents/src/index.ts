@@ -13,10 +13,12 @@ import { approvalAgent } from './agents/approval.js';
 import { sortAgent } from './agents/sort.js';
 import { shoppingListAgent } from './agents/shopping.js';
 import { buyAgent } from './agents/buy.js';
+import { sam3dAgent } from './agents/sam3d.js';
+import { meshyAgent } from './agents/meshy.js';
 import type { Agent } from './agents/types.js';
 
 // Register agents here as they land (vision, pricing, sort, listing, buy, fraud, ...).
-const agents: Agent[] = [visionAgent, pricingAgent, sortAgent, listingAgent, approvalAgent, shoppingListAgent, buyAgent];
+const agents: Agent[] = [visionAgent, pricingAgent, sortAgent, listingAgent, approvalAgent, shoppingListAgent, buyAgent, sam3dAgent, meshyAgent];
 
 startUploadServer();
 

@@ -98,6 +98,9 @@ export const Item = __t.object("Item", {
   maybeSentimental: __t.bool(),
   createdAt: __t.timestamp(),
   updatedAt: __t.timestamp(),
+  modelUrl: __t.string(),
+  modelSource: __t.string(),
+  modelStatus: __t.string(),
 });
 export type Item = __Infer<typeof Item>;
 
