@@ -4,7 +4,12 @@ import { existsSync, readFileSync } from "node:fs";
 import type { Item } from "../src/module_bindings/types.js";
 import { cacheFile, type Comp } from "../src/integrations/apify.js";
 import { estimate, queryFor } from "../src/agents/pricing.js";
-import { DEMO_OBJECTS, demoQuery } from "../scripts/demo-room.js";
+import { preFilter } from "../src/agents/comp-filter.js";
+import { decide } from "../src/agents/sort.js";
+import { DEMO_COMMERCE_OBJECTS, DEMO_OBJECTS as BASE_OBJECTS, demoQuery } from "../scripts/demo-room.js";
+
+// Every check covers the opt-in commerce items (SEED_COMMERCE=1) too.
+const DEMO_OBJECTS = [...BASE_OBJECTS, ...DEMO_COMMERCE_OBJECTS];
 
 test("demo objects have unique scan ids and queries, and plausible dims", () => {
   assert.equal(new Set(DEMO_OBJECTS.map((o) => o.scanObjectId)).size, DEMO_OBJECTS.length);
@@ -32,5 +37,20 @@ test("every demo query has a committed, non-empty real comps cache that prices",
     for (const c of comps) assert.ok(c.title && c.priceCents > 0 && c.url.startsWith("http"), `${file}: bad comp ${JSON.stringify(c)}`);
     const e = estimate(comps, "");
     assert.ok(e && e.est > 0 && e.low <= e.est && e.est <= e.high, `${file}: no usable estimate`);
+  }
+});
+
+test("SEED_COMMERCE items are set to sell and priced from their replay over the $100 approval threshold", () => {
+  assert.ok(DEMO_COMMERCE_OBJECTS.length > 0);
+  for (const o of DEMO_COMMERCE_OBJECTS) {
+    assert.equal(o.sell, true, `${o.name}: the seed sets it to sell`);
+    assert.ok(!o.sentimental, `${o.name}: sentimental items are never listed`);
+    const comps = JSON.parse(readFileSync(cacheFile(demoQuery(o)), "utf8")) as Comp[];
+    const it = { name: o.name, category: o.category, brand: "", material: "", condition: "", widthM: o.widthM, heightM: o.heightM, depthM: o.depthM, fragile: false };
+    // Rule-filtered comps are the floor: what pricing uses when the Claude filter is unavailable.
+    const e = estimate(preFilter(comps, it).kept, "");
+    assert.ok(e && e.est > 10_000, `${o.name}: ~$${(e?.est ?? 0) / 100} is not over the $100 threshold`);
+    // Why the seed taps Sell: on value alone the sort rules would keep it.
+    assert.equal(decide({ ...it, estValueCents: BigInt(e.est) }).disposition, "keep");
   }
 });
