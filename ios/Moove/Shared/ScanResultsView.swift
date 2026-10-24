@@ -204,7 +204,8 @@ struct EstimatedRoom {
     var depthM: Double
     /// True when the room and positions come from the scan rather than an estimate.
     var scanned = false
-    /// Scanned rooms: items without a scanned position that the layout solver placed.
+    /// Scanned rooms: items shown without a scanned position (spots from the layout solver, or
+    /// small things / wall pieces put on the scanned furniture and walls).
     var estimatedCount = 0
 
     /// The scanned room with each item where the scan found it. Unmatched small things and
@@ -227,10 +228,11 @@ struct EstimatedRoom {
                 .solve(unmatchedFurniture, style: .byFunction, around: result.placements, fixedItems: layoutItems)
                 .placements
         }
-        let estimatedCount = placements.count - result.placements.count
-        // RoomPlan doesn't locate small things (lamps, books, art): put them on the scanned
-        // furniture and walls so the room looks lived-in. Scanned wall heights are kept.
-        placements = PropPlacer(plan: result.plan).place(placements, items: layoutItems, extraRoom: name)
+        // Small things and wall pieces RoomPlan didn't locate go on the scanned furniture and
+        // walls so the room looks lived-in. Scanned ones (`matched`) keep their scanned spot:
+        // a scanned lamp only goes up onto furniture whose top is where it was seen.
+        placements = PropPlacer(plan: result.plan).place(placements, items: layoutItems, extraRoom: name, scanned: matched)
+        let estimatedCount = placements.filter { !matched.contains($0.itemId) }.count
         return EstimatedRoom(plan: result.plan, items: layoutItems, placements: placements,
                              widthM: b.width, depthM: b.depth, scanned: true, estimatedCount: estimatedCount)
     }
