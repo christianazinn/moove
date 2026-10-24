@@ -106,7 +106,16 @@ struct ItemDetailView: View {
                 Button("Rotate in room 90°", systemImage: "rotate.right") { models.rotate(key) }
                 Button("Recapture", systemImage: "camera.metering.center.weighted") { capturing = true }
                     .disabled(!ObjectCaptureFlowView.isSupported)
-                Button("Remove model", systemImage: "trash", role: .destructive) { models.deleteModel(for: key) }
+                if models.hasLocalModel(key) {
+                    // Only a model captured on this phone can be removed here. If it was
+                    // synced, clear it on the server too, or it would just download again.
+                    Button("Remove model", systemImage: "trash", role: .destructive) {
+                        models.deleteModel(for: key)
+                        if item.modelSource == .capture, item.modelUrl != nil {
+                            Task { await store.clearItemModel(item) }
+                        }
+                    }
+                }
             }
         } else if ObjectCaptureFlowView.isSupported {
             Section {

@@ -175,6 +175,11 @@ final class MooveStore {
     }
 
     @discardableResult
+    /// Clears an item's synced 3D model on the server (the contract treats url "" as clear).
+    func clearItemModel(_ item: Item) async {
+        _ = await run { try await $0.setItemModel(itemId: item.id, url: "", source: item.modelSource ?? .capture) }
+    }
+
     /// After Object Capture: uploads the USDZ to the worker and records it on the
     /// item so other phones get it too. Offline (or no upload server) it stays
     /// on this device only, which the room view already shows.

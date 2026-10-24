@@ -76,7 +76,9 @@ struct RoomModelView: View {
     private func loadModels() async {
         for object in geometry.objects {
             if models.modelURL(for: object.id) == nil, let remote = items[object.id]?.modelUrl.flatMap(URL.init(string:)) {
-                await models.fetchRemote(remote, for: object.id)  // bumps revision, which re-runs this task
+                // notify: false. A revision bump would restart this task mid-loop and
+                // cancel the next item's download; the result is picked up just below.
+                await models.fetchRemote(remote, for: object.id, notify: false)
             }
             guard let url = models.modelURL(for: object.id) else {
                 prototypes[object.id] = nil
