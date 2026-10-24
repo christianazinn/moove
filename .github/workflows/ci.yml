@@ -4,7 +4,27 @@ on:
   push:
     branches: [main]
 
+# A newer push to the same PR (or to main) supersedes the older run, so the few macOS runners
+# aren't spent on commits nobody will merge.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # Which lanes a PR touches. The macOS app build only runs when ios/ (or CI itself) changed;
+  # a job skipped by `if:` reports success, so it still satisfies the required `ios` check.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      ios: ${{ steps.f.outputs.ios }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: f
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo "ios=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -qE '^(ios/|\.github/workflows/)'; then echo "ios=true"; else echo "ios=false"; fi >> "$GITHUB_OUTPUT"
+
   secrets:
     runs-on: ubuntu-latest
     steps:
@@ -78,6 +98,8 @@ jobs:
           docker run --rm -v "$PWD/ios/MooveKit:/pkg" -w /pkg swift:6.2 swift test
 
   ios:
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
