@@ -36,9 +36,9 @@ struct ScanFlowView: View {
     @ViewBuilder private var content: some View {
         switch session.phase {
         case .capturing:
-            RoomCaptureContainer(stopRequested: $stopRequested, onFound: { found = $0 }) { result, extras in
+            RoomCaptureContainer(stopRequested: $stopRequested, onFound: { found = $0 }) { result, extras, photographer in
                 switch result {
-                case .success(let room): session.captured(room, extras: extras)
+                case .success(let room): session.captured(room, extras: extras, photographer: photographer)
                 case .failure(let error): session.phase = .failed(error.localizedDescription)
                 }
             }
@@ -54,12 +54,12 @@ struct ScanFlowView: View {
                 RoomVisualizationView(geometry: geometry)
                     .safeAreaInset(edge: .bottom) {
                         VStack(spacing: 6) {
-                            Text("\(geometry.objects.count) pieces of furniture, \(geometry.walls.count) walls, \(geometry.openings.count) doors & windows")
+                            Text("\(geometry.objects.count) items, \(geometry.walls.count) walls, \(geometry.openings.count) doors & windows")
                                 .font(.footnote).foregroundStyle(.secondary)
                             Button {
                                 session.phase = .photos
                             } label: {
-                                Text("Looks right: photograph items").frame(maxWidth: .infinity)
+                                Text("Looks right: check photos").frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.borderedProminent)
                             .controlSize(.large)
@@ -106,7 +106,7 @@ struct ScanFlowView: View {
             Section {
                 TextField("Room name", text: $session.roomName)
             } footer: {
-                Text("Take a photo of each item so Moove can tell what it is, its brand and its condition.")
+                Text("Moove took a photo of each item it could see clearly during the scan. Tap an item to retake its photo, or take one for any item still missing a photo, so Moove can tell what it is, its brand and its condition.")
             }
             if session.objects.isEmpty {
                 Section {
@@ -125,7 +125,11 @@ struct ScanFlowView: View {
             } footer: {
                 Text("For anything RoomPlan missed: small things, decor, items on shelves. Moove identifies it from the photo.")
             }
-            Section("\(session.photos.count) of \(session.objects.count) photographed") {
+            Section {
+                if session.autoPhotosPending {
+                    Label("Picking the best scan frame for each item…", systemImage: "photo.stack")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 ForEach(session.objects) { object in
                     Button { photographing = object } label: {
                         HStack(spacing: 12) {
@@ -135,6 +139,9 @@ struct ScanFlowView: View {
                                 Text(dims(object)).font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
+                            if session.autoPhotos.contains(object.id) {
+                                Text("Auto").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                            }
                             Image(systemName: session.photos[object.id] == nil ? "camera" : "checkmark.circle.fill")
                                 .foregroundStyle(session.photos[object.id] == nil ? Color.accentColor : .green)
                         }
@@ -145,6 +152,8 @@ struct ScanFlowView: View {
                         }
                     }
                 }
+            } header: {
+                Text("\(session.photos.count) of \(session.objects.count) photographed")
             }
         }
         .navigationTitle("Photograph items")
