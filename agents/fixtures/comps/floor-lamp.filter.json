@@ -1,0 +1,38 @@
+{
+  "219e0ddb8536a902": {
+    "item": "Floor lamp; category lamp; 0.30 x 1.70 x 0.30 m (W x H x D)",
+    "n": 17,
+    "keep": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      9,
+      10,
+      11,
+      12,
+      15,
+      16
+    ],
+    "reason": "Dropped #8 (lampshade part), #17 (bundle/set), and #13 and #14 (generic 'Lamp'/'Tall Lamp' listings not identifiable as floor lamps).",
+    "model": "claude-haiku-5-5"
+  },
+  "bed33c3b6356765d": {
+    "item": "Floor lamp; category lamp; 0.30 x 1.70 x 0.30 m (W x H x D)",
+    "n": 17,
+    "keep": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "reason": "Dropped vintage/antique/designer and premium smart listings (1-9), and a bundled set (17); kept plain generic floor lamps and a size-matching IKEA floor lamp (10-16).",
+    "model": "claude-haiku-5-5"
+  }
+}
