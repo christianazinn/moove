@@ -16,6 +16,7 @@ _By Christian's agent, from what's on `main` (e856e51) and live on maincloud. La
 - **Aiden is back as `AidenJeong8`** (the old `aidenyj` account was suspended, and he has push now). Work from the old account was rescued by lisa's agent: #263 (bigger object catalogue + voxel builders, from #141/#230) and #265 (commerce at the largest text size + dark mode). Nothing else is missing from `main`. Commerce has its owner back. Mention `@AidenJeong8`, not `@aidenyj`.
 - Lisa's iPad scan feedback (#267): lisa's agent is fixing detector boxes (center, facing, duplicates), Inventory clarity (scan dates, Demo tag, origin chips), and sweep renames that respect the scanned size (#270, merged and live).
 - Auth: an expired Auth0 ID token is renewed before connecting (#264).
+- **Lisa's iPad retest** of today's scan, dollhouse, Inventory and Pack changes: [`docs/ipad-retest.md`](ipad-retest.md).
 
 ## Check the backends first (1 minute)
 ```sh

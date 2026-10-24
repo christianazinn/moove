@@ -123,3 +123,4 @@ xcodegen && open Moove.xcodeproj
 cd MooveKit && swift test                                          # also runs on Linux
 ```
 In the app, Settings -> **Offline demo** runs every screen on in-memory fixtures with no backend.
+Demo runbook: [`docs/demo.md`](docs/demo.md) · video script: [`docs/demo-video.md`](docs/demo-video.md) · device retest checklist (scan, dollhouse, Inventory, Pack): [`docs/ipad-retest.md`](docs/ipad-retest.md).
