@@ -119,6 +119,10 @@ extension SpacetimeBackend {
         try await call(AddItemPhotoReducer(itemid: itemId, url: url))
     }
 
+    func addScanPhoto(scanId: UInt64, url: String) async throws {
+        try await call(AddScanPhotoReducer(scanid: scanId, url: url))
+    }
+
     func setDisposition(itemId: UInt64, disposition: Disposition) async throws {
         try await call(SetDispositionReducer(itemid: itemId, disposition: disposition.rawValue))
     }
