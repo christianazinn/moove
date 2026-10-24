@@ -15,6 +15,8 @@ struct InventoryView: View {
     @State private var newName = ""
     /// Row whose "Delete item" is waiting on the confirm.
     @State private var deleting: Item?
+    /// Add item (by hand) sheet, opened on this room.
+    @State private var addingTo: Room?
 
     var body: some View {
         let rooms = store.snapshot.roomsNewestFirst(store.visibleRooms)
@@ -46,7 +48,14 @@ struct InventoryView: View {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Join a room", systemImage: "person.2.badge.plus") { showJoin = true }
             }
+            if let newest = rooms.first {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Add item", systemImage: "plus") { addingTo = newest }
+                        .accessibilityIdentifier("inventory.addItem")
+                }
+            }
         }
+        .sheet(item: $addingTo) { room in AddItemView(rooms: rooms, roomId: room.id) }
         .sheet(item: $sharing) { ShareRoomView(room: $0) }
         .sheet(isPresented: $showJoin) { JoinRoomView() }
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }), presenting: renaming) { item in
@@ -102,6 +111,7 @@ struct InventoryView: View {
                 .buttonStyle(.pill(.outline, compact: true))
                 .accessibilityLabel("View room in 3D")
                 Menu {
+                    Button("Add item here", systemImage: "plus") { addingTo = room }
                     hideButton(room)
                 } label: {
                     Image(systemName: "ellipsis")

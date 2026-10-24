@@ -16,6 +16,7 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         case invalidAttribute
         case invalidColors
         case noSuchRoomCode
+        case noSuchRoom
         case noSuchScan
         case invalidUrl
         case tooManyPhotos
@@ -290,6 +291,18 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
             guard let i = s.items.firstIndex(where: { $0.id == itemId }) else { throw Failure.noSuchItem }
             guard s.items[i].owner == me || memberRoomIds.contains(s.items[i].roomId) else { throw Failure.unauthorized }
             s.items.remove(at: i)
+        }
+    }
+
+    /// Same as `add_item`: a hand-added item (no scan object) in a room the caller can edit.
+    public func addItem(roomId: UInt64, name: String, category: String, widthM: Double, heightM: Double, depthM: Double, photoUrl: String?) async throws {
+        try mutateAuthed { s, me in
+            guard let room = s.rooms.first(where: { $0.id == roomId }) else { throw Failure.noSuchRoom }
+            guard room.owner == me || memberRoomIds.contains(roomId) else { throw Failure.unauthorized }
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            s.items.append(Item(id: takeId(), owner: room.owner, roomId: roomId, name: trimmed.isEmpty ? category : trimmed,
+                                category: category, widthM: widthM, heightM: heightM, depthM: depthM,
+                                photoUrls: photoUrl.map { [$0] } ?? []))
         }
     }
 

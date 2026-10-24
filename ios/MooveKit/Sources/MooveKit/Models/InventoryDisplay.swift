@@ -59,6 +59,8 @@ extension Item {
         case fromPhotos
         /// Added by its photo during scan review (no size).
         case addedByPhoto
+        /// Added by hand in Inventory.
+        case addedByYou
         /// In a room someone else shared with me (#10).
         case shared
 
@@ -67,6 +69,7 @@ extension Item {
             case .scanned: "Scanned"
             case .fromPhotos: "From photos"
             case .addedByPhoto: "Added by photo"
+            case .addedByYou: "Added by you"
             case .shared: "Shared"
             }
         }
@@ -76,6 +79,7 @@ extension Item {
             case .scanned: "Scanned with LiDAR"
             case .fromPhotos: "From room photos"
             case .addedByPhoto: "Added by photo"
+            case .addedByYou: "Added by you"
             case .shared: "From a shared room"
             }
         }
@@ -87,6 +91,7 @@ extension Item {
         case .scan: return .scanned
         case .roomPhotos: return .fromPhotos
         case .photo: return .addedByPhoto
+        case .manual: return .addedByYou
         }
     }
 

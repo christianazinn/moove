@@ -275,7 +275,7 @@ struct ItemDetailView: View {
         if item.origin == .photo { return "Not measured" }
         let f = { (v: Double) in v.formatted(.number.precision(.fractionLength(2))) }
         let size = "\(f(item.widthM)) × \(f(item.depthM)) × \(f(item.heightM)) m"
-        return item.origin == .roomPhotos ? "≈ \(size)" : size
+        return item.origin == .roomPhotos || item.origin == .manual ? "≈ \(size)" : size
     }
 
     private func foundBy(_ item: Item) -> String {
@@ -283,6 +283,7 @@ struct ItemDetailView: View {
         case .scan: "LiDAR scan"
         case .roomPhotos: "Room photos (size estimated)"
         case .photo: "Your photo"
+        case .manual: "Added by you (typical size)"
         }
     }
 }
