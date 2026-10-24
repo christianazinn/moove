@@ -821,22 +821,35 @@ extension Canvas {
             if Y > 6 { box(ix, tyLeg - 1, iz, X - ix, tyLeg, Z - iz) { x, _, z in x == ix || x == X - ix - 1 || z == iz || z == Z - iz - 1 ? shade(w, 0.82) : nil } }
             return
         }
-        // four square legs; thickness from the table's size
-        let lw = X > 30 || (coffee && X >= 16) ? 2 : 1
-        for (lx, lz) in [(1, 1), (X - 1 - lw, 1), (1, Z - 1 - lw), (X - 1 - lw, Z - 1 - lw)] { box(lx, 0, lz, lx + lw, tyLeg, lz + lw, legC) }
-        if Y > 6 {
+        // four square legs set in under an overhanging top; overhang and leg thickness scale
+        // with the table (a side table's legs sit near the edge, a dining table's 10-15 cm in)
+        let span = min(X, Z)
+        let oh = span >= 6 ? clamp(rd(D(span) * 0.07), 1, 3) : 0
+        let lw = (span >= 16 && Y >= 12) || (coffee && span >= 12) || X > 30 ? 2 : 1
+        let lx0 = oh, lx1 = X - oh - lw, lz0 = oh, lz1 = Z - oh - lw
+        let foot = metalLegs ? legC : shade(legC, 0.82)
+        for (lx, lz) in [(lx0, lz0), (lx1, lz0), (lx0, lz1), (lx1, lz1)] {
+            if metalLegs { box(lx, 0, lz, lx + lw, tyLeg, lz + lw, legC) } else { wood(lx, 1, lz, lx + lw, tyLeg, lz + lw, legC, .y) }
+            box(lx, 0, lz, lx + lw, 1, lz + lw, foot)
+        }
+        if Y > 6 && lx1 > lx0 && lz1 > lz0 {
+            // apron: a rail joining the legs' tops, deeper on a tall table
             let apron = metalLegs ? legC : shade(w, 0.82)
-            box(1, tyLeg - 1, 1, X - 1, tyLeg, 2, apron)
-            box(1, tyLeg - 1, Z - 2, X - 1, tyLeg, Z - 1, apron)
-            box(1, tyLeg - 1, 1, 2, tyLeg, Z - 1, apron)
-            box(X - 2, tyLeg - 1, 1, X - 1, tyLeg, Z - 1, apron)
+            let ah = Y >= 14 && !metalLegs ? 2 : 1
+            let ay0 = tyLeg - ah
+            box(lx0, ay0, lz0, lx1 + lw, tyLeg, lz0 + 1, apron)
+            box(lx0, ay0, lz1 + lw - 1, lx1 + lw, tyLeg, lz1 + lw, apron)
+            box(lx0, ay0, lz0, lx0 + 1, tyLeg, lz1 + lw, apron)
+            box(lx1 + lw - 1, ay0, lz0, lx1 + lw, tyLeg, lz1 + lw, apron)
+            // the top's edge band reads darker than its face
+            if !glass { box(0, ty, Z - 1, X, Y, Z, shade(w, 0.93)) }
         }
         // coffee tables with a shelf / storage, and bar-height tables' footrest stretchers
-        if coffee && name.has("shelf", "storage", "drawer") && Y >= 6 { wood(1 + lw, 1, 1 + lw, X - 1 - lw, 2, Z - 1 - lw, shade(w, 0.92), .x) }
+        if coffee && name.has("shelf", "storage", "drawer") && Y >= 6 { wood(lx0 + lw, 1, lz0 + lw, lx1, 2, lz1, shade(w, 0.92), .x) }
         if hM >= 0.95 {
             let fy = rd(D(Y) * 0.3)
-            box(1, fy, 1, X - 1, fy + 1, 1 + lw, legC); box(1, fy, Z - 1 - lw, X - 1, fy + 1, Z - 1, legC)
-            box(1, fy, 1, 1 + lw, fy + 1, Z - 1, legC); box(X - 1 - lw, fy, 1, X - 1, fy + 1, Z - 1, legC)
+            box(lx0, fy, lz0, lx1 + lw, fy + 1, lz0 + lw, legC); box(lx0, fy, lz1, lx1 + lw, fy + 1, lz1 + lw, legC)
+            box(lx0, fy, lz0, lx0 + lw, fy + 1, lz1 + lw, legC); box(lx1, fy, lz0, lx1 + lw, fy + 1, lz1 + lw, legC)
         }
     }
 
@@ -876,7 +889,13 @@ extension Canvas {
             doorTop = Y >= 12 ? y1 - max(2, rd(D(y1 - y0) * 0.28)) : y1
             for k in 0..<doors {
                 let x0 = rd(D(X * k) / D(doors)), x1 = rd(D(X * (k + 1)) / D(doors))
-                box(x0, y0, zf, x1, doorTop, zf + 1) { x, y, _ in x == x0 || y == y0 ? shade(body, 0.78) : body }
+                // shaker doors: a frame around a slightly darker recessed panel when there is room
+                let panel = x1 - x0 >= 5 && doorTop - y0 >= 6
+                box(x0, y0, zf, x1, doorTop, zf + 1) { x, y, _ in
+                    if x == x0 || y == y0 { return shade(body, 0.78) }
+                    if panel && x > x0 + 1 && x < x1 - 2 && y > y0 + 1 && y < doorTop - 2 { return shade(body, 0.9) }
+                    return body
+                }
                 let kx = k % 2 == 0 ? x1 - 2 : x0 + 1
                 if !worn(kx, doorTop, zf, 0.3) { box(kx, rd(D(y0 + doorTop) * 0.55), zf + 1, kx + 1, rd(D(y0 + doorTop) * 0.55) + 2, zf + 2, knob) }
             }
@@ -1120,7 +1139,8 @@ extension Canvas {
             // marble block base at one side, arching pole to a dome shade hanging on the other
             let bx = 1, bz = rd(cz)
             box(0, 0, max(0, bz - 1), 3, 2, min(Z, bz + 2), 0xE7E2D8)
-            let dr = clampD(D(min(X, Z)) * 0.4, 1.5, 6)
+            // the dome fills the scanned depth
+            let dr = clampD(D(Z) / 2 - 0.3, 1.5, 8)
             let rr = max(2, rd(min(D(X) - 1 - dr + 0.5, D(X - 3)) - D(bx)))
             let tipY = Y - 1
             let poleTop = tipY - rr
@@ -1184,9 +1204,12 @@ extension Canvas {
             return
         }
         if floor {
-            let sh = clamp(rd(D(Y) * 0.2), 3, 7)
+            // shade about a fifth of the height but never much taller than it is wide; a weighted
+            // disc base with a hub, a thin pole up into the shade
+            let sh = clamp(rd(D(Y) * 0.2), 3, max(3, min(8, rd(R * 2.4))))
             let sb = Y - sh
-            cyl(cx, cz, max(1, R * 0.7), 0, 1, P.charcoal)
+            cyl(cx, cz, max(1, R * 0.62), 0, 1, P.charcoal)
+            if Y >= 20 { cyl(cx, cz, max(1, R * 0.3), 1, 2, shade(poleC, 0.85)) }
             box(rd(cx), 1, rd(cz), rd(cx) + 1, sb + 2, rd(cz) + 1, poleC)
             let shadeLo = shade(shadeC, 0.9), shadeAlt = shade(shadeC, 0.96)
             for y in upTo(sb, Y) {
