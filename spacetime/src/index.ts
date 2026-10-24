@@ -461,7 +461,9 @@ export const setApprovalThreshold = spacetimedb.reducer(
 // upload_base_url: where the app POSTs /upload (the worker's PUBLIC_UPLOAD_BASE_URL)
 // worker_version: git sha the worker runs; worker_started_at: ISO time it (re)started
 // spend_today: JSON of today's estimated Claude and Apify spend against the worker's daily caps
-const SERVICE_KEYS = ['upload_base_url', 'worker_version', 'worker_started_at', 'spend_today'] as const;
+// visa_checkout: how purchases are charged (#191), so approvals can say SIMULATED
+const SERVICE_KEYS = ['upload_base_url', 'worker_version', 'worker_started_at', 'spend_today', 'visa_checkout'] as const;
+const VISA_CHECKOUT_MODES = ['simulated', 'sandbox', 'sandbox+fallback'] as const;
 
 // A bare origin: no userinfo, path, query or fragment. Plain http only for local/private hosts (#146).
 const HTTPS_ORIGIN_RE = /^https:\/\/[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?\/?$/i;
@@ -476,6 +478,7 @@ export const setServiceConfig = spacetimedb.reducer(
     requireWorker(ctx);
     oneOf('key', key, SERVICE_KEYS);
     if (value.length > 512) throw new SenderError('value too long');
+    if (key === 'visa_checkout') oneOf('visa_checkout', value, VISA_CHECKOUT_MODES);
     if (key === 'upload_base_url' && value !== '' && !isUploadOrigin(value)) {
       throw new SenderError('upload_base_url must be https://host[:port], or http:// only for a local/private host');
     }
