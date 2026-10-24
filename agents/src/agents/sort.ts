@@ -2,6 +2,7 @@ import type { Agent } from './types.js';
 import type { Conn } from '../spacetime.js';
 import type { Item } from '../module_bindings/types.js';
 import { logEvent } from '../events.js';
+import { isBuiltInFixture } from '../builtins.js';
 
 // Auto-sort (#8): keep / sell / donate / trash from pure rules, no model calls. The reducer
 // (set_auto_disposition) never overrides a user's choice and forces 'undecided' on possibly
@@ -40,8 +41,6 @@ const has = (it: SortInput, words: string[]) => {
   return words.some(w => new RegExp(`\\b${w}s?\\b`).test(s)); // whole words, so 'bed' isn't 'bedside'
 };
 
-// Built into the house (RoomPlan detects these too): they stay, so there is nothing to sort.
-const BUILT_IN = ['toilet', 'bathtub', 'sink', 'fireplace', 'stair'];
 const BEDDING = ['mattress', 'bed'];
 const SOFT_GOODS = ['clothing', 'clothes', 'book', 'textile', 'linen'];
 
@@ -54,7 +53,8 @@ export function moveCostCents(it: SortInput): number {
 // The rules. Planet-first: trash only what's in poor shape and not worth selling; anything usable
 // is donated instead.
 export function decide(it: SortInput): { disposition: Disposition; reason: string } {
-  if (has(it, BUILT_IN)) return { disposition: 'undecided', reason: 'Built-in fixture: stays with the house' };
+  // Built into the house (RoomPlan detects these too): they stay, so there is nothing to sort.
+  if (isBuiltInFixture(it)) return { disposition: 'undecided', reason: 'Built-in fixture: stays with the house' };
   const v = Number(it.estValueCents); // -1 unknown, 0 = no comps found
   const known = v > 0;
   const cost = moveCostCents(it);

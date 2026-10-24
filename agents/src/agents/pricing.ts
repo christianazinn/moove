@@ -2,6 +2,7 @@ import type { Agent } from './types.js';
 import type { Conn } from '../spacetime.js';
 import type { Item } from '../module_bindings/types.js';
 import { logEvent } from '../events.js';
+import { isBuiltInFixture } from '../builtins.js';
 import { filterCacheFile, isApifyUnavailable, lookupComps, similarCachedComps, type Comp, type CompsResult } from '../integrations/apify.js';
 import { filterComps, type FilterResult } from './comp-filter.js';
 
@@ -74,6 +75,12 @@ export function needsPricing(it: Item): boolean {
 }
 
 async function price(conn: Conn, it: Item, retry: (it: Item, delayMs: number) => void): Promise<void> {
+  if (isBuiltInFixture(it)) {
+    // A toilet or radiator stays with the building: no comps (and no Apify spend), no estimate.
+    conn.reducers.setItemStage({ itemId: it.id, stage: 'done', field: 'pricing' });
+    logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'result', message: `Not priced: "${it.name}" is a built-in fixture that stays with the building`, refTable: 'item', refId: it.id, data: { builtIn: true } });
+    return;
+  }
   inFlight.add(it.id);
   const q = queryFor(it);
   conn.reducers.setItemStage({ itemId: it.id, stage: 'running', field: 'pricing' });

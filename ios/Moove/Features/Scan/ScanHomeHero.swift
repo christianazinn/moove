@@ -125,7 +125,7 @@ struct ScanRoomCard: View {
 
     private var meta: String {
         let count = "\(items.count) item\(items.count == 1 ? "" : "s")"
-        let cents = items.compactMap(\.estValueCents).reduce(0, +)
+        let cents = items.compactMap(\.saleValueCents).reduce(0, +)
         return cents > 0 ? "\(count) · ~$\(cents / 100)" : count
     }
 }

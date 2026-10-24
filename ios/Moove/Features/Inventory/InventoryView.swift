@@ -128,13 +128,16 @@ struct InventoryView: View {
             .padding(.vertical, 8)
             .accessibilityElement(children: .combine)
         }
+        let compCounts = store.snapshot.compCounts
         ForEach(items) { item in
             let tag = item.originTag(inSharedRoom: shared)
+            // "≈" marks an estimate from only one or two comparable listings
+            let rough = item.saleValueCents != nil && Item.isRoughEstimate(compCount: compCounts[item.id] ?? 0)
             LedgerRow(
                 title: item.name,
                 meta: meta(for: item),
-                value: item.priceText,
-                valueTint: item.estValueCents == nil ? Theme.muted : Theme.text,
+                value: rough ? "≈\(item.priceText)" : item.priceText,
+                valueTint: item.saleValueCents == nil ? Theme.muted : Theme.text,
                 tag: tag.label,
                 tagAccessibilityLabel: tag.accessibilityLabel
             ) {
@@ -275,7 +278,7 @@ struct InventoryView: View {
 
     /// Item count, room count and estimated value between rules, split by hairlines.
     private var totals: some View {
-        let priced = store.visibleItems.compactMap(\.estValueCents)
+        let priced = store.visibleItems.compactMap(\.saleValueCents)
         return HStack(spacing: 0) {
             StatFigure(label: "Items", value: "\(store.visibleItems.count)")
                 .padding(.vertical, 18).padding(.trailing, 14)

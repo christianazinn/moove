@@ -285,14 +285,48 @@ extension Item {
         case pricing
         /// The pricing agent gave up (no comparable listings, or a lookup error).
         case unpriced
+        /// A toilet, tub, sink or radiator: part of the building, never sold or priced.
+        case builtIn
     }
 
     public var priceState: PriceState {
+        if isBuiltInFixture { return .builtIn }
         if let estValueCents { return .priced(estValueCents) }
         if pricingStatus == .failed { return .unpriced }
         if !photoUrls.isEmpty, detailsStatus == .pending || detailsStatus == .running { return .identifying }
         return .pricing
     }
+}
+
+extension Item {
+    /// Fixtures that belong to the building (mirrors the worker's `agents/src/builtins.ts`): never
+    /// priced, and left out of sale totals even if an older worker priced them (Rio's hotel
+    /// bathroom: a $48 toilet, a $64 tub, a $32 radiator). A sink caddy or a toilet brush is an item.
+    public var isBuiltInFixture: Bool {
+        let words = Set("\(name) \(category)".lowercased().split(whereSeparator: { !$0.isLetter && $0 != "-" }).map(String.init))
+        let fixtures: Set<String> = ["toilet", "toilets", "bathtub", "bathtubs", "sink", "sinks", "washbasin", "washbasins",
+                                     "fireplace", "fireplaces", "stairs", "stair", "staircase", "radiator", "radiators",
+                                     "shower", "showers", "built-in", "built-ins", "builtin"]
+        let accessories: Set<String> = ["caddy", "caddies", "mat", "mats", "organizer", "organizers", "strainer", "strainers",
+                                        "stopper", "paper", "brush", "brushes", "plunger", "cleaner", "towel", "towels", "rack",
+                                        "racks", "shelf", "shelves", "curtain", "curtains", "head", "heads", "heater", "heaters",
+                                        "portable", "oil", "cover", "covers", "tool", "tools", "screen", "gate", "gates"]
+        let joined = "\(name) \(category)".lowercased()
+        let tub = joined.contains("bath tub")
+        return (tub || !words.isDisjoint(with: fixtures)) && words.isDisjoint(with: accessories)
+    }
+
+    /// What the item adds to "expected sales" and other totals: nothing for a built-in fixture.
+    public var saleValueCents: Int64? { isBuiltInFixture ? nil : estValueCents }
+
+    /// An estimate from only one or two comparable listings is a rough guess, not a market price.
+    /// Zero means none are recorded (seeded or demo rows), which isn't flagged.
+    public static func isRoughEstimate(compCount: Int) -> Bool { (1...2).contains(compCount) }
+}
+
+extension SyncSnapshot {
+    /// How many comparable listings priced each item.
+    public var compCounts: [UInt64: Int] { comps.reduce(into: [:]) { $0[$1.itemId, default: 0] += 1 } }
 }
 
 extension Item {
