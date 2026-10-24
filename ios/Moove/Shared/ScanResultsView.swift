@@ -74,16 +74,16 @@ struct ScanResultsView: View {
 
             HStack(spacing: 10) {
                 Circle().fill(Theme.accent).frame(width: 8, height: 8).accessibilityHidden(true)
-                Text(caption).monoText(13).foregroundStyle(Theme.text)
+                Text(caption).monoText(13.5).foregroundStyle(Theme.text)
             }
             .padding(.top, 14)
-            Text(model?.scanned == true
-                 ? "Your room as scanned: walls, doors, windows and where each piece stands."
-                 : "Layout estimated from your items, not their scanned positions.")
-                .monoMeta()
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 4)
-                .padding(.leading, 18)
+            if model?.scanned != true {
+                Text("Estimated layout, not scanned positions.")
+                    .monoMeta()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+                    .padding(.leading, 18)
+            }
         }
     }
 

@@ -7,8 +7,8 @@ struct LoginView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer()
-            MooveWordmark(height: 44)
-                .padding(.bottom, 28)
+            MooveWordmark(height: 64)
+                .padding(.bottom, 36)
             Text("Welcome").eyebrow().padding(.bottom, 12)
             Text("Your move, handled.")
                 .pageTitle()

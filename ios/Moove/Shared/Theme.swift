@@ -122,7 +122,7 @@ extension View {
 
     /// Small monospace label above a heading or section ("06 — New home").
     func eyebrow() -> some View {
-        monoText(12.5).tracking(0.4).foregroundStyle(Theme.muted)
+        monoText(13).tracking(0.4).foregroundStyle(Theme.muted)
     }
 
     /// Large monospace page heading ("Your current room").
@@ -132,7 +132,7 @@ extension View {
 
     /// Short sans paragraph under a page heading.
     func lede() -> some View {
-        sansText(15.5).foregroundStyle(Theme.muted).lineSpacing(3)
+        sansText(15.5).foregroundStyle(Theme.muted).lineSpacing(4)
     }
 
     /// Bold monospace section heading ("Pieces").
@@ -142,17 +142,17 @@ extension View {
 
     /// Bold monospace title for a block or row.
     func blockTitle() -> some View {
-        monoText(14.5, weight: .bold).foregroundStyle(Theme.text)
+        monoText(15.5, weight: .bold).foregroundStyle(Theme.text).lineSpacing(2)
     }
 
     /// Monospace secondary line ("4.5 × 4.0 m · 2 doors").
     func monoMeta() -> some View {
-        monoText(12.5).foregroundStyle(Theme.muted)
+        monoText(13.5).foregroundStyle(Theme.muted).lineSpacing(2.5)
     }
 
     /// Right-aligned monospace figure in a row ("$80–$140").
     func rowValue() -> some View {
-        monoText(13.5).foregroundStyle(Theme.text).lineLimit(1)
+        monoText(14).foregroundStyle(Theme.text).lineLimit(1)
     }
 
     /// Cream background, sage tint, warm ink. Lists and forms drop their gray background.
@@ -206,7 +206,7 @@ struct ListHeader<Trailing: View>: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title).listHeading().accessibilityAddTraits(.isHeader)
-            if let count { Text(count).monoText(13).foregroundStyle(Theme.muted) }
+            if let count { Text(count).monoText(13.5).foregroundStyle(Theme.muted) }
             Spacer(minLength: 8)
             trailing
         }
@@ -236,7 +236,7 @@ struct LedgerRow<Leading: View, Trailing: View>: View {
     var body: some View {
         HStack(spacing: 16) {
             leading
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title).blockTitle().fixedSize(horizontal: false, vertical: true)
                 if let meta { Text(meta).monoMeta().fixedSize(horizontal: false, vertical: true) }
             }
@@ -289,7 +289,7 @@ struct StatFigure: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(label).monoText(12.5).foregroundStyle(Theme.muted)
+            Text(label).monoText(13.5).foregroundStyle(Theme.muted)
             Text(value)
                 .monoText(24, weight: .bold, maxScale: 1.6)
                 .tracking(-0.2)
@@ -365,7 +365,7 @@ struct MonoTag: View {
 
     var body: some View {
         Text(text)
-            .monoText(10.5, weight: .bold, maxScale: 1.6)
+            .monoText(11, weight: .bold, maxScale: 1.6)
             .tracking(0.5)
             .textCase(.uppercase)
             .lineLimit(1)
@@ -387,7 +387,7 @@ struct PillPicker<Value: Hashable>: View {
             ForEach(options, id: \.self) { option in
                 let selected = option == selection
                 Button(label(option)) { selection = option }
-                    .monoText(12.5, weight: selected ? .bold : .regular, maxScale: 1.5)
+                    .monoText(13, weight: selected ? .bold : .regular, maxScale: 1.5)
                     .lineLimit(1)
                     .padding(.horizontal, 14)
                     .frame(minHeight: 38)
@@ -417,9 +417,9 @@ struct ChoiceChip: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Text(title).monoText(12.5, weight: selected ? .bold : .regular, maxScale: 1.5)
+                Text(title).monoText(13, weight: selected ? .bold : .regular, maxScale: 1.5)
                 if let meta {
-                    Text(meta).monoText(11.5, maxScale: 1.5)
+                    Text(meta).monoText(12, maxScale: 1.5)
                         .foregroundStyle(selected ? Theme.accentInk.opacity(0.85) : Theme.muted)
                 }
             }
