@@ -36,7 +36,7 @@ function fakeConn(opts: { failFraudFor?: bigint } = {}) {
         deals.set(d.id, d);
         for (const cb of updates) cb({}, old, d);
       },
-      logAgentEvent: (e: { kind: string; message: string; refId: bigint }) => void events.push(e),
+      logAgentEvent: async (e: { kind: string; message: string; refId: bigint }) => void events.push(e), // reducers return promises (events.ts .catch()es them)
     },
   };
   let nextId = 1n;
