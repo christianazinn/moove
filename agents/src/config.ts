@@ -18,6 +18,8 @@ export const config = {
   workerToken: env('SPACETIME_WORKER_TOKEN'),
   uploadPort: Number(env('UPLOAD_PORT', '8787')),
   uploadDir: env('UPLOAD_DIR', 'uploads'),
+  // Largest accepted upload (USDZ scans are the big ones).
+  uploadMaxBytes: Number(env('UPLOAD_MAX_BYTES', String(50 * 1024 * 1024))),
   // What phones/the worker use to fetch uploads; set to your LAN IP for devices.
   publicUploadBaseUrl: env('PUBLIC_UPLOAD_BASE_URL', 'http://localhost:8787'),
   // Paywalled comps endpoint the pricing agent buys from over x402 (#7); bound to 127.0.0.1.
