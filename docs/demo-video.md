@@ -73,7 +73,7 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 
 ### 9. 1:36–1:50 Everything flies into the new home
 - **VO:** "Paste the new place's listing link, and Moove builds the floor plan. Then everything you kept flies from where it stood in your old room into the new home, with what the agent bought."
-- **ON SCREEN:** Move > **New Home** > **Import from a listing** (Zillow, Redfin, Realtor.com): paste a link, add a floor-plan screenshot, **Build floor plan**, **Use this home**. The fly-in: pieces lift from the scanned room drawn beside the house, arc over the walls and land. Tap **Fly in** to replay; flash a layout style.
+- **ON SCREEN:** Move > **New Home** > **Paste a Zillow link** (Zillow, Redfin, Realtor.com): paste a link, add a floor-plan screenshot, **Build floor plan**, **Use this home**. The fly-in: pieces lift from the scanned room drawn beside the house, arc over the walls and land. Tap **Fly in** to replay; flash a layout style.
 - **STATE:** Offline demo (same take) for the house; the import needs the worker (Claude reads the floor-plan screenshot), so record the import part on Demo and cut it in.
 - **TRACK:** Anthropic (floor plan from screenshots). Visa (bought items land in the layout).
 - **FALLBACK:** The **Demo house** card > **Use this home**, and drop the first sentence of the VO. With no worker reachable, the import builds an estimate from beds, baths and square feet (labeled Estimated); say "estimated".

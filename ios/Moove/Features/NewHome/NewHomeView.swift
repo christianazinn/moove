@@ -6,6 +6,7 @@ import MooveKit
 struct NewHomeView: View {
     @Environment(MooveStore.self) private var store
     @State private var showPicker = false
+    @State private var showImport = false
     /// Shown when the save to `newHome` failed (e.g. live backend not ready), so the demo still works.
     @State private var unsaved: Unsaved?
 
@@ -26,7 +27,8 @@ struct NewHomeView: View {
             if let current {
                 NewHomeDetail(
                     name: current.name, source: current.source, plan: current.plan,
-                    home: unsaved == nil ? store.newHome : nil, furniture: furniture
+                    home: unsaved == nil ? store.newHome : nil, furniture: furniture,
+                    onImport: { showImport = true }
                 )
             } else {
                 NewHomePicker(onPick: choose)
@@ -39,9 +41,22 @@ struct NewHomeView: View {
         .toolbar {
             if current != nil {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Change") { showPicker = true }
+                    Button("Change home") { showPicker = true }
                         .monoText(13, weight: .bold, maxScale: 1.4)
                         .accessibilityLabel("Change new home")
+                }
+            }
+        }
+        .sheet(isPresented: $showImport) {
+            NavigationStack {
+                ListingImportView { name, source, plan in
+                    showImport = false
+                    choose(name, source, plan)
+                }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showImport = false }.monoText(13, maxScale: 1.4)
+                    }
                 }
             }
         }
@@ -94,7 +109,16 @@ struct NewHomePicker: View {
             VStack(alignment: .leading, spacing: 0) {
                 MooveWordmark(height: 36).padding(.top, 8).padding(.bottom, 32)
                 PageHeader(eyebrow: "06 — New home", title: "Where are you moving?")
-                .padding(.bottom, 32)
+                .padding(.bottom, 24)
+
+                NavigationLink {
+                    ListingImportView { name, source, plan in onPick(name, source, plan) }
+                } label: {
+                    Label("Paste a Zillow link", systemImage: "link").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.pill(.primary))
+                .accessibilityHint("Zillow, Redfin or Realtor.com")
+                .padding(.bottom, 36)
 
                 demoHouse.padding(.bottom, 44)
 
@@ -109,14 +133,6 @@ struct NewHomePicker: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Enter room sizes, width by depth")
 
-                NavigationLink {
-                    ListingImportView { name, source, plan in onPick(name, source, plan) }
-                } label: {
-                    LedgerRow(title: "Import from a listing", meta: "Zillow, Redfin, Realtor.com", chevron: true) {
-                        IconTile(systemName: "link")
-                    }
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.top, 16)
@@ -187,6 +203,8 @@ struct NewHomeDetail: View {
     /// The saved `newHome` row; nil while the plan is only local.
     var home: NewHome?
     var furniture: Furniture
+    /// Opens the listing import (paste a Zillow link) to replace this home.
+    var onImport: () -> Void = {}
 
     @State private var focusRoom: String?
     @State private var options: [LayoutOption] = []
@@ -282,6 +300,13 @@ struct NewHomeDetail: View {
                 if !saved { MonoTag(text: "Not saved", tone: Theme.ochreInk) }
             }
             .padding(.top, 14)
+            Button(action: onImport) {
+                Label(source == .zillow ? "Import another listing" : "Paste a Zillow link", systemImage: "link")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.pill(.outline))
+            .padding(.top, 18)
+            .accessibilityHint("Builds your new home from a Zillow, Redfin or Realtor.com listing")
         }
     }
 
