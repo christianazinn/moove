@@ -1,6 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
-import type { z } from 'zod';
+import { z } from 'zod';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { config } from '../config.js'; // also loads .env.local before the client reads ANTHROPIC_API_KEY
 import { loadPhoto, type ImageInput } from './photos.js';
 
@@ -23,6 +26,8 @@ export function loadImage(url: string): Promise<ImageInput> {
 export class RefusalError extends Error {}
 
 // One structured-output call: images + instructions in, schema-validated object out.
+// LLM_REPLAY=record|replay|auto records answers to LLM_REPLAY_DIR (fixtures/llm) and replays them, so tests
+// and the E2E run (scripts/e2e.ts) don't spend the API budget; off (default) always calls the API.
 // Server-side fallbacks re-run on another model if the request is declined. Haiku has none,
 // so pass fallbacks: false for MODEL_FAST calls.
 export async function structuredCall<S extends z.ZodType>(opts: {
@@ -36,6 +41,38 @@ export async function structuredCall<S extends z.ZodType>(opts: {
   maxTokens?: number;
   fallbacks?: boolean;
 }): Promise<z.infer<S>> {
+  const mode = replayMode();
+  if (mode === 'off') return liveCall(opts);
+  const key = replayKey(opts);
+  const file = path.join(config.llmReplayDir, `${key}.json`);
+  if (mode !== 'record' && existsSync(file)) {
+    const saved = JSON.parse(readFileSync(file, 'utf8')) as { output: unknown };
+    console.log(`[llm] replayed ${key} (${opts.model})`);
+    return opts.schema.parse(saved.output); // a schema change makes a stale recording fail loudly
+  }
+  if (mode === 'replay') throw new Error(`LLM_REPLAY=replay: no recorded answer ${key} for ${opts.model} (record it with LLM_REPLAY=auto)`);
+  const output = await liveCall(opts);
+  mkdirSync(config.llmReplayDir, { recursive: true });
+  writeFileSync(file, JSON.stringify({ key, model: opts.model, output }, null, 2) + '\n');
+  console.log(`[llm] recorded ${key} (${opts.model})`);
+  return output;
+}
+
+export type ReplayMode = 'off' | 'record' | 'replay' | 'auto';
+export function replayMode(raw = process.env.LLM_REPLAY): ReplayMode {
+  const v = (raw ?? '').trim().toLowerCase();
+  return v === 'record' || v === 'replay' || v === 'auto' ? v : 'off';
+}
+
+/** Same model, prompts, images and output schema -> same key. */
+export function replayKey(opts: { model: string; system: string; text: string; images?: ImageInput[]; schema: z.ZodType }): string {
+  const h = createHash('sha256');
+  h.update(JSON.stringify([opts.model, opts.system, opts.text, z.toJSONSchema(opts.schema)]));
+  for (const img of opts.images ?? []) h.update(createHash('sha256').update(img.data).digest('hex'));
+  return h.digest('hex').slice(0, 24);
+}
+
+async function liveCall<S extends z.ZodType>(opts: Parameters<typeof structuredCall<S>>[0]): Promise<z.infer<S>> {
   const response = await anthropic.beta.messages.parse({
     model: opts.model,
     max_tokens: opts.maxTokens ?? 16000,

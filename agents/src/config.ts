@@ -61,6 +61,8 @@ export const config = {
     // Optional allowlist of hosts web images may come from (comma-separated). Empty = any public https host.
     productImageHosts: parseAllowedHosts(env('PRODUCT_IMAGE_HOSTS')),
   },
+  // Recorded Claude answers for LLM_REPLAY (see integrations/anthropic.ts).
+  llmReplayDir: env('LLM_REPLAY_DIR', 'fixtures/llm'),
   models: {
     vision: env('MODEL_VISION', 'claude-sonnet-5-5'),
     fast: env('MODEL_FAST', 'claude-haiku-5-5'),
