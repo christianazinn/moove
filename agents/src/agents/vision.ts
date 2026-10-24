@@ -106,6 +106,13 @@ export const visionAgent: Agent = {
         pump();
       }
     };
+    // A worker that died mid-call (supervisor restart, maincloud republish) left its items `running`
+    // forever, and pricing/sort wait on vision. Only one worker runs, so put them back to pending.
+    for (const it of conn.db.item.iter()) {
+      if (it.detailsStatus === 'running' && !inFlight.has(it.id)) {
+        conn.reducers.setItemStage({ itemId: it.id, stage: 'pending', field: 'details' });
+      }
+    }
     for (const it of conn.db.item.iter()) maybe(it);
     conn.db.item.onInsert((_ctx, it) => maybe(it));
     conn.db.item.onUpdate((_ctx, _old, it) => maybe(it));
