@@ -7,17 +7,18 @@ import MooveKit
 struct SummaryView: View {
     @Environment(MooveStore.self) private var store
 
-    /// Spend and agent events come from the commerce lane (#7, #15) and the
-    /// worker's event log; until the app syncs those tables, show labeled demo lines.
-    private var usingDemoActivity: Bool { true }
+    /// Spend and agent steps come from the `payment` and `agent_event` tables. With no
+    /// rows yet (nothing has run), show labeled demo lines so the closing slide isn't empty.
+    private var usingDemoActivity: Bool { store.snapshot.payments.isEmpty && store.snapshot.agentEvents.isEmpty }
 
     private var summary: MoveSummary {
-        let items = store.items
+        let snap = store.snapshot
+        let demo = usingDemoActivity
         return MoveSummary(
-            items: items,
-            sales: MoveSummary.estimatedSales(from: items) + MoveSummary.sales(from: store.snapshot.listings),
-            spend: usingDemoActivity ? SummaryDemo.spend : [],
-            events: usingDemoActivity ? SummaryDemo.events() : []
+            items: snap.items,
+            sales: MoveSummary.estimatedSales(from: snap.items) + MoveSummary.sales(from: snap.listings),
+            spend: demo ? SummaryDemo.spend : MoveSummary.spend(from: snap.payments),
+            events: demo ? SummaryDemo.events() : MoveSummary.events(from: snap.agentEvents)
         )
     }
 
@@ -58,7 +59,7 @@ struct SummaryView: View {
             Text("Your move, handled.")
                 .font(.system(size: 28, weight: .semibold))
             HStack(alignment: .firstTextBaseline, spacing: 18) {
-                figure(s.netCents.signedUSD, "net", tint: s.netCents >= 0 ? Theme.accentStrong : Theme.danger)
+                figure(s.netMicros.netUSD, "net", tint: s.netMicros >= 0 ? Theme.accentStrong : Theme.danger)
                 figure("\(Int(s.divertedKg.rounded())) kg", "kept from landfill", tint: Theme.text)
             }
             .padding(.top, 6)
@@ -112,8 +113,8 @@ struct SummaryView: View {
                     figure(s.pendingSalesCents.usd, "still selling", tint: Theme.text)
                 }
                 GridRow {
-                    figure(s.spentCents.usd, "spent", tint: Theme.ochre)
-                    figure(s.netCents.signedUSD, "net", tint: s.netCents >= 0 ? Theme.accentStrong : Theme.danger)
+                    figure(UsdMicros.format(s.spentMicros), "spent", tint: Theme.ochre)
+                    figure(s.netMicros.netUSD, "net", tint: s.netMicros >= 0 ? Theme.accentStrong : Theme.danger)
                 }
             }
             .padding(.bottom, 6)
@@ -121,11 +122,11 @@ struct SummaryView: View {
                 HStack(spacing: 8) {
                     Text(rail.rail == "x402" ? "x402 data payments" : rail.rail == "visa" ? "Visa purchases" : rail.rail)
                         .font(.mono(13.5))
-                    if rail.simulatedCents > 0 {
-                        MonoTag(text: rail.simulatedCents == rail.cents ? "Simulated" : "\(rail.simulatedCents.usd) sim", tone: Theme.ochre)
+                    if rail.simulatedMicros > 0 {
+                        MonoTag(text: rail.simulatedMicros == rail.micros ? "Simulated" : "\(UsdMicros.format(rail.simulatedMicros)) sim", tone: Theme.ochre)
                     }
                     Spacer()
-                    Text(rail.cents.usd).font(.mono(13.5, weight: .bold))
+                    Text(UsdMicros.format(rail.micros)).font(.mono(13.5, weight: .bold))
                 }
                 .padding(.vertical, 9)
                 .ruled(.top)
@@ -243,7 +244,12 @@ struct SummaryView: View {
 }
 
 private extension Int64 {
-    var signedUSD: String { self < 0 ? "−" + (-self).usd : usd }
+    /// USD micros as a headline figure: whole cents, real minus sign ("−$12.40").
+    var netUSD: String {
+        let cents = (magnitude + 5_000) / 10_000
+        let text = Int64(cents).usd
+        return self < 0 && cents > 0 ? "−" + text : text
+    }
 }
 
 #Preview {
