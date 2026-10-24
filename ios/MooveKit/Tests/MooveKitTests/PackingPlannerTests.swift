@@ -35,7 +35,7 @@ import Testing
         let p = plan
         #expect(p.boxes.count >= 4)
         #expect(p.boxes.filter(\.openFirst).count == 1)
-        #expect(p.boxes.contains(where: \.keepWithYou))
+        #expect(p.boxes.contains { $0.keepWithYou })
         #expect(p.boxes.map(\.id) == Array(1...p.boxes.count))
 
         // Big furniture gets notes, not boxes.
@@ -55,7 +55,7 @@ import Testing
 
         // Typical contents are marked so the UI can label them.
         #expect(p.boxes.flatMap(\.contents).contains { $0.itemId == nil })
-        #expect(p.boxes.first(where: \.openFirst)?.contents.allSatisfy { $0.itemId == nil } == true)
+        #expect(p.boxes.first { $0.openFirst }?.contents.allSatisfy { $0.itemId == nil } == true)
     }
 
     @Test func sentimentalItemsTravelWithYou() {
