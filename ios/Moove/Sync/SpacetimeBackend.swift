@@ -184,6 +184,9 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
         }
     }
 
+    /// The connected identity (hex), for reducers that take the owner as an argument.
+    var currentIdentity: IdentityHex? { lock.withLock { me } }
+
     // MARK: Reducers
 
     func call<R: Reducer>(_ reducer: R) async throws {

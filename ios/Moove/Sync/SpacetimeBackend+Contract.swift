@@ -15,6 +15,7 @@ extension SpacetimeBackend {
     static let tableNames = [
         "user", "room", "room_member", "scan", "item", "comp",
         "new_home", "layout", "listing", "approval",
+        "payment", "agent_event", "shopping_item", "deal",
     ]
 
     /// Everything the signed-in identity can see: its own rows, plus rooms,
@@ -37,6 +38,10 @@ extension SpacetimeBackend {
             "SELECT * FROM layout WHERE owner = \(id)",
             "SELECT * FROM listing WHERE owner = \(id)",
             "SELECT * FROM approval WHERE owner = \(id)",
+            "SELECT * FROM payment WHERE owner = \(id)",
+            "SELECT * FROM agent_event WHERE owner = \(id)",
+            "SELECT * FROM shopping_item WHERE owner = \(id)",
+            "SELECT * FROM deal WHERE owner = \(id)",
         ]
     }
 
@@ -51,6 +56,10 @@ extension SpacetimeBackend {
         { await $0.registerTableRowDecoder(MooveBindings.LayoutRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.ListingRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.ApprovalRow.self) },
+        { await $0.registerTableRowDecoder(MooveBindings.PaymentRow.self) },
+        { await $0.registerTableRowDecoder(MooveBindings.AgentEventRow.self) },
+        { await $0.registerTableRowDecoder(MooveBindings.ShoppingItemRow.self) },
+        { await $0.registerTableRowDecoder(MooveBindings.DealRow.self) },
     ]
 
     static func primaryKey(of row: Any) -> AnyHashable? {
@@ -70,6 +79,10 @@ extension SpacetimeBackend {
         s.layouts = rows("layout", MooveBindings.LayoutRow.self).map(Layout.init).sorted { $0.id < $1.id }
         s.listings = rows("listing", MooveBindings.ListingRow.self).compactMap(Listing.init).sorted { $0.id < $1.id }
         s.approvals = rows("approval", MooveBindings.ApprovalRow.self).compactMap(Approval.init).sorted { $0.id < $1.id }
+        s.payments = rows("payment", MooveBindings.PaymentRow.self).map(Payment.init).sorted { $0.id < $1.id }
+        s.agentEvents = rows("agent_event", MooveBindings.AgentEventRow.self).map(AgentEvent.init).sorted { $0.id < $1.id }
+        s.shoppingItems = rows("shopping_item", MooveBindings.ShoppingItemRow.self).map(ShoppingItem.init).sorted { $0.id < $1.id }
+        s.deals = rows("deal", MooveBindings.DealRow.self).map(Deal.init).sorted { $0.id < $1.id }
         return s
     }
 
@@ -105,20 +118,18 @@ extension SpacetimeBackend {
         try await call(SetSentimentalReducer(itemid: itemId, value: maybeSentimental))
     }
 
-    // Shopping (#15). Once bindings exist: add_shopping_item(owner: me, name, category, reason),
-    // remove_shopping_item(shopping_item_id), choose_deal(shopping_item_id, deal_id); and subscribe to
-    // shopping_item / deal (ShoppingItem(chosenDealId: 0 -> nil), Deal(url: "" -> nil, fraud_score: -1 -> nil)).
-
+    // Shopping (#15).
     func addShoppingItem(name: String, category: String, reason: String) async throws {
-        throw Failure.reducerFailed("addShoppingItem: waiting on the SpacetimeDB module (#2)")
+        guard let me = currentIdentity, let owner = Identity(hex: me) else { throw Failure.notConnected }
+        try await call(MooveBindings.AddShoppingItemReducer(owner: owner, nameArg: name, category: category, reason: reason))
     }
 
     func removeShoppingItem(shoppingItemId: UInt64) async throws {
-        throw Failure.reducerFailed("removeShoppingItem: waiting on the SpacetimeDB module (#2)")
+        try await call(MooveBindings.RemoveShoppingItemReducer(shoppingitemid: shoppingItemId))
     }
 
     func chooseDeal(shoppingItemId: UInt64, dealId: UInt64) async throws {
-        throw Failure.reducerFailed("chooseDeal: waiting on the SpacetimeDB module (#2)")
+        try await call(MooveBindings.ChooseDealReducer(shoppingitemid: shoppingItemId, dealid: dealId))
     }
 
     func createNewHome(name: String, source: NewHomeSource, floorPlanJson: String) async throws {
@@ -222,5 +233,41 @@ private extension Approval {
         guard let kind = ApprovalKind(rawValue: r.kind), let status = ApprovalStatus(rawValue: r.status) else { return nil }
         self.init(id: r.id, owner: r.owner.description, kind: kind, refId: r.refId, amountCents: r.amountCents,
                   summary: r.summary, status: status, requestedAt: r.requestedAt.date, updatedAt: r.updatedAt.date)
+    }
+}
+
+private func optional(_ score: Double) -> Double? { score < 0 ? nil : score }
+private func optional(_ id: UInt64) -> UInt64? { id == 0 ? nil : id }
+
+private extension Payment {
+    init(_ r: MooveBindings.PaymentRow) {
+        self.init(id: r.id, owner: r.owner.description, agent: r.agent, rail: PaymentRail(wire: r.rail), purpose: r.purpose,
+                  payee: r.payee, amountUsdMicros: r.amountUsdMicros, txHash: optional(r.txHash),
+                  status: PaymentStatus(wire: r.status), simulated: r.simulated, refTable: optional(r.refTable),
+                  refId: r.refId, createdAt: r.createdAt.date, updatedAt: r.updatedAt.date)
+    }
+}
+
+private extension AgentEvent {
+    init(_ r: MooveBindings.AgentEventRow) {
+        self.init(id: r.id, owner: r.owner.description, agent: r.agent, kind: AgentEventKind(wire: r.kind), message: r.message,
+                  refTable: optional(r.refTable), refId: r.refId, dataJson: r.dataJson.isEmpty ? "{}" : r.dataJson,
+                  createdAt: r.createdAt.date)
+    }
+}
+
+private extension ShoppingItem {
+    init(_ r: MooveBindings.ShoppingItemRow) {
+        self.init(id: r.id, owner: r.owner.description, name: r.name, category: r.category, reason: r.reason,
+                  status: ShoppingStatus(wire: r.status), chosenDealId: optional(r.chosenDealId), createdAt: r.createdAt.date)
+    }
+}
+
+private extension Deal {
+    init(_ r: MooveBindings.DealRow) {
+        self.init(id: r.id, owner: r.owner.description, shoppingItemId: r.shoppingItemId, source: r.source, title: r.title,
+                  priceCents: r.priceCents, url: optional(r.url), sellerInfo: r.sellerInfo,
+                  fraudScore: optional(r.fraudScore), aiTextScore: optional(r.aiTextScore),
+                  fraudReasons: r.fraudReasons, createdAt: r.createdAt.date)
     }
 }
