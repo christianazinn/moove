@@ -57,8 +57,8 @@ struct ListingDetailView: View {
                 .accessibilityAddTraits(.isHeader)
                 switch listing.status {
                 case .awaitingApproval where store.snapshot.isShared(listing):
-                    // Shared-room item someone else owns (#195): only they can approve it for now.
-                    notice("Over the owner's approval limit. Waiting for \(store.snapshot.approverName(owner: listing.owner)) to approve it.",
+                    // Shared-room item someone else owns (#195): any room member may decide it (#200).
+                    notice("Over \(store.snapshot.ownerName(listing.owner))'s approval limit. Anyone in the room can approve it in Approvals to post it.",
                            systemImage: "hourglass", tint: Theme.ochre)
                         .padding(.top, 20)
                 case .awaitingApproval:
@@ -77,11 +77,15 @@ struct ListingDetailView: View {
                     notice("The listing agent is still drafting this. It posts once it's ready, or asks you first if it's over your limit.",
                            systemImage: "pencil.line", tint: Theme.muted)
                         .padding(.top, 20)
+                case .posting:
+                    notice(listing.simulated ? "The listing agent is posting this now. It's a simulated post, so nothing goes to eBay." : "The listing agent is posting this to eBay now.",
+                           systemImage: "arrow.up.circle", tint: Theme.muted)
+                        .padding(.top, 20)
                 case .posted, .sold:
                     EmptyView()
                 }
                 VStack(alignment: .leading, spacing: 10) {
-                    if let url = listing.url.flatMap(URL.init(string:)) {
+                    if let url = listing.viewURL(uploadBase: store.uploadBaseURL) {
                         Button { openURL(url) } label: {
                             Label(listing.simulated ? "View simulated listing page" : "View on eBay", systemImage: "safari")
                                 .frame(maxWidth: .infinity)

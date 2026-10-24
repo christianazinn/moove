@@ -516,7 +516,7 @@ await stage("share: second phone joins by code, sees items, edits sync back", as
         c.subscriptionBuilder()
           .onApplied(() => resolve({ conn: c, identity }))
           .onError(ctx => reject(ctx.event ?? new Error("subscription failed")))
-          .subscribe([tables.myRoom, tables.item, tables.roomMember]);
+          .subscribe([tables.myRoom, tables.item, tables.roomMember, tables.myListing, tables.myApproval]);
       })
       .onConnectError((_ctx, err) => reject(err))
       .build();
@@ -532,7 +532,24 @@ await stage("share: second phone joins by code, sees items, edits sync back", as
       const it = conn!.db.item.id.find(target.id);
       return it && it.disposition === "donate" && it.dispositionSource === "user" ? it : undefined;
     }, 15_000);
-    return { detail: `joined with ${myRoom.joinCode}, sees ${theirs.length} items; member set "${target.name}" to donate, owner saw it` };
+    // #200: the member sees the room's listings and listing approvals (never purchase approvals),
+    // may decide listing approvals (this one is already decided, so the status check answers),
+    // and may not decide the owner's purchase approvals.
+    const listingIds = new Set([...conn.db.listing.iter()].filter(l => theirs.some(i => i.id === l.itemId)).map(l => l.id));
+    await until("member's my_listing", () => [...second.conn.db.myListing.iter()].some(l => listingIds.has(l.id)) || undefined, 15_000);
+    const seen = [...second.conn.db.myApproval.iter()];
+    if (seen.some(a => a.kind !== "listing")) throw new Error("a member's my_approval includes a purchase approval");
+    const listingApproval = [...conn.db.approval.iter()].find(a => a.kind === "listing" && listingIds.has(a.refId));
+    const purchase = [...conn.db.approval.iter()].find(a => a.kind === "purchase");
+    if (!listingApproval || !seen.some(a => a.id === listingApproval.id)) throw new Error("member's my_approval lacks the room's listing approval");
+    const err = (p: Promise<unknown>) => p.then(() => "ok", (e: unknown) => String((e as Error)?.message ?? e));
+    const onListing = await err(second.conn.reducers.decideApproval({ approvalId: listingApproval.id, status: "denied" }));
+    if (!onListing.includes("already")) throw new Error(`member deciding a listing approval: ${onListing}`);
+    if (purchase) {
+      const onPurchase = await err(second.conn.reducers.decideApproval({ approvalId: purchase.id, status: "approved" }));
+      if (!onPurchase.includes("not your approval")) throw new Error(`member deciding a purchase approval: ${onPurchase}`);
+    }
+    return { detail: `joined with ${myRoom.joinCode}, sees ${theirs.length} items; member set "${target.name}" to donate, owner saw it; member sees ${seen.length} listing approval(s), may decide listings, not purchases` };
   } finally {
     second.conn.disconnect();
   }

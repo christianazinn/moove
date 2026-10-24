@@ -8,8 +8,9 @@ struct SpendingView: View {
     @Environment(MooveStore.self) private var store
 
     var body: some View {
-        let log = store.snapshot.spendingLog()
-        let state = store.commerceState(hasRows: !log.isEmpty)
+        let split = store.snapshot.spendingSplit()
+        let log = split.yours, room = split.room
+        let state = store.commerceState(hasRows: !split.isEmpty)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 PageHeader(
@@ -25,19 +26,26 @@ struct SpendingView: View {
                     )
                     .padding(.top, 32)
                 } else {
-                    SpendingTotals(log: log).padding(.top, 28)
-                    if !log.budgets.isEmpty {
-                        ListHeader(title: "Budgets", count: "\(log.budgets.count)").padding(.top, 40)
-                        ForEach(log.budgets) { AgentBudgetRow(budget: $0) }
-                    }
-                    ListHeader(title: "Activity", count: "\(log.entries.count)").padding(.top, 40)
-                    ForEach(log.entries) { entry in
-                        switch entry {
-                        case .payment(let payment):
-                            PaymentRow(payment: payment, failureReason: store.snapshot.failureReason(for: payment))
-                        case .refusal(let event): RefusalRow(event: event)
-                        case .failedAttempt(let event): FailedAttemptRow(event: event)
+                    if !log.isEmpty {
+                        SpendingTotals(log: log).padding(.top, 28)
+                        if !log.budgets.isEmpty {
+                            ListHeader(title: "Budgets", count: "\(log.budgets.count)").padding(.top, 40)
+                            ForEach(log.budgets) { AgentBudgetRow(budget: $0) }
                         }
+                        ListHeader(title: "Activity", count: "\(log.entries.count)").padding(.top, 40)
+                        entries(log)
+                    } else {
+                        Text("No payments of your own yet.").monoMeta().padding(.top, 28)
+                    }
+                    if !room.isEmpty {
+                        // #254: other members' x402 comps for items in rooms you joined. Kept out of your totals.
+                        ListHeader(title: SpendingSplit.roomTag, count: "\(room.entries.count)").padding(.top, 40)
+                        Label(SpendingSplit.roomCaption, systemImage: "person.2")
+                            .monoMeta()
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.vertical, 12)
+                        SpendingTotals(log: room)
+                        entries(room, sharedRoom: true)
                     }
                 }
             }
@@ -49,6 +57,18 @@ struct SpendingView: View {
         .navigationBarTitleDisplayMode(.inline)
         .mooveScreen()
         .animation(.default, value: log.entries)
+    }
+
+    @ViewBuilder
+    private func entries(_ log: SpendingLog, sharedRoom: Bool = false) -> some View {
+        ForEach(log.entries) { entry in
+            switch entry {
+            case .payment(let payment):
+                PaymentRow(payment: payment, failureReason: store.snapshot.failureReason(for: payment), sharedRoom: sharedRoom)
+            case .refusal(let event): RefusalRow(event: event)
+            case .failedAttempt(let event): FailedAttemptRow(event: event)
+            }
+        }
     }
 }
 
@@ -147,6 +167,8 @@ struct AgentBudgetRow: View {
 struct PaymentRow: View {
     let payment: Payment
     var failureReason: String? = nil
+    /// Another member's payment for an item in a room the user joined (#254).
+    var sharedRoom = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -162,6 +184,7 @@ struct PaymentRow: View {
                     } else if payment.rail == .visa {
                         MonoTag(text: payment.railTag, tone: Theme.muted)
                     }
+                    if sharedRoom { MonoTag(text: SpendingSplit.roomTag, tone: Theme.muted) }
                     Spacer(minLength: 8)
                     Text(payment.createdAt.ago).monoMeta()
                 }
@@ -180,7 +203,9 @@ struct PaymentRow: View {
                 }
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(payment.accessibilitySummary + (failureReason.map { " \($0)" } ?? ""))
+            .accessibilityLabel((sharedRoom ? "\(SpendingSplit.roomTag). " : "") + payment.accessibilitySummary
+                                + (failureReason.map { " \($0)" } ?? ""))
+            .accessibilityIdentifier("payment.\(payment.id)")
             // Only real x402 payments with a tx hash link out (`explorerURL` is nil when simulated).
             if let url = payment.explorerURL, let hash = payment.txHash {
                 Link(destination: url) {
@@ -191,6 +216,7 @@ struct PaymentRow: View {
                 }
                 .accessibilityLabel("View the transaction on Basescan")
                 .accessibilityHint("Opens sepolia.basescan.org")
+                .accessibilityIdentifier("payment.basescan.\(payment.id)")
             }
         }
         .padding(.top, 16)

@@ -11,19 +11,21 @@ The judging demo is live, 2 minutes, on a phone. This page covers the seeded bac
 ## The seeded room (safety net)
 `npm run seed:demo` (in `agents/`) creates a college-student bedroom through the same app reducers iOS calls (`register_user`, `import_scan`, `set_sentimental`). It connects as a **normal user**, not the worker. The room is "Bedroom", home `old`, with 9 RoomPlan-style objects (`agents/scripts/demo-room.ts`):
 
-| Item | Category | Cached comps | Estimate |
-|---|---|---|---|
-| Full size metal bed frame | bed | 16 (ebay 10, fb 6) | $77 ($60-$130) |
-| IKEA Micke desk | table | 12 (ebay 4, fb 8) | $60 ($40-$75) |
-| Mesh office chair | chair | 17 (ebay 10, fb 7) | $30 ($27-$40) |
-| IKEA Kallax shelf | storage | 17 (ebay 10, fb 7) | $50 ($35-$70) |
-| Mini fridge | refrigerator | 18 (ebay 10, fb 8) | $38 ($25-$50) |
-| TCL 32 inch TV | television | 18 (ebay 10, fb 8) | $55 ($45-$60) |
-| Dell 27 inch monitor | electronics | 18 (ebay 10, fb 8) | $100 ($60-$125) |
-| Floor lamp | lamp | 18 (ebay 10, fb 8) | $60 ($47-$104) |
-| Yamaha acoustic guitar (flagged sentimental) | instrument | 18 (ebay 10, fb 8) | $109 ($70-$140) |
+| Item | Category | Cached comps | Estimate | Decision |
+|---|---|---|---|---|
+| Full size metal bed frame | bed | 16 (ebay 10, fb 6) | $77 ($60-$130) | keep |
+| IKEA Micke desk | table | 12 (ebay 4, fb 8) | $60 ($40-$75) | keep |
+| Mesh office chair | chair | 17 (ebay 10, fb 7) | $30 ($27-$40) | sell |
+| IKEA Kallax shelf | storage | 17 (ebay 10, fb 7) | $50 ($35-$70) | keep |
+| Mini fridge | refrigerator | 18 (ebay 10, fb 8) | $38 ($25-$50) | keep |
+| TCL 32 inch TV | television | 18 (ebay 10, fb 8) | $55 ($45-$60) | keep |
+| Dell 27 inch monitor | electronics | 18 (ebay 10, fb 8) | $100 ($60-$125) | keep |
+| Floor lamp | lamp | 18 (ebay 10, fb 8) | $60 ($47-$104) | keep |
+| Yamaha acoustic guitar (flagged sentimental) | instrument | 18 (ebay 10, fb 8) | $109 ($70-$140) | left to you |
 
-Every item name is exactly the pricing agent's query (`queryFor`: brand + name, and the brand is `''` because seeded items have no photos). Each query has a real Apify cache committed in `agents/fixtures/comps/`, so a running worker prices the whole room from replays (`[REPLAYED]` in the event log): no Apify calls, no Claude calls. `test/demo-room.test.ts` fails if an item's cache goes missing. The estimates above are the uncorrected medians (condition is unknown without vision).
+Every item name is exactly the pricing agent's query (`queryFor`: brand + name, and the brand is `''` because seeded items have no photos). Each query has a real Apify cache committed in `agents/fixtures/comps/`, so a running worker prices the whole room from replays (`[REPLAYED]` in the event log): no Apify calls, no Claude calls. `test/demo-room.test.ts` fails if an item's cache goes missing. The estimates above are the uncorrected medians (condition is unknown without vision). The decisions are what the sort agent's rules (`agents/src/agents/sort.ts`) give those estimates: every item is worth at least 1.25x its moving cost except the mesh chair ($30 vs ~$24 to move: "barely worth moving, sell"), and the bed is kept by the bed rule. Total $579: 7 keep, 1 sell, 1 left to you.
+
+The **Offline demo** Bedroom (`MooveKit/DemoFixtures`) has the same 9 items with these names, categories, sizes, estimates and decisions (#243; `DemoSeedTests` checks it against a copy of this list), plus three offline-only commerce items set to sell: the Herman Miller office chair (the seed's `SEED_COMMERCE` chair), a nightstand and a bean bag. If you change an item here, change both.
 
 Behavior:
 - Skips if this user already has a "Bedroom" and prints its join code. `--force` imports another one.
@@ -57,7 +59,7 @@ The live worker must be running against maincloud for `--wait` to see prices. No
 ## The 2-minute script
 Two phones if we have them: A (presenter) and B (shows live sync). Have the worker, tunnel and SpacetimeDB up, the seeded room's join code at hand, and the app on the live backend.
 
-1. **Scan (20s).** "Moving is mostly deciding what to do with your stuff." Scan tab (the top shows your last room, or the demo bedroom, turning in 3D), **Scan a room**, scan a corner of the table with RoomPlan, **Done**, **Looks right: photograph items**, snap the photos, then **Add N items**. The finished page shows the room as a voxel dollhouse (real walls, doors, windows, each piece where it stood, colored from the scan) with the items below. If the scan is slow, cut to the seeded Bedroom (join with the code), or tap **Load demo scan**: it imports a recorded bedroom and shows the same dollhouse page, tagged **Demo scan**. **Done** goes to Items > Inventory.
+1. **Scan (20s).** "Moving is mostly deciding what to do with your stuff." Scan tab (the top shows your last room, or the demo bedroom, turning in 3D), **Scan a room**, scan a corner of the table with RoomPlan, **Done**, **Looks right: check photos** (Moove already cut a photo of each item from the scan, marked **Auto**; retake any that look bad), then **Add N items**. Point out the "Also found: …" chip during the scan for things RoomPlan doesn't know (bike, plant, guitar). The finished page shows the room as a voxel dollhouse (real walls, doors, windows, each piece where it stood, colored from the scan) with the items below. If the scan is slow, cut to the seeded Bedroom (join with the code), or tap **Load demo scan**: it imports a recorded bedroom and shows the same dollhouse page, tagged **Demo scan**. **See inventory** goes to Items > Inventory. Under the room, "Identifying items from room photos…" shows while the photo sweep names unidentified boxes and adds missed items; the offline demo plays this too (a potted monstera appears).
 2. **Inventory (10s).** Items tab, **Inventory**. The room's items, with dimensions from LiDAR. Vision names and conditions come from Claude when there are photos.
 3. **Prices (20s).** Each item gets an estimate and its real eBay sold / FB Marketplace comps. Open Sell & Buy > **Spending**: the pricing agent paid $0.01 per lookup over x402 (Base Sepolia, or labeled simulated). Comps from the cache say `[REPLAYED]`.
 4. **Sort (15s).** Items tab, **Review**. Keep/sell/donate/trash, each with a reason. The guitar is flagged sentimental, so the agent leaves it to you. Change one on phone A and phone B updates live (SpacetimeDB).

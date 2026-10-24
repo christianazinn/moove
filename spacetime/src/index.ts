@@ -461,7 +461,9 @@ export const setApprovalThreshold = spacetimedb.reducer(
 // upload_base_url: where the app POSTs /upload (the worker's PUBLIC_UPLOAD_BASE_URL)
 // worker_version: git sha the worker runs; worker_started_at: ISO time it (re)started
 // spend_today: JSON of today's estimated Claude and Apify spend against the worker's daily caps
-const SERVICE_KEYS = ['upload_base_url', 'worker_version', 'worker_started_at', 'spend_today'] as const;
+// visa_checkout: how purchases are charged (#191), so approvals can say SIMULATED
+const SERVICE_KEYS = ['upload_base_url', 'worker_version', 'worker_started_at', 'spend_today', 'visa_checkout'] as const;
+const VISA_CHECKOUT_MODES = ['simulated', 'sandbox', 'sandbox+fallback'] as const;
 
 // A bare origin: no userinfo, path, query or fragment. Plain http only for local/private hosts (#146).
 const HTTPS_ORIGIN_RE = /^https:\/\/[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?\/?$/i;
@@ -476,6 +478,7 @@ export const setServiceConfig = spacetimedb.reducer(
     requireWorker(ctx);
     oneOf('key', key, SERVICE_KEYS);
     if (value.length > 512) throw new SenderError('value too long');
+    if (key === 'visa_checkout') oneOf('visa_checkout', value, VISA_CHECKOUT_MODES);
     if (key === 'upload_base_url' && value !== '' && !isUploadOrigin(value)) {
       throw new SenderError('upload_base_url must be https://host[:port], or http:// only for a local/private host');
     }
@@ -539,6 +542,37 @@ export const myRoom = spacetimedb.view({ name: 'my_room', public: true }, t.arra
 export const myUser = spacetimedb.view({ name: 'my_user', public: true }, t.array(user.rowType), ctx => {
   const u = ctx.db.user.identity.find(ctx.sender);
   return u ? [u] : [];
+});
+
+// #200: listings and listing approvals for items in rooms the sender shares, plus their own.
+// Subscriptions can't join 3 tables, so the app reads these instead. Other users' purchase
+// approvals are never included.
+function sharedRoomIds(ctx: { sender: Identity; db: any }): bigint[] {
+  const ids = [...ctx.db.room.owner.filter(ctx.sender)].map((r: { id: bigint }) => r.id);
+  for (const m of ctx.db.roomMember.member.filter(ctx.sender)) if (!ids.includes(m.roomId)) ids.push(m.roomId);
+  return ids;
+}
+function sharedListings(ctx: { sender: Identity; db: any }) {
+  const out = [...ctx.db.listing.owner.filter(ctx.sender)];
+  for (const roomId of sharedRoomIds(ctx)) {
+    for (const it of ctx.db.item.roomId.filter(roomId)) {
+      for (const l of ctx.db.listing.itemId.filter(it.id)) if (!out.some(o => o.id === l.id)) out.push(l);
+    }
+  }
+  return out;
+}
+
+export const myListing = spacetimedb.view({ name: 'my_listing', public: true }, t.array(listing.rowType), ctx => sharedListings(ctx));
+
+export const myApproval = spacetimedb.view({ name: 'my_approval', public: true }, t.array(approval.rowType), ctx => {
+  const out = [...ctx.db.approval.owner.filter(ctx.sender)];
+  for (const l of sharedListings(ctx)) {
+    if (l.owner.isEqual(ctx.sender)) continue;
+    for (const a of ctx.db.approval.owner.filter(l.owner)) {
+      if (a.kind === 'listing' && a.refId === l.id && !out.some(o => o.id === a.id)) out.push(a);
+    }
+  }
+  return out;
 });
 
 export const workerRoom = spacetimedb.view({ name: 'worker_room', public: true }, t.array(room.rowType), ctx =>
@@ -1293,16 +1327,42 @@ export const decideApproval = spacetimedb.reducer(
   (ctx, { approvalId, status }) => {
     const a = ctx.db.approval.id.find(approvalId);
     if (!a) throw new SenderError(`no approval ${approvalId}`);
-    if (!ctx.sender.isEqual(a.owner)) throw new SenderError('not your approval');
+    const byOwner = ctx.sender.isEqual(a.owner);
+    // #200: a room member may decide a *listing* approval for an item in a room they share.
+    // Purchases spend the owner's money, so they stay owner-only; the worker never decides (#42).
+    if (!byOwner && !(a.kind === 'listing' && !isWorker(ctx) && sharesListingRoom(ctx, a.refId))) {
+      throw new SenderError('not your approval');
+    }
     if (a.status !== 'pending') throw new SenderError(`approval already ${a.status}`);
-    ctx.db.approval.id.update({
-      ...a,
-      status: oneOf('status', status, APPROVAL_DECISION),
-      decidedVia: 'app',
-      updatedAt: ctx.timestamp,
+    const decided = oneOf('status', status, APPROVAL_DECISION);
+    ctx.db.approval.id.update({ ...a, status: decided, decidedVia: 'app', updatedAt: ctx.timestamp });
+    // Who decided, as an audit row the owner sees (not a new approval column, so the iOS
+    // decoders don't change before the demo).
+    const who = ctx.sender.toHexString();
+    ctx.db.agentEvent.insert({
+      id: 0n,
+      owner: a.owner,
+      agent: 'approval',
+      kind: 'approval',
+      message: `${decided === 'approved' ? 'Approved' : 'Denied'} in the app by ${byOwner ? 'you' : `room member ${who.slice(0, 8)}…`}`,
+      refTable: 'approval',
+      refId: a.id,
+      dataJson: JSON.stringify({ decidedBy: who, byOwner, decidedVia: 'app', status: decided }),
+      createdAt: ctx.timestamp,
     });
   }
 );
+
+// The sender owns or has joined the room holding listing `listingId`'s item (no worker shortcut).
+function sharesListingRoom(ctx: Ctx, listingId: bigint): boolean {
+  const l = ctx.db.listing.id.find(listingId);
+  const it = l && ctx.db.item.id.find(l.itemId);
+  if (!it) return false;
+  const r = ctx.db.room.id.find(it.roomId);
+  if (r && r.owner.isEqual(ctx.sender)) return true;
+  for (const m of ctx.db.roomMember.roomId.filter(it.roomId)) if (m.member.isEqual(ctx.sender)) return true;
+  return false;
+}
 
 // The worker relays an Auth0 CIBA result (#12, #42). Reducers can't do network I/O, so the module does
 // NOT verify the CIBA id_token: it trusts the worker to have checked it. It does pin the reported subject

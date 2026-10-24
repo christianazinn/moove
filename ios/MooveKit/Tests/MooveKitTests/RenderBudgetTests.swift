@@ -9,9 +9,9 @@ import Testing
 @Suite struct RenderBudgetTests {
     // MARK: budgets
 
-    // Today (Oct 24, Linux debug): biggest item the bed (~10.7k at default size, 10.1k for the
-    // demo queen bed; sofa 6.1k, mattress 5.9k, bookshelf 5.6k, the rest under 5k); demo bedroom
-    // shell 2.0k + 12 items 30.3k = 32.3k; demo house shell 11.8k + 4 laid-out items 16.9k = 28.7k;
+    // Today (Oct 24, Linux debug): biggest item the bed (~10.7k at default size; sofa 6.1k,
+    // mattress 5.9k, bookshelf 5.6k, the rest under 5k); demo bedroom (the seeded Bedroom, #243)
+    // shell 2.0k + 12 items = 26.1k; demo house shell 11.8k + 8 laid-out items = 34.5k;
     // building + meshing all of it 0.3-0.9 s.
 
     /// Any one item mesh (demo item or a kind at its default size). Leaves room for new builders.

@@ -16,7 +16,9 @@ process.env.LLM_REPLAY = "replay";
 process.env.LLM_REPLAY_DIR = tmp;
 process.env.LISTING_SIM_SOLD_AFTER_SEC = "0";
 process.env.APPROVAL_THRESHOLD_CENTS_DEFAULT = "10000";
-const { listingAgent, ListingDraft } = await import("../src/agents/listing.js");
+const { listingAgent, ListingDraft, setListingDeps } = await import("../src/agents/listing.js");
+const { simulatedEbay } = await import("../src/integrations/ebay.js");
+type EbayPoster = import("../src/integrations/ebay.js").EbayPoster;
 const { buildDraftPrompt, LISTING_SYSTEM } = await import("../src/agents/listingPrompt.js");
 const { replayKey } = await import("../src/integrations/anthropic.js");
 const { config } = await import("../src/config.js");
@@ -24,7 +26,7 @@ const { config } = await import("../src/config.js");
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const owner = { toHexString: () => "owner", isEqual: () => true };
 
-type Opts = { threshold?: bigint; failRequestApproval?: boolean; failCreateDraft?: boolean };
+type Opts = { threshold?: bigint; failRequestApproval?: boolean; failCreateDraft?: boolean; claimTaken?: boolean };
 
 function fakeConn(o: Opts = {}) {
   const listings = new Map<bigint, Listing>();
@@ -59,6 +61,10 @@ function fakeConn(o: Opts = {}) {
         calls.push({ reducer: "updateListing", args: a });
         await sleep(1);
         const old = listings.get(a.listingId)!;
+        // Same rule as the module (#144): a post can only be claimed from draft/awaiting_approval.
+        if (a.status === "posting" && (o.claimTaken || (old.status !== "draft" && old.status !== "awaiting_approval"))) {
+          throw new Error(`SenderError: listing ${a.listingId} is ${o.claimTaken ? "posting" : old.status}, can't start posting`);
+        }
         const l = { ...old, status: a.status, externalId: a.externalId || old.externalId, url: a.url || old.url };
         listings.set(l.id, l);
         fire("listing.update", old, l);
@@ -74,8 +80,8 @@ function fakeConn(o: Opts = {}) {
       logAgentEvent: async (e: { kind: string; message: string; refId: bigint }) => void events.push(e),
     },
   };
-  const listing = (id: bigint, priceCents: bigint, status = "draft") => {
-    const l = { id, owner, itemId: id * 10n, title: `Thing ${id}`, description: "desc", priceCents, status, externalId: "", url: "", simulated: true } as unknown as Listing;
+  const listing = (id: bigint, priceCents: bigint, status = "draft", simulated = true) => {
+    const l = { id, owner, itemId: id * 10n, title: `Thing ${id}`, description: "desc", priceCents, status, externalId: "", url: "", simulated } as unknown as Listing;
     listings.set(id, l);
     return l;
   };
@@ -146,7 +152,10 @@ test("listing agent: exactly at the threshold posts right away (no user row: def
   await sleep(6000); // simulated eBay walks three steps with latency
   assert.equal(f.named("requestApproval").length, 0);
   assert.equal(f.listings.get(7n)!.status, "posted");
-  assert.ok(f.listings.get(7n)!.url.endsWith("/files/listing-7.html"));
+  // Stored absolute on the worker's upload host, not relative: installed app builds, `spacetime sql`
+  // readers and the result event's data all open it as-is. The app moves a dead tunnel host onto
+  // the current upload base itself (MooveKit ListingURL).
+  assert.match(f.listings.get(7n)!.url, /^https?:\/\/[^/]+\/files\/listing-7\.html$/);
 });
 
 test("listing agent: denied, or approved for a different amount, is rejected, never posted", async () => {
@@ -184,4 +193,140 @@ test("listing agent: a rejected create_listing_draft logs an error, not a Drafte
   assert.equal(f.named("createListingDraft").length, 1);
   assert.ok(f.events.some(e => e.kind === "error" && e.refId === 11n && /Drafting failed/.test(e.message)));
   assert.ok(!f.events.some(e => e.kind === "result" && e.refId === 11n), "no result event for a draft that never landed");
+});
+
+// ---- #144: claim `posting` before publish, and never re-post a `posting` row blindly on restart ----
+
+// A fake eBay backend that records each publish (and the listing's status when it ran).
+function fakePoster(simulated: boolean, o: { live?: string | null; findFails?: boolean; statusOf?: (id: bigint) => string } = {}) {
+  const published: { id: bigint; statusAtPublish?: string }[] = [];
+  const lookedUp: bigint[] = [];
+  const poster: EbayPoster = {
+    simulated,
+    async publish(l, onStep) {
+      published.push({ id: l.listingId, statusAtPublish: o.statusOf?.(l.listingId) });
+      onStep({ call: "publishOffer", detail: "fake" });
+      return { externalId: `X${l.listingId}`, url: `https://example.test/itm/X${l.listingId}`, simulated };
+    },
+    ...(simulated
+      ? {}
+      : {
+          async findLive(id: bigint) {
+            lookedUp.push(id);
+            if (o.findFails) throw new Error("eBay 503");
+            return o.live ? { externalId: o.live, url: `https://example.test/itm/${o.live}`, simulated: false } : null;
+          },
+        }),
+  };
+  return { poster, published, lookedUp };
+}
+
+const statuses = (f: ReturnType<typeof fakeConn>, id: bigint) => f.named("updateListing").filter(c => c.args.listingId === id).map(c => c.args.status);
+
+test("listing agent (#144): claims `posting` before publishing, then marks it posted", async () => {
+  const f = fakeConn({ threshold: 10000n });
+  const p = fakePoster(true, { statusOf: id => f.listings.get(id)!.status });
+  setListingDeps({ simulated: p.poster });
+  try {
+    f.listing(20n, 5000n);
+    listingAgent.start(f.conn);
+    await sleep(50);
+    assert.deepEqual(statuses(f, 20n), ["posting", "posted"]);
+    assert.equal(p.published.length, 1);
+    assert.equal(p.published[0].statusAtPublish, "posting", "the claim landed before publish()");
+    assert.equal(f.listings.get(20n)!.status, "posted");
+  } finally {
+    setListingDeps({ simulated: simulatedEbay });
+  }
+});
+
+test("listing agent (#144): a refused claim means another post owns it, so it doesn't publish", async () => {
+  const f = fakeConn({ threshold: 10000n, claimTaken: true });
+  const p = fakePoster(true);
+  setListingDeps({ simulated: p.poster });
+  try {
+    f.listing(21n, 5000n);
+    listingAgent.start(f.conn);
+    await sleep(50);
+    assert.equal(p.published.length, 0, "never published");
+    assert.deepEqual(statuses(f, 21n), ["posting"], "only the refused claim; not marked failed");
+    assert.equal(f.listings.get(21n)!.status, "draft");
+    assert.ok(f.events.some(e => e.refId === 21n && /already being posted/.test(e.message)));
+  } finally {
+    setListingDeps({ simulated: simulatedEbay });
+  }
+});
+
+test("listing agent (#144): a simulated listing left `posting` by a crash is marked failed, not re-posted", async () => {
+  const f = fakeConn({ threshold: 10000n });
+  const p = fakePoster(true);
+  setListingDeps({ simulated: p.poster });
+  try {
+    f.listing(22n, 5000n, "posting");
+    listingAgent.start(f.conn);
+    await sleep(50);
+    assert.equal(p.published.length, 0);
+    assert.deepEqual(statuses(f, 22n), ["failed"]);
+    assert.ok(f.events.some(e => e.kind === "error" && e.refId === 22n && /interrupted by a restart; nothing was posted twice/.test(e.message)));
+  } finally {
+    setListingDeps({ simulated: simulatedEbay });
+  }
+});
+
+test("listing agent (#144): a real-eBay `posting` row that is already live is marked posted, not published again", async () => {
+  const f = fakeConn({ threshold: 10000n });
+  const p = fakePoster(false, { live: "110555" });
+  setListingDeps({ ebay: p.poster });
+  try {
+    f.listing(23n, 5000n, "posting", false);
+    listingAgent.start(f.conn);
+    await sleep(50);
+    assert.deepEqual(p.lookedUp, [23n]);
+    assert.equal(p.published.length, 0, "no second publish");
+    assert.deepEqual(statuses(f, 23n), ["posted"]);
+    assert.equal(f.listings.get(23n)!.externalId, "110555");
+  } finally {
+    setListingDeps({ ebay: simulatedEbay });
+  }
+});
+
+test("listing agent (#144): a real-eBay `posting` row that isn't live yet finishes its post once, without a new claim", async () => {
+  const f = fakeConn({ threshold: 10000n });
+  const p = fakePoster(false, { live: null });
+  setListingDeps({ ebay: p.poster });
+  try {
+    f.listing(24n, 5000n, "posting", false);
+    listingAgent.start(f.conn);
+    await sleep(50);
+    assert.equal(p.published.length, 1);
+    assert.deepEqual(statuses(f, 24n), ["posted"], "the claim is already held, so no second `posting`");
+  } finally {
+    setListingDeps({ ebay: simulatedEbay });
+  }
+});
+
+test("listing agent (#144): if eBay can't be checked, a `posting` row stays put and nothing is published", async () => {
+  const f = fakeConn({ threshold: 10000n });
+  const p = fakePoster(false, { findFails: true });
+  setListingDeps({ ebay: p.poster });
+  try {
+    f.listing(25n, 5000n, "posting", false);
+    listingAgent.start(f.conn);
+    await sleep(50);
+    assert.equal(p.published.length, 0);
+    assert.equal(f.named("updateListing").length, 0);
+    assert.equal(f.listings.get(25n)!.status, "posting");
+    assert.ok(f.events.some(e => e.kind === "error" && e.refId === 25n && /Not posting again/.test(e.message)));
+  } finally {
+    setListingDeps({ ebay: simulatedEbay });
+  }
+});
+
+test("listing agent (#144): a real-eBay `posting` row with the keys gone is marked failed without a lookup", async () => {
+  const f = fakeConn({ threshold: 10000n });
+  f.listing(26n, 5000n, "posting", false); // module default: simulated eBay, which has no findLive
+  listingAgent.start(f.conn);
+  await sleep(50);
+  assert.deepEqual(statuses(f, 26n), ["failed"]);
+  assert.ok(f.events.some(e => e.kind === "error" && e.refId === 26n && /SKU MOOVE-26/.test(e.message)));
 });

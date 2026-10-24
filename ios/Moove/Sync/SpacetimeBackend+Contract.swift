@@ -14,9 +14,17 @@ import MooveBindings
 extension SpacetimeBackend {
     static let tableNames = [
         "my_user", "my_room", "room_member", "scan", "item", "comp",
-        "new_home", "layout", "listing", "approval",
+        "new_home", "layout", "my_listing", "my_approval",
         "payment", "agent_event", "shopping_item", "deal",
-        "service_config",
+        "service_config", "my_payment", "my_agent_event",
+    ]
+
+    /// Views that may not be published yet (#254: own rows plus x402 comps payments and agent
+    /// steps for items in joined rooms). Subscribed separately so a module without them only
+    /// fails this subscription. Rows merge by id with the owner-only `payment` / `agent_event`.
+    static let optionalSubscriptionQueries = [
+        "SELECT * FROM my_payment",
+        "SELECT * FROM my_agent_event",
     ]
 
     /// Everything the signed-in identity can see: its own rows, plus rooms,
@@ -39,13 +47,10 @@ extension SpacetimeBackend {
             "SELECT comp.* FROM comp JOIN item ON comp.item_id = item.id WHERE item.owner = \(id)",
             "SELECT * FROM new_home WHERE owner = \(id)",
             "SELECT * FROM layout WHERE owner = \(id)",
-            // Shared-room listings (#195): subscriptions join at most two tables, so
-            // listing -> item -> room_member can't be one query. Take all listings and other
-            // users' listing approvals (public tables) and keep only those for visible items
-            // in makeSnapshot (MooveKit scopedToVisibleItems). Swap for views once #200 lands.
-            "SELECT * FROM listing",
-            "SELECT * FROM approval WHERE owner = \(id)",
-            "SELECT * FROM approval WHERE kind = 'listing' AND owner != \(id)",
+            // Own listings/approvals plus listing ones for items in joined rooms (#195, #200).
+            // Per-user views: subscriptions can't join listing -> item -> room_member.
+            "SELECT * FROM my_listing",
+            "SELECT * FROM my_approval",
             "SELECT * FROM payment WHERE owner = \(id)",
             "SELECT * FROM agent_event WHERE owner = \(id)",
             "SELECT * FROM shopping_item WHERE owner = \(id)",
@@ -65,13 +70,15 @@ extension SpacetimeBackend {
         { await $0.registerTableRowDecoder(MooveBindings.CompRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.NewHomeRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.LayoutRow.self) },
-        { await $0.registerTableRowDecoder(MooveBindings.ListingRow.self) },
-        { await $0.registerTableRowDecoder(MooveBindings.ApprovalRow.self) },
+        { await $0.registerTableRowDecoder(table: "my_listing", decoder: MooveBindings.ListingRow.decoder()) },
+        { await $0.registerTableRowDecoder(table: "my_approval", decoder: MooveBindings.ApprovalRow.decoder()) },
         { await $0.registerTableRowDecoder(MooveBindings.PaymentRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.AgentEventRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.ShoppingItemRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.DealRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.ServiceConfigRow.self) },
+        { await $0.registerTableRowDecoder(table: "my_payment", decoder: MooveBindings.PaymentRow.decoder()) },
+        { await $0.registerTableRowDecoder(table: "my_agent_event", decoder: MooveBindings.AgentEventRow.decoder()) },
     ]
 
     static func primaryKey(of row: Any) -> AnyHashable? {
@@ -89,16 +96,22 @@ extension SpacetimeBackend {
         s.comps = rows("comp", MooveBindings.CompRow.self).map(Comp.init).sorted { $0.id < $1.id }
         s.newHomes = rows("new_home", MooveBindings.NewHomeRow.self).compactMap(NewHome.init).sorted { $0.id < $1.id }
         s.layouts = rows("layout", MooveBindings.LayoutRow.self).map(Layout.init).sorted { $0.id < $1.id }
-        s.listings = rows("listing", MooveBindings.ListingRow.self).compactMap(Listing.init).sorted { $0.id < $1.id }
-        s.approvals = rows("approval", MooveBindings.ApprovalRow.self).compactMap(Approval.init).sorted { $0.id < $1.id }
-        s.payments = rows("payment", MooveBindings.PaymentRow.self).map(Payment.init).sorted { $0.id < $1.id }
-        s.agentEvents = rows("agent_event", MooveBindings.AgentEventRow.self).map(AgentEvent.init).sorted { $0.id < $1.id }
+        s.listings = rows("my_listing", MooveBindings.ListingRow.self).compactMap(Listing.init).sorted { $0.id < $1.id }
+        s.approvals = rows("my_approval", MooveBindings.ApprovalRow.self).compactMap(Approval.init).sorted { $0.id < $1.id }
+        // Owner-only tables plus the optional views (#254); the views repeat the user's own rows.
+        func byId<M: Identifiable>(_ models: [M]) -> [M] where M.ID == UInt64 {
+            Array(Dictionary(models.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }).values).sorted { $0.id < $1.id }
+        }
+        let paymentRows = rows("payment", MooveBindings.PaymentRow.self) + rows("my_payment", MooveBindings.PaymentRow.self)
+        s.payments = byId(paymentRows.map { Payment($0) })
+        let eventRows = rows("agent_event", MooveBindings.AgentEventRow.self) + rows("my_agent_event", MooveBindings.AgentEventRow.self)
+        s.agentEvents = byId(eventRows.map { AgentEvent($0) })
         s.shoppingItems = rows("shopping_item", MooveBindings.ShoppingItemRow.self).map(ShoppingItem.init).sorted { $0.id < $1.id }
         s.deals = rows("deal", MooveBindings.DealRow.self).map(Deal.init).sorted { $0.id < $1.id }
         s.serviceConfig = ServiceConfig(values: Dictionary(
             rows("service_config", MooveBindings.ServiceConfigRow.self).map { ($0.key, $0.value) },
             uniquingKeysWith: { a, _ in a }))
-        return s.scopedToVisibleItems()
+        return s
     }
 
     // MARK: Reducers
@@ -255,7 +268,8 @@ private extension Layout {
 
 private extension Listing {
     init?(_ r: MooveBindings.ListingRow) {
-        guard let status = ListingStatus(rawValue: r.status) else { return nil }
+        // An unknown (newer) status shows as Drafting instead of hiding the row (#144).
+        let status = ListingStatus(rawValue: r.status) ?? .draft
         self.init(id: r.id, owner: r.owner.description, itemId: r.itemId, platform: r.platform, title: r.title,
                   description: r.description, priceCents: r.priceCents, status: status,
                   externalId: optional(r.externalId), url: optional(r.url), simulated: r.simulated,

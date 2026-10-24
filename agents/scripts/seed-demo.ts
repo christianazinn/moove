@@ -8,11 +8,15 @@
 // Bedroom it adds just the missing commerce items, so the join code stays the same. Off by default: the
 // listing draft is a live Claude call on a maincloud worker.
 //
+// --reset-commerce (implies SEED_COMMERCE=1) makes the commerce story single-use-proof: it denies the
+// chair's pending listing approval, deletes the chair and seeds it again, so the listing agent drafts a
+// fresh listing that waits for approval (one more live Claude call). The join code doesn't change.
+//
 // Skips if this user already has a "Bedroom" (prints its join code) unless --force, which imports another.
 // --wait[=SEC] waits (default 90s) for the worker to price the items and prints the estimates.
 // The user's token lives in .user-token.<db> (SEED_USER_TOKEN_FILE overrides), so re-runs are the same user.
 // Refuses a maincloud URI unless --maincloud is passed.
-// Usage (from agents/): npm run seed:demo [-- --force] [-- --wait] [-- --maincloud]
+// Usage (from agents/): npm run seed:demo [-- --force] [-- --wait] [-- --maincloud] [-- --reset-commerce]
 import "./env.js";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import type { Identity } from "spacetimedb";
@@ -22,7 +26,8 @@ import { config } from "../src/config.js";
 import { DEMO_COMMERCE_OBJECTS, DEMO_HOME, DEMO_OBJECTS, DEMO_ROOM_NAME, demoQuery } from "./demo-room.js";
 
 const force = process.argv.includes("--force");
-const commerce = process.env.SEED_COMMERCE === "1";
+const resetCommerce = process.argv.includes("--reset-commerce");
+const commerce = process.env.SEED_COMMERCE === "1" || resetCommerce;
 const objects = commerce ? [...DEMO_OBJECTS, ...DEMO_COMMERCE_OBJECTS] : DEMO_OBJECTS;
 const waitArg = process.argv.find((a) => a === "--wait" || a.startsWith("--wait="));
 const waitSec = waitArg ? Number(waitArg.split("=")[1] ?? 90) : 0;
@@ -103,6 +108,17 @@ try {
   if (existing.length && !force) {
     room = existing.reduce((a, b) => (b.id > a.id ? b : a)); // newest; iter() order isn't by id
     console.log(`\nAlready seeded: "${room.name}" (room #${room.id}, ${itemsIn(room).length} items). Use --force to import another.`);
+    if (resetCommerce) {
+      for (const it of itemsIn(room).filter((i) => DEMO_COMMERCE_OBJECTS.some((o) => o.scanObjectId === i.scanObjectId))) {
+        const listingIds = new Set([...conn.db.listing.iter()].filter((l) => l.itemId === it.id).map((l) => l.id));
+        for (const a of conn.db.approval.iter()) {
+          if (a.kind === "listing" && a.status === "pending" && listingIds.has(a.refId)) await conn.reducers.decideApproval({ approvalId: a.id, status: "denied" });
+        }
+        await conn.reducers.deleteItem({ itemId: it.id });
+        console.log(`Reset: denied its pending listing approval and deleted #${it.id} ${it.name}`);
+      }
+      await waitFor("the reset", () => (itemsIn(room).some((i) => DEMO_COMMERCE_OBJECTS.some((o) => o.scanObjectId === i.scanObjectId)) ? undefined : true));
+    }
     const missing = commerce ? DEMO_COMMERCE_OBJECTS.filter((o) => !itemsIn(room).some((i) => i.scanObjectId === o.scanObjectId)) : [];
     for (const { sentimental: _s, sell: _sell, ...o } of missing) await conn.reducers.addItem({ roomId: room.id, object: o });
     if (missing.length) {

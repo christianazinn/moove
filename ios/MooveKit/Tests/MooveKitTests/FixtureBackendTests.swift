@@ -198,7 +198,7 @@ import Testing
         let template = DemoFixtures.inventory(owner: "demo").items
         #expect(snap.items.count == template.count)
         let bed = snap.items.first { $0.scanObjectId == "demo-10" }!
-        #expect(bed.name == "Queen bed frame" && bed.material == "oak" && bed.disposition == .keep && bed.estValueCents == 12_000)
+        #expect(bed.name == "Full size metal bed frame" && bed.category == "bed" && bed.disposition == .keep && bed.estValueCents == 7_700)
         // Sentimental pieces are still left for the user.
         #expect(snap.items.filter(\.maybeSentimental).allSatisfy { $0.disposition == .undecided })
         // Colors come through set_item_colors, not the import.

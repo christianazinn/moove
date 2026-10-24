@@ -129,7 +129,9 @@ final class MooveStore {
             Task { [weak self] in
                 for await snap in snapshots {
                     self?.snapshot = snap
-                    AppConfig.runtimeUploadBaseURL = snap.serviceConfig.uploadBaseURL
+                    // Same rule as `uploadBaseURL` (a loopback announcement loses to the build's
+                    // URL on a device), so the uploader and listing import agree with Settings.
+                    AppConfig.runtimeUploadBaseURL = self?.uploadBaseURL
                 }
             },
             Task { [weak self] in
@@ -151,7 +153,8 @@ final class MooveStore {
         await run { try await $0.importScan(scan) }
     }
 
-    func addItemPhoto(itemId: UInt64, url: String) async {
+    @discardableResult
+    func addItemPhoto(itemId: UInt64, url: String) async -> Bool {
         await run { try await $0.addItemPhoto(itemId: itemId, url: url) }
     }
 
@@ -277,7 +280,7 @@ final class MooveStore {
     // MARK: Approvals (#12)
 
     /// The signed-in user's undecided approvals, oldest first.
-    var pendingApprovals: [Approval] { snapshot.pendingApprovals }
+    var pendingApprovals: [Approval] { snapshot.actionableApprovals } // own + shared-room listing ones (#195)
 
     /// Approve or deny through `decide_approval`. The listing agent posts or
     /// rejects once it sees the decision. Returns false if the write failed.
