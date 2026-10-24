@@ -23,19 +23,32 @@ public struct FittedBox: Equatable, Sendable {
 
 public enum BoxFit {
     /// Smallest upright box (by footprint area) around the bulk of the points.
-    /// Percentile trimming ignores stray depth samples (background, edges);
-    /// the bottom is extended to `floorY` when the object stands on the floor.
-    public static func fit(_ points: [SIMD3<Float>], floorY: Float? = nil, trim: Float = 0.05) -> FittedBox? {
+    /// - Stray depth samples are dropped first by a per-axis MAD test (`madThreshold`,
+    ///   nil turns it off), which catches a cluster of background hits too big for the
+    ///   percentile `trim` alone; the trim then shaves the edges.
+    /// - Yaw: a 3° sweep, plus 0.5° steps within ±6° of the points' principal axis when
+    ///   the footprint is elongated (`refineYaw`), so an object at 31.4° isn't fitted at 30°.
+    /// - The bottom is extended to `floorY` when the object stands on the floor.
+    public static func fit(_ points: [SIMD3<Float>], floorY: Float? = nil, trim: Float = 0.05,
+                           madThreshold: Float? = 3.5, refineYaw: Bool = true) -> FittedBox? {
         guard points.count >= 12 else { return nil }
+        var points = points
+        if let madThreshold {
+            let kept = rejectOutliers(points, threshold: madThreshold)
+            if kept.count >= 12 { points = kept }
+        }
         var ys = points.map(\.y).sorted()
         let top = percentile(ys, 1 - trim / 2)
         var bottom = percentile(ys, trim / 2)
         if let floorY, bottom - floorY < 0.25 { bottom = floorY }  // standing on the floor
         ys.removeAll()
 
+        var yaws = (0..<30).map { Float($0) * 3 * .pi / 180 }  // 0°..87°, every 3°
+        if refineYaw, let pca = principalYaw(points), pca.anisotropy > 0.2 {
+            yaws += (-12...12).map { pca.yaw + Float($0) * 0.5 * .pi / 180 }
+        }
         var best: (area: Float, yaw: Float, lo: SIMD2<Float>, hi: SIMD2<Float>)?
-        for step in 0..<30 {  // 0°..87°, every 3°
-            let yaw = Float(step) * 3 * .pi / 180
+        for yaw in yaws {
             let c = cos(yaw), s = sin(yaw)
             // Coordinates in a frame rotated by `yaw` (inverse of RoomTransform.at's rotation).
             let us = points.map { c * $0.x - s * $0.z }.sorted()
@@ -57,7 +70,62 @@ public enum BoxFit {
         }
         let height = max(top - bottom, 0.05)
         return FittedBox(center: SIMD3(cx, bottom + height / 2, cz),
-                         size: SIMD3(max(width, 0.05), height, max(depth, 0.05)), yaw: yaw)
+                         size: SIMD3(max(width, 0.05), height, max(depth, 0.05)), yaw: wrapHalfTurn(yaw))
+    }
+
+    /// Drops points whose modified z-score (0.6745 · |x − median| / MAD, Iglewicz–Hoaglin)
+    /// exceeds `threshold` on any axis. Points on an object's faces stay well under 3.5;
+    /// background hits meters away don't.
+    static func rejectOutliers(_ points: [SIMD3<Float>], threshold: Float = 3.5) -> [SIMD3<Float>] {
+        guard points.count >= 3 else { return points }
+        let kx = inliers(points.map(\.x), threshold: threshold)
+        let ky = inliers(points.map(\.y), threshold: threshold)
+        let kz = inliers(points.map(\.z), threshold: threshold)
+        return points.indices.filter { kx[$0] && ky[$0] && kz[$0] }.map { points[$0] }
+    }
+
+    /// Which values are within `threshold` modified z-scores of the median. When more
+    /// than half the values are identical (MAD = 0) the mean absolute deviation stands in.
+    static func inliers(_ values: [Float], threshold: Float) -> [Bool] {
+        let med = median(values)
+        let dev = values.map { abs($0 - med) }
+        var scale = median(dev) / 0.6745
+        if scale <= 1e-6 { scale = dev.reduce(0, +) / Float(max(dev.count, 1)) * 1.2533 }
+        guard scale > 1e-6 else { return values.map { _ in true } }
+        return dev.map { $0 / scale <= threshold }
+    }
+
+    static func median(_ values: [Float]) -> Float {
+        guard !values.isEmpty else { return 0 }
+        let s = values.sorted(), n = s.count
+        return n % 2 == 1 ? s[n / 2] : (s[n / 2 - 1] + s[n / 2]) / 2
+    }
+
+    /// Yaw (`RoomTransform.at` convention) of the main axis of the points' XZ spread,
+    /// and how elongated it is (1 − λmin/λmax: 0 round or square, near 1 long and thin).
+    static func principalYaw(_ points: [SIMD3<Float>]) -> (yaw: Float, anisotropy: Float)? {
+        guard points.count >= 3 else { return nil }
+        let n = Float(points.count)
+        let mx = points.reduce(0) { $0 + $1.x } / n, mz = points.reduce(0) { $0 + $1.z } / n
+        var sxx: Float = 0, szz: Float = 0, sxz: Float = 0
+        for p in points {
+            let dx = p.x - mx, dz = p.z - mz
+            sxx += dx * dx; szz += dz * dz; sxz += dx * dz
+        }
+        let diff = (sxx - szz) / n, tr = (sxx + szz) / n, cov = sxz / n
+        let root = (diff * diff / 4 + cov * cov).squareRoot()
+        let l1 = tr / 2 + root, l2 = tr / 2 - root
+        guard l1 > 1e-9 else { return nil }
+        // Main axis at angle θ from +x toward +z; RoomTransform.at(yaw) sends local +x
+        // to (cos yaw, −sin yaw), so yaw = −θ.
+        let theta = 0.5 * atan2(2 * cov, diff)
+        return (wrapHalfTurn(-theta), 1 - max(l2, 0) / l1)
+    }
+
+    static func wrapHalfTurn(_ a: Float) -> Float {
+        var y = remainder(a, .pi)
+        if y < 0 { y += .pi }
+        return y
     }
 
     static func percentile(_ sorted: [Float], _ p: Float) -> Float {
@@ -186,20 +254,50 @@ public struct SightingMerger: Sendable {
     enum Relative { case smaller, first }
 
     /// Shared volume of two upright boxes, as a share of the smaller one's volume (or
-    /// of the first's). Footprints are approximated by their axis-aligned bounds.
+    /// of the first's): the exact intersection of the rotated footprints times the
+    /// vertical overlap, so two long things side by side at 45° don't count as overlapping.
     static func overlap(_ a: FittedBox, _ b: FittedBox, relativeTo: Relative = .smaller) -> Float {
-        func bounds(_ box: FittedBox) -> (lo: SIMD3<Float>, hi: SIMD3<Float>) {
-            let pts = RoomGeometry.footprint(width: box.size.x, depth: box.size.z, box.transform)
-            let lo = pts.reduce(pts[0]) { pointwiseMin($0, $1) }, hi = pts.reduce(pts[0]) { pointwiseMax($0, $1) }
-            return (SIMD3(lo.x, box.center.y - box.size.y / 2, lo.y), SIMD3(hi.x, box.center.y + box.size.y / 2, hi.y))
-        }
-        let (alo, ahi) = bounds(a), (blo, bhi) = bounds(b)
-        let d = pointwiseMax(pointwiseMin(ahi, bhi) - pointwiseMax(alo, blo), SIMD3(repeating: 0))
-        let inter = d.x * d.y * d.z
-        let ea = ahi - alo, eb = bhi - blo
-        let va = ea.x * ea.y * ea.z, vb = eb.x * eb.y * eb.z
+        let dy = min(a.center.y + a.size.y / 2, b.center.y + b.size.y / 2) - max(a.center.y - a.size.y / 2, b.center.y - b.size.y / 2)
+        guard dy > 0 else { return 0 }
+        let fa = RoomGeometry.footprint(width: a.size.x, depth: a.size.z, a.transform)
+        let fb = RoomGeometry.footprint(width: b.size.x, depth: b.size.z, b.transform)
+        let inter = abs(signedArea(clip(fa, by: fb))) * dy
+        let va = a.size.x * a.size.y * a.size.z, vb = b.size.x * b.size.y * b.size.z
         let base = relativeTo == .first ? va : min(va, vb)
-        return base > 0 ? inter / base : 0
+        return base > 0 ? min(inter / base, 1) : 0
+    }
+
+    static func signedArea(_ p: [SIMD2<Float>]) -> Float {
+        guard p.count >= 3 else { return 0 }
+        var a: Float = 0
+        for i in p.indices {
+            let q = p[i], r = p[(i + 1) % p.count]
+            a += q.x * r.y - r.x * q.y
+        }
+        return a / 2
+    }
+
+    /// Sutherland–Hodgman: the part of `subject` inside the convex polygon `clipper`.
+    static func clip(_ subject: [SIMD2<Float>], by clipper: [SIMD2<Float>]) -> [SIMD2<Float>] {
+        guard clipper.count >= 3 else { return [] }
+        let ccw = signedArea(clipper) >= 0 ? clipper : clipper.reversed()
+        func side(_ a: SIMD2<Float>, _ b: SIMD2<Float>, _ p: SIMD2<Float>) -> Float {
+            (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)
+        }
+        var out = subject
+        for i in ccw.indices {
+            let a = ccw[i], b = ccw[(i + 1) % ccw.count]
+            let input = out
+            out = []
+            guard !input.isEmpty else { break }
+            for j in input.indices {
+                let p = input[j], q = input[(j + 1) % input.count]
+                let sp = side(a, b, p), sq = side(a, b, q)
+                if sp >= 0 { out.append(p) }
+                if (sp >= 0) != (sq >= 0) { out.append(p + (q - p) * (sp / (sp - sq))) }
+            }
+        }
+        return out
     }
 
     static func thin(_ points: [SIMD3<Float>], to max: Int) -> [SIMD3<Float>] {
