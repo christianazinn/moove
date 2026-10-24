@@ -20,7 +20,7 @@ import Testing
     }
 
     @Test func transformYawRoundTrips() {
-        let t = Transform.at(SIMD3(1, 2, 3), yaw: 0.7)
+        let t = RoomTransform.at(SIMD3(1, 2, 3), yaw: 0.7)
         #expect(abs(t.yaw - 0.7) < 1e-5)
         #expect(t.position == SIMD3(1, 2, 3))
         let p = t.apply(SIMD3(1, 0, 0))

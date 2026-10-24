@@ -16,9 +16,9 @@ public struct RoomGeometry: Codable, Sendable, Equatable {
         public var parentId: String?
         /// Width (x), height (y), thickness (z) in meters.
         public var dimensions: SIMD3<Float>
-        public var transform: Transform
+        public var transform: RoomTransform
 
-        public init(id: String, kind: SurfaceKind, parentId: String? = nil, dimensions: SIMD3<Float>, transform: Transform) {
+        public init(id: String, kind: SurfaceKind, parentId: String? = nil, dimensions: SIMD3<Float>, transform: RoomTransform) {
             self.id = id
             self.kind = kind
             self.parentId = parentId
@@ -46,10 +46,10 @@ public struct RoomGeometry: Codable, Sendable, Equatable {
         public var category: String
         /// Width (x), height (y), depth (z) in meters.
         public var dimensions: SIMD3<Float>
-        /// Transform of the object's center.
-        public var transform: Transform
+        /// RoomTransform of the object's center.
+        public var transform: RoomTransform
 
-        public init(id: String, category: String, dimensions: SIMD3<Float>, transform: Transform) {
+        public init(id: String, category: String, dimensions: SIMD3<Float>, transform: RoomTransform) {
             self.id = id
             self.category = category
             self.dimensions = dimensions
@@ -72,7 +72,7 @@ public struct RoomGeometry: Codable, Sendable, Equatable {
 
 /// A rigid transform as a column-major 4x4 matrix (same layout as `simd_float4x4`),
 /// kept as plain floats so MooveKit doesn't need the simd module.
-public struct Transform: Codable, Sendable, Equatable {
+public struct RoomTransform: Codable, Sendable, Equatable {
     public var columns: [SIMD4<Float>]
 
     public init(columns: [SIMD4<Float>]) {
@@ -80,14 +80,14 @@ public struct Transform: Codable, Sendable, Equatable {
         self.columns = columns
     }
 
-    public static let identity = Transform(columns: [
+    public static let identity = RoomTransform(columns: [
         SIMD4(1, 0, 0, 0), SIMD4(0, 1, 0, 0), SIMD4(0, 0, 1, 0), SIMD4(0, 0, 0, 1),
     ])
 
     /// A transform at `position`, rotated `yaw` radians about +Y.
-    public static func at(_ position: SIMD3<Float>, yaw: Float = 0) -> Transform {
+    public static func at(_ position: SIMD3<Float>, yaw: Float = 0) -> RoomTransform {
         let c = Float(cos(Double(yaw))), s = Float(sin(Double(yaw)))
-        return Transform(columns: [
+        return RoomTransform(columns: [
             SIMD4(c, 0, -s, 0), SIMD4(0, 1, 0, 0), SIMD4(s, 0, c, 0), SIMD4(position.x, position.y, position.z, 1),
         ])
     }
@@ -103,7 +103,7 @@ public struct Transform: Codable, Sendable, Equatable {
         return SIMD3(r.x, r.y, r.z)
     }
 
-    public func translated(by d: SIMD3<Float>) -> Transform {
+    public func translated(by d: SIMD3<Float>) -> RoomTransform {
         var t = self
         t.columns[3] += SIMD4(d.x, d.y, d.z, 0)
         return t
@@ -156,12 +156,12 @@ extension RoomGeometry {
     }
 
     /// Top-down rectangle (4 corners, x/z) of a surface or object.
-    public static func footprint(width: Float, depth: Float, _ t: Transform) -> [SIMD2<Float>] {
+    public static func footprint(width: Float, depth: Float, _ t: RoomTransform) -> [SIMD2<Float>] {
         [SIMD3<Float>(-width / 2, 0, -depth / 2), SIMD3(width / 2, 0, -depth / 2), SIMD3(width / 2, 0, depth / 2), SIMD3(-width / 2, 0, depth / 2)]
             .map { let p = t.apply($0); return SIMD2(p.x, p.z) }
     }
 
-    static func corners(of d: SIMD3<Float>, _ t: Transform) -> [SIMD3<Float>] {
+    static func corners(of d: SIMD3<Float>, _ t: RoomTransform) -> [SIMD3<Float>] {
         var out: [SIMD3<Float>] = []
         for x in [-d.x / 2, d.x / 2] { for y in [-d.y / 2, d.y / 2] { for z in [-d.z / 2, d.z / 2] { out.append(t.apply(SIMD3(x, y, z))) } } }
         return out
