@@ -47,6 +47,9 @@ final class ScanSession {
     private(set) var colors: ScanColors?
     /// Keeps camera keyframes during capture for `colors`.
     let frameRecorder = ScanFrameRecorder()
+    /// Where the scan was imported, so colors that finish sampling after the import still get saved.
+    @ObservationIgnored private weak var store: MooveStore?
+    @ObservationIgnored private var colorsSaved = false
     /// Set when some files couldn't reach the worker's upload server.
     private(set) var uploadProblem: String?
     let folder: URL
@@ -96,8 +99,20 @@ final class ScanSession {
         Task { [weak self] in
             let colors = await ScanColorAnalysis.run(geometry: geometry, frames: frames, saveTo: folder)
             try? JSONEncoder().encode(colors).write(to: folder.appending(path: "colors.json"))
-            self?.colors = colors
+            guard let self else { return }
+            self.colors = colors
+            // Finished after the items were imported: save them now.
+            if self.phase == .finished { await self.persistColors() }
         }
+    }
+
+    /// Writes the sampled per-object colors onto the imported items (`set_item_colors`), so the
+    /// new home, summary and thumbnails show the real colors too. Once per scan; a sampling
+    /// failure (no colors) or a failed write just leaves the keyword palette.
+    private func persistColors() async {
+        guard !colorsSaved, let store, let colors, !colors.objectColors.isEmpty else { return }
+        colorsSaved = true
+        await store.saveScanColors(colors, roomName: roomName)
     }
 
     /// An item RoomPlan missed, added by its photo. The vision agent names and
@@ -165,6 +180,10 @@ final class ScanSession {
             }
         ))
         phase = imported ? .finished : .failed(store.lastError ?? "Couldn't save the scan")
+        if imported {
+            self.store = store
+            await persistColors()
+        }
     }
 }
 

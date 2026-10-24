@@ -2,9 +2,10 @@ import RealityKit
 import UIKit
 import MooveKit
 
-/// The kept items as voxel models in the new home, plus the fly-in: items start piled
-/// beside the house (the "old room"), lift, arc over the walls and settle into
-/// their layout spots, staggered. Switching layouts glides them to new spots.
+/// The kept items as voxel models in the new home, plus the fly-in: items start where they
+/// stood in the scanned old room (`FlyInStarts`: that room's footprint drawn left of the house),
+/// or piled beside the house when there's no scanned spot, then lift, arc over the walls and
+/// settle into their layout spots, staggered. Switching layouts glides them to new spots.
 /// Props `PropPlacer` put on furniture land on top of it (`Placement.elevationM`); wall-hung
 /// items use their flat wall model.
 @MainActor
@@ -15,10 +16,21 @@ final class FurnitureLayer {
     private var wallModels: Set<UInt64> = []
     private var items: [UInt64: LayoutItem] = [:]
     private var flight: Task<Void, Never>?
+    /// The old rooms' footprints (low voxel shells) shown during a fly-in from scanned spots.
+    private let oldRooms = Entity()
+    private var oldRoomsTask: Task<Void, Never>?
 
-    /// Shows `placements`, flying in from the old-room pile if `flyIn`, otherwise gliding from where items are.
-    func show(_ placements: [Placement], items list: [LayoutItem], plan: FloorPlan, flyIn: Bool) {
+    init() {
+        root.addChild(oldRooms)
+    }
+
+    /// Shows `placements`, flying in if `flyIn` (from `starts` where an item has one, else from the
+    /// pile), otherwise gliding from where items are. Returns how long the fly-in takes (0 if none).
+    @discardableResult
+    func show(_ placements: [Placement], items list: [LayoutItem], plan: FloorPlan, flyIn: Bool, starts: FlyInStarts? = nil) -> Double {
         flight?.cancel()
+        oldRoomsTask?.cancel()
+        oldRooms.children.removeAll()
         items = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let placed = placements.filter { items[$0.itemId] != nil }
         let wanted = Set(placed.map(\.itemId))
@@ -38,17 +50,34 @@ final class FurnitureLayer {
         }
 
         if flyIn {
-            let pile = Self.pile(placed.compactMap { items[$0.itemId] }, beside: plan.bounds)
-            for p in placed { if let t = pile[p.itemId] { entities[p.itemId]?.transform = t } }
+            // Scanned spot in the old room when known; the pile for the rest (added by photo, no scan).
+            let scanned = starts?.placements ?? [:]
+            let pile = Self.pile(placed.filter { scanned[$0.itemId] == nil }.compactMap { items[$0.itemId] }, beside: plan.bounds)
+            for p in placed {
+                if let start = scanned[p.itemId] {
+                    entities[p.itemId]?.transform = transform(for: start)
+                } else if let t = pile[p.itemId] {
+                    entities[p.itemId]?.transform = t
+                }
+            }
+            let shownRooms = placed.contains { scanned[$0.itemId] != nil } ? (starts?.rooms ?? []) : []
+            showOldRooms(shownRooms)
             // Biggest pieces first, like real movers; things that sit on others land after them.
             let order = placed.sorted { (($0.onTopOf == nil ? 0 : 1), -area($0)) < (($1.onTopOf == nil ? 0 : 1), -area($1)) }
+            let duration = Double(max(order.count - 1, 0)) * 0.11 + 1.6
             flight = Task { [weak self] in
                 for (i, p) in order.enumerated() {
                     if i > 0 { try? await Task.sleep(for: .milliseconds(110)) }
                     guard let self, !Task.isCancelled, let e = self.entities[p.itemId] else { return }
                     self.launch(e, to: self.transform(for: p))
                 }
+                // Everything has left the old room: clear its footprint.
+                try? await Task.sleep(for: .seconds(1.6))
+                guard let self, !Task.isCancelled else { return }
+                self.oldRoomsTask?.cancel()
+                self.oldRooms.children.removeAll()
             }
+            return duration
         } else {
             for p in placed {
                 guard let e = entities[p.itemId] else { continue }
@@ -58,6 +87,23 @@ final class FurnitureLayer {
                 } else {
                     _ = e.move(to: target, relativeTo: root, duration: 0.7, timingFunction: .easeInOut)
                 }
+            }
+            return 0
+        }
+    }
+
+    /// The old rooms as low voxel shells (floor and a short wall stub) where the fly-in starts.
+    private func showOldRooms(_ plans: [FloorPlan]) {
+        guard !plans.isEmpty else { return }
+        oldRoomsTask = Task { [weak self] in
+            for (i, plan) in plans.enumerated() {
+                let mesh = await Task.detached(priority: .userInitiated) {
+                    VoxelMesher.mesh(VoxelHouse.build(plan, cutawayHeightM: 0.25, realism: false), centered: false)
+                }.value
+                guard let self, !Task.isCancelled, let shell = VoxelEntity.entity(mesh, name: "old-room-\(i)") else { return }
+                let o = VoxelHouse.origin(of: plan)
+                shell.position = [Float(o.x), Float(o.y), Float(o.z)]
+                self.oldRooms.addChild(shell)
             }
         }
     }

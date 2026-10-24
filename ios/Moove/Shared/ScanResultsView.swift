@@ -130,11 +130,15 @@ struct ScanResultsView: View {
         }
     }
 
-    /// The thumbnail spec, with the item's scanned colors when there are any.
+    /// The thumbnail spec (attributes, material, condition), with the item's scanned colors when
+    /// there are any, else the colors it stores (`set_item_colors`).
     static func spec(_ item: Item, colors: ScanColors?) -> VoxelItemSpec {
-        let c = colors?.colors(for: item)
-        return VoxelItemSpec(category: item.category, name: item.name, widthM: item.widthM, depthM: item.depthM, heightM: item.heightM,
-                             primaryColor: c?.primary, secondaryColor: c?.secondary)
+        var spec = VoxelItemSpec(item)
+        if let c = colors?.colors(for: item) {
+            spec.primaryColor = c.primary
+            spec.secondaryColor = c.secondary
+        }
+        return spec
     }
 
     static func meta(_ item: Item) -> String {

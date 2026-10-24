@@ -14,6 +14,7 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         case noSuchShoppingItem
         case dealDoesNotMatchItem
         case invalidAttribute
+        case invalidColors
     }
 
     private let lock = NSLock()
@@ -101,19 +102,39 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
             var seen = Set<String>()
             return object.attributes.filter { seen.insert($0).inserted }
         }
+        let demo = Dictionary(DemoFixtures.inventory(owner: "demo").items.compactMap { item in item.scanObjectId.map { ($0, item) } },
+                              uniquingKeysWith: { a, _ in a })
         try mutateAuthed { s, me in
             let roomId = takeId()
             s.rooms.append(Room(id: roomId, owner: me, name: scan.roomName))
             s.scans.append(Scan(id: takeId(), owner: me, roomId: roomId, usdzUrl: scan.usdzUrl, capturedRoomJsonUrl: scan.capturedRoomJsonUrl))
             for (object, attributes) in zip(scan.objects, attributes) {
-                s.items.append(Item(
+                var item = Item(
                     id: takeId(), owner: me, roomId: roomId, scanObjectId: object.scanObjectId,
                     name: object.category.capitalized, category: object.category,
                     widthM: object.widthM, heightM: object.heightM, depthM: object.depthM,
                     photoUrls: object.photoUrl.map { [$0] } ?? [], attributes: attributes
-                ))
+                )
+                if let template = demo[object.scanObjectId] { Self.identifyDemo(&item, as: template) }
+                s.items.append(item)
             }
         }
+    }
+
+    /// Stand-in for the vision, pricing and sorting agents on the demo bedroom ("Load demo scan"
+    /// offline): an object whose scan id is a demo item's ("demo-<id>") gets that item's name,
+    /// details, value and disposition, as if the agents had run. Sentimental items stay undecided.
+    /// Colors are not copied: they arrive through `set_item_colors`, like a real scan's.
+    private static func identifyDemo(_ item: inout Item, as t: Item) {
+        item.name = t.name
+        item.material = t.material
+        item.brand = t.brand
+        item.condition = t.condition
+        item.estValueCents = t.estValueCents
+        item.disposition = t.disposition
+        item.dispositionReason = t.dispositionReason
+        item.fragile = t.fragile
+        item.maybeSentimental = t.maybeSentimental
     }
 
     public func addItemPhoto(itemId: UInt64, url: String) async throws {
@@ -130,6 +151,18 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
 
     public func setSentimental(itemId: UInt64, maybeSentimental: Bool) async throws {
         try updateOwnedItem(itemId) { $0.maybeSentimental = maybeSentimental }
+    }
+
+    public func setItemColors(itemId: UInt64, colors: ItemColors?) async throws {
+        guard colors?.isValid ?? true else { throw Failure.invalidColors }
+        try await setItemColors(itemId: itemId, colorsJson: colors?.json ?? "")
+    }
+
+    /// `set_item_colors` with the raw `colors_json`, validated like the module: '' clears,
+    /// otherwise only `primary` / `secondary` "#RRGGBB" strings, stored uppercase.
+    public func setItemColors(itemId: UInt64, colorsJson: String) async throws {
+        guard let json = ItemColors.normalizedJson(colorsJson) else { throw Failure.invalidColors }
+        try updateOwnedItem(itemId) { $0.colors = ItemColors(json: json) }
     }
 
     // MARK: Shopping (#15)

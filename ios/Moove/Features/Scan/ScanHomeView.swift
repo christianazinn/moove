@@ -7,6 +7,8 @@ struct ScanHomeView: View {
     @AppStorage("moove.tab") private var tab = "scan"
     @State private var scanning = false
     @State private var loadingDemo = false
+    /// The demo scan landed: show its results like a real scan's.
+    @State private var demoFinished = false
 
     var body: some View {
         ScrollView {
@@ -48,6 +50,12 @@ struct ScanHomeView: View {
         }) {
             ScanFlowView()
         }
+        .fullScreenCover(isPresented: $demoFinished, onDismiss: { tab = "inventory" }) {
+            NavigationStack {
+                ScanFinishedScreen(roomName: demo.roomName, isDemo: true, importedCount: demo.objects.count) { demoFinished = false }
+            }
+            .tint(Theme.accentStrong)
+        }
     }
 
     private var startScan: some View {
@@ -69,18 +77,24 @@ struct ScanHomeView: View {
         }
     }
 
+    private var demo: ScanImport { DemoFixtures.scanImport() }
+
     private var demoScan: some View {
         VStack(alignment: .leading, spacing: 14) {
             ListHeader(title: "Demo scan") { MonoTag(text: "Demo", tone: Theme.ochreInk) }
-            Text("Imports a recorded bedroom through the same path as a real scan. Use it if a live scan fails on stage.")
+            Text("Imports a recorded bedroom through the same path as a real scan and shows its 3D results. Use it if a live scan fails on stage.")
                 .monoMeta()
                 .fixedSize(horizontal: false, vertical: true)
             Button {
                 loadingDemo = true
                 Task {
-                    let imported = await store.importScan(DemoFixtures.scanImport())
+                    let imported = await store.importScan(demo)
                     loadingDemo = false
-                    if imported { tab = "inventory" }
+                    guard imported else { return }
+                    // Same finished screen as a real scan, then the same color write a real
+                    // scan does after sampling (here the demo room's fixture colors).
+                    demoFinished = true
+                    await store.saveScanColors(DemoFixtures.scanColors(), roomName: demo.roomName)
                 }
             } label: {
                 Label(loadingDemo ? "Loading…" : "Load demo scan", systemImage: "tray.and.arrow.down")

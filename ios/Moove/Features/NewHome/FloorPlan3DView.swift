@@ -13,6 +13,8 @@ struct FloorPlan3DView: UIViewRepresentable {
     var items: [LayoutItem] = []
     var placements: [Placement] = []
     var flyInToken = 0
+    /// Where the fly-in starts pieces (their scanned spots in the old room); nil: the pile.
+    var flyInStarts: FlyInStarts? = nil
     /// Measured from the scan's photos (scan results); nil keeps the default palette.
     var wallColor: VoxelColor? = nil
     var floorColor: VoxelColor? = nil
@@ -27,14 +29,14 @@ struct FloorPlan3DView: UIViewRepresentable {
         view.environment.background = .color(Self.sceneBackground.resolvedColor(with: view.traitCollection))
         context.coordinator.attach(to: view)
         context.coordinator.show(plan, focusRoom: focusRoom, animated: false, wallColor: wallColor, floorColor: floorColor)
-        context.coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken)
+        context.coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken, starts: flyInStarts)
         return view
     }
 
     func updateUIView(_ view: ARView, context: Context) {
         view.environment.background = .color(Self.sceneBackground.resolvedColor(with: view.traitCollection))
         context.coordinator.show(plan, focusRoom: focusRoom, animated: true, wallColor: wallColor, floorColor: floorColor)
-        context.coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken)
+        context.coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken, starts: flyInStarts)
     }
 
     @MainActor
@@ -57,6 +59,8 @@ struct FloorPlan3DView: UIViewRepresentable {
         private var distance: Float = 30
         private var shadowDistance: Float = 0
         private var shownFocus: String??
+        /// Back to the house after a fly-in that framed the old room too.
+        private var reframe: Task<Void, Never>?
 
         func attach(to view: ARView) {
             self.view = view
@@ -95,17 +99,30 @@ struct FloorPlan3DView: UIViewRepresentable {
             let planChanged = plan != scene.plan
             scene.build(plan, wallColor: wallColor, floorColor: floorColor)
             guard planChanged || shownFocus != .some(focusRoom) else { return }
+            reframe?.cancel()
             shownFocus = .some(focusRoom)
             frame(on: focusRoom.flatMap(plan.room(named:))?.bounds ?? plan.bounds, animated: animated && !planChanged)
         }
 
-        func showFurniture(_ placements: [Placement], items: [LayoutItem], plan: FloorPlan, flyInToken: Int) {
+        func showFurniture(_ placements: [Placement], items: [LayoutItem], plan: FloorPlan, flyInToken: Int, starts: FlyInStarts? = nil) {
             guard placements != shownPlacements || flyInToken != shownFlyIn else { return }
             // Hold the fly-in until there's something to fly.
             let flyIn = flyInToken != shownFlyIn && !placements.isEmpty
             shownPlacements = placements
             if !placements.isEmpty { shownFlyIn = flyInToken }
-            furniture.show(placements, items: items, plan: plan, flyIn: flyIn)
+            let duration = furniture.show(placements, items: items, plan: plan, flyIn: flyIn, starts: starts)
+            // Flying from the old room: pull back so it's in view too, then settle on the house.
+            reframe?.cancel()
+            guard flyIn, shownFocus == .some(nil), let old = starts?.bounds,
+                  starts?.placements.keys.contains(where: { id in placements.contains { $0.itemId == id } }) == true else { return }
+            let b = plan.bounds
+            frame(on: PlanBounds([PlanPoint(min(b.minX, old.minX), min(b.minY, old.minY)), PlanPoint(max(b.maxX, old.maxX), max(b.maxY, old.maxY))]),
+                  animated: true)
+            reframe = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(max(1, duration - 0.6)))
+                guard let self, !Task.isCancelled, self.shownFocus == .some(nil), let plan = self.scene.plan else { return }
+                self.frame(on: plan.bounds, animated: true)
+            }
         }
 
         private func frame(on bounds: PlanBounds, animated: Bool) {
@@ -150,6 +167,7 @@ struct FloorPlan3DView: UIViewRepresentable {
         // MARK: Gestures
 
         @objc private func orbit(_ g: UIPanGestureRecognizer) {
+            reframe?.cancel()
             let d = g.translation(in: g.view)
             g.setTranslation(.zero, in: g.view)
             yaw -= Float(d.x) * 0.008
@@ -158,6 +176,7 @@ struct FloorPlan3DView: UIViewRepresentable {
         }
 
         @objc private func pan(_ g: UIPanGestureRecognizer) {
+            reframe?.cancel()
             let d = g.translation(in: g.view)
             g.setTranslation(.zero, in: g.view)
             // Move the target in the ground plane, relative to where the camera faces.
@@ -169,6 +188,7 @@ struct FloorPlan3DView: UIViewRepresentable {
         }
 
         @objc private func pinch(_ g: UIPinchGestureRecognizer) {
+            reframe?.cancel()
             distance /= Float(g.scale)
             g.scale = 1
             updateCamera()

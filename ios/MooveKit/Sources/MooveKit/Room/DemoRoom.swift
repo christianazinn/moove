@@ -43,3 +43,38 @@ extension DemoFixtures {
         )
     }
 }
+
+extension DemoFixtures {
+    /// Colors for the demo bedroom (`roomGeometry()`), as if `ColorSampler` had measured them:
+    /// a warm off-white wall, an oak floor, and a primary / secondary per object that matches
+    /// the demo item's name and material. Keyed by scan object id ("demo-<item id>").
+    /// Used when a demo room has no sampled colors (the offline demo, "Load demo scan").
+    public static func scanColors() -> ScanColors {
+        func c(_ primary: VoxelColor, _ secondary: VoxelColor? = nil) -> ScanColors.ObjectColor {
+            .init(primary: primary, secondary: secondary)
+        }
+        return ScanColors(
+            wallColor: 0xEFE3D0,  // warm cream paint
+            floorColor: 0xC49A6C,  // oak boards
+            objectColors: [
+                "demo-10": c(0xB98A5A, 0xE9E3D6),  // queen bed: oak frame, linen bedding
+                "demo-11": c(0x3A3D42, 0x1E1F21),  // Aeron: graphite mesh, black base
+                "demo-12": c(0xF2F0EB),  // white laminate desk (as the seeded item stores it)
+                "demo-13": c(0xD8BF96),  // birch-effect particleboard bookshelf
+                "demo-14": c(0x2B2B2D, 0xF1E6CF),  // black metal floor lamp, cream shade
+                "demo-15": c(0xD9B47F, 0x8A6A45),  // pine nightstand, dark knob
+                "demo-16": c(0xE6E6E2, 0x9EA3A8),  // white box fan, gray grille
+                "demo-17": c(0xC4D0D6, 0x6E5A45),  // mirror glass, wood frame
+                "demo-18": c(0x5C4030, 0xB5533C),  // walnut quilt rack, red quilt
+                "demo-19": c(0x2F2A26, 0xD8CBB4),  // dark frames, sepia photos
+                "demo-20": c(0x8A8D91),  // gray fabric bean bag
+                "demo-21": c(0x262729, 0x8E9093),  // black mini fridge, silver handle
+            ]
+        )
+    }
+
+    /// Whether `item` came from the demo bedroom (its scan object id is "demo-<id>").
+    public static func isDemoItem(_ item: Item) -> Bool {
+        item.scanObjectId?.hasPrefix("demo-") ?? false
+    }
+}

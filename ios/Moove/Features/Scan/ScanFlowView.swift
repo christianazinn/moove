@@ -85,25 +85,8 @@ struct ScanFlowView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .mooveScreen()
         case .finished:
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("01 — Scan · Done").eyebrow()
-                    Text("\(session.objects.count) items added").pageTitle().padding(.top, 8)
-                    Text(session.uploadProblem.map { "Photos couldn't be uploaded (\($0)), so agents can't identify items yet. The room is saved, and the 3D view works on this device." }
-                         ?? "Agents are identifying and pricing them now.")
-                        .lede()
-                        .padding(.top, 10)
-                    ScanFinishedResults(roomName: session.roomName, colors: session.colors)
-                        .padding(.top, 28)
-                    Button("See inventory") { dismiss() }
-                        .buttonStyle(.pill(.primary))
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 32)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 24)
-            }
-            .mooveScreen()
+            ScanFinishedScreen(roomName: session.roomName, colors: session.colors, uploadProblem: session.uploadProblem,
+                               importedCount: session.objects.count) { dismiss() }
         case .failed(let why):
             ScanStatusPanel(
                 eyebrow: "01 — Scan · Problem",

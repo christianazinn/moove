@@ -161,6 +161,45 @@ final class MooveStore {
         await run { try await $0.setSentimental(itemId: item.id, maybeSentimental: value) }
     }
 
+    /// `set_item_colors`. Quiet: a failed color write only loses the real color (the model
+    /// falls back to its palette), so it doesn't raise the error banner.
+    @discardableResult
+    func setItemColors(_ colors: ItemColors?, forItemId itemId: UInt64) async -> Bool {
+        do {
+            try await backend.setItemColors(itemId: itemId, colors: colors)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// The newest old-home room named `roomName`: the one a scan import just created.
+    func newestRoom(named roomName: String) -> Room? {
+        snapshot.rooms.filter { $0.name == roomName && $0.home == .old }.max { $0.id < $1.id }
+    }
+
+    /// Persists a scan's sampled colors onto the items just imported into room `roomName`
+    /// (matched by scan object id), one `set_item_colors` each. The imported rows reach the
+    /// snapshot a moment after the reducer returns, so this waits up to ~5 s for them.
+    /// Returns how many items were written.
+    @discardableResult
+    func saveScanColors(_ colors: ScanColors, roomName: String) async -> Int {
+        guard !colors.objectColors.isEmpty else { return 0 }
+        var updates: [ItemColorUpdate] = []
+        for attempt in 0..<20 {
+            if let room = newestRoom(named: roomName) {
+                updates = colors.itemColorUpdates(for: items.filter { $0.roomId == room.id })
+                if !updates.isEmpty { break }
+            }
+            if attempt < 19 { try? await Task.sleep(for: .milliseconds(250)) }
+        }
+        var written = 0
+        for u in updates {
+            if await setItemColors(u.colors, forItemId: u.itemId) { written += 1 }
+        }
+        return written
+    }
+
     // MARK: Shopping (#15)
 
     var shoppingItems: [ShoppingItem] { snapshot.myShoppingItems }

@@ -127,6 +127,11 @@ extension SpacetimeBackend {
         try await call(SetSentimentalReducer(itemid: itemId, value: maybeSentimental))
     }
 
+    /// `set_item_colors` (#110): `{"primary":"#RRGGBB","secondary":"#RRGGBB"}`, '' clears.
+    func setItemColors(itemId: UInt64, colors: ItemColors?) async throws {
+        try await call(SetItemColorsReducer(itemid: itemId, colorsjson: colors?.json ?? ""))
+    }
+
     // Shopping (#15).
     func addShoppingItem(name: String, category: String, reason: String) async throws {
         guard let me = currentIdentity, let owner = Identity(hex: me) else { throw Failure.notConnected }
