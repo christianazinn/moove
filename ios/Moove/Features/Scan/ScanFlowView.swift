@@ -85,7 +85,6 @@ struct ScanFlowView: View {
             photoChecklist
         case .uploading(let done, let total):
             VStack(alignment: .leading, spacing: 16) {
-                Text("01 — Scan · Uploading").eyebrow()
                 Text("Uploading \(done) of \(total)…").blockTitle()
                 ProgressView(value: Double(done), total: Double(max(total, 1)))
                     .tint(Theme.accentFill)
@@ -99,7 +98,6 @@ struct ScanFlowView: View {
                                importedCount: session.objects.count) { dismiss() }
         case .failed(let why):
             ScanStatusPanel(
-                eyebrow: "01 — Scan · Problem",
                 systemImage: "exclamationmark.triangle",
                 tint: Theme.danger,
                 title: "Scan problem",
@@ -132,9 +130,8 @@ struct ScanFlowView: View {
         List {
             Section {
                 PageHeader(
-                    eyebrow: "01 — Scan · Photos",
                     title: "Photograph each item.",
-                    lede: "Moove took a photo of each item it could see clearly during the scan. Tap an item to retake its photo, or take one for any item still missing a photo, so Moove can tell what it is, its brand and its condition."
+                    lede: "Tap an item to retake or add its photo."
                 )
                 .padding(.top, 16)
                 .padding(.bottom, 28)
@@ -152,7 +149,7 @@ struct ScanFlowView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("RoomPlan didn't recognize any furniture", systemImage: "exclamationmark.magnifyingglass")
                             .blockTitle()
-                        Text("It detects beds, sofas, chairs, tables, storage, appliances, TVs and similar, and needs each one in view for a moment. Add your items by photo below, or cancel and scan again more slowly. The room itself is saved either way.")
+                        Text("Add missed items by photo below, or scan again more slowly. The room is saved either way.")
                             .sansText(14.5)
                             .foregroundStyle(Theme.muted)
                             .fixedSize(horizontal: false, vertical: true)
@@ -167,7 +164,7 @@ struct ScanFlowView: View {
                         Label("Add an item by photo", systemImage: "camera.badge.ellipsis").frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.pill(.outline))
-                    Text("For anything RoomPlan missed: small things, decor, items on shelves. Moove identifies it from the photo.")
+                    Text("For anything the scan missed.")
                         .monoMeta()
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -379,7 +376,6 @@ struct ScanFlowView: View {
 
 /// Finished / failed: a quiet centered block with an icon, mono heading, message and pill actions.
 private struct ScanStatusPanel<Actions: View>: View {
-    var eyebrow: String
     var systemImage: String
     var tint: Color
     var title: String
@@ -388,7 +384,6 @@ private struct ScanStatusPanel<Actions: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(eyebrow).eyebrow().padding(.bottom, 16)
             Image(systemName: systemImage)
                 .font(.system(size: 30, weight: .light))
                 .foregroundStyle(tint)

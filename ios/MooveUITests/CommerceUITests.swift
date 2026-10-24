@@ -34,7 +34,7 @@ final class CommerceUITests: XCTestCase {
 
         // Spending: SIMULATED rows and the Basescan link for the one real payment.
         spendingTab.tap()
-        XCTAssertTrue(app.staticTexts["Where the money went."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Spending"].waitForExistence(timeout: 10))
         let simulated = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH 'payment.' AND label CONTAINS ', simulated,'")).firstMatch
         XCTAssertTrue(scrollTo(simulated), "no SIMULATED payment row")
@@ -46,7 +46,7 @@ final class CommerceUITests: XCTestCase {
 
         // Listings: posted listings say "Posted (simulated)", never "Live on eBay".
         listingsTab.tap()
-        XCTAssertTrue(app.staticTexts["Your listings."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Listings"].waitForExistence(timeout: 10))
         let posted = byId("listing.201")
         XCTAssertTrue(scrollTo(posted), "no posted listing row")
         XCTAssertTrue(posted.label.localizedCaseInsensitiveContains("Posted (simulated)"), posted.label)
@@ -55,7 +55,7 @@ final class CommerceUITests: XCTestCase {
 
         // Approvals: 2 pending; approving the Aeron listing moves it to History.
         approvalsTab.tap()
-        XCTAssertTrue(app.staticTexts["Your go-ahead."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Approvals"].waitForExistence(timeout: 10))
         XCTAssertTrue(byId("approval.pending.300").waitForExistence(timeout: 10), "no pending Aeron approval")
         XCTAssertTrue(scrollTo(byId("approval.pending.85")), "no pending sofa approval")
         XCTAssertEqual(app.descendants(matching: .any)
@@ -80,7 +80,7 @@ final class CommerceUITests: XCTestCase {
 
         // Shopping > Desk chair: the Craigslist Aeron is blocked; the Target chair checks out (simulated).
         shoppingTab.tap()
-        XCTAssertTrue(app.staticTexts["What the new place needs."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Shopping"].waitForExistence(timeout: 10))
         shot("4-shopping")
         let deskChair = byId("shopping.item.52")
         XCTAssertTrue(scrollTo(deskChair), "no Desk chair on the shopping list")
@@ -157,7 +157,7 @@ final class CommerceUITests: XCTestCase {
         shot("\(prefix)-0-sell-and-buy")
 
         tapSegment(listingsTab)
-        XCTAssertTrue(app.staticTexts["Your listings."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Listings"].waitForExistence(timeout: 10))
         shot("\(prefix)-1-listings")
         let posted = byId("listing.201")
         XCTAssertTrue(scrollTo(posted), "listing row not hittable")
@@ -165,7 +165,7 @@ final class CommerceUITests: XCTestCase {
         shot("\(prefix)-1-listings-simulated")
 
         tapSegment(shoppingTab)
-        XCTAssertTrue(app.staticTexts["What the new place needs."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Shopping"].waitForExistence(timeout: 10))
         shot("\(prefix)-2-shopping")
         let deskChair = byId("shopping.item.52")
         XCTAssertTrue(scrollTo(deskChair), "Desk chair not hittable")
@@ -180,13 +180,13 @@ final class CommerceUITests: XCTestCase {
 
         XCTAssertTrue(approvalsTab.waitForExistence(timeout: 10))
         tapSegment(approvalsTab)
-        XCTAssertTrue(app.staticTexts["Your go-ahead."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Approvals"].waitForExistence(timeout: 10))
         shot("\(prefix)-3-approvals")
         XCTAssertTrue(scrollTo(byId("approval.approve.300")), "Approve not hittable")
         shot("\(prefix)-3-approvals-approve")
 
         tapSegment(spendingTab)
-        XCTAssertTrue(app.staticTexts["Where the money went."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Spending"].waitForExistence(timeout: 10))
         shot("\(prefix)-4-spending")
         let simulated = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH 'payment.' AND label CONTAINS ', simulated,'")).firstMatch

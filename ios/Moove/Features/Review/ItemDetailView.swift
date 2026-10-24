@@ -24,7 +24,6 @@ struct ItemDetailView: View {
     private func content(_ item: Item) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("03 — Review · Item").eyebrow().padding(.bottom, 16)
                 ItemThumbnail(item: item, size: 200)
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 12)
@@ -60,12 +59,12 @@ struct ItemDetailView: View {
                             .accessibilityIdentifier("item.roughEstimate")
                     }
                     if item.priceState == .builtIn {
-                        Text("Part of the building, like a toilet, tub or radiator, so it isn't priced or counted in sales.")
+                        Text("Part of the building: not priced or sold.")
                             .monoMeta()
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if item.priceState == .unpriced {
-                        Text("The pricing agent couldn't price this one. It's still sorted by size, condition and category, and you can choose below.")
+                        Text("No price found.")
                             .monoMeta()
                             .fixedSize(horizontal: false, vertical: true)
                     }

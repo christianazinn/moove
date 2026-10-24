@@ -116,7 +116,7 @@ struct NewHomePicker: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 MooveWordmark(height: 36).padding(.top, 8).padding(.bottom, 32)
-                PageHeader(eyebrow: "06 — New home", title: "Where are you moving?")
+                PageHeader(title: "Where are you moving?")
                 .padding(.bottom, 24)
 
                 NavigationLink {
@@ -320,7 +320,7 @@ struct NewHomeDetail: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
             MooveWordmark(height: 32).padding(.bottom, 28)
-            PageHeader(eyebrow: "06 — New home", title: name)
+            PageHeader(title: name)
             Text("\(plan.rooms.count) rooms · \(Int(plan.totalAreaM2.rounded())) m²")
                 .monoMeta()
                 .padding(.top, 10)

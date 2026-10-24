@@ -27,13 +27,6 @@ struct PackView: View {
         let input = inputs
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                PageHeader(
-                    eyebrow: "08 — Pack",
-                    title: "Pack your move.",
-                    lede: "Truck, crew and boxes for what you keep."
-                )
-                .padding(.top, 16)
-                .padding(.bottom, 24)
                 if input.demo {
                     demoNotice.padding(.bottom, 24)
                 } else if !input.choices.isEmpty {

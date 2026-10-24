@@ -26,7 +26,6 @@ struct SummaryView: View {
             VStack(alignment: .leading, spacing: 0) {
                 MooveWordmark(height: 36).padding(.top, 8).padding(.bottom, 32)
                 PageHeader(
-                    eyebrow: "07 — Summary",
                     title: "Your move, handled.",
                     lede: store.visibleItems.isEmpty ? nil : "\(s.itemCount) items, start to finish."
                 )

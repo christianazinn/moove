@@ -33,11 +33,6 @@ struct InventoryView: View {
         let stories = ItemStories.decode(storiesJSON)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                PageHeader(
-                    eyebrow: "02 — Inventory",
-                    title: "Everything you own.",
-                    lede: "Your things, hung by what they're for."
-                )
                 if store.visibleItems.isEmpty {
                     emptyState.padding(.top, 32)
                 } else {

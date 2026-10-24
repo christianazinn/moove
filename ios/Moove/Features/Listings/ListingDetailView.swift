@@ -22,7 +22,6 @@ struct ListingDetailView: View {
     private func content(_ listing: Listing, item: Item?) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("04 — Sell · Listing").eyebrow().padding(.bottom, 16)
                 if listing.simulated {
                     notice("Simulated post. Not live on eBay, and no buyer can see it.", systemImage: "info.circle", tint: Theme.ochre)
                         .padding(.bottom, 20)
