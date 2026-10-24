@@ -16,6 +16,9 @@ struct HTTPUploader: Uploader {
     var baseURL: @Sendable () -> URL? = { AppConfig.effectiveUploadBaseURL }
     var token: String?
     var policy = UploadRetryPolicy.standard
+    /// Per attempt. A dead tunnel can swallow requests without an answer, so keep this short;
+    /// photos are ≤1600 px JPEGs and the scan files a few MB.
+    var timeout: TimeInterval = 30
 
     struct Response: Decodable { let url: String }
 
@@ -28,7 +31,7 @@ struct HTTPUploader: Uploader {
             request.httpMethod = "POST"
             request.setValue(contentType, forHTTPHeaderField: "Content-Type")
             if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-            request.timeoutInterval = 60
+            request.timeoutInterval = timeout
             let data: Data, response: URLResponse
             do {
                 (data, response) = try await URLSession.shared.upload(for: request, fromFile: file)
