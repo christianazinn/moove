@@ -108,7 +108,9 @@ public struct PropPlacer: Sendable {
         var roles: [Int: Role] = [:]
         for (i, p) in out.enumerated() {
             guard let s = specs[p.itemId] else { continue }
-            roles[i] = Self.role(of: s, elevationM: p.elevationM)
+            // A height means "seen on the wall" only for a piece that isn't standing on another
+            // (the layout sets a TV on its console).
+            roles[i] = Self.role(of: s, elevationM: p.onTopOf == nil ? p.elevationM : nil)
         }
 
         // Furniture in each room: surfaces and solid boxes (for hung items to clear).
@@ -222,7 +224,8 @@ public struct PropPlacer: Sendable {
             let small = Double(grid.nx) * V <= 0.65 && Double(grid.ny) * V <= 0.8
             return n.has("nightstand", "night stand", "bedside") || small ? .nightstand : .dresser
         case .desk: return .desk
-        case .bookshelf: return s.clearance != nil ? .shelf : .shelfTop
+        // A small cabinet RoomPlan calls "storage" (drawn as a low shelf) by the bed is a nightstand.
+        case .bookshelf: return s.clearance != nil ? .shelf : (DesignRole.of(spec) == .nightstand ? .nightstand : .shelfTop)
         case .tv: return .tvStand
         default: return .table
         }
@@ -232,8 +235,9 @@ public struct PropPlacer: Sendable {
     static func propOrder(_ spec: VoxelItemSpec) -> Int {
         switch VoxelModels.kind(spec) {
         case .lamp: 0
-        case .tv, .electronics: 1
-        default: 2
+        case .monitor, .electronics: 1 // the monitor gets the desk before a TV can take it
+        case .tv: 2
+        default: 3
         }
     }
 
@@ -243,8 +247,8 @@ public struct PropPlacer: Sendable {
         switch kind {
         case .lamp: order = [.nightstand, .desk, .dresser, .table, .tvStand, .shelfTop, .shelf]
         case .photos, .framedPhotos, .books, .binder: order = [.shelf, .nightstand, .dresser, .desk, .shelfTop, .table, .tvStand]
-        case .tv: order = [.tvStand, .dresser, .table, .desk]
-        case .electronics: order = [.desk, .tvStand, .dresser, .table, .nightstand, .shelf]
+        case .tv: order = [.tvStand, .dresser, .table, .desk, .shelfTop]
+        case .electronics, .monitor: order = [.desk, .tvStand, .dresser, .table, .nightstand, .shelf]
         case .plant, .decor: order = [.dresser, .shelf, .table, .nightstand, .tvStand, .desk, .shelfTop]
         default: order = [.dresser, .desk, .table, .nightstand, .shelf, .tvStand, .shelfTop]
         }

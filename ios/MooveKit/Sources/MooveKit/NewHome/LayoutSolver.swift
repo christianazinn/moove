@@ -50,16 +50,22 @@ public struct LayoutItem: Sendable, Hashable, Identifiable {
 public struct LayoutOption: Sendable, Hashable, Identifiable {
     public var style: LayoutSolver.Style
     public var placements: [Placement]
-    /// Items that didn't fit anywhere.
+    /// Items that didn't fit anywhere (including `stored`).
     public var unplaced: [UInt64]
+    /// Beds beyond one per bedroom (two twins or bunks may share): kept out of the layout on
+    /// purpose, for storage, rather than scattered into the living room. Also in `unplaced`.
+    public var stored: [UInt64] = []
 
     public var id: LayoutSolver.Style { style }
     public var name: String { style.label }
 }
 
-/// Places items along the walls of a floor plan: no overlaps, nothing in front
-/// of a door, and each item in a room that suits it. Deterministic, so the
-/// same inputs always give the same layout (handy for the demo).
+/// Lays out a floor plan the way an interior designer would (decision 0300): one bed per
+/// bedroom, furniture in groups by room function (bed with nightstands, sofa facing the TV with
+/// the coffee table and chairs, table with chairs, desk with its chair), anchors placed first
+/// by a small cost function, clearances and a walkable path from the doors kept. Always: no
+/// overlaps, inside the rooms, nothing in front of a door. Deterministic, so the same inputs
+/// always give the same layout (handy for the demo).
 public struct LayoutSolver: Sendable {
     public enum Style: String, CaseIterable, Sendable, Hashable {
         /// Each item in the room its category belongs in.
@@ -113,38 +119,21 @@ public struct LayoutSolver: Sendable {
                                 rotationDeg: p.rotationDeg).inflated(by: itemGapM / 2)
         }
         let used = Dictionary(fixed.compactMap { p in sizes[p.itemId].map { (p.room, $0.widthM * $0.depthM) } }, uniquingKeysWith: +)
-        var option = solve(items.filter { !fixedIds.contains($0.id) }, style: style, obstacles: obstacles, used: used)
+        let fixedBeds = Dictionary(fixed.compactMap { p in sizes[p.itemId].flatMap { DesignRole.of($0) == .bed ? (p.room, 1) : nil } }, uniquingKeysWith: +)
+        var option = solve(items.filter { !fixedIds.contains($0.id) }, style: style, obstacles: obstacles, used: used, fixedBeds: fixedBeds)
         option.placements = (fixed + option.placements).sorted { $0.itemId < $1.itemId }
         return option
     }
 
-    func solve(_ items: [LayoutItem], style: Style, obstacles fixed: [OrientedRect], used seeded: [String: Double] = [:]) -> LayoutOption {
+    /// The designer layout (`Designer`, decision 0300) around `fixed` obstacles. `fixedBeds`:
+    /// beds already in a room (a scan's), which count against its one bed.
+    func solve(_ items: [LayoutItem], style: Style, obstacles fixed: [OrientedRect], used seeded: [String: Double] = [:],
+               fixedBeds: [String: Int] = [:]) -> LayoutOption {
         // Hallways stay clear, unless the plan is only that room (a scanned "Entry").
         let usable = plan.rooms.filter { $0.polygon.count >= 3 }
         let rooms = usable.count == 1 ? usable : usable.filter { $0.kind != .hallway }
-        var obstacles = doorKeepOuts() + fixed
-        var used = seeded // footprint area placed per room
-        var placements: [Placement] = []
-        var unplaced: [UInt64] = []
-
-        // Big things first: they're the hardest to fit.
-        let ordered = items.sorted { ($0.widthM * $0.depthM, $1.id) > ($1.widthM * $1.depthM, $0.id) }
-        for item in ordered {
-            let candidates = roomOrder(for: item, rooms: rooms, style: style, used: used)
-            var placed = false
-            for room in candidates {
-                if let spot = fit(item, in: room, obstacles: obstacles, style: style) {
-                    placements.append(Placement(itemId: item.id, room: room.name, x: spot.center.x, y: spot.center.y, rotationDeg: spot.rotationDeg))
-                    obstacles.append(spot.inflated(by: itemGapM / 2))
-                    used[room.name, default: 0] += item.widthM * item.depthM
-                    placed = true
-                    break
-                }
-            }
-            if !placed { unplaced.append(item.id) }
-        }
-        placements.sort { $0.itemId < $1.itemId }
-        return LayoutOption(style: style, placements: placements, unplaced: unplaced.sorted())
+        var designer = Designer(solver: self, style: style, rooms: rooms, fixed: fixed, used: seeded)
+        return designer.run(items, fixedBeds: fixedBeds)
     }
 
     // MARK: Room choice
