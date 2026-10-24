@@ -35,6 +35,18 @@ struct RoomVisualizationView: View {
                         .padding(.bottom, 60)
                 }
             }
+            // The 3D scene and the plan canvas draw pixels VoiceOver can't read, so
+            // expose each piece of furniture as its own element: swipe through them,
+            // double-tap to select (which opens the item card below).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilitySummary)
+            .accessibilityChildren {
+                ForEach(geometry.objects) { object in
+                    Text(accessibilityName(object))
+                        .accessibilityAddTraits(selection == object.id ? [.isButton, .isSelected] : .isButton)
+                        .accessibilityAction { selection = object.id }
+                }
+            }
             VStack(spacing: 10) {
                 if let id = selection, let object = geometry.objects.first(where: { $0.id == id }) {
                     SelectedObjectCard(object: object, item: items[id]) { selection = nil }
@@ -72,6 +84,21 @@ struct RoomVisualizationView: View {
             if ProcessInfo.processInfo.environment["MOOVE_ROOM_MODE"] == "decision" { mode = .decision }
             #endif
         }
+    }
+
+    private var accessibilitySummary: String {
+        let n = geometry.objects.count
+        return "\(style == .model ? "3D model" : "Floor plan") of the room: \(n) item\(n == 1 ? "" : "s"), \(geometry.walls.count) walls, \(geometry.openings.count) doors and windows"
+    }
+
+    private func accessibilityName(_ object: RoomGeometry.Object) -> String {
+        let item = items[object.id]
+        var parts = [item?.name ?? object.category.capitalized]
+        if let item { parts.append(item.disposition.label) }
+        if let value = item?.estValueCents { parts.append(value.usd) }
+        let d = object.dimensions
+        parts.append(String(format: "%.1f by %.1f meters", d.x, d.z))
+        return parts.joined(separator: ", ")
     }
 
     private var legend: some View {
