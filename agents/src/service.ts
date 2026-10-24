@@ -3,6 +3,7 @@ import type { Conn } from './spacetime.js';
 import { config } from './config.js';
 import { claudeSpentToday } from './integrations/anthropic.js';
 import { apifySpentToday } from './integrations/apify.js';
+import { visaCheckoutMode, type VisaEnv } from './integrations/visa.js';
 
 // Tells every client where to upload and which worker build is live (service_config table), so a
 // new tunnel URL or a second backend needs no app rebuild. A failed write only logs.
@@ -15,20 +16,24 @@ export function workerVersion(): string {
   }
 }
 
-export async function announceService(conn: Conn, now = new Date()): Promise<void> {
+export async function announceService(conn: Conn, now = new Date(), env: VisaEnv = process.env): Promise<void> {
   const entries: [string, string][] = [
     ['upload_base_url', config.publicUploadBaseUrl.replace(/\/+$/, '')],
     ['worker_version', workerVersion()],
     ['worker_started_at', now.toISOString()],
+    // #191: so purchase approvals can say SIMULATED before anything is paid.
+    ['visa_checkout', visaCheckoutMode(env)],
   ];
   for (const [key, value] of entries) {
     try {
       await conn.reducers.setServiceConfig({ key, value });
     } catch (err) {
-      console.warn(`[service] could not set ${key}: ${String(err)}`);
+      // A module older than #191 rejects visa_checkout; the app then just shows no checkout label.
+      if (key === 'visa_checkout') console.warn(`[service] module did not accept visa_checkout=${value} (needs the #191 SERVICE_KEYS update): ${String(err)}`);
+      else console.warn(`[service] could not set ${key}: ${String(err)}`);
     }
   }
-  console.log(`[service] announced upload_base_url=${entries[0][1]} version=${entries[1][1]}`);
+  console.log(`[service] announced upload_base_url=${entries[0][1]} version=${entries[1][1]} visa_checkout=${entries[3][1]}`);
 }
 
 // Today's estimated spend against the daily caps (#169, #170), so the app can show the guardrails.

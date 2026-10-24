@@ -136,6 +136,43 @@ extension Approval {
     }
 }
 
+/// The rail label on a pending purchase approval (#191), from the worker's announced checkout mode.
+public enum PurchaseRailTag: Sendable, Equatable {
+    /// The filled SIMULATED pill: approving won't move any money.
+    case simulated
+    /// The outlined VISA SANDBOX tag (same words as the payment rows, #140): a test card, no real money.
+    case sandbox
+
+    public var text: String {
+        switch self {
+        case .simulated: "SIMULATED"
+        case .sandbox: "VISA SANDBOX"
+        }
+    }
+
+    /// What VoiceOver says, for the tag and appended to the row's summary.
+    public var spoken: String {
+        switch self {
+        case .simulated: "Simulated purchase, no money will move"
+        case .sandbox: "Visa sandbox, test card, no real money"
+        }
+    }
+}
+
+extension Approval {
+    /// The tag a purchase approval shows before it is paid. nil for listings (they use
+    /// `listing.simulated`), when the worker didn't announce a mode, and for `sandbox+fallback`,
+    /// where a purchase may end up simulated: the payment row says which after checkout.
+    public func purchaseRailTag(_ mode: VisaCheckoutMode?) -> PurchaseRailTag? {
+        guard kind == .purchase else { return nil }
+        switch mode {
+        case .simulated: return .simulated
+        case .sandbox: return .sandbox
+        case .sandboxFallback, nil: return nil
+        }
+    }
+}
+
 extension ApprovalAsks {
     /// Caption for a pending re-ask: "Asked again (2 of 3). The earlier request got no answer in 12 h."
     /// nil for a first ask.

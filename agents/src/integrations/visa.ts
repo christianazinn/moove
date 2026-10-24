@@ -475,6 +475,10 @@ export class VisaCheckout {
   get simulated(): boolean {
     return this.backend.simulated;
   }
+  /** service_config `visa_checkout` (#191). */
+  get mode(): VisaCheckoutMode {
+    return checkoutMode(this.backend, this.fallback);
+  }
   remaining(agent: string): bigint {
     return this.ledger.remaining(agent);
   }
@@ -810,13 +814,31 @@ export function selectBackend(env: VisaEnv, fetchImpl?: typeof globalThis.fetch)
   }
 }
 
+// Falling back to simulated on a 5xx/network error is opt-in once a provider is explicitly chosen
+// (VISA_FALLBACK_SIMULATED=1), and on by default only when the provider was picked from the keys.
+const fallbackAllowed = (env: VisaEnv): boolean =>
+  env.VISA_FALLBACK_SIMULATED === '1' || (!env.VISA_PROVIDER && env.VISA_FALLBACK_SIMULATED !== '0');
+
+/** What the worker announces as service_config `visa_checkout` (#191), so the app can label purchase approvals. */
+export type VisaCheckoutMode = 'simulated' | 'sandbox' | 'sandbox+fallback';
+
+/**
+ * The checkout mode for a backend and its fallback. A real (sandbox) backend with no fallback is
+ * `sandbox`, even when misconfigured: those checkouts fail loudly and are never simulated.
+ */
+export const checkoutMode = (backend: Pick<CheckoutBackend, 'simulated'>, fallback?: Pick<CheckoutBackend, 'simulated'>): VisaCheckoutMode =>
+  backend.simulated ? 'simulated' : fallback?.simulated ? 'sandbox+fallback' : 'sandbox';
+
+/** The mode `createVisaCheckout(sink, env)` would run in. No network: selecting a backend only builds it. */
+export function visaCheckoutMode(env: VisaEnv = process.env): VisaCheckoutMode {
+  const { backend } = selectBackend(env);
+  return checkoutMode(backend, !backend.simulated && fallbackAllowed(env) ? { simulated: true } : undefined);
+}
+
 export function createVisaCheckout(sink: VisaSink, env: VisaEnv = process.env, fetchImpl?: typeof globalThis.fetch): VisaCheckout {
   const { backend, note } = selectBackend(env, fetchImpl);
   if (note) console.warn(backend.simulated ? `[visa] using the SIMULATED checkout: ${note}` : `[visa] CHECKOUT WILL FAIL: ${note}`);
   const ledger = new CardSpendLedger(capCents(env, 'VISA_SPEND_CAP_USD'), capCents(env, 'VISA_MAX_PER_PURCHASE_USD'));
-  // Falling back to simulated on a 5xx/network error is opt-in once a provider is explicitly chosen
-  // (VISA_FALLBACK_SIMULATED=1), and on by default only when the provider was picked from the keys.
-  const fallbackAllowed = env.VISA_FALLBACK_SIMULATED === '1' || (!env.VISA_PROVIDER && env.VISA_FALLBACK_SIMULATED !== '0');
-  const fallback = backend.simulated || !fallbackAllowed ? undefined : createSimulatedBackend({ delayMs: Number(env.VISA_SIM_DELAY_MS ?? '400') });
+  const fallback = backend.simulated || !fallbackAllowed(env) ? undefined : createSimulatedBackend({ delayMs: Number(env.VISA_SIM_DELAY_MS ?? '400') });
   return new VisaCheckout({ sink, backend, ledger, fallback });
 }
