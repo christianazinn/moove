@@ -1,0 +1,9 @@
+{
+  "model": "claude-haiku-5-5",
+  "output": {
+    "keep": [
+      7
+    ],
+    "reason": "Dropped bags, prints, lamps, vanity tray, jacket, vintage/antique stools and tables, and maple dough box; only #7 is a plain used wood side table of comparable type."
+  }
+}
