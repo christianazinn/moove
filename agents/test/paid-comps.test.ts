@@ -75,10 +75,11 @@ test("a refusal falls back to a direct lookup without double-logging the refusal
   assert.deepEqual(res, { comps: COMPS, replayed: false });
   assert.equal(payments.length, 0);
   assert.deepEqual(direct.calls, ["lamp"]);
-  assert.equal(events.filter((e) => e.message.startsWith("Refused")).length, 1);
+  // Simulated rail: the refusal and the fallback are both labeled.
+  assert.equal(events.filter((e) => e.message.startsWith("[SIMULATED] Refused x402 payment")).length, 1);
   assert.equal(logged.length, 1);
   assert.equal(logged[0].kind, "tool_call");
-  assert.match(logged[0].message, /directly \(unpaid\)/);
+  assert.match(logged[0].message, /^\[SIMULATED\] x402 payment refused, .*directly \(unpaid\)/);
   assert.equal((logged[0].data as { refused: boolean }).refused, true);
 });
 

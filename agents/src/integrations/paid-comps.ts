@@ -19,6 +19,7 @@ import { logEvent, type EventKind } from '../events.js';
 import { paymentRail } from '../payments.js';
 import { COMPS_ROUTE, createCompsPaywall, type CompsLookup } from '../paywall.js';
 import { lookupComps, type CompsResult } from './apify.js';
+import { simulatedLabel } from './simulated.js';
 import { SpendRefusedError, type RailEnv, type X402Rail } from './x402.js';
 
 /** What one comps report costs ($0.01, matching COMPS_PRICE_USD). Used by the simulated rail. */
@@ -99,8 +100,10 @@ export interface PaidCompsDeps {
 export function createPaidCompsSource(deps: PaidCompsDeps, baseUrl: string): CompsSource {
   return async (query: string, item: Item): Promise<CompsResult> => {
     const url = `${baseUrl}${COMPS_ROUTE}?q=${encodeURIComponent(query)}`;
+    let simulated = false;
     try {
       const rail = await deps.rail;
+      simulated = rail.simulated;
       const { response } = await rail.paidFetch(
         {
           owner: item.owner,
@@ -130,16 +133,17 @@ export function createPaidCompsSource(deps: PaidCompsDeps, baseUrl: string): Com
       // The rail already logged refusals (and its own payment failures); this only records the fallback.
       // A fallback isn't an error by itself (if the direct lookup fails, pricing logs that as one).
       const refused = err instanceof SpendRefusedError;
+      const message = refused
+        ? `x402 payment refused, looking up comps for "${query}" directly (unpaid)`
+        : `Paid comps lookup failed (${(err as Error).message}), looking up "${query}" directly (unpaid)`;
       deps.log({
         owner: item.owner,
         agent: 'pricing',
         kind: 'tool_call',
-        message: refused
-          ? `x402 payment refused, looking up comps for "${query}" directly (unpaid)`
-          : `Paid comps lookup failed (${(err as Error).message}), looking up "${query}" directly (unpaid)`,
+        message: simulated ? simulatedLabel(message) : message,
         refTable: 'item',
         refId: item.id,
-        data: { query, fallback: true, refused, reason: (err as Error).message },
+        data: { query, fallback: true, refused, reason: (err as Error).message, simulated },
       });
       return deps.lookup(query);
     }
