@@ -121,7 +121,12 @@ struct NewHomePicker: View {
                 }
                 .buttonStyle(.plain)
 
-                row(icon: "link", title: "Import from a listing", meta: "Zillow, Redfin · coming soon", enabled: false)
+                NavigationLink {
+                    ListingImportView { name, source, plan in onPick(name, source, plan) }
+                } label: {
+                    row(icon: "link", title: "Import from a listing", meta: "Zillow, Redfin, Realtor.com link", enabled: true)
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
