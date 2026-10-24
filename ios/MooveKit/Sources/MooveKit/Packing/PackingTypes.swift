@@ -63,6 +63,19 @@ public enum BoxSize: String, Sendable, CaseIterable {
     /// Litres you can actually fill once things are wrapped (about 70%).
     var usableLitres: Double { volumeM3 * 1000 * PackingPlanner.packingEfficiency }
 
+    /// Place in the nesting chain small < medium < large < dish pack < wardrobe, where each size
+    /// holds the one before it in every dimension; nil for picture boxes and totes.
+    var nestRank: Int? {
+        switch self {
+        case .small: return 0
+        case .medium: return 1
+        case .large: return 2
+        case .dishPack: return 3
+        case .wardrobe: return 4
+        case .picture, .tote: return nil
+        }
+    }
+
     /// Dimensions sorted largest first, for "does it fit" checks.
     var sortedDims: [Double] {
         let d = dimsM
@@ -89,6 +102,9 @@ public struct BoxContent: Sendable, Hashable {
         self.reason = reason
         self.category = category
     }
+
+    /// An estimate: typical everyday contents Moove added, not something the user scanned.
+    public var estimated: Bool { itemId == nil }
 
     /// A generic voxel model for this line (books, a stack of plates, folded clothes), for lines
     /// without a scanned item to draw.
@@ -117,6 +133,12 @@ public struct MovingBox: Sendable, Hashable, Identifiable {
     public var reason: String
     /// Where it goes and how Moove knows ("Goes to Bedroom 2 (from your saved layout)").
     public var roomReason: String
+
+    /// Only typical everyday contents (an estimate for the truck), nothing from the scan.
+    /// The open-first tote and keep-with-you box count too; the Pack screen keeps those apart.
+    public var estimatedOnly: Bool { !contents.isEmpty && contents.allSatisfy(\.estimated) }
+    /// How many lines came from the scan.
+    public var scannedLineCount: Int { contents.filter { !$0.estimated }.count }
 
     public init(id: Int, size: BoxSize, room: String, title: String, contents: [BoxContent], weightKg: Double,
                 fragile: Bool = false, openFirst: Bool = false, keepWithYou: Bool = false, thisSideUp: Bool = false,
