@@ -2,8 +2,9 @@ import Foundation
 
 /// Sends scan files to the agent worker, because SpacetimeDB isn't a blob store.
 ///
-/// Contract with `agents/` (#4): `POST {MOOVE_UPLOAD_BASE_URL}/upload?name=<file name>`
-/// with the raw file as the body and its `Content-Type`; responds `{"url": "<public url>"}`.
+/// Contract with `agents/src/upload.ts`: `POST {MOOVE_UPLOAD_BASE_URL}/upload` with the
+/// raw file as the body and its `Content-Type`; responds `{"url": "<public url>"}`.
+/// The worker names files itself (random UUIDs), so no file name is sent.
 protocol Uploader: Sendable {
     func upload(_ file: URL, contentType: String) async throws -> String
 }
@@ -15,9 +16,7 @@ struct HTTPUploader: Uploader {
     struct Response: Decodable { let url: String }
 
     func upload(_ file: URL, contentType: String) async throws -> String {
-        var components = URLComponents(url: baseURL.appending(path: "upload"), resolvingAgainstBaseURL: false)!
-        components.queryItems = [URLQueryItem(name: "name", value: file.lastPathComponent)]
-        var request = URLRequest(url: components.url!)
+        var request = URLRequest(url: baseURL.appending(path: "upload"))
         request.httpMethod = "POST"
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
