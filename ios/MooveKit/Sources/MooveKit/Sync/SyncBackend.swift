@@ -129,6 +129,10 @@ public protocol SyncBackend: AnyObject, Sendable {
     /// `set_item_colors` (#110): colors sampled from the scan's frames. nil clears them.
     func setItemColors(itemId: UInt64, colors: ItemColors?) async throws
 
+    /// Joins someone else's room by its join code (#10). Its scans and items then
+    /// stream in like the user's own. Joining a room you already have is a no-op.
+    func joinRoom(code: String) async throws
+
     /// Shopping list (#15): the user's edit step on the list the shopping agent generated.
     func addShoppingItem(name: String, category: String, reason: String) async throws
     func removeShoppingItem(shoppingItemId: UInt64) async throws
