@@ -1,0 +1,33 @@
+{
+  "a7177cb62b4e5d12": {
+    "item": "Mesh office chair; category chair; 0.64 x 1.02 x 0.62 m (W x H x D)",
+    "n": 17,
+    "keep": [
+      3,
+      7,
+      11,
+      12,
+      13,
+      17
+    ],
+    "reason": "Kept generic mesh office chairs (3, 7, 11, 12, 13, 17); dropped Herman Miller Aeron listings as a distinct named product line plus the Aeron seat-only part (1), dropped 14, 15 and 16 as office chairs…",
+    "model": "claude-haiku-5-5"
+  },
+  "e47d8915618eaa1c": {
+    "item": "Mesh office chair; category chair; 0.64 x 1.02 x 0.62 m (W x H x D)",
+    "n": 17,
+    "keep": [
+      3,
+      7,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+    ],
+    "reason": "Dropped Aeron and Herman Miller listings (premium named line, refurbished or luxury-priced, or a seat-only part) and the Aeron seat-only part; kept plain generic office and mesh chairs in a normal us…",
+    "model": "claude-haiku-5-5"
+  }
+}
