@@ -35,4 +35,4 @@ prizes.txt
 # ios local config
 ios/Config/Local.xcconfig
 ios/Moove/Resources/Info.plist
-.worker-token
+.worker-token*
