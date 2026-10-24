@@ -15,7 +15,8 @@
     "visa:demo": "tsx scripts/visa-demo.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "comps:prefetch": "tsx scripts/prefetch-comps.ts",
-    "e2e": "tsx scripts/e2e.ts"
+    "e2e": "tsx scripts/e2e.ts",
+    "status": "tsx scripts/status.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
