@@ -44,6 +44,17 @@ struct InventoryView: View {
                             .monoMeta()
                             .padding(.vertical, 8)
                     }
+                    if let scan = store.snapshot.latestScan(ofRoom: room.id), scan.sweepStatus?.isActive == true,
+                       scan.createdAt > .now.addingTimeInterval(-300) {
+                        // Room photo sweep (#92): the worker is naming "other" boxes and adding missed items.
+                        // Hidden after 5 min so a scan whose worker was down doesn't spin forever.
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.mini)
+                            Text("Identifying items from room photos…").monoMeta()
+                        }
+                        .padding(.vertical, 8)
+                        .accessibilityElement(children: .combine)
+                    }
                     ForEach(items) { item in
                         LedgerRow(
                             title: item.name,
