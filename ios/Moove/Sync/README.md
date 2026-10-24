@@ -29,5 +29,6 @@ Never hand-edit `Generated/`. After regenerating, update `SpacetimeBackend+Contr
   and column `widthM` is `width_m`. The codegen handles this.
 - Initial subscription rows arrive as `.inserted` row events, so register `rowEvents` **before** `subscribe`.
 - The SDK auto-reconnects but does **not** replay subscriptions; `SpacetimeBackend` resubscribes on reconnect.
+- The SDK needs **Swift 6.2+ / Xcode 26+** (it uses `SendableMetatype`), despite its README saying 6.1.
 - Generated reducer initializers lowercase multi-word args (`itemid:`), and a reducer argument named
   `name` becomes `nameArg:`.
