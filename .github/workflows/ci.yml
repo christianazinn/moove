@@ -153,9 +153,27 @@ jobs:
       - name: Export screenshots
         if: always()
         run: |
-          mkdir -p "$RUNNER_TEMP/shots"
-          xcrun xcresulttool export attachments --path "$RUNNER_TEMP/MooveUITests.xcresult" --output-path "$RUNNER_TEMP/shots" || true
-          ls -la "$RUNNER_TEMP/shots"
+          mkdir -p "$RUNNER_TEMP/all" "$RUNNER_TEMP/shots"
+          xcrun xcresulttool export attachments --path "$RUNNER_TEMP/MooveUITests.xcresult" --output-path "$RUNNER_TEMP/all" || true
+          # Keep only the tests' named screenshots (not XCTest's automatic snapshots or the screen recording),
+          # renamed "<Test class>/<shot name>.png".
+          python3 - "$RUNNER_TEMP/all" "$RUNNER_TEMP/shots" <<'PY'
+          import json, os, shutil, sys
+          src, dst = sys.argv[1], sys.argv[2]
+          try:
+              tests = json.load(open(os.path.join(src, "manifest.json")))
+          except OSError:
+              sys.exit(0)
+          for test in tests:
+              cls = test["testIdentifier"].split("/")[0]
+              for a in test["attachments"]:
+                  name, f = a["suggestedHumanReadableName"], a["exportedFileName"]
+                  if not f.endswith(".png") or name.startswith("UI Snapshot"):
+                      continue
+                  os.makedirs(os.path.join(dst, cls), exist_ok=True)
+                  shutil.copy(os.path.join(src, f), os.path.join(dst, cls, name.split("_0_")[0] + ".png"))
+          PY
+          find "$RUNNER_TEMP/shots" -type f
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -168,3 +186,4 @@ jobs:
           name: ios-ui-xcresult
           path: ${{ runner.temp }}/MooveUITests.xcresult
           if-no-files-found: warn
+          retention-days: 3

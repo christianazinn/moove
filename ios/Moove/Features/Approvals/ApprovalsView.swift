@@ -30,9 +30,13 @@ struct ApprovalsView: View {
                 }
                 if !pending.isEmpty {
                     ListHeader(title: "Needs you", count: "\(pending.count)").padding(.top, 36)
-                    ForEach(pending) { approval in
-                        PendingApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
-                                           deal: store.snapshot.deal(for: approval), item: item(for: approval))
+                    // Each list in its own VStack: an approval's id is in `pending`, then in `decided`, and
+                    // sharing one LazyVStack's id space left the stale pending card showing under History.
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(pending) { approval in
+                            PendingApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
+                                               deal: store.snapshot.deal(for: approval), item: item(for: approval))
+                        }
                     }
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Image(systemName: "iphone.radiowaves.left.and.right")
@@ -63,9 +67,11 @@ struct ApprovalsView: View {
                 }
                 if !decided.isEmpty {
                     ListHeader(title: "History", count: "\(decided.count)").padding(.top, 40)
-                    ForEach(decided) { approval in
-                        DecidedApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
-                                           deal: store.snapshot.deal(for: approval), item: item(for: approval))
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(decided) { approval in
+                            DecidedApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
+                                               deal: store.snapshot.deal(for: approval), item: item(for: approval))
+                        }
                     }
                 }
             }
