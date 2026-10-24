@@ -51,4 +51,8 @@ extension SpacetimeBackend {
     func saveLayout(newHomeId: UInt64, name: String, placementsJson: String) async throws {
         throw Failure.reducerFailed("saveLayout: waiting on the SpacetimeDB module (#2)")
     }
+
+    func decideApproval(approvalId: UInt64, status: ApprovalStatus) async throws {
+        throw Failure.reducerFailed("decideApproval: waiting on the SpacetimeDB module (#2)")
+    }
 }
