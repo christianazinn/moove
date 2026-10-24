@@ -115,12 +115,27 @@ jobs:
 
   ios-ui:
     # Runs the app in an iOS Simulator on the offline demo backend: the `Moove` scheme's test action
-    # (all of ios/MooveUITests). Screenshots are in the `ios-ui-screenshots` artifact.
-    # About 15 min, so like `ios` it only runs on PRs touching ios/ (or CI) and on pushes to main.
+    # (all of ios/MooveUITests), split in two shards on two runners so each stays ~15 min: `main` runs
+    # every class but MooveSmokeTests (CommerceUITests, DevpostShotsTests, and any new class), `smoke` runs
+    # MooveSmokeTests (#161). All serially in one runner took ~26 min; parallel Simulator clones on one
+    # runner were slower still and lost the app's test connection (#255).
+    # Screenshots: `ios-ui-screenshots` (main) and `ios-ui-screenshots-smoke`.
+    # Like `ios` it only runs on PRs touching ios/ (or CI) and on pushes to main.
+    name: ios-ui (${{ matrix.shard }})
     needs: changes
     if: needs.changes.outputs.ios == 'true'
     runs-on: macos-15
-    timeout-minutes: 30  # ~19-24 min observed with the XXXL + dark passes (macOS runner speed varies)
+    timeout-minutes: 30  # per shard: ~6 min build + tests; main also runs the XXXL + dark passes (runner speed varies)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: main
+            tests: -skip-testing:MooveUITests/MooveSmokeTests -skip-testing:MooveUITests/CommerceUITests/testCommerceScreensInDarkMode
+            suffix: ""
+          - shard: smoke
+            tests: -only-testing:MooveUITests/MooveSmokeTests
+            suffix: -smoke
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode and a simulator
@@ -151,17 +166,18 @@ jobs:
         working-directory: ios
         run: |
           xcrun simctl boot "$SIM_UDID" || true
-          # The whole MooveUITests target: CommerceUITests, MooveSmokeTests (#161, 30 s waits since #241) and
-          # DevpostShotsTests (#242, saves the Devpost shots). One build, serial on one Simulator: parallel
-          # clones (-parallel-testing-enabled) were slower on this runner and the app lost its test connection.
-          DARK=MooveUITests/CommerceUITests/testCommerceScreensInDarkMode
-          xcodebuild test -scheme Moove -destination "id=$SIM_UDID" -skip-testing:$DARK \
+          # One build, serial on one Simulator per shard: parallel clones (-parallel-testing-enabled) were
+          # slower on this runner and the app lost its test connection.
+          xcodebuild test -scheme Moove -destination "id=$SIM_UDID" ${{ matrix.tests }} \
             -resultBundlePath "$RUNNER_TEMP/MooveUITests.xcresult" CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO
-          # Dark mode (#15): `-AppleInterfaceStyle` and XCUIDevice.appearance don't take on the CI Simulator,
-          # so switch the whole Simulator and rerun just that test on the same build (~2 min).
-          xcrun simctl ui "$SIM_UDID" appearance dark
-          xcodebuild test-without-building -scheme Moove -destination "id=$SIM_UDID" -only-testing:$DARK \
-            -resultBundlePath "$RUNNER_TEMP/MooveUITests-dark.xcresult" CODE_SIGNING_ALLOWED=NO
+          # Dark mode (#15, main shard): `-AppleInterfaceStyle` and XCUIDevice.appearance don't take on the CI
+          # Simulator, so switch the whole Simulator and rerun just that test on the same build (~2 min).
+          if [ "${{ matrix.shard }}" = main ]; then
+            DARK=MooveUITests/CommerceUITests/testCommerceScreensInDarkMode
+            xcrun simctl ui "$SIM_UDID" appearance dark
+            xcodebuild test-without-building -scheme Moove -destination "id=$SIM_UDID" -only-testing:$DARK \
+              -resultBundlePath "$RUNNER_TEMP/MooveUITests-dark.xcresult" CODE_SIGNING_ALLOWED=NO
+          fi
       - name: Export screenshots
         if: always()
         run: |
@@ -192,11 +208,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ios-ui-screenshots
+          name: ios-ui-screenshots${{ matrix.suffix }}
           path: ${{ runner.temp }}/shots
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && matrix.shard == 'main'
         with:
           # The shots named in docs/devpost-media.md (01-scan, 02-items, ...), #242.
           name: devpost-screenshots
@@ -205,7 +221,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ios-ui-xcresult
+          name: ios-ui-xcresult${{ matrix.suffix }}
           path: |
             ${{ runner.temp }}/MooveUITests.xcresult
             ${{ runner.temp }}/MooveUITests-dark.xcresult
