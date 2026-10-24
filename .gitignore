@@ -52,3 +52,6 @@ ios/Moove/Resources/Info.plist
 
 # workflow agent worktrees
 .claude/worktrees/
+
+# Core ML models are downloaded by ios/scripts/fetch-models.sh (too big for git)
+ios/Moove/Resources/Models/

@@ -141,3 +141,18 @@ public enum DemoFixtures {
         ]
     }
 }
+
+extension DemoFixtures {
+    /// The demo bedroom as a scan import, for the "Load demo scan" fallback.
+    /// It goes through the same `importScan` reducer as a real scan.
+    public static func scanImport() -> ScanImport {
+        let items = inventory(owner: "demo").items
+        return ScanImport(
+            roomName: "Demo bedroom",
+            objects: items.map {
+                ScanObject(scanObjectId: $0.scanObjectId ?? "demo-\($0.id)", category: $0.category,
+                           widthM: $0.widthM, heightM: $0.heightM, depthM: $0.depthM, photoUrl: $0.photoUrls.first)
+            }
+        )
+    }
+}
