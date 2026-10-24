@@ -116,7 +116,9 @@ public struct LayoutSolver: Sendable {
     }
 
     func solve(_ items: [LayoutItem], style: Style, obstacles fixed: [OrientedRect], used seeded: [String: Double] = [:]) -> LayoutOption {
-        let rooms = plan.rooms.filter { $0.kind != .hallway && $0.polygon.count >= 3 }
+        // Hallways stay clear, unless the plan is only that room (a scanned "Entry").
+        let usable = plan.rooms.filter { $0.polygon.count >= 3 }
+        let rooms = usable.count == 1 ? usable : usable.filter { $0.kind != .hallway }
         var obstacles = doorKeepOuts() + fixed
         var used = seeded // footprint area placed per room
         var placements: [Placement] = []
