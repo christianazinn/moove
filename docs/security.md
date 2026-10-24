@@ -1,6 +1,6 @@
 # Security & responsible AI
 
-How Moove protects users' data and money, what is built today, and what is still open. Written for judges (Visa "trust & responsibility", Coinbase "controls and known limitations", Anthropic "where it could go wrong", Armadin security) and for the team. Task: #17. Last updated Sat Oct 24, early morning (follow-up pass over everything merged after #38).
+How Moove protects users' data and money, what is built today, and what is still open. Written for judges (Visa "trust & responsibility", Coinbase "controls and known limitations", Anthropic "where it could go wrong", Armadin security) and for the team. Task: #17. Last updated Sat Oct 24 (follow-up pass over everything merged after #38, then the e2e defaults from #133 and the replay guard).
 
 **Status labels:** ✅ built and tested · 🟡 partly built · ⏳ pending (linked issue).
 
@@ -121,6 +121,12 @@ Tests for every fix are in `agents/test/security-followup.test.ts` and `ios/Moov
 - **Fixture PII.**
   - Two realistic addresses in the listing-import tests became `Example St` placeholders. One was a real NYC building and unit.
   - A planted scam email on a real provider's domain now uses `example.invalid`.
+- **`npm run e2e` is safe by default** (#133, plus this pass). The e2e worker still loads the developer's `.env.local`, but it overrides everything that spends or reaches a real service:
+  - `LLM_REPLAY=replay`: a cassette miss fails and never calls Claude or writes a file. Live calls need `E2E_LLM=auto|record` or `--live`.
+  - `X402_SIMULATE=1`, so CDP keys never sign Base Sepolia payments unless `E2E_REAL_X402=1`. Visa is always simulated.
+  - `APIFY_TOKEN`, `FAL_KEY`, `PANGRAM_URL`/`PANGRAM_TOKEN`, `EBAY_CLIENT_SECRET`/`EBAY_REFRESH_TOKEN` and `AUTH0_CIBA_CLIENT_SECRET` are blanked. Listings post to the labeled simulated eBay, and approvals stay in the app. The eBay and Auth0 CIBA keys used to pass through.
+  - It refuses a non-local `E2E_URI`. CI runs `--replay` with no secrets.
+- **No `LLM_REPLAY` against maincloud.** With `replay`, `record` or `auto`, a file in `LLM_REPLAY_DIR` stands in for the model, or a live answer is written to disk. The worker now refuses to start when `LLM_REPLAY` is anything but `off` and `SPACETIME_URI` is maincloud (`replayGuardError` in `agents/src/integrations/anthropic.ts`). The live worker runs with it off (the `.env.example` default), so nothing changes there.
 
 **Proposed (contract change, backend lane): [#146](https://github.com/christianazinn/moove/issues/146)**
 - Pin the worker identity on databases other than `moove`. A `moove-demo` published to maincloud would be first-caller-wins, and that caller could redirect uploads.
@@ -147,12 +153,6 @@ Tests for every fix are in `agents/test/security-followup.test.ts` and `ios/Moov
 - **`.gitleaksignore`** lists exactly the two empty `FAL_KEY=` false positives (`7007d94b…:81` and `e7d7e512…:149`). `.gitleaks.toml` has only the two narrow Auth0 client-id allowlists.
 
 **Still open:**
-- **`npm run e2e` run locally.** Another agent is fixing `agents/scripts/e2e.ts` on `aiden/e2e-commerce-checks`.
-  - The e2e worker gets the developer's `.env.local`. It blanks `FAL_KEY` and `APIFY_TOKEN` and forces Visa to simulated.
-  - CDP keys pass through without `X402_SIMULATE=1`, so a dev with CDP keys **signs real (testnet) x402 payments**. eBay sandbox, Pangram and Auth0 CIBA keys pass through too.
-  - The default `LLM_REPLAY=auto` makes a **live Claude call on a cassette miss**, and writes a new tracked file under `fixtures/llm`.
-  - CI is safe: it runs `--replay`, which fails closed, and has no secrets.
-- **`LLM_REPLAY` on a deployed worker.** With `replay` or `auto`, any matching file in `LLM_REPLAY_DIR` stands in for the model. Don't set it on the maincloud worker. A guard that refuses replay against maincloud would make that a rule rather than a habit.
 - **SAM 3D web images** (`product-images.ts`).
   - Unless `PRODUCT_IMAGE_HOSTS` is set, they can come from any public https host. That leaves the resolve-then-fetch DNS-rebinding window open.
   - A body without a content-length is read whole before the size check.
