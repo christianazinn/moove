@@ -37,6 +37,7 @@ enum RoomScene {
         }
         room.addChild(objects)
         room.addChild(sunlight(for: geometry))
+        room.addChild(fillLight())
         return room
     }
 
@@ -143,8 +144,9 @@ enum RoomScene {
     // MARK: Objects
 
     /// One piece of furniture: a container (named "obj:<id>", the tap target)
-    /// holding the colored block, a thin colored base, and, once captured, the
-    /// item's real 3D model (`attachModel`).
+    /// holding a furniture-shaped placeholder, the measured box (selection
+    /// highlight), a thin colored base, and, once there is one, the item's real
+    /// 3D model (`attachModel`).
     private static func objectEntity(_ object: RoomGeometry.Object) -> Entity {
         let d = object.dimensions
         let container = Entity()
@@ -153,12 +155,27 @@ enum RoomScene {
         container.components.set(InputTargetComponent())
         container.components.set(CollisionComponent(shapes: [.generateBox(width: d.x, height: d.y, depth: d.z)]))
 
+        let color = RoomPalette.category(object.category)
         let radius = min(0.04, min(d.x, d.y, d.z) / 4)
+        // The measured box: a translucent highlight around a placed model when it's selected.
         let block = ModelEntity(mesh: .generateBox(width: d.x, height: d.y, depth: d.z, cornerRadius: radius),
-                                materials: [material(RoomPalette.category(object.category), roughness: 0.5)])
+                                materials: [material(color, roughness: 0.5)])
         block.name = "block"
-        block.components.set(GroundingShadowComponent(castsShadow: true))
+        block.isEnabled = false
         container.addChild(block)
+
+        // Until there's a model: a soft, furniture-shaped stand-in (a table's top and legs,
+        // a sofa's seat, back and arms) inside the same box. See MooveKit.FurniturePlaceholder.
+        let placeholder = Entity()
+        placeholder.name = "placeholder"
+        for part in FurniturePlaceholder.parts(category: object.category, size: d) {
+            let piece = ModelEntity(mesh: .generateBox(width: part.size.x, height: part.size.y, depth: part.size.z, cornerRadius: part.cornerRadius),
+                                    materials: [material(color, roughness: 0.65)])
+            piece.position = part.center
+            piece.components.set(GroundingShadowComponent(castsShadow: true))
+            placeholder.addChild(piece)
+        }
+        container.addChild(placeholder)
 
         // Shown under captured models so color-by-category/decision still reads.
         let base = ModelEntity(mesh: .generateBox(width: d.x, height: 0.025, depth: d.z, cornerRadius: 0.01),
@@ -237,6 +254,16 @@ enum RoomScene {
         sun.shadow = DirectionalLightComponent.Shadow(maximumDistance: 12, depthBias: 1.5)
         sun.look(at: .zero, from: SIMD3(2.5, 6, 3.5), relativeTo: nil)
         return sun
+    }
+
+    /// A soft, shadowless light from the opposite side, so the side of furniture
+    /// away from the sun isn't flat and dark.
+    private static func fillLight() -> Entity {
+        let fill = DirectionalLight()
+        fill.light.intensity = 700
+        fill.light.color = UIColor(red: 0.9, green: 0.94, blue: 1, alpha: 1)
+        fill.look(at: .zero, from: SIMD3(-3, 4, -2.5), relativeTo: nil)
+        return fill
     }
 
     static func material(_ color: UIColor, roughness: Float, glow: Bool = false) -> PhysicallyBasedMaterial {
