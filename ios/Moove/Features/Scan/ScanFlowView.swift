@@ -42,9 +42,9 @@ struct ScanFlowView: View {
         switch session.phase {
         case .capturing:
             ZStack(alignment: .top) {
-                RoomCaptureContainer(stopRequested: $stopRequested, recorder: session.frameRecorder, onFound: { found = $0 }) { result, extras in
+                RoomCaptureContainer(stopRequested: $stopRequested, recorder: session.frameRecorder, onFound: { found = $0 }) { result, extras, photographer in
                     switch result {
-                    case .success(let room): session.captured(room, extras: extras)
+                    case .success(let room): session.captured(room, extras: extras, photographer: photographer)
                     case .failure(let error): session.phase = .failed(error.localizedDescription)
                     }
                 }
@@ -57,13 +57,13 @@ struct ScanFlowView: View {
                 RoomVisualizationView(geometry: geometry)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("\(geometry.objects.count) pieces of furniture, \(geometry.walls.count) walls, \(geometry.openings.count) doors & windows")
+                            Text("\(geometry.objects.count) items, \(geometry.walls.count) walls, \(geometry.openings.count) doors & windows")
                                 .monoMeta()
                                 .fixedSize(horizontal: false, vertical: true)
                             Button {
                                 session.phase = .photos
                             } label: {
-                                Text("Looks right: photograph items").frame(maxWidth: .infinity)
+                                Text("Looks right: check photos").frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.pill(.primary))
                         }
@@ -144,7 +144,7 @@ struct ScanFlowView: View {
                 PageHeader(
                     eyebrow: "01 — Scan · Photos",
                     title: "Photograph each item.",
-                    lede: "Take a photo of each item so Moove can tell what it is, its brand and its condition."
+                    lede: "Moove took a photo of each item it could see clearly during the scan. Tap an item to retake its photo, or take one for any item still missing a photo, so Moove can tell what it is, its brand and its condition."
                 )
                 .padding(.top, 16)
                 .padding(.bottom, 28)
@@ -189,6 +189,12 @@ struct ScanFlowView: View {
                 ListHeader(title: "Photographed", count: "\(session.photos.count) of \(session.objects.count)")
                     .padding(.top, 40)
                     .chromeRow()
+                if session.autoPhotosPending {
+                    Label("Picking the best scan frame for each item…", systemImage: "photo.stack")
+                        .monoMeta()
+                        .padding(.vertical, 8)
+                        .ledgerListRow()
+                }
                 ForEach(session.objects) { object in
                     let done = session.photos[object.id] != nil
                     Button { photographing = object } label: {
@@ -199,6 +205,10 @@ struct ScanFlowView: View {
                                 Text(dims(object)).monoMeta()
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            if session.autoPhotos.contains(object.id) {
+                                Text("Auto").monoMeta()
+                                    .accessibilityLabel("Photo taken automatically from the scan")
+                            }
                             Image(systemName: done ? "checkmark.circle.fill" : "camera")
                                 .font(.system(size: 17, weight: done ? .regular : .light))
                                 .foregroundStyle(done ? Theme.accentStrong : Theme.text)
