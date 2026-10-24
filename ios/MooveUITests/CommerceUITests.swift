@@ -125,15 +125,12 @@ final class CommerceUITests: XCTestCase {
 
     /// #140 claimed dark-mode contrast: the same read-only pass in dark mode.
     func testCommerceScreensInDarkMode() {
-        // `-AppleInterfaceStyle Dark` is ignored on iOS; the Simulator-wide appearance works (reset in tearDown).
+        // `-AppleInterfaceStyle Dark` is ignored on iOS, and this alone doesn't take on the CI Simulator,
+        // so CI also runs this test by itself after `simctl ui appearance dark`.
         XCUIDevice.shared.appearance = .dark
+        addTeardownBlock { @MainActor in XCUIDevice.shared.appearance = .light }
         launchOfflineDemo()
         tourCommerceScreens(prefix: "dark")
-    }
-
-    override func tearDown() {
-        XCUIDevice.shared.appearance = .light
-        super.tearDown()
     }
 
     // MARK: Helpers
