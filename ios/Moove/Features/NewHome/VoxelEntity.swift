@@ -24,9 +24,10 @@ enum VoxelEntity {
     }
 
     /// A voxel model for one piece of furniture: origin at the bottom center, front toward +z.
-    /// Falls back to a plain box if the model can't be built.
-    static func furniture(_ item: LayoutItem) -> ModelEntity {
-        let spec = VoxelItemSpec(item)
+    /// `wallMounted`: the flat wall-hung variant (no easel leg / TV feet). Falls back to a plain
+    /// box if the model can't be built.
+    static func furniture(_ item: LayoutItem, wallMounted: Bool = false) -> ModelEntity {
+        let spec = wallMounted ? VoxelModels.wallVariant(VoxelItemSpec(item)) : VoxelItemSpec(item)
         let r: Resources? = furnitureCache[spec] ?? {
             let made = resources(VoxelMesher.mesh(VoxelModels.build(spec), centered: true), name: spec.name)
             if let made { furnitureCache[spec] = made }
@@ -38,7 +39,7 @@ enum VoxelEntity {
             return e
         }
         // generateBox is centered; lift it inside a holder so the origin is the bottom, like voxel meshes.
-        let w = Float(item.widthM), h = Float(item.heightM), d = Float(item.depthM)
+        let w = Float(item.widthM), h = Float(item.heightM), d = Float(spec.depthM)
         let body = ModelEntity(mesh: .generateBox(width: w, height: h, depth: d), materials: [material(0xB98D5E)])
         body.position.y = h / 2
         let holder = ModelEntity()

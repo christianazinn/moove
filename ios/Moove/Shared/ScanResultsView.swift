@@ -194,13 +194,18 @@ struct EstimatedRoom {
     /// True when the room and positions come from the scan rather than an estimate.
     var scanned = false
 
-    /// The scanned room with each item where the scan found it. Items the scan can't match
-    /// (added by photo, no RoomPlan object) are left out of the 3D view; they stay in the list.
+    /// The scanned room with each item where the scan found it. Unmatched small things and
+    /// wall pieces (added by photo, no RoomPlan object) go on the scanned furniture / walls;
+    /// other unmatched items are left out of the 3D view and stay in the list.
     /// `layoutItems` are `items` as layout items (with their scanned colors); defaults to plain ones.
     static func scanned(name: String, geometry: RoomGeometry, items: [Item], layoutItems: [LayoutItem]? = nil) -> EstimatedRoom {
         let result = geometry.dollhouse(roomName: name, items: items)
         let b = result.plan.bounds
-        return EstimatedRoom(plan: result.plan, items: layoutItems ?? items.map(LayoutItem.init), placements: result.placements,
+        let layoutItems = layoutItems ?? items.map(LayoutItem.init)
+        // RoomPlan doesn't locate small things (lamps, books, art): put them on the scanned
+        // furniture and walls so the room looks lived-in. Scanned wall heights are kept.
+        let placements = PropPlacer(plan: result.plan).place(result.placements, items: layoutItems, extraRoom: name)
+        return EstimatedRoom(plan: result.plan, items: layoutItems, placements: placements,
                              widthM: b.width, depthM: b.depth, scanned: true)
     }
 
@@ -220,7 +225,8 @@ struct EstimatedRoom {
                 windows: [WallOpening(from: PlanPoint(w / 2 - 0.7, 0), to: PlanPoint(w / 2 + 0.7, 0))]
             )
             let option = LayoutSolver(plan: plan).solve(items, style: .byFunction)
-            best = EstimatedRoom(plan: plan, items: items, placements: option.placements, widthM: w, depthM: d)
+            let placements = PropPlacer(plan: plan).place(option.placements, items: items)
+            best = EstimatedRoom(plan: plan, items: items, placements: placements, widthM: w, depthM: d)
             if option.unplaced.isEmpty { break }
             area *= 1.25
         }
