@@ -1,0 +1,13 @@
+{
+  "model": "claude-sonnet-5-5",
+  "output": {
+    "name": "brown wood rectangular table with red legs",
+    "category": "table",
+    "material": "wood top with painted red metal legs",
+    "brand": "",
+    "condition": "good",
+    "fragile": false,
+    "maybeSentimental": false,
+    "notes": "Image is tiny and low-detail, showing a brown rectangular top on thin red-orange legs with no visible logos or wear, so brand is blank and condition is assumed good."
+  }
+}
