@@ -120,7 +120,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.ios == 'true'
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 30  # ~15-19 min observed (macOS runner speed varies)
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode and a simulator
