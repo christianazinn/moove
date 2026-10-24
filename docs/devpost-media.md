@@ -47,21 +47,21 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 ### 1. Scan home: the turning voxel dollhouse
 - **Source:** CI `01-scan`. For a GIF, record 3 to 4 s of the hero turning.
 - **Screen:** Scan tab (first tab). No taps.
-- **State:** "01 — Scan", "Scan a room.", the hero with the **DEMO** tag and "Bedroom · 12 objects", the back walls full height and the front walls low as it turns, then **Scan a room** and **Load demo scan** below. The tab bar shows all five tabs, with the Sell & Buy badge at 2.
+- **State:** "Scan", "Scan a room.", the hero with the **DEMO** tag and "Bedroom · 12 objects", the back walls full height and the front walls low as it turns, then **Scan a room** and **Load demo scan** below. The tab bar shows all five tabs, with the Sell & Buy badge at 2.
 - **Caption:** "Scan a room with LiDAR and Moove rebuilds it as a voxel dollhouse, every piece where it stood (our recorded demo bedroom)."
 - **Track:** Spacetime (the scan imports through `import_scan_v2`), Best Planet-First Hack (the story starts here).
 - **Live swap:** a real LiDAR scan's finished page on the Demo backend (same layout, no Demo tag) is better if one is ready. Change the caption to "a real scan".
 
 ### 2. Scan finished: the room as a dollhouse
 - **Source:** by hand. Scan tab > **Load demo scan**.
-- **State:** "01 — Scan · Done", the **DEMO SCAN** tag, "12 items added", "A recorded bedroom, not a live scan. Offline demo: items, prices and colors are fixture data, as if the agents had run.", then the dollhouse: real walls with windows and a door, **back walls full height, near walls cut at 1.1 m**, items in their scanned spots and colors. Below it, "13 objects · 4.0 × 3.5 m", "1 placed by estimate", and the inventory starting with "Full size metal bed frame". Drag to turn it so two tall back walls frame the room before taking the shot.
+- **State:** "Scan · Done", the **DEMO SCAN** tag, "12 items added", "A recorded bedroom, not a live scan. Offline demo: items, prices and colors are fixture data, as if the agents had run.", then the dollhouse: real walls with windows and a door, **back walls full height, near walls cut at 1.1 m**, items in their scanned spots and colors. Below it, "13 objects · 4.0 × 3.5 m", "1 placed by estimate", and the inventory starting with "Full size metal bed frame". Drag to turn it so two tall back walls frame the room before taking the shot.
 - **Caption:** "The finished scan: real walls, doors and windows, tall at the back and cut low at the front, each piece colored from the scan's own frames (demo scan shown)."
 - **Track:** Spacetime, Anthropic (the photo sweep runs next and names what the scanner couldn't).
 - Loading the demo scan adds a second room, so **relaunch** before images 7 and 8.
 
 ### 3. Items > Review: keep, sell, donate, trash
 - **Source:** CI `04-review`.
-- **State:** "03 — Review", "Your call.", the **Needs you** deck ("1 of 1") with the **Yamaha acoustic guitar** card ("Sentimental" tag, $109, "Possibly sentimental - your call") and the Sell / Trash / Donate / Keep buttons under it, then the top of the **Where it goes** board: Keep (7 items, → new home), Sell ($500 expected sales), Donate and Trash tiles with the items' voxel models fanned on them.
+- **State:** "Review", "Your call.", the **Needs you** deck ("1 of 1") with the **Yamaha acoustic guitar** card ("Sentimental" tag, $109, "Possibly sentimental - your call") and the Sell / Trash / Donate / Keep buttons under it, then the top of the **Where it goes** board: Keep (7 items, → new home), Sell ($500 expected sales), Donate and Trash tiles with the items' voxel models fanned on them.
 - **Caption:** "Moove suggests keep, sell, donate or trash with a reason for each, and leaves possibly sentimental items like the guitar to you (fixture data)."
 - **Track:** Anthropic (knowing where the model shouldn't decide), Best Planet-First Hack (donate and resell over trash).
 
@@ -86,7 +86,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 
 ### 7. Move > New Home: the fly-in
 - **Source:** by hand, best as a **GIF** (3 to 6 s). On a fresh fixture first do the video's taps so bought pieces fly in too: Sell & Buy > Approvals > **Approve** the Aeron; Shopping > Desk chair > **Choose** the Target "Mesh task chair with arms, black"; back on Shopping, **Approve** the sofa ($429.99). Then Move tab > **New Home** > the **"Demo house · 2 bed, 1 bath"** card > **Use this home**, and tap **Fly in** to replay.
-- **State:** "06 — New home", "Demo house · 2 bed, 1 bath", "6 rooms · 112 m²", the **DEMO HOUSE** tag, the voxel house with the back walls tall, and the kept pieces flying from the scanned room (drawn beside the house) to their new spots, plus the bought ones ("8" memory foam mattress, Full", "78" upholstered sofa, gray"). **Fly in** and **Save layout** under it.
+- **State:** "New home", "Demo house · 2 bed, 1 bath", "6 rooms · 112 m²", the **DEMO HOUSE** tag, the voxel house with the back walls tall, and the kept pieces flying from the scanned room (drawn beside the house) to their new spots, plus the bought ones ("8" memory foam mattress, Full", "78" upholstered sofa, gray"). **Fly in** and **Save layout** under it.
 - **Caption:** "Everything you kept, plus what the buy agent bought, flies from its old spot into the new home's 3D layout (demo house shown)."
 - **Track:** Visa (bought items land in the new home), Best Planet-First Hack.
 

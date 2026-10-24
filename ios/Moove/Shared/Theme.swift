@@ -181,7 +181,7 @@ struct PageHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(eyebrow).eyebrow().padding(.bottom, 12)
+            Text(Self.unnumbered(eyebrow)).eyebrow().padding(.bottom, 12)
             Text(title)
                 .pageTitle()
                 .fixedSize(horizontal: false, vertical: true)
@@ -194,6 +194,13 @@ struct PageHeader: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Drops a leading page number ("06 — Spending" → "Spending"): with five tabs and their
+    /// segments the numbers couldn't stay in order, so pages show just their name.
+    static func unnumbered(_ eyebrow: String) -> String {
+        guard let r = eyebrow.range(of: #"^\d+\s*—\s*"#, options: .regularExpression) else { return eyebrow }
+        return String(eyebrow[r.upperBound...])
     }
 }
 
