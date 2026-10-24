@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { glbUrlFrom, reconstruct, Sam3dError } from '../src/integrations/sam3d.js';
+import { glbUrlFrom, reconstruct, Sam3dError, Sam3dUnavailableError } from '../src/integrations/sam3d.js';
 import { needsModel, promptFor } from '../src/agents/sam3d.js';
 import type { Item } from '../src/module_bindings/types.js';
 
@@ -68,4 +68,13 @@ test('reconstruct: rejects a download that is not a GLB, and missing keys', asyn
   const { f } = fakeFal({ model_glb: { url: 'https://cdn/m.glb' } }, Buffer.from('<html>oops</html>'));
   await assert.rejects(reconstruct({ imageUrl: 'data:image/jpeg;base64,AAAA', prompt: 'office chair' }, { key: 'test-key', fetch: f, pollMs: 1 }), Sam3dError);
   await assert.rejects(reconstruct({ imageUrl: 'x', prompt: 'y' }, { key: '', fetch: f }), /FAL_KEY/);
+});
+
+test('reconstruct: an account or quota refusal is "unavailable", a bad photo is a plain failure', async () => {
+  const answer = (status: number) => (async () => new Response('{"detail":"Exhausted balance"}', { status })) as unknown as typeof fetch;
+  const req = { imageUrl: 'data:image/jpeg;base64,AAAA', prompt: 'chair' };
+  for (const status of [401, 403, 429, 503]) {
+    await assert.rejects(reconstruct(req, { key: 'k', fetch: answer(status) }), Sam3dUnavailableError, String(status));
+  }
+  await assert.rejects(reconstruct(req, { key: 'k', fetch: answer(400) }), (e: unknown) => e instanceof Sam3dError && !(e instanceof Sam3dUnavailableError));
 });

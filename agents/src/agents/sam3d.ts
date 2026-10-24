@@ -10,7 +10,7 @@ import { loadImage, structuredCall } from '../integrations/anthropic.js';
 import type { ImageInput } from '../integrations/photos.js';
 import { imageSize } from '../integrations/imagesize.js';
 import { compImages, IMAGE_SEARCH_ACTOR, loadWebImage, searchProductImages, type ImageSearchResult, type WebImage } from '../integrations/product-images.js';
-import { reconstruct, SAM3D_MODEL, type Sam3dRequest, type Sam3dResult } from '../integrations/sam3d.js';
+import { reconstruct, SAM3D_MODEL, Sam3dUnavailableError, type Sam3dRequest, type Sam3dResult } from '../integrations/sam3d.js';
 import { queryFor } from './pricing.js';
 import {
   buildPickPrompt,
@@ -28,6 +28,8 @@ import {
 const inFlight = new Set<bigint>();
 // Items that got a new photo while their model was being built: re-queued when the build ends.
 const stale = new Set<bigint>();
+// Items fal couldn't run (no balance, rate limit, outage): not retried before this time.
+const retryAt = new Map<bigint, number>();
 let spentUsd = 0;
 
 /** Own photos sent to the picker: the scan crop plus the newest few. */
@@ -70,12 +72,14 @@ export function resetSam3dState(): void {
   spentUsd = 0;
   inFlight.clear();
   stale.clear();
+  retryAt.clear();
 }
 
 /** Items that should get a SAM 3D model: a photo, vision finished (so the prompt is the real
  *  name), no captured model, and not already being built. */
-export function needsModel(it: Item): boolean {
+export function needsModel(it: Item, now = Date.now()): boolean {
   return (
+    (retryAt.get(it.id) ?? 0) <= now &&
     it.modelStatus === 'pending' &&
     it.modelSource !== 'capture' &&
     it.photoUrls.length > 0 &&
@@ -159,7 +163,10 @@ function sourceData(c: Candidate) {
   };
 }
 
-export async function build(conn: Conn, it: Item, deps: Sam3dDeps = currentDeps): Promise<void> {
+export type BuildOutcome = 'done' | 'failed' | 'retry-later' | 'refused';
+
+export async function build(conn: Conn, it: Item, deps: Sam3dDeps = currentDeps): Promise<BuildOutcome> {
+  let outcome: BuildOutcome = 'failed';
   inFlight.add(it.id);
   stale.delete(it.id);
   const ev = (kind: 'plan' | 'tool_call' | 'result' | 'error', message: string, data?: unknown) =>
@@ -168,7 +175,7 @@ export async function build(conn: Conn, it: Item, deps: Sam3dDeps = currentDeps)
     const fal = config.sam3d.usdPerRun;
     if (!canSpend(fal)) {
       ev('error', `Spend cap reached (${money(config.sam3d.maxUsd)}): not building a 3D model of "${it.name}"`, { refused: true, spentUsd, capUsd: config.sam3d.maxUsd });
-      return;
+      return (outcome = 'refused');
     }
     conn.reducers.setItemStage({ itemId: it.id, stage: 'running', field: 'model' });
     const prompt = promptFor(it);
@@ -230,22 +237,34 @@ export async function build(conn: Conn, it: Item, deps: Sam3dDeps = currentDeps)
         ev('result', `3D model of "${prompt}" ready from the ${describe(c)} (${(result.glb.length / 1024).toFixed(0)} KB)`, {
           url, requestId: result.requestId, bytes: result.glb.length, attempt: k + 1, ...sourceData(c),
         });
-        return;
+        return (outcome = 'done');
       } catch (err) {
+        if (err instanceof Sam3dUnavailableError) {
+          // fal can't run anything right now: don't burn the next image or mark the item failed.
+          spentUsd -= fal; // the request was refused, nothing ran
+          retryAt.set(it.id, Date.now() + config.sam3d.retryLaterSec * 1000);
+          conn.reducers.setItemStage({ itemId: it.id, stage: 'pending', field: 'model' });
+          ev('error', `SAM 3D unavailable, will retry in ${Math.round(config.sam3d.retryLaterSec / 60)} min: ${err.message}`, {
+            retryLater: true, retryInSec: config.sam3d.retryLaterSec, attempt: k + 1, ...sourceData(c),
+          });
+          return (outcome = 'retry-later');
+        }
         const next = tries[k + 1];
         ev('error', `SAM 3D failed on the ${describe(c)}: ${String(err)}${next ? `; trying the ${describe(next.candidate)}` : ''}`, { attempt: k + 1, ...sourceData(c) });
       }
     }
     conn.reducers.setItemStage({ itemId: it.id, stage: 'failed', field: 'model' });
     ev('error', `3D model of "${prompt}" failed after ${tries.length} attempt(s)`);
+    return (outcome = 'failed');
   } catch (err) {
     conn.reducers.setItemStage({ itemId: it.id, stage: 'failed', field: 'model' });
     ev('error', `3D model failed: ${String(err)}`);
+    return (outcome = 'failed');
   } finally {
     inFlight.delete(it.id);
     // A photo added mid-build re-queued the item, but our own set_item_model / stage write landed
     // after it and cleared that. Put it back so the new photo gets considered.
-    if (stale.delete(it.id)) conn.reducers.setItemStage({ itemId: it.id, stage: 'pending', field: 'model' });
+    if (stale.delete(it.id) && outcome !== 'retry-later') conn.reducers.setItemStage({ itemId: it.id, stage: 'pending', field: 'model' });
   }
 }
 
@@ -267,7 +286,13 @@ export const sam3dAgent: Agent = {
         const it = queue.shift()!;
         if (!needsModel(it)) continue;
         running++;
-        void build(conn, it, currentDeps).finally(() => {
+        void build(conn, it, currentDeps).then(outcome => {
+          // After the back-off, look at the item again (no row update would wake it up).
+          if (outcome !== 'retry-later') return;
+          setTimeout(() => {
+            for (const row of conn.db.item.iter()) if (row.id === it.id) maybe(row);
+          }, config.sam3d.retryLaterSec * 1000).unref?.();
+        }).finally(() => {
           running--;
           pump();
         });
@@ -285,6 +310,8 @@ export const sam3dAgent: Agent = {
     conn.db.item.onInsert((_ctx, it) => maybe(it));
     conn.db.item.onUpdate((_ctx, old, it) => {
       if (inFlight.has(it.id) && it.photoUrls.length > old.photoUrls.length && it.modelSource !== 'capture') stale.add(it.id);
+      // A new photo is a reason to try again now, even while backing off.
+      if (it.photoUrls.length > old.photoUrls.length) retryAt.delete(it.id);
       maybe(it);
     });
   },

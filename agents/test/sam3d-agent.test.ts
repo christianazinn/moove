@@ -13,7 +13,8 @@ process.env.SAM3D_IMAGE_SEARCH_MAX_USD = '0.03';
 process.env.SAM3D_WEB_IMAGES_MAX = '4';
 process.env.SAM3D_MAX_ATTEMPTS = '2';
 process.env.SAM3D_CONCURRENCY = '1';
-const { build, resetSam3dState, sam3dAgent, setSam3dDeps } = await import('../src/agents/sam3d.js');
+const { build, needsModel, resetSam3dState, sam3dAgent, setSam3dDeps } = await import('../src/agents/sam3d.js');
+const { Sam3dUnavailableError } = await import('../src/integrations/sam3d.js');
 type Deps = import('../src/agents/sam3d.js').Sam3dDeps;
 type PickOutput = import('../src/agents/sam3d-select.js').PickOutput;
 
@@ -180,6 +181,26 @@ test('every attempt failing marks the model failed', async () => {
   assert.equal(calls.reconstruct.length, 2, 'SAM3D_MAX_ATTEMPTS');
   assert.deepEqual(f.stages, ['running', 'failed']);
   assert.match(f.events.at(-1)!.message, /failed after 2 attempt/);
+});
+
+test('fal unavailable (e.g. no balance): one try, item left pending and backed off', async () => {
+  resetSam3dState();
+  const it = baseItem();
+  const f = fakeConn([it]);
+  const { deps, calls } = fakeDeps({
+    reconstruct: async req => {
+      calls.reconstruct.push(req);
+      throw new Sam3dUnavailableError('submit: 403 {"detail":"Exhausted balance"}');
+    },
+  });
+  assert.equal(await build(f.conn, it, deps), 'retry-later');
+  assert.equal(calls.reconstruct.length, 1, "doesn't burn the next image");
+  assert.deepEqual(f.stages, ['running', 'pending']);
+  const err = f.events.at(-1)!;
+  assert.match(err.message, /unavailable, will retry/);
+  assert.equal(data(err).retryLater, true);
+  assert.equal(needsModel(f.get(1n)), false, 'backing off');
+  assert.equal(needsModel(f.get(1n), Date.now() + 601_000), true, 'after the back-off');
 });
 
 test('generic items skip the web; a single photo skips Claude', async () => {
