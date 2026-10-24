@@ -44,6 +44,25 @@ struct ScanFlowView: View {
                     Button("Done") { stopRequested = true }.disabled(stopRequested)
                 }
             }
+        case .reviewing:
+            if let geometry = session.geometry {
+                RoomVisualizationView(geometry: geometry)
+                    .safeAreaInset(edge: .bottom) {
+                        VStack(spacing: 6) {
+                            Text("\(geometry.objects.count) pieces of furniture, \(geometry.walls.count) walls, \(geometry.openings.count) doors & windows")
+                                .font(.footnote).foregroundStyle(.secondary)
+                            Button {
+                                session.phase = .photos
+                            } label: {
+                                Text("Looks right: photograph items").frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                        }
+                        .padding()
+                        .background(.bar)
+                    }
+            }
         case .photos:
             photoChecklist
         case .uploading(let done, let total):
