@@ -137,10 +137,16 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         let demo = Dictionary(DemoFixtures.inventory(owner: "demo").items.compactMap { item in item.scanObjectId.map { ($0, item) } },
                               uniquingKeysWith: { a, _ in a })
         try mutateAuthed { s, me in
-            let roomId = takeId()
+            let roomId = takeId(), scanId = takeId()
             s.rooms.append(Room(id: roomId, owner: me, name: scan.roomName, joinCode: Self.joinCode(forRoomId: roomId)))
-            s.scans.append(Scan(id: takeId(), owner: me, roomId: roomId, usdzUrl: scan.usdzUrl, capturedRoomJsonUrl: scan.capturedRoomJsonUrl))
+            s.scans.append(Scan(id: scanId, owner: me, roomId: roomId, usdzUrl: scan.usdzUrl, capturedRoomJsonUrl: scan.capturedRoomJsonUrl))
+            var skipped: [ScanSkips.Entry] = []
             for (object, attributes) in zip(scan.objects, attributes) {
+                // Like the module (#177): skip impossible objects, import the rest.
+                if let why = Self.unimportable(object) {
+                    skipped.append(ScanSkips.Entry(id: String(object.scanObjectId.prefix(64)), why: why))
+                    continue
+                }
                 var item = Item(
                     id: takeId(), owner: me, roomId: roomId, scanObjectId: object.scanObjectId,
                     name: object.category.capitalized, category: object.category,
@@ -150,7 +156,26 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
                 if let template = demo[object.scanObjectId] { Self.identifyDemo(&item, as: template) }
                 s.items.append(item)
             }
+            if !skipped.isEmpty {
+                let json = (try? JSONEncoder().encode(skipped.prefix(50).map { ["id": $0.id, "why": $0.why] }))
+                    .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+                s.agentEvents.append(AgentEvent(
+                    id: takeId(), owner: me, agent: "scan", kind: .error,
+                    message: "Skipped \(skipped.count) scanned object(s) with impossible sizes or labels: "
+                        + skipped.prefix(5).map(\.why).joined(separator: ", "),
+                    refTable: "scan", refId: scanId, dataJson: json))
+            }
         }
+    }
+
+    /// `importable` in the module: sizes must be finite, 0...30 m; names ≤120, ids ≤64.
+    static func unimportable(_ o: ScanObject) -> String? {
+        for (k, v) in [("width_m", o.widthM), ("height_m", o.heightM), ("depth_m", o.depthM)] where !v.isFinite || v < 0 || v > 30 {
+            return "\(k)=\(v)"
+        }
+        if o.category.count > 120 { return "name too long" }
+        if o.scanObjectId.count > 64 { return "scan_object_id too long" }
+        return nil
     }
 
     /// Stand-in for the vision, pricing and sorting agents on the demo bedroom ("Load demo scan"
