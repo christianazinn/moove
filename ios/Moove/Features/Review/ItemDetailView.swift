@@ -72,6 +72,7 @@ struct ItemDetailView: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Disposition")
+            .accessibilityIdentifier("item.disposition")
             if item.disposition == .undecided {
                 Text("Undecided. Pick one.").monoMeta()
             }

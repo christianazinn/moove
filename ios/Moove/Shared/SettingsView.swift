@@ -181,5 +181,6 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("settings.dataSource.\(kind.rawValue)")
     }
 }
