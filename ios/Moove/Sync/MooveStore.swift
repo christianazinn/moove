@@ -212,7 +212,8 @@ final class MooveStore {
         await run { try await $0.addScanPhoto(scanId: scanId, url: url) }
     }
 
-    func setDisposition(_ disposition: Disposition, for item: Item) async {
+    @discardableResult
+    func setDisposition(_ disposition: Disposition, for item: Item) async -> Bool {
         await run { try await $0.setDisposition(itemId: item.id, disposition: disposition) }
     }
 

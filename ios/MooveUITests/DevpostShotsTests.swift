@@ -22,12 +22,16 @@ final class DevpostShotsTests: XCTestCase {
         open(tab: "Items", segment: "Inventory")
         shot("02-items")
 
-        // 4. Items > Review (before 3b, which opens an item from here).
+        // 4. Items > Review (before 3b, which opens an item from here): the Needs you deck
+        // (the guitar) over the Where it goes board.
         open(tab: "Items", segment: "Review")
+        _ = byId("review.deck").waitForExistence(timeout: slow)
         shot("04-review")
 
-        // 3b. Review > Office chair: the price and its comparable listings.
-        let chair = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Office chair'")).firstMatch
+        // 3b. Review > Sell > Office chair: the price and its comparable listings.
+        let sell = byId("review.pile.sell")
+        if scrollTo(sell) { sell.tap() }
+        let chair = byId("review.item.11")
         if scrollTo(chair) {
             chair.tap()
             XCTAssertTrue(app.navigationBars["Office chair"].waitForExistence(timeout: slow), "Office chair detail")
@@ -109,8 +113,9 @@ final class DevpostShotsTests: XCTestCase {
         for up in [true, false] {
             for _ in 0..<swipes {
                 if element.exists, element.isHittable { return true }
-                let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: up ? 0.7 : 0.35))
-                let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: up ? 0.35 : 0.7))
+                // Near the left edge, in the gutter: a drag on Review's deck card would decide it.
+                let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: up ? 0.7 : 0.35))
+                let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: up ? 0.35 : 0.7))
                 start.press(forDuration: 0.05, thenDragTo: end)
             }
         }

@@ -35,6 +35,8 @@ public struct ReviewTotals: Equatable, Sendable {
     public var volumeToMoveM3: Double
     public var needsYou: Int
     public var divertedFromLandfill: Int
+    /// Rough weight of the sell + donate items (`MoveSummary.estimatedKg`).
+    public var divertedKg: Double = 0
 }
 
 public enum Review {
@@ -59,7 +61,8 @@ public enum Review {
             itemsToMove: keep.count,
             volumeToMoveM3: keep.map(\.volumeM3).reduce(0, +),
             needsYou: items.filter { ReviewSection.of($0) == .needsYou }.count,
-            divertedFromLandfill: items.filter { $0.disposition == .sell || $0.disposition == .donate }.count
+            divertedFromLandfill: items.filter { $0.disposition == .sell || $0.disposition == .donate }.count,
+            divertedKg: items.filter { $0.disposition == .sell || $0.disposition == .donate }.map(MoveSummary.estimatedKg).reduce(0, +)
         )
     }
 }
