@@ -269,6 +269,14 @@ import Testing
         #expect(s.shoppingItems.first { $0.id == 52 }?.status == .found)
     }
 
+    @Test func plantedScamShowsOnlyItsFraudScore() async throws {
+        let s = await latest(try await connectedDemo())
+        let planted = try #require(s.deals.first { $0.id == 76 })
+        #expect(planted.fraudScore == 0.85 && planted.isFraudBlocked)
+        #expect(!planted.sellerInfo.contains("score"))
+        #expect(planted.sellerDetails == "Planted demo scam (not a real listing) · new · ships · message seller")
+    }
+
     @Test func chooseDealRejectsMismatches() async throws {
         let backend = try await connectedDemo()
         await #expect(throws: FixtureBackend.Failure.dealDoesNotMatchItem) {

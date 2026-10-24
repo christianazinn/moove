@@ -10,7 +10,7 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 - Judged on usefulness, technical design, ease of reuse, and product feedback. Not judged on code volume or money spent. Real money is not required. **Label simulated actions**, keep credentials private, and don't manage other people's funds.
 - Submit:
   - [x] project summary (who it's for, what it does, which Coinbase tools)
-  - [ ] demo + repo with setup instructions (repo + setup done in the doc below, and pricing now pays over x402 since #46. The live in-app log is wired: #28 maps `payment` and `agent_event` into the live iOS backend (`ios/Moove/Sync/SpacetimeBackend+Contract.swift`), pending verification on a device. Still missing: the demo video)
+  - [ ] demo + repo with setup instructions (repo + setup done in the doc below, and pricing now pays over x402 since #46. The live in-app log is wired: #28 maps `payment` and `agent_event` into the live iOS backend (`ios/Moove/Sync/SpacetimeBackend+Contract.swift`), pending verification on a device. Every simulated x402 step is labeled `[SIMULATED]` (#154), and the e2e test in CI shows calls past the budget refused before paying (#133). Still missing: the demo video)
   - [x] **architecture diagram**, controls and known limitations (whole-app security controls: [`docs/security.md`](security.md))
   - [x] **builder feedback** (biggest blocker, how we worked around it, the missing capability we want most)
 
@@ -26,7 +26,7 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 - [ ] Demo the two-phone live sync and the live spending log, and show the agents coordinating through tables.
   - Agents coordinating through tables: **done on the worker side** (vision -> pricing -> listing -> approval, each step an `agent_event` row; `spacetime/src/index.ts`).
   - Live data in the app, including the spending log: **wired on `main`** (#28). `ios/Moove/Sync/SpacetimeBackend+Contract.swift` subscribes per identity and maps every table, including `payment`, `agent_event`, `shopping_item` and `deal`. Live updates were checked against a local server, not yet on a device.
-  - Two-phone live sync: share / join a room is in open PR #78 (#10). Not yet tested on two phones.
+  - Two-phone live sync: share / join a room is on `main` (#78, #10). Not yet tested on two phones.
 
 **Apify** ($5k pool for the top 5, plus $400 Best Actor)
 - Use Apify meaningfully. Best Actor means building and publishing an Actor during the event (stretch: a "moving comps" Actor).
@@ -36,8 +36,8 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 
 **Visa: Reimagining Shopping** ($5,000)
 - Judged on innovation 25%, UX 25%, technical execution 20%, commerce impact 15%, trust & responsibility 15%.
-- [ ] Use the Visa Starter Pack tooling for checkout (#15). Built (#40): Visa Acceptance (CyberSource) REST sandbox backend, tested against a fake server. Real sandbox calls (keys in place) fail with HTTP 502 SYSTEM_ERROR because the sandbox merchant has no card processor enabled; the fix is in the Business Center or via CyberSource support (#15). VIC is a seam only. The demo runs `VISA_PROVIDER=simulated` (labeled).
-- [ ] Show privacy, transparency, approvals and fraud checks (trust & responsibility write-up: [`docs/security.md`](security.md)). On `main`: transparency (every step an `agent_event`), listing approvals (#12), the purchase-approval push text (#53), and upload hardening with EXIF/GPS stripping (#38). Purchase approvals and the auth-hold re-check (#40). Fraud screening for deals (#64, #18): price outliers vs. comps and other deals, off-platform payment wording, new sellers and duplicate listings, combined into one score with reasons (`agents/src/agents/fraud.ts`). The buy agent won't buy a deal at or above `BUY_FRAUD_BLOCK` (0.7). AI-text detection is a Pangram hook (`agents/src/integrations/aitext.ts`), off unless `PANGRAM_URL` is set.
+- [ ] Use the Visa Starter Pack tooling for checkout (#15). Built (#40): Visa Acceptance (CyberSource) REST sandbox backend, tested against a fake server. Real sandbox calls (keys in place) fail with HTTP 502 SYSTEM_ERROR because the sandbox merchant has no card processor enabled; the fix is in the Business Center or via CyberSource support (#15). VIC is a seam only. The demo runs `VISA_PROVIDER=simulated` (labeled, every simulated step starts with `[SIMULATED]`, #154). Hardened (#138, #143): holds left by a restart are reversed, and the card caps are validated at startup.
+- [ ] Show privacy, transparency, approvals and fraud checks (trust & responsibility write-up: [`docs/security.md`](security.md)). On `main`: transparency (every step an `agent_event`), listing approvals (#12), the purchase-approval push text (#53), and upload hardening with EXIF/GPS stripping (#38). Purchase approvals and the auth-hold re-check (#40). Fraud screening for deals (#64, #18): price outliers vs. comps and other deals, off-platform payment wording, new sellers and duplicate listings, combined into one score with reasons (`agents/src/agents/fraud.ts`). The buy agent won't buy a deal at or above `BUY_FRAUD_BLOCK` (0.7), and an unscreened deal waits for its score (#138). A planted, labeled demo scam on the Desk chair item scores 0.85 and is refused with no approval or payment (#154). The e2e test in CI proves the card budget refusal and the fraud block on every PR (#133). In the app: the Sell & Buy tab (#136), voxel thumbnails for deals, and a "Blocked: likely fraud" tag instead of Choose (#140); bought items appear in the new home layout (#125). Still to do: show it in the demo (not yet verified on a device). AI-text detection is a Pangram hook (`agents/src/integrations/aitext.ts`), off unless `PANGRAM_URL` is set.
 
 **Anthropic** ($5k credits, plus 1 year of Max 20x)
 - Name a specific community (to be decided), show a real problem we've lived, make it work, and use Claude thoughtfully, including knowing where it could go wrong for users.
@@ -46,7 +46,7 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 
 ## Tier 2
 - **Auth0 (MLH)**: use any Auth0 API. We use login, plus Auth0 for AI Agents async authorization for approvals.
-  - [x] CIBA approvals built (#12, `agents/src/integrations/auth0.ts`), but tested only against stubbed HTTP, not a real tenant.
+  - [x] CIBA approvals built (#12, `agents/src/integrations/auth0.ts`), but tested only against stubbed HTTP, not a real tenant. Restart edge cases (no duplicate requests, no re-push of expired ones, a tap just before expiry still counts) are unit tested (#138).
   - [x] Login (#25): Auth0 Web Auth in the app, with the ID token as the SpacetimeDB connection token. `register_user` is wired on the live backend (#28), but login hasn't been demoed end to end on a phone yet. If `MOOVE_BUNDLE_ID` changes, the callback URL must be added in the Auth0 dashboard (`ios/CLAUDE.md`).
 - **CRS Credit**: the Identity/Fraud Innovation prize, if the fraud screening uses the CRS sandbox. Fraud screening is built (#64), but it's rule-based and doesn't call CRS, so we don't qualify as built.
 - **Best Planet-First Hack** (overall prize): the resell / donate-over-trash story. The Summary screen (#16) shows a rough kg-kept-out-of-landfill figure, labeled as an estimate.

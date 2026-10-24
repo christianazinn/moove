@@ -160,6 +160,8 @@ test("the planted demo scam on Desk chair is written, labeled sample data, score
   assert.equal(planted.title, "Herman Miller Aeron, brand new, $95, Zelle only, ship only");
   assert.ok(planted.sample);
   assert.match(sellerInfo(planted), /^Planted demo scam \(not a real listing\) · .*sample data$/);
+  assert.doesNotMatch(sellerInfo(planted), /score/, "no rank score that could be read as the fraud score");
+  assert.ok(written.filter(d => !d.planted).every(d => /score \d\.\d\d/.test(sellerInfo(d))), "other deals keep their rank score");
   assert.equal(planted.checkout, "seller_message");
   assert.ok(!(await createDealSource({}).search({ name: "Office chair", category: "chair" })).some(d => d.planted), "only planted for Desk chair");
 
