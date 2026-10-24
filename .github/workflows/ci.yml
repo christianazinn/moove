@@ -42,6 +42,32 @@ jobs:
           npm run --if-present typecheck
           npm run --if-present test
 
+  e2e:
+    # Whole pipeline on a local SpacetimeDB with replayed Claude answers (no API calls, no Apify).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Install SpacetimeDB CLI
+        run: |
+          curl -sSf https://install.spacetimedb.com | sh -s -- --yes
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Start local SpacetimeDB
+        run: |
+          (spacetime start > /tmp/stdb.log 2>&1 &)
+          for i in $(seq 1 60); do curl -sf localhost:3000/v1/ping && break; sleep 1; done
+      - name: Install
+        run: |
+          (cd spacetime && npm ci)
+          (cd agents && npm ci)
+      - name: E2E (replay only)
+        working-directory: agents
+        run: npm run e2e -- --replay
+      - name: Worker log
+        if: failure()
+        run: tail -100 agents/.cache/e2e/worker.log || true
+
   moovekit:
     runs-on: ubuntu-latest
     steps:
