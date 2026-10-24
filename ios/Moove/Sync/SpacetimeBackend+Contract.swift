@@ -252,7 +252,8 @@ private extension Layout {
 
 private extension Listing {
     init?(_ r: MooveBindings.ListingRow) {
-        guard let status = ListingStatus(rawValue: r.status) else { return nil }
+        // An unknown (newer) status shows as Drafting instead of hiding the row (#144).
+        let status = ListingStatus(rawValue: r.status) ?? .draft
         self.init(id: r.id, owner: r.owner.description, itemId: r.itemId, platform: r.platform, title: r.title,
                   description: r.description, priceCents: r.priceCents, status: status,
                   externalId: optional(r.externalId), url: optional(r.url), simulated: r.simulated,

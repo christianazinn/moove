@@ -78,6 +78,20 @@ import Testing
         #expect(real.accessibilitySummary == "Desk, $35, live on ebay")
     }
 
+    @Test func postingStatus() throws {
+        // #144: the worker writes "posting" while it publishes; it must decode, not drop the row.
+        #expect(ListingStatus(rawValue: "posting") == .posting)
+        let decoded = try JSONDecoder().decode(ListingStatus.self, from: Data(#""posting""#.utf8))
+        #expect(decoded == .posting)
+        #expect(ListingStatus.posting.displayLabel(simulated: true) == "Posting (simulated)…")
+        #expect(ListingStatus.posting.displayLabel(simulated: false) == "Posting…")
+        let l = Listing(id: 2, owner: "me", itemId: 2, title: "Chair", description: "", priceCents: 41_000,
+                        status: .posting, simulated: true)
+        #expect(l.accessibilitySummary == "Chair, $410, posting (simulated), simulated listing, not on eBay")
+        // Being posted counts as listed in the move summary, so the total doesn't dip mid-post.
+        #expect(MoveSummary.sales(from: [l]).first?.stage == .listed)
+    }
+
     @Test func approvalOutcomesAndSummary() {
         let a = Approval(id: 1, owner: "me", kind: .listing, refId: 1, amountCents: 41_000, summary: "Sell chair for $410")
         #expect(a.outcomeText == nil)
