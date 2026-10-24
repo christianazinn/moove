@@ -6,6 +6,10 @@ import MooveKit
 struct ItemDetailView: View {
     @Environment(MooveStore.self) private var store
     let itemId: UInt64
+    @State private var takingPhoto = false
+    @State private var photoState: PhotoState = .idle
+
+    enum PhotoState: Equatable { case idle, uploading, added, failed(String) }
 
     var body: some View {
         if let item = store.items.first(where: { $0.id == itemId }) {
@@ -22,6 +26,9 @@ struct ItemDetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text("03 — Review · Item").eyebrow().padding(.bottom, 16)
                 ItemThumbnail(item: item, size: 200)
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 12)
+                photoAction(item)
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 24)
                 VStack(alignment: .leading, spacing: 10) {
@@ -62,6 +69,62 @@ struct ItemDetailView: View {
         .navigationTitle(item.name)
         .navigationBarTitleDisplayMode(.inline)
         .mooveScreen()
+        .fullScreenCover(isPresented: $takingPhoto) {
+            CameraPicker { jpeg in
+                takingPhoto = false
+                if let jpeg { Task { await addPhoto(jpeg, to: item) } }
+            }
+            .ignoresSafeArea()
+        }
+    }
+
+    // MARK: Photo (#5: vision runs again on a new photo)
+
+    /// "Add photo" for items without one (seeded, or added before uploads worked), and
+    /// "Add another photo" otherwise. `add_item_photo` re-queues vision, then pricing.
+    @ViewBuilder private func photoAction(_ item: Item) -> some View {
+        VStack(spacing: 6) {
+            Button {
+                photoState = .idle
+                takingPhoto = true
+            } label: {
+                Label(photoState == .uploading ? "Uploading…" : item.photoUrls.isEmpty ? "Add photo" : "Add another photo",
+                      systemImage: "camera")
+            }
+            .buttonStyle(.pill(.outline, compact: true))
+            .disabled(photoState == .uploading)
+            .accessibilityHint("Moove identifies and prices the item from the photo")
+            switch photoState {
+            case .idle, .uploading:
+                if item.photoUrls.isEmpty {
+                    Text("No photo yet, so the agents can't identify it.").monoMeta()
+                }
+            case .added:
+                Text("Photo added. Moove is identifying it again.").monoMeta()
+            case .failed(let why):
+                Text("Couldn't add the photo: \(why)").monoMeta().foregroundStyle(Theme.danger)
+            }
+        }
+        .multilineTextAlignment(.center)
+    }
+
+    private func addPhoto(_ jpeg: Data, to item: Item) async {
+        photoState = .uploading
+        let file = FileManager.default.temporaryDirectory.appending(path: "item-\(item.id)-\(UUID().uuidString).jpg")
+        do {
+            try jpeg.write(to: file)
+            // Offline demo: keep the file on the device, as the scan does.
+            let uploader: Uploader = store.uploadBaseURL == nil ? LocalUploader() : HTTPUploader()
+            let url = try await uploader.upload(file, contentType: "image/jpeg")
+            if await store.addItemPhoto(itemId: item.id, url: url) {
+                photoState = .added
+            } else {
+                photoState = .failed(store.lastError ?? "not saved")
+                store.lastError = nil
+            }
+        } catch {
+            photoState = .failed((error as? UploadFailure)?.message ?? error.localizedDescription)
+        }
     }
 
     // MARK: Sections

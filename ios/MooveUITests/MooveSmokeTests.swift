@@ -67,6 +67,8 @@ final class MooveSmokeTests: XCTestCase {
         for choice in ["Keep", "Sell", "Donate", "Trash"] {
             XCTAssertTrue(picker.buttons[choice].exists, "\(choice) choice")
         }
+        // Demo items have no photo yet, so the detail offers one (vision runs on it).
+        XCTAssertTrue(app.buttons["Add photo"].exists, "Add photo on an item without a photo")
         snap("02-item-detail")
     }
 
