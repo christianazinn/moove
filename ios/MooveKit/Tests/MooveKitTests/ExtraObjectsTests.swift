@@ -210,6 +210,23 @@ private struct SplitMix {
         #expect(merger.results(excluding: [bed]).isEmpty)
     }
 
+    @Test func dropsAShowerCurtainOverTheTub() {
+        // Rio's bathroom (Oct 24): a "room divider" 0.53 × 0.50 × 1.43 m standing 5 cm above
+        // the tub's rim, 78% over its footprint, was the shower curtain.
+        var merger = SightingMerger(floorY: 0)
+        for seed in 1...2 {
+            merger.add(Sighting(label: "room divider", confidence: 0.8, points: boxPoints(center: SIMD3(0.2, 0.5 + 0.715, 0), size: SIMD3(0.53, 1.43, 0.5), yaw: 0, seed: UInt64(seed))))
+            // a trash can on the floor beside the tub stays
+            merger.add(Sighting(label: "trash can", confidence: 0.8, points: boxPoints(center: SIMD3(1.3, 0.17, 0), size: SIMD3(0.3, 0.34, 0.3), yaw: 0, seed: UInt64(seed + 4))))
+        }
+        let tub = RoomGeometry.Object(id: "t", category: "bathtub", dimensions: SIMD3(1.4, 0.45, 0.77), transform: .at(SIMD3(0, 0.225, 0)))
+        #expect(Set(merger.results().map(\.label)) == ["room divider", "trash can"])
+        #expect(merger.results(excluding: [tub]).map(\.label) == ["trash can"])
+        // the same divider over a bed is just near it, not over a tub
+        let bed = RoomGeometry.Object(id: "b", category: "bed", dimensions: SIMD3(1.4, 0.45, 0.77), transform: .at(SIMD3(0, 0.225, 0)))
+        #expect(merger.results(excluding: [bed]).map(\.label).contains("room divider"))
+    }
+
     @Test func trackIDsAreStable() {
         var merger = SightingMerger(floorY: 0)
         let a = merger.add(Sighting(label: "scooter", confidence: 0.7, points: boxPoints(center: scooter.center, size: scooter.size, yaw: 0)))

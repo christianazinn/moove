@@ -164,6 +164,10 @@ public enum VoxelModels {
         case .clock: g.clock(X, NY, Z, name)
         case .toy: g.toy(X, NY, Z, name)
         case .rack: g.rack(X, NY, Z, name)
+        case .screen: g.screen(X, NY, Z, name)
+        case .toilet: g.toilet(X, NY, Z, name)
+        case .sink: g.sink(X, NY, Z, name)
+        case .bathtub: g.bathtub(X, NY, Z, name)
         case .box: g.kraftBox(X, NY, Z, name)
         }
         return (g.output(), g.surfaces)
@@ -206,7 +210,7 @@ public enum VoxelModels {
         case framedPhotos, stove, dishwasher, microwave, bench, ottoman, bike, suitcase
         case guitar, piano, keyboard, drums, vacuum, monitor, scooter, bag, fitness, board
         case motorcycle, stroller, wheelchair, grill, lawnMower, crib, ladder, trunk, basket, trashCan, toolbox
-        case petCrate, petBed, catTree, clock, toy, rack, box
+        case petCrate, petBed, catTree, clock, toy, rack, screen, toilet, sink, bathtub, box
 
         /// Default size (w, d, h) in meters when a dimension is missing or invalid.
         var defaultSize: (Double, Double, Double) {
@@ -271,6 +275,10 @@ public enum VoxelModels {
             case .clock: (0.35, 0.05, 0.35)
             case .toy: (0.35, 0.3, 0.4)
             case .rack: (0.5, 0.5, 1.8)
+            case .screen: (1.2, 0.4, 1.7)
+            case .toilet: (0.4, 0.7, 0.8)
+            case .sink: (0.55, 0.45, 0.3)
+            case .bathtub: (1.5, 0.75, 0.5)
             case .box: (0.5, 0.4, 0.4)
             }
         }
@@ -326,6 +334,10 @@ public enum VoxelModels {
             case .clock: (5, 5, 1)
             case .toy: (6, 6, 5)
             case .rack: (5, 8, 3)
+            case .screen: (6, 10, 2)
+            case .toilet: (7, 12, 10)
+            case .sink: (8, 4, 7)
+            case .bathtub: (16, 7, 10)
             default: nil
             }
         }
@@ -351,12 +363,16 @@ public enum VoxelModels {
         if attrs.contains("storagetype.cabinet") { return .dresser }
         if attrs.contains(where: { $0.hasPrefix("chairtype.") || $0.hasPrefix("chairlegtype.") }) && !n.has("sofa", "couch") { return .chair }
         if attrs.contains(where: { $0.hasPrefix("sofatype.") }) { return .sofa }
+        // Bathroom fixtures by name: vision has no toilet/sink/bathtub category and files them under
+        // "appliance" ("white two-piece elongated toilet" drew as a white cabinet in Rio's bathroom)
+        if let fixture = bathroomFixture(n) { return fixture }
         if attrs.contains("tableshapetype.lshaped") && (cat == "table" || cat == "desk") { return .desk }
         if n.has("mattress") && !n.has("frame") { return .mattress }
         if n.has("bean bag", "beanbag", "bean-bag", "pouf", "floor cushion") { return .beanBag }
         // throw pillows and cushions are soft decor (drawn as a pillow), whatever the category
         if isPillow(n) { return .decor }
         if n.has("sectional", "sofa", "couch", "loveseat", "futon", "settee", "armchair") { return .sofa }
+        if isScreen(n) { return .screen }
         if n.has("bookcase", "bookshelf", "book shelf", "shelving", "shelf unit", "étagère") { return .bookshelf }
         // the vision agent's specific names ("black standing desk") beat a broad category ("furniture"),
         // but not a small-object one: a "coffee table book" stays books, a "TV remote" electronics.
@@ -495,6 +511,11 @@ public enum VoxelModels {
         case "toy", "toys", "stuffed animal", "plush", "dollhouse", "rocking horse": return .toy
         case "coat rack", "shoe rack", "clothes rack", "rack", "garment rack", "coat stand", "hat stand": return .rack
         case "workbench", "work bench": return .desk
+        case "room divider", "divider", "folding screen", "privacy screen", "screen divider", "curtain", "curtains", "shower curtain", "drapes": return .screen
+        // RoomPlan's bathroom fixtures (a toilet drew as a dresser by its size)
+        case "toilet", "wc", "commode": return .toilet
+        case "sink", "basin", "washbasin", "vanity sink": return .sink
+        case "bathtub", "bath", "tub", "bath tub": return .bathtub
         case "cart", "rolling cart", "utility cart": return n.has("bar cart", "tea cart") ? .table : .bookshelf
         case "decor":
             // a wall clock, a basket, a cat bed, a plush: household things, but not a "toy motorcycle" figurine
@@ -558,7 +579,7 @@ public enum VoxelModels {
         if n.has("coat rack", "coat stand", "coat tree", "hat stand", "hat rack", "hall tree", "shoe rack", "shoe shelf", "shoe stand",
                  "shoe organizer", "clothes rack", "clothing rack", "garment rack", "clothes rail", "clothes stand", "rolling rack") { return .rack }
         if (n.word("ladder", "ladders", "stepladder", "stepladders") || n.has("step ladder", "step-ladder"))
-            && !n.has("blanket", "quilt", "towel", "shelf", "bookcase", "desk", "plant", "rack") { return .ladder }
+            && !n.has("blanket", "quilt", "towel", "shelf", "bookcase", "desk", "plant", "rack", "bed", "bunk", "loft") { return .ladder }
         if n.word("grill", "grills", "bbq", "barbecue", "barbeque", "smoker", "hibachi", "kamado", "traeger") || n.has("big green egg", "weber kettle") {
             if !n.has("grill pan", "foreman", "panini", "griddle", "indoor", "brush", "cover", "grill tool", "grill mat") { return .grill }
         }
@@ -604,6 +625,28 @@ public enum VoxelModels {
     static func isBag(_ n: VName) -> Bool {
         n.word("backpack", "backpacks", "rucksack", "knapsack", "duffel", "duffle", "holdall", "tote", "totes", "handbag", "purse",
                "bag", "bags", "satchel", "briefcase", "daypack")
+    }
+
+    /// A room divider, folding screen or curtain (a shower curtain read as a "room divider" by the
+    /// detector drew as a 1.4 m bookshelf). "screen" alone is a TV or monitor word, so it needs a qualifier.
+    static func isScreen(_ n: VName) -> Bool {
+        n.has("room divider", "folding screen", "privacy screen", "screen divider", "shower curtain", "shower door")
+            || n.word("divider", "curtain", "curtains", "drapes")
+    }
+
+    /// A toilet, sink or bathtub named as such, not an accessory for one (toilet paper, a sink
+    /// strainer, a bath mat).
+    static func bathroomFixture(_ n: VName) -> Kind? {
+        if n.word("toilet", "toilets", "commode", "wc") && !n.has("paper", "brush", "plunger", "cleaner", "seat cover", "mat", "roll", "caddy", "shelf", "storage") {
+            return .toilet
+        }
+        if n.has("bathtub", "bath tub") || (n.word("tub") && n.has("soaking", "clawfoot", "claw-foot", "alcove", "freestanding", "jetted", "whirlpool", "porcelain")) {
+            return .bathtub
+        }
+        if n.word("sink", "sinks", "washbasin", "washbasins") && !n.has("strainer", "stopper", "mat", "organizer", "caddy", "drain", "sponge", "cabinet", "skirt") {
+            return .sink
+        }
+        return nil
     }
 
     /// The name is a TV itself, not a TV accessory ("TV remote", "TV antenna").

@@ -144,7 +144,7 @@ import Testing
     // MARK: routing
 
     /// Detector categories that still have no builder of their own (small sports / music gear).
-    static let stillBoxes: Set<String> = ["ball", "helmet", "ironing board", "racket", "room divider", "saxophone", "trumpet", "weights", "yoga mat", "box"]
+    static let stillBoxes: Set<String> = ["ball", "helmet", "ironing board", "racket", "saxophone", "trumpet", "weights", "yoga mat", "box"]
 
     @Test func detectorCategoriesRouteOffTheBox() {
         var boxed: Set<String> = []
