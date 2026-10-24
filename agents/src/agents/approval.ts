@@ -15,13 +15,13 @@ function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-// Binding message for the phone. Listings use the listing row's title; anything else (or a
-// missing listing) falls back to the approval summary, preferring a "quoted" title in it.
-function bindingFor(conn: Conn, a: Approval): string {
+// Binding message for the phone, from the row being approved: the listing's title (kind
+// listing, refId = listing.id) or the deal's title (kind purchase, refId = deal.id). If that row
+// isn't in the cache, fall back to the summary: a "quoted" title, or the text after "for:".
+export function bindingFor(conn: Conn, a: Approval): string {
   const action = a.kind === 'listing' ? 'sell' : 'buy';
-  let title = '';
-  if (a.kind === 'listing') title = conn.db.listing.id.find(a.refId)?.title ?? '';
-  if (!title) title = /"([^"]+)"/.exec(a.summary)?.[1] ?? a.summary;
+  let title = a.kind === 'listing' ? conn.db.listing.id.find(a.refId)?.title : conn.db.deal.id.find(a.refId)?.title;
+  if (!title) title = /"([^"]+)"/.exec(a.summary)?.[1] ?? /\bfor:\s*(.+)$/.exec(a.summary)?.[1] ?? a.summary;
   return toBindingMessage(action, title, a.amountCents);
 }
 
