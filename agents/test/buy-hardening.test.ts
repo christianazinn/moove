@@ -47,7 +47,7 @@ function table() {
   };
 }
 
-const db = { shoppingItem: table(), deal: table(), approval: table(), payment: table(), user: { identity: { find: () => undefined } } };
+const db = { shoppingItem: table(), deal: table(), approval: table(), payment: table(), workerUser: { iter: () => [].values() } };
 const events: { kind: string; message: string; refId: bigint }[] = [];
 const failStatusFor = new Set<bigint>(); // shopping item ids whose next set_shopping_status throws
 let nextId = 1000n;

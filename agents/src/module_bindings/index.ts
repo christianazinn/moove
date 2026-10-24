@@ -95,14 +95,14 @@ import MyRoomRow from "./my_room_table";
 import MyUserRow from "./my_user_table";
 import NewHomeRow from "./new_home_table";
 import PaymentRow from "./payment_table";
-import RoomRow from "./room_table";
 import RoomMemberRow from "./room_member_table";
 import ScanRow from "./scan_table";
 import ScanPhotoRow from "./scan_photo_table";
 import ServiceConfigRow from "./service_config_table";
 import ShoppingItemRow from "./shopping_item_table";
-import UserRow from "./user_table";
 import WorkerRow from "./worker_table";
+import WorkerRoomRow from "./worker_room_table";
+import WorkerUserRow from "./worker_user_table";
 
 /** Type-only namespace exports for generated type groups. */
 
@@ -246,24 +246,6 @@ const tablesSchema = __schema({
       { name: 'payment_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, PaymentRow),
-  room: __table({
-    name: 'room',
-    indexes: [
-      { accessor: 'id', name: 'room_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'joinCode', name: 'room_join_code_idx_btree', algorithm: 'btree', columns: [
-        'joinCode',
-      ] },
-      { accessor: 'owner', name: 'room_owner_idx_btree', algorithm: 'btree', columns: [
-        'owner',
-      ] },
-    ],
-    constraints: [
-      { name: 'room_id_key', constraint: 'unique', columns: ['id'] },
-      { name: 'room_join_code_key', constraint: 'unique', columns: ['joinCode'] },
-    ],
-  }, RoomRow),
   roomMember: __table({
     name: 'room_member',
     indexes: [
@@ -340,17 +322,6 @@ const tablesSchema = __schema({
       { name: 'shopping_item_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, ShoppingItemRow),
-  user: __table({
-    name: 'user',
-    indexes: [
-      { accessor: 'identity', name: 'user_identity_idx_btree', algorithm: 'btree', columns: [
-        'identity',
-      ] },
-    ],
-    constraints: [
-      { name: 'user_identity_key', constraint: 'unique', columns: ['identity'] },
-    ],
-  }, UserRow),
   worker: __table({
     name: 'worker',
     indexes: [
@@ -376,6 +347,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyUserRow),
+  workerRoom: __table({
+    name: 'worker_room',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, WorkerRoomRow),
+  workerUser: __table({
+    name: 'worker_user',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, WorkerUserRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */

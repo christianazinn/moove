@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Agent } from './types.js';
-import type { Conn } from '../spacetime.js';
+import { findUser, type Conn } from '../spacetime.js';
 import type { Approval, Item, Listing } from '../module_bindings/types.js';
 import { config } from '../config.js';
 import { logEvent } from '../events.js';
@@ -70,7 +70,7 @@ async function draft(conn: Conn, it: Item): Promise<void> {
 }
 
 function thresholdFor(conn: Conn, l: Listing): bigint {
-  return conn.db.user.identity.find(l.owner)?.approvalThresholdCents ?? DEFAULT_THRESHOLD_CENTS;
+  return findUser(conn, l.owner)?.approvalThresholdCents ?? DEFAULT_THRESHOLD_CENTS;
 }
 
 // Status writes are awaited so a failed one (e.g. while reconnecting) shows up as an error event
