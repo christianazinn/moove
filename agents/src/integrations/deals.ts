@@ -25,8 +25,8 @@ export interface DealCandidate {
   /** Hand-made demo data, not from any real search. Labeled "sample data". */
   sample?: boolean;
   /**
-   * A planted demo scam from fixtures/deals.json (always also `sample`): served only for the item
-   * names in its `plantedFor`, always written, so the demo can show the fraud block live.
+   * A planted demo scam from fixtures/deals.json (always also `sample`): served only for items whose
+   * name or category contains one of its `plantedFor` phrases (`plantedMatches`), always written, so the demo can show the fraud block live.
    */
   planted?: boolean;
 }
@@ -82,9 +82,32 @@ export function toCandidate(raw: Record<string, unknown>, replay: boolean): Deal
   };
 }
 
-type FixtureRow = Record<string, unknown> & { keywords?: string[]; planted?: boolean; plantedFor?: string[] };
+type FixtureRow = Record<string, unknown> & { keywords?: string[]; planted?: boolean; plantedFor?: string[]; plantedExcept?: string[] };
 
-const itemName = (q: DealQuery) => q.name.trim().toLowerCase();
+/** Lowercase words, punctuation dropped, simple plurals folded ("Desk-Chairs" -> ["desk", "chair"]). */
+export function nameWords(s: string): string[] {
+  return s
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .map(w => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w));
+}
+
+const hasPhrase = (words: string[], phrase: string[]) =>
+  phrase.length > 0 && words.some((_, i) => phrase.every((p, j) => words[i + j] === p));
+
+/**
+ * True when a planted row targets this item: one of its `plantedFor` phrases appears as whole words,
+ * in order, in the item's name or category (case and plurals ignored, so "Ergonomic Desk Chairs" and
+ * "Office chair" match "desk chair" / "office chair", but "Dining chairs" and "Armchair" don't), and
+ * none of its `plantedExcept` words does ("Office chair mat" is an accessory, not a chair).
+ */
+export function plantedMatches(row: Pick<FixtureRow, 'plantedFor' | 'plantedExcept'>, q: DealQuery): boolean {
+  const fields = [nameWords(q.name), nameWords(q.category)];
+  const except = new Set((row.plantedExcept ?? []).flatMap(nameWords));
+  if (fields.some(ws => ws.some(w => except.has(w)))) return false;
+  return (row.plantedFor ?? []).some(p => fields.some(ws => hasPhrase(ws, nameWords(p))));
+}
 
 function matchScore(q: DealQuery, keywords: string[]): number {
   const hay = ` ${q.name} ${q.category} `.toLowerCase();
@@ -97,20 +120,26 @@ function matchScore(q: DealQuery, keywords: string[]): number {
   return best;
 }
 
+function loadFixtureRows(): FixtureRow[] {
+  const path = fileURLToPath(new URL('../../fixtures/deals.json', import.meta.url));
+  return (JSON.parse(readFileSync(path, 'utf8')) as { deals: FixtureRow[] }).deals;
+}
+
+/** True when fixtures/deals.json has a planted demo scam for this shopping item. */
+export function hasPlantedDeal(q: DealQuery, rows: FixtureRow[] = loadFixtureRows()): boolean {
+  return rows.some(r => r.planted && plantedMatches(r, q));
+}
+
 /** Replays fixtures/deals.json: picks the keyword group that best matches the item. */
 export function fixtureDealSource(rows?: FixtureRow[]): DealSource {
-  const load = (): FixtureRow[] => {
-    if (rows) return rows;
-    const path = fileURLToPath(new URL('../../fixtures/deals.json', import.meta.url));
-    return (JSON.parse(readFileSync(path, 'utf8')) as { deals: FixtureRow[] }).deals;
-  };
+  const load = (): FixtureRow[] => rows ?? loadFixtureRows();
   return {
     name: 'sample data (hand-made fixtures)',
     replay: true,
     async search(q) {
       const all = load();
-      // Planted demo scams only show up for the exact item names they were planted for.
-      const planted = all.filter(r => r.planted && (r.plantedFor ?? []).some(n => n.toLowerCase() === itemName(q)));
+      // Planted demo scams only show up for the items they were planted for (see plantedMatches).
+      const planted = all.filter(r => r.planted && plantedMatches(r, q));
       const scored = all.filter(r => !r.planted).map(r => ({ r, s: matchScore(q, r.keywords ?? []) })).filter(x => x.s > 0);
       const top = Math.max(0, ...scored.map(x => x.s));
       // Keep the whole group sharing the best keyword set.
