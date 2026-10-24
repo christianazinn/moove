@@ -44,6 +44,22 @@ extension SpacetimeBackend {
         throw Failure.reducerFailed("setSentimental: waiting on the SpacetimeDB module (#2)")
     }
 
+    // Shopping (#15). Once bindings exist: add_shopping_item(owner: me, name, category, reason),
+    // remove_shopping_item(shopping_item_id), choose_deal(shopping_item_id, deal_id); and subscribe to
+    // shopping_item / deal (ShoppingItem(chosenDealId: 0 -> nil), Deal(url: "" -> nil, fraud_score: -1 -> nil)).
+
+    func addShoppingItem(name: String, category: String, reason: String) async throws {
+        throw Failure.reducerFailed("addShoppingItem: waiting on the SpacetimeDB module (#2)")
+    }
+
+    func removeShoppingItem(shoppingItemId: UInt64) async throws {
+        throw Failure.reducerFailed("removeShoppingItem: waiting on the SpacetimeDB module (#2)")
+    }
+
+    func chooseDeal(shoppingItemId: UInt64, dealId: UInt64) async throws {
+        throw Failure.reducerFailed("chooseDeal: waiting on the SpacetimeDB module (#2)")
+    }
+
     func createNewHome(name: String, source: NewHomeSource, floorPlanJson: String) async throws {
         throw Failure.reducerFailed("createNewHome: waiting on the SpacetimeDB module (#2)")
     }

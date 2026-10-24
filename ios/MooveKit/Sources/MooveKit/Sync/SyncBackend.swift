@@ -15,6 +15,8 @@ public struct SyncSnapshot: Sendable, Equatable {
     public var approvals: [Approval] = []
     public var payments: [Payment] = []
     public var agentEvents: [AgentEvent] = []
+    public var shoppingItems: [ShoppingItem] = []
+    public var deals: [Deal] = []
 
     public init(me: IdentityHex? = nil) { self.me = me }
 
@@ -102,6 +104,12 @@ public protocol SyncBackend: AnyObject, Sendable {
     func addItemPhoto(itemId: UInt64, url: String) async throws
     func setDisposition(itemId: UInt64, disposition: Disposition) async throws
     func setSentimental(itemId: UInt64, maybeSentimental: Bool) async throws
+
+    /// Shopping list (#15): the user's edit step on the list the shopping agent generated.
+    func addShoppingItem(name: String, category: String, reason: String) async throws
+    func removeShoppingItem(shoppingItemId: UInt64) async throws
+    /// Pick which of an item's deals the buy agent should check out.
+    func chooseDeal(shoppingItemId: UInt64, dealId: UInt64) async throws
 
     func createNewHome(name: String, source: NewHomeSource, floorPlanJson: String) async throws
     func saveLayout(newHomeId: UInt64, name: String, placementsJson: String) async throws
