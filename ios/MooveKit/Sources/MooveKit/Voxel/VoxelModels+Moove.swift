@@ -230,14 +230,14 @@ extension Canvas {
             let t = (D(y) + 0.5) / D(Y)
             // radius profile: rounded foot, full belly, tapering to a soft top
             let foot = t < 0.15 ? 0.84 + t : 1.0
-            let taper = 1.0 - pow(max(0, t - 0.3) / 0.75, 2)
+            let taper = 1.0 - pow(max(0, t - 0.3) / 0.95, 2)
             let allowed = min(foot, taper)
             if allowed <= 0 { continue }
             for z in upTo(0, Z) {
                 for x in upTo(0, X) {
                     let nx = (D(x) - cx) / rx, nz = (D(z) - cz) / rz
                     // the back (low z) stands taller than the front
-                    let lean = 1.0 - max(0, nz) * 0.35 * t
+                    let lean = 1.0 - max(0, nz) * 0.35 * max(0, t - 0.3)
                     let rr = (nx * nx + nz * nz).squareRoot()
                     if rr > allowed * lean { continue }
                     let ex = (D(x) - cx) / srx, ey = (D(y) - sy) / sry, ez = (D(z) - sz) / srz
