@@ -335,3 +335,40 @@ test("comps endpoint (simulated, unpaywalled) end to end through the simulated r
     server.close();
   }
 });
+
+test("budget seeded from earlier payments survives a restart", async () => {
+  const { sink, events } = memorySink();
+  const server = fakeX402Server(paymentRequired("10000")); // $0.01
+  const rail = new X402Rail({ sink, ledger: new SpendLedger(usdToMicros(0.05), usdToMicros(0.1)), signer: fakeSigner, fetch: server.fetch });
+  rail.seedSpent("pricing", usdToMicros(0.045)); // as if counted from payment rows at startup
+  await assert.rejects(rail.paidFetch(ctx, "https://paid.example/comps?q=chair"), SpendRefusedError);
+  assert.equal(server.seen.filter((r) => r.headers.get("PAYMENT-SIGNATURE")).length, 0, "nothing signed");
+  assert.ok(events.some((e) => e.kind === "error" && /budget/.test(e.message)));
+});
+
+test("payee allowlist: unknown payTo is refused before signing", async () => {
+  const { sink, events } = memorySink();
+  const server = fakeX402Server(paymentRequired("10000"));
+  fakeSigner.signed = [];
+  const rail = new X402Rail({
+    sink,
+    ledger: new SpendLedger(usdToMicros(1), usdToMicros(0.1)),
+    signer: fakeSigner,
+    fetch: server.fetch,
+    allowedPayees: ["0x2222222222222222222222222222222222222222"],
+  });
+  await assert.rejects(rail.paidFetch(ctx, "https://paid.example/comps?q=chair"), SpendRefusedError);
+  assert.equal(fakeSigner.signed.length, 0);
+  const refusal = events.find((e) => e.kind === "error" && /allowlist/.test(e.message));
+  assert.ok(refusal, "refusal logged");
+  const data = JSON.parse(refusal.dataJson);
+  assert.equal(data.rail, "x402");
+  assert.equal(data.outcome, "refused");
+  assert.equal(data.refused, true);
+  assert.equal(data.remainingUsdMicros, usdToMicros(1).toString());
+  assert.equal(rail.remaining("pricing"), usdToMicros(1), "budget untouched");
+
+  const ok = new X402Rail({ sink, ledger: new SpendLedger(usdToMicros(1), usdToMicros(0.1)), signer: fakeSigner, fetch: server.fetch, allowedPayees: [PAY_TO.toUpperCase().replace("0X", "0x")] });
+  const { payment } = await ok.paidFetch(ctx, "https://paid.example/comps?q=chair");
+  assert.equal(payment?.status, "settled");
+});

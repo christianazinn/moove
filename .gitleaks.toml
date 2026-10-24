@@ -1,11 +1,17 @@
+# gitleaks config. CI runs gitleaks-action on every PR/push (new commits) and a full-history
+# `gitleaks detect` scan (see .github/workflows/ci.yml). [[allowlists]] needs gitleaks >= 8.25.
 [extend]
 useDefault = true
 
-[[allowlists]]
-description = "Public identifiers, not secrets"
-paths = ['''\.env\.example''']
+# No allowlist for .env.example on purpose: `.env.example` must only ever hold empty values or obvious
+# placeholders, so a real key pasted there should fail CI like anywhere else.
 
+# The Auth0 domain and *native* client id are public app config (PKCE, no client secret; see
+# ios/CLAUDE.md), but the generic-api-key rule flags the client id. Allow only those two keys, only
+# in the iOS xcconfig files. Secrets (AUTH0_CLIENT_SECRET etc.) never belong there.
 [[allowlists]]
-description = "Auth0 native-app client IDs are public (shipped in every app binary)"
+description = "Public Auth0 native client config in iOS xcconfig"
+condition = "AND"
+paths = ['''^ios/Config/[^/]+\.xcconfig(\.example)?$''']
 regexTarget = "line"
-regexes = ['''MOOVE_AUTH0_CLIENT_ID\s*=''']
+regexes = ['''^\s*(//\s*)?MOOVE_AUTH0_(CLIENT_ID|DOMAIN)\s*=''']
