@@ -48,3 +48,16 @@ test("LLM_REPLAY is refused against maincloud, allowed locally and when off", ()
   assert.equal(replayGuardError("off", "wss://maincloud.spacetimedb.com"), null);
   assert.ok(replayGuardError(replayMode(" Auto "), "WSS://MAINCLOUD.SPACETIMEDB.COM/"));
 });
+
+test("hasRecordedAnswer: true only for a recording that replay/auto would use (budgets skip those)", async () => {
+  const { hasRecordedAnswer } = await import("../src/integrations/anthropic.js");
+  const rec = { ...base, text: "recorded for the budget" };
+  writeFileSync(path.join(dir, `${replayKey(rec)}.json`), JSON.stringify({ output: { name: "lamp", n: 1 } }));
+  for (const [mode, want] of [["replay", true], ["auto", true], ["record", false], ["", false]] as const) {
+    process.env.LLM_REPLAY = mode;
+    assert.equal(hasRecordedAnswer(rec), want, `LLM_REPLAY=${mode}`);
+  }
+  process.env.LLM_REPLAY = "auto";
+  assert.equal(hasRecordedAnswer({ ...rec, text: "never recorded" }), false, "a miss in auto mode calls the API (paid)");
+  delete process.env.LLM_REPLAY;
+});

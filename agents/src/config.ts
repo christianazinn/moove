@@ -1,3 +1,4 @@
+import { numberFromEnv } from './integrations/caps.js';
 import { parseAllowedHosts } from './integrations/photos.js';
 
 // Loads ../.env.local (repo root) then agents/.env.local if present. See root .env.example.
@@ -63,9 +64,10 @@ export const config = {
   },
   // POST /homes/import (#89) spend cap (#17 follow-up): paid steps (Apify Zillow run, photo classifier,
   // floor-plan vision read) per window, re-counted from agent_event on start. See homes/budget.ts.
+  // A bad value (e.g. "30x" -> NaN) used to mean no cap at all; now it warns and uses the default.
   homes: {
-    maxPaidCalls: Number(env('HOMES_MAX_PAID_CALLS', '30')),
-    spendWindowH: Number(env('HOMES_SPEND_WINDOW_H', '24')),
+    maxPaidCalls: Math.floor(numberFromEnv(process.env.HOMES_MAX_PAID_CALLS, 'HOMES_MAX_PAID_CALLS', 30, { min: 0 })),
+    spendWindowH: numberFromEnv(process.env.HOMES_SPEND_WINDOW_H, 'HOMES_SPEND_WINDOW_H', 24, { above: 0 }),
   },
   // Recorded Claude answers for LLM_REPLAY (see integrations/anthropic.ts).
   llmReplayDir: env('LLM_REPLAY_DIR', 'fixtures/llm'),

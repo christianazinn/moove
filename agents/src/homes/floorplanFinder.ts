@@ -14,6 +14,7 @@ import { config } from '../config.js';
 import type { EventKind } from '../events.js';
 import type { structuredCall, ImageInput } from '../integrations/anthropic.js';
 import { UNTRUSTED_RULE } from '../untrusted.js';
+import { OverCapError, takePaidCall } from './budget.js';
 
 type Log = (kind: EventKind, message: string, data?: unknown) => void;
 
@@ -60,6 +61,12 @@ const defaultClassify: Classify = async args => {
   return structuredCall(args) as Promise<PhotoVerdicts>;
 };
 
+type IsRecorded = (args: Parameters<typeof structuredCall>[0]) => boolean | Promise<boolean>;
+const defaultIsRecorded: IsRecorded = async args => {
+  const { hasRecordedAnswer } = await import('../integrations/anthropic.js');
+  return hasRecordedAnswer(args);
+};
+
 /** Which photos to classify: no exteriors (by caption), latest first, capped. Indices are listing order. */
 export function pickCandidates(photos: ListingPhoto[]): { photo: ListingPhoto; photoIndex: number }[] {
   const all = photos
@@ -83,11 +90,13 @@ export function pickPlans(verdicts: PhotoVerdicts, count: number): { index: numb
 
 /**
  * Classifies listing photos and returns the scan (cacheable) plus the loaded plan images.
- * Throws on a failed classification (the caller falls back to "no floor plan").
+ * Throws on a failed classification (the caller falls back to "no floor plan"), and OverCapError
+ * when the homes budget is used up. The budget slot is taken here, once the exact request is known,
+ * so an answer recorded for LLM_REPLAY doesn't take one.
  */
 export async function findFloorPlanInPhotos(
   photos: ListingPhoto[],
-  opts: { log: Log; loadImage: (url: string) => Promise<ImageInput>; classify?: Classify }
+  opts: { log: Log; loadImage: (url: string) => Promise<ImageInput>; classify?: Classify; isRecorded?: IsRecorded }
 ): Promise<{ scan: PhotoPlanScan; images: ImageInput[] }> {
   const { log } = opts;
   const candidates = pickCandidates(photos);
@@ -97,17 +106,24 @@ export async function findFloorPlanInPhotos(
     return r.status === 'fulfilled' ? [{ ...c, image: r.value }] : [];
   });
   if (!usable.length) throw new Error(`none of the ${candidates.length} listing photos could be loaded`);
-  log('tool_call', `Classifying ${usable.length} listing photo(s) with Claude (${config.models.fast})`, { photos: usable.length, model: config.models.fast, paid: true });
-  const verdicts = await (opts.classify ?? defaultClassify)({
+  const args = {
     model: config.models.fast,
     system: SYSTEM,
     text: `These are ${usable.length} photos from one home listing, in order (image 0 first). For EVERY image give its index, whether it is a floor plan, and your confidence.`,
     images: usable.map(u => u.image),
     schema: PhotoVerdicts,
-    effort: 'low',
+    effort: 'low' as const,
     maxTokens: 2048,
     fallbacks: false,
-  });
+  };
+  const recorded = await (opts.isRecorded ?? defaultIsRecorded)(args);
+  if (!recorded && !takePaidCall()) throw new OverCapError();
+  log(
+    'tool_call',
+    `${recorded ? '[REPLAYED] ' : ''}Classifying ${usable.length} listing photo(s) with Claude (${config.models.fast})`,
+    { photos: usable.length, model: config.models.fast, paid: !recorded, ...(recorded ? { replayed: true } : {}) }
+  );
+  const verdicts = await (opts.classify ?? defaultClassify)(args);
   const picks = pickPlans(verdicts, usable.length).map(p => ({ ...usable[p.index], confidence: p.confidence }));
   const scan: PhotoPlanScan = {
     checked: usable.length,
