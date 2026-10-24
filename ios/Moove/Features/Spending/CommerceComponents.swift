@@ -130,6 +130,51 @@ struct AdaptiveLine<Content: View>: View {
     }
 }
 
+/// Headline figures between rules, split by hairlines. At accessibility text sizes they stack, so
+/// labels like "Simulated" don't break mid-word and amounts don't truncate in a third of the width.
+struct StatStrip: View {
+    struct Figure {
+        var label: String
+        var value: String
+        var tint: Color = Theme.text
+        var spoken: String
+    }
+
+    let figures: [Figure]
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(figures.indices, id: \.self) { i in
+                        figure(i).padding(.vertical, 14)
+                        if i < figures.count - 1 { Rectangle().fill(Theme.line).frame(height: 1) }
+                    }
+                }
+            } else {
+                HStack(spacing: 0) {
+                    ForEach(figures.indices, id: \.self) { i in
+                        figure(i)
+                            .padding(.vertical, 18)
+                            .padding(.leading, i == 0 ? 0 : 14)
+                            .padding(.trailing, i == figures.count - 1 ? 0 : 14)
+                        if i < figures.count - 1 { Rectangle().fill(Theme.line).frame(width: 1) }
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .ruled(.top)
+        .ruled()
+    }
+
+    private func figure(_ i: Int) -> some View {
+        let f = figures[i]
+        return StatFigure(label: f.label, value: f.value, tint: f.tint).accessibilityLabel(f.spoken)
+    }
+}
+
 extension View {
     /// A money figure: one line, wins space over its neighbors, shrinks a little before it truncates.
     func amountText() -> some View {
