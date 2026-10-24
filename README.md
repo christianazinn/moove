@@ -80,7 +80,7 @@ Each integration is one file in `agents/src/integrations/` behind an interface, 
 - **Login (#25):** Auth0 Web Auth (Universal Login) in the app (`ios/Moove/Features/Auth/`), with the ID token used as the SpacetimeDB connection token, plus a guest mode. On the live backend, `register_user` is wired (#28) but not yet demoed on a phone.
 
 ### Visa (Reimagining Shopping)
-- **Built (#40):** `agents/src/integrations/visa.ts`: an approval gate, a spend ledger, an auth-hold, a re-check, then capture or void. The `acceptance` backend targets the Visa Acceptance (CyberSource) REST **sandbox** with the public test card. `simulated` is the default without keys, and `vic` (Visa Intelligent Commerce) is a documented seam only. **No real sandbox call has been made** (no keys), so the demo checkout is labeled simulated.
+- **Built (#40):** `agents/src/integrations/visa.ts`: an approval gate, a spend ledger, an auth-hold, a re-check, then capture or void. The `acceptance` backend targets the Visa Acceptance (CyberSource) REST **sandbox** with the public test card. `simulated` is the default without keys, and `vic` (Visa Intelligent Commerce) is a documented seam only. Real sandbox calls are accepted but fail with HTTP 502 SYSTEM_ERROR until the sandbox merchant has a card processor enabled (#15), so the demo checkout is labeled simulated.
 
 ### eBay (sandbox)
 - **Where:** `agents/src/integrations/ebay.ts` (`sandboxEbay`: Sell Inventory API inventory item -> offer -> publish, category and required aspects picked from the live taxonomy) and `agents/scripts/ebay-setup.ts` (one-time seller setup).

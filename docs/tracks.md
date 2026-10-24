@@ -36,7 +36,7 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 
 **Visa: Reimagining Shopping** ($5,000)
 - Judged on innovation 25%, UX 25%, technical execution 20%, commerce impact 15%, trust & responsibility 15%.
-- [ ] Use the Visa Starter Pack tooling for checkout (#15). Built (#40): Visa Acceptance (CyberSource) REST sandbox backend, tested only against a fake server (no keys). VIC is a seam only. The demo runs `VISA_PROVIDER=simulated` (labeled).
+- [ ] Use the Visa Starter Pack tooling for checkout (#15). Built (#40): Visa Acceptance (CyberSource) REST sandbox backend, tested against a fake server. Real sandbox calls (keys in place) fail with HTTP 502 SYSTEM_ERROR because the sandbox merchant has no card processor enabled; the fix is in the Business Center or via CyberSource support (#15). VIC is a seam only. The demo runs `VISA_PROVIDER=simulated` (labeled).
 - [ ] Show privacy, transparency, approvals and fraud checks (trust & responsibility write-up: [`docs/security.md`](security.md)). On `main`: transparency (every step an `agent_event`), listing approvals (#12), the purchase-approval push text (#53), and upload hardening with EXIF/GPS stripping (#38). Purchase approvals and the auth-hold re-check (#40). Fraud screening for deals (#64, #18): price outliers vs. comps and other deals, off-platform payment wording, new sellers and duplicate listings, combined into one score with reasons (`agents/src/agents/fraud.ts`). The buy agent won't buy a deal at or above `BUY_FRAUD_BLOCK` (0.7). AI-text detection is a Pangram hook (`agents/src/integrations/aitext.ts`), off unless `PANGRAM_URL` is set.
 
 **Anthropic** ($5k credits, plus 1 year of Max 20x)
