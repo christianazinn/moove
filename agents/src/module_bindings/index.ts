@@ -93,8 +93,10 @@ import DealRow from "./deal_table";
 import ItemRow from "./item_table";
 import LayoutRow from "./layout_table";
 import ListingRow from "./listing_table";
+import MyAgentEventRow from "./my_agent_event_table";
 import MyApprovalRow from "./my_approval_table";
 import MyListingRow from "./my_listing_table";
+import MyPaymentRow from "./my_payment_table";
 import MyRoomRow from "./my_room_table";
 import MyUserRow from "./my_user_table";
 import NewHomeRow from "./new_home_table";
@@ -337,6 +339,13 @@ const tablesSchema = __schema({
       { name: 'worker_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, WorkerRow),
+  myAgentEvent: __table({
+    name: 'my_agent_event',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyAgentEventRow),
   myApproval: __table({
     name: 'my_approval',
     indexes: [
@@ -351,6 +360,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyListingRow),
+  myPayment: __table({
+    name: 'my_payment',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyPaymentRow),
   myRoom: __table({
     name: 'my_room',
     indexes: [
