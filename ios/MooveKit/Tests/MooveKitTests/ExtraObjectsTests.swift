@@ -194,3 +194,184 @@ private struct SplitMix {
         #expect(a == 0 && b == 1 && a2 == 0)
     }
 }
+
+/// Points on just one vertical face of a box (what LiDAR sees from one side), plus noise.
+private func facePoints(center: SIMD3<Float>, size: SIMD3<Float>, face: SIMD3<Float>, count: Int = 300, seed: UInt64 = 1) -> [SIMD3<Float>] {
+    var rng = SplitMix(seed: seed)
+    return (0..<count).map { _ in
+        var p = SIMD3<Float>(rng.unit() - 0.5, rng.unit() - 0.5, rng.unit() - 0.5) * size
+        if face.x != 0 { p.x = face.x * size.x / 2 }
+        if face.z != 0 { p.z = face.z * size.z / 2 }
+        return center + p + SIMD3(rng.unit() - 0.5, rng.unit() - 0.5, rng.unit() - 0.5) * 0.01
+    }
+}
+
+/// A 4 m x 4 m room centered on the origin: walls at x = ±2 and z = ±2.
+private let squareRoom: RoomGeometry = {
+    func wall(_ id: String, _ p: SIMD3<Float>, yaw: Float) -> RoomGeometry.Surface {
+        .init(id: id, kind: .wall, dimensions: SIMD3(4, 2.5, 0.1), transform: .at(p, yaw: yaw))
+    }
+    return RoomGeometry(walls: [
+        wall("n", SIMD3(0, 1.25, -2), yaw: 0), wall("s", SIMD3(0, 1.25, 2), yaw: 0),
+        wall("w", SIMD3(-2, 1.25, 0), yaw: .pi / 2), wall("e", SIMD3(2, 1.25, 0), yaw: .pi / 2),
+    ])
+}()
+
+private func front(_ box: FittedBox) -> SIMD2<Float> { SIMD2(sin(box.yaw), cos(box.yaw)) }
+
+/// #267: Lisa's iPad scan. Detector boxes sat toward the camera, faced either way,
+/// doubled RoomPlan objects, and one glance was enough to add an object.
+@Suite struct DetectorBoxTests {
+    // MARK: 1. Center: padding grows away from the camera
+
+    @Test func paddingKeepsTheSeenFaceInPlace() {
+        // A 10 cm slab (the front LiDAR saw) at z = 0, camera 3 m in front (+z).
+        let seen = FittedBox(center: SIMD3(0, 0.4, 0), size: SIMD3(1.2, 0.8, 0.1), yaw: 0)
+        let padded = DetectorPlacement.padDepth(seen, to: 0.5, camera: SIMD3(0, 1.4, 3))
+        #expect(abs(padded.size.z - 0.5) < 1e-5)
+        #expect(abs(padded.center.z - -0.2) < 1e-4)  // front face stays at z = +0.05
+        #expect(abs((padded.center.z + padded.size.z / 2) - 0.05) < 1e-4)
+        // Seen from behind (camera at -z), it grows the other way. Same with yaw 180°.
+        #expect(abs(DetectorPlacement.padDepth(seen, to: 0.5, camera: SIMD3(0, 1.4, -3)).center.z - 0.2) < 1e-4)
+        var turned = seen
+        turned.yaw = .pi
+        #expect(abs(DetectorPlacement.padDepth(turned, to: 0.5, camera: SIMD3(0, 1.4, 3)).center.z - -0.2) < 1e-4)
+    }
+
+    @Test func paddingIsEvenWithoutAUsefulCamera() {
+        let seen = FittedBox(center: SIMD3(0, 0.4, 0), size: SIMD3(1.2, 0.8, 0.1), yaw: 0)
+        #expect(DetectorPlacement.padDepth(seen, to: 0.5, camera: nil).center == seen.center)
+        // Seen side-on (camera along the width axis): its depth faces weren't the near side.
+        #expect(DetectorPlacement.padDepth(seen, to: 0.5, camera: SIMD3(3, 1.4, 0)).center == seen.center)
+        // Already deep enough: untouched.
+        #expect(DetectorPlacement.padDepth(seen, to: 0.05, camera: SIMD3(0, 1.4, 3)) == seen)
+    }
+
+    @Test func mergerKnowsWhereTheCameraWas() {
+        var merger = SightingMerger(floorY: 0)
+        let pts = facePoints(center: SIMD3(0, 0.5, 0), size: SIMD3(1.7, 1, 0.6), face: SIMD3(0, 0, 1))
+        merger.add(Sighting(label: "bicycle", confidence: 0.8, points: pts, camera: SIMD3(-1, 1.4, 3), time: 0))
+        merger.add(Sighting(label: "bicycle", confidence: 0.8, points: pts, camera: SIMD3(1, 1.4, 3), time: 1))
+        let t = merger.tracks[0]
+        #expect(t.camera.map { abs($0.x) < 1e-5 && abs($0.z - 3) < 1e-5 } == true)
+    }
+
+    // MARK: 2. Fit from all sightings
+
+    @Test func boxCombinesSightingsFromDifferentSides() throws {
+        // A 1.7 x 1.0 x 0.6 bike seen from the front, then from its right end.
+        let center = SIMD3<Float>(1, 0.5, 0), size = SIMD3<Float>(1.7, 1, 0.6)
+        var merger = SightingMerger(floorY: 0)
+        merger.add(Sighting(label: "bicycle", confidence: 0.8, points: facePoints(center: center, size: size, face: SIMD3(0, 0, 1)),
+                            camera: SIMD3(1, 1.4, 3), time: 0))
+        let firstDepth = try #require(merger.tracks.first).box.size.z
+        merger.add(Sighting(label: "bicycle", confidence: 0.8, points: facePoints(center: center, size: size, face: SIMD3(1, 0, 0), seed: 2),
+                            camera: SIMD3(4, 1.4, 0), time: 2))
+        let box = try #require(merger.results().first).box
+        #expect(merger.tracks.count == 1)
+        #expect(firstDepth < 0.1)  // one side alone is a slab
+        // Both views land in one track (their near faces are 0.9 m apart, which used to
+        // start a second bike) and the box is refitted from all their points. Two bare
+        // faces make an L, which the min-area fit tilts a little; more views tighten it.
+        #expect(abs(box.size.x - 1.7) < 0.15 && box.size.z > 0.4)
+        #expect(abs(box.center.x - 1) < 0.2 && abs(box.center.z) < 0.25)
+    }
+
+    // MARK: 3. Facing
+
+    @Test func backGoesToTheWallItStandsAgainst() {
+        // A sofa-ish box 10 cm off the north wall (z = -2), fitted facing the wall.
+        let box = FittedBox(center: SIMD3(0.3, 0.4, -1.5), size: SIMD3(2, 0.8, 0.8), yaw: .pi)
+        let faced = DetectorPlacement.faced(box, in: squareRoom, camera: nil)
+        #expect(front(faced).y > 0.99)  // front toward +z, into the room
+        #expect(faced.center == box.center && faced.size == box.size)
+        // Against the east wall (x = 2) with its width along it: front toward -x.
+        let east = FittedBox(center: SIMD3(1.65, 0.4, 0.5), size: SIMD3(1.2, 0.8, 0.5), yaw: -.pi / 2)
+        #expect(front(DetectorPlacement.faced(east, in: squareRoom, camera: nil)).x < -0.99)
+    }
+
+    @Test func freeStandingPiecesFaceTheRoomCenter() {
+        // An ottoman 1 m from the south wall, fitted facing the wall: turn to the center.
+        let box = FittedBox(center: SIMD3(0, 0.2, 1.0), size: SIMD3(0.6, 0.4, 0.5), yaw: 0)
+        #expect(front(DetectorPlacement.faced(box, in: squareRoom, camera: nil)).y < -0.99)
+        // A wall end-on to the box (its side, not its back) doesn't count as "against".
+        let side = FittedBox(center: SIMD3(1.5, 0.4, 1.0), size: SIMD3(0.8, 0.8, 0.5), yaw: .pi / 2)
+        let f = front(DetectorPlacement.faced(side, in: squareRoom, camera: nil))
+        #expect(f.x < -0.99)  // toward the center (-x), not decided by the south wall
+    }
+
+    @Test func withoutWallsItFacesTheCamera() {
+        let box = FittedBox(center: SIMD3(0, 0.4, 0), size: SIMD3(1, 0.8, 0.5), yaw: 0)
+        #expect(front(DetectorPlacement.faced(box, in: RoomGeometry(), camera: SIMD3(0, 1.4, -2))).y < -0.99)
+        #expect(DetectorPlacement.faced(box, in: RoomGeometry(), camera: nil) == box)
+    }
+
+    @Test func placePadsThenFaces() {
+        // A bench's front slab (12 cm) seen from the room, 25 cm off the north wall.
+        let o = RoomGeometry.Object(id: "b", category: "bench", dimensions: SIMD3(1.2, 0.45, 0.12),
+                                    transform: .at(SIMD3(0, 0.225, -1.7), yaw: .pi))
+        let placed = DetectorPlacement.place(o, in: squareRoom, camera: SIMD3(0, 1.4, 1))
+        #expect(abs(placed.dimensions.z - 0.35) < 1e-5)
+        #expect(abs(placed.transform.position.z - -1.815) < 1e-3)  // grew toward the wall
+        #expect(abs(placed.transform.yaw) < 1e-3)  // front (+z) into the room
+    }
+
+    // MARK: 4. RoomPlan duplicates
+
+    @Test func partialFootprintOverlapIsADuplicate() {
+        // RoomPlan saw the ottoman as a 0.6 m storage box; the detector box is off by 0.35 m
+        // (about 40% footprint overlap; the old >50%-inside rule kept it).
+        let roomPlanBox = RoomGeometry.Object(id: "s", category: "storage", dimensions: SIMD3(0.6, 0.45, 0.6), transform: .at(SIMD3(0, 0.225, 0)))
+        func run(offset: Float) -> Int {
+            var merger = SightingMerger(floorY: 0)
+            for seed in 1...2 {
+                merger.add(Sighting(label: "ottoman", confidence: 0.8,
+                                    points: boxPoints(center: SIMD3(offset, 0.225, 0), size: SIMD3(0.6, 0.45, 0.6), yaw: 0, seed: UInt64(seed))))
+            }
+            return merger.results(excluding: [roomPlanBox]).count
+        }
+        #expect(run(offset: 0.35) == 0)
+        #expect(run(offset: 0.52) == 1)  // ~13% overlap: a separate piece beside it
+    }
+
+    @Test func footprintOverlapIsExactForRotatedBoxes() {
+        let a = FittedBox(center: SIMD3(0, 0.5, 0), size: SIMD3(1, 1, 1), yaw: 0)
+        let b = FittedBox(center: SIMD3(0.5, 0.5, 0), size: SIMD3(1, 1, 1), yaw: 0)
+        #expect(abs(SightingMerger.footprintOverlap(a, b) - 0.5) < 1e-4)
+        let diamond = FittedBox(center: SIMD3(0, 0.5, 0), size: SIMD3(1, 1, 1), yaw: .pi / 4)
+        // A unit square and the same square turned 45°: overlap = 2(√2 - 1) ≈ 0.828.
+        #expect(abs(SightingMerger.footprintOverlap(a, diamond) - 0.8284) < 1e-3)
+        let far = FittedBox(center: SIMD3(3, 0.5, 0), size: SIMD3(1, 1, 1), yaw: 0.3)
+        #expect(SightingMerger.footprintOverlap(a, far) == 0)
+    }
+
+    // MARK: 5. False positives
+
+    let ottoman = (center: SIMD3<Float>(0, 0.225, 0), size: SIMD3<Float>(0.7, 0.45, 0.6))
+
+    @Test func oneGlanceNeedsHighConfidence() {
+        var merger = SightingMerger(floorY: 0)
+        merger.add(Sighting(label: "ottoman", confidence: 0.8, points: boxPoints(center: ottoman.center, size: ottoman.size, yaw: 0)))
+        #expect(merger.results().isEmpty)  // 0.7 used to be enough
+        merger = SightingMerger(floorY: 0)
+        merger.add(Sighting(label: "ottoman", confidence: 0.9, points: boxPoints(center: ottoman.center, size: ottoman.size, yaw: 0)))
+        #expect(merger.results().count == 1)
+    }
+
+    @Test func sightingsFromTheSameViewCountOnce() {
+        func run(_ second: (time: Double, camera: SIMD3<Float>)) -> SightingMerger.Track? {
+            var merger = SightingMerger(floorY: 0)
+            merger.add(Sighting(label: "ottoman", confidence: 0.8, points: boxPoints(center: ottoman.center, size: ottoman.size, yaw: 0, seed: 1),
+                                camera: SIMD3(0, 1.4, 2), time: 10))
+            merger.add(Sighting(label: "ottoman", confidence: 0.8, points: boxPoints(center: ottoman.center, size: ottoman.size, yaw: 0, seed: 2),
+                                camera: second.camera, time: second.time))
+            return merger.results().first
+        }
+        // Same frame, same place (two boxes on one object): one view, not confirmed.
+        #expect(run((10.1, SIMD3(0.05, 1.4, 2))) == nil)
+        // 0.4 s later: a second look.
+        #expect(run((10.4, SIMD3(0.05, 1.4, 2)))?.views == 2)
+        // Same instant but from 30° around: also a second look.
+        #expect(run((10.0, SIMD3(2 * sin(Float.pi / 6), 1.4, 2 * cos(Float.pi / 6))))?.views == 2)
+    }
+}
