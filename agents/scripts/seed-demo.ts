@@ -53,14 +53,14 @@ const { conn, identity } = await new Promise<{ conn: DbConnection; identity: Ide
         .subscriptionBuilder()
         .onApplied(() => resolve({ conn, identity }))
         .onError((ctx) => reject(ctx.event ?? new Error("subscription failed")))
-        .subscribe([tables.room, tables.item, tables.user]);
+        .subscribe([tables.myRoom, tables.item, tables.myUser]);
     })
     .onConnectError((_ctx, err) => reject(err))
     .build();
 });
 console.log(`connected to ${config.spacetimeUri} / ${config.spacetimeDb} as user ${identity.toHexString()} (token: agents/${tokenFile})`);
 
-const myBedrooms = () => [...conn.db.room.iter()].filter((r) => r.owner.isEqual(identity) && r.name === DEMO_ROOM_NAME && r.home === DEMO_HOME);
+const myBedrooms = () => [...conn.db.myRoom.iter()].filter((r) => r.owner.isEqual(identity) && r.name === DEMO_ROOM_NAME && r.home === DEMO_HOME);
 const itemsIn = (room: Room) => [...conn.db.item.iter()].filter((it) => it.roomId === room.id);
 
 function printItems(room: Room): void {
@@ -78,7 +78,7 @@ try {
     room = existing.reduce((a, b) => (b.id > a.id ? b : a)); // newest; iter() order isn't by id
     console.log(`\nAlready seeded: "${room.name}" (room #${room.id}, ${itemsIn(room).length} items). Use --force to import another.`);
   } else {
-    if (!conn.db.user.identity.find(identity)) await conn.reducers.registerUser({ auth0Sub: "", name: "Demo Student", email: "demo@moove.app" });
+    if (conn.db.myUser.count() === 0n) await conn.reducers.registerUser({ auth0Sub: "", name: "Demo Student", email: "demo@moove.app" });
     const before = new Set(existing.map((r) => r.id));
     await conn.reducers.importScan({
       roomName: DEMO_ROOM_NAME,

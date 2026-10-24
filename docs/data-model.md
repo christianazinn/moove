@@ -9,7 +9,7 @@
 - **Money:** prices are `i64` cents. Payments use `amount_usd_micros` (`i64`, USD × 1e6), so x402 USDC (6 decimals) and card amounts share one column.
 - **Types:** ids are `u64` auto-inc (pass `0` on insert). Dimensions are `f64` meters. Times are `Timestamp`. Ownership is `owner: Identity`.
 - **Room access:** room items are readable and editable by the owner, by `room_member`s (who join with `join_room(code)`), and by the worker. Other tables are owner-only. The owner can `rotate_join_code` (the old code stops working) and `remove_member` if a code leaks (#41).
-- **All tables are public** for now, so clients subscribe with `WHERE owner = ...`. Private tables + per-user views (#41 part B) are deferred until the demo path works end to end.
+- **`room` and `user` are private** (#41 part B): read them through the views below. Every other table is public, so clients subscribe with `WHERE owner = ...`.
 - **Worker auth:** the agent worker calls `register_worker` on connect. **On maincloud** (the module checks `ctx.databaseIdentity`) only the pinned worker identity in `spacetime/src/index.ts` (`MAINCLOUD_WORKER_IDENTITIES`) can register or act as the worker, even if another row is in `worker` (#44). **On any other database** (local dev) the first caller wins, and after that only registered workers can add more. Worker-only reducers reject everyone else. Rotating the maincloud worker means editing that constant and republishing.
 - **Connection gate (#41 part A):** `client_connected` rejects connections that aren't an Auth0 ID token from our tenant (`iss` = `https://dev-78lq8spq27b2bipk.us.auth0.com/`, `aud` contains the iOS native client id) or the worker (on a local DB with no worker yet, any caller gets in so the first worker can register). It is **off** (`REQUIRE_AUTH0 = false`) until the app no longer falls back to anonymous tokens; flipping it is a one-line change plus a republish. Tested locally: with it on, HTTP reducer calls and `spacetime sql` are rejected too.
 - **Identity claims:** `register_user` takes `auth0_sub` (and `email`, when the token has one) from the caller's verified Auth0 token, never from its args (#44). Anonymous tokens get `auth0_sub = ''`. The `auth0_sub` arg is ignored but kept so bindings don't change. The SQL column name is `auth_0_sub` (that's how SpacetimeDB snake-cases `auth0Sub`).
@@ -47,8 +47,9 @@ Status values:
 ## Views (#41 part B)
 - **`my_room`**: rooms you own or joined through `room_member` (base `room` rows, including `join_code`).
 - **`my_user`**: your own `user` row.
+- **`worker_room`** / **`worker_user`**: every `room` / `user` row for the registered worker, empty for anyone else. The worker reads owners' approval thresholds and Auth0 subjects here.
 
-**Step 1 (now):** additive. Clients should subscribe with `SELECT * FROM my_room` / `SELECT * FROM my_user` instead of filtering the base tables. **Step 2 (after the iOS switch):** `room` and `user` become private, so join codes, emails and Auth0 subjects stop being world-readable, and the worker gets a worker-only users view for CIBA. One-off SQL queries against views return no rows (SDK behavior); use subscriptions.
+`room` and `user` are private, so join codes, emails and Auth0 subjects aren't world-readable: a client subscribing to `SELECT * FROM room` or `user` is refused (`npm run e2e` checks it). Views have no index accessors and an updated row arrives as delete + insert. One-off SQL queries against views return no rows (SDK behavior); use subscriptions. App builds older than #176 subscribe to `room`/`user` directly and fail to sync; rebuild from main.
 
 ## Input limits (#146)
 Enforced in the module, so they hold for every client:

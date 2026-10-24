@@ -247,7 +247,7 @@ await stage("app user connects + register_user", async () => {
   await conn.reducers.registerUser({ auth0Sub: "", name: "E2E Tester", email: "e2e@example.invalid" });
   // -1 = ask for approval on everything, so the approval path runs for listings and purchases
   await conn.reducers.setApprovalThreshold({ cents: -1n });
-  await until("user row", () => conn!.db.user.identity.find(me!), 10_000);
+  await until("user row", () => [...conn!.db.myUser.iter()].find(u => u.identity.isEqual(me!)), 10_000);
   return { detail: `user ${me.toHexString().slice(0, 12)}…, approval threshold -1 (always ask)` };
 });
 
@@ -533,6 +533,22 @@ await stage("share: second phone joins by code, sees items, edits sync back", as
   } finally {
     second.conn.disconnect();
   }
+});
+
+await stage("privacy: room and user are private, worker views are empty for apps (#41)", async () => {
+  if (!conn) throw new Error("not connected");
+  if (conn.db.workerRoom.count() !== 0n || conn.db.workerUser.count() !== 0n) throw new Error("an app identity can read worker_room / worker_user");
+  const refused = await Promise.all(["SELECT * FROM room", "SELECT * FROM user"].map(sql =>
+    new Promise<string>(resolve => {
+      conn!.subscriptionBuilder()
+        .onApplied(() => resolve(`${sql} was allowed`))
+        .onError(() => resolve(""))
+        .subscribe(sql);
+    })
+  ));
+  const leaks = refused.filter(Boolean);
+  if (leaks.length) throw new Error(leaks.join("; "));
+  return { detail: "app subscriptions to room/user refused; worker_room/worker_user empty; my_room/my_user still work" };
 });
 
 await stage("vision: a photographed item gets identified (Claude, replayed)", async () => {
