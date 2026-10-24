@@ -9,19 +9,24 @@ struct RootView: View {
     @AppStorage("moove.tab") private var tab = "scan"
 
     var body: some View {
+        // iOS shows the first 4 tabs plus "More". Keep the demo flow
+        // (scan -> review -> spending -> new home) in the visible four.
         TabView(selection: $tab) {
             NavigationStack { screen(ScanHomeView()) }
                 .tag("scan")
                 .tabItem { Label("Scan", systemImage: "camera.viewfinder") }
-            NavigationStack { screen(InventoryView()) }
-                .tag("inventory")
-                .tabItem { Label("Inventory", systemImage: "shippingbox") }
             NavigationStack { screen(ReviewView()) }
                 .tag("review")
                 .tabItem { Label("Review", systemImage: "checklist") }
+            NavigationStack { screen(SpendingView()) }
+                .tag("spending")
+                .tabItem { Label("Spending", systemImage: "creditcard") }
             NavigationStack { screen(NewHomeView()) }
                 .tag("newhome")
                 .tabItem { Label("New Home", systemImage: "house") }
+            NavigationStack { screen(InventoryView()) }
+                .tag("inventory")
+                .tabItem { Label("Inventory", systemImage: "shippingbox") }
             NavigationStack { screen(ListingsView()) }
                 .tag("listings")
                 .tabItem { Label("Listings", systemImage: "tag") }
@@ -29,9 +34,6 @@ struct RootView: View {
                 .tag("approvals")
                 .tabItem { Label("Approvals", systemImage: "checkmark.shield") }
                 .badge(store.pendingApprovals.count)
-            NavigationStack { screen(SpendingView()) }
-                .tag("spending")
-                .tabItem { Label("Spending", systemImage: "creditcard") }
             NavigationStack { screen(SummaryView()) }
                 .tag("summary")
                 .tabItem { Label("Summary", systemImage: "chart.bar.doc.horizontal") }
