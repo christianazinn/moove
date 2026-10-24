@@ -1,5 +1,8 @@
 // Safety net: a stray rejected promise (e.g. a reducer call nobody awaited) must not kill the worker.
 process.on('unhandledRejection', (err) => console.error('[agents] UNHANDLED REJECTION (worker kept alive):', err));
+// As PID 1 in a container node ignores SIGTERM unless it has a handler, so `docker stop` and platform
+// redeploys would wait out the grace period with the old worker still processing rows. Exit right away.
+for (const sig of ['SIGTERM', 'SIGINT'] as const) process.on(sig, () => { console.log(`[agents] ${sig}, exiting`); process.exit(0); });
 import { connect } from './spacetime.js';
 import { startUploadServer } from './upload.js';
 import { visionAgent } from './agents/vision.js';
