@@ -37,6 +37,21 @@ public enum DemoFixtures {
             Comp(id: 101, itemId: 11, source: "craigslist", title: "Aeron chair, good condition", priceCents: 38_000, url: "https://sfbay.craigslist.org/"),
             Comp(id: 102, itemId: 11, source: "fb", title: "Herman Miller office chair", priceCents: 42_500, url: "https://www.facebook.com/marketplace/"),
         ]
+        // As if the listing agent (#11) had run. All simulated: the demo never posts to eBay.
+        s.listings = [
+            Listing(id: 200, owner: owner, itemId: 11, title: "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition",
+                    description: "Fully adjustable Aeron in size B with lumbar support. Mesh seat and back are intact with no tears.\n\nLight wear on the armrests. Smoke-free home.\n\nLocal pickup in SF, or I can ship.",
+                    priceCents: 41_000, status: .awaitingApproval),
+            Listing(id: 201, owner: owner, itemId: 12, title: "IKEA Laminate Desk, 140 x 70 cm, White - Good Condition",
+                    description: "Simple, sturdy desk with plenty of room for a monitor and laptop.\n\nSome surface scratches, nothing structural. Disassembles for transport.",
+                    priceCents: 3_500, status: .posted, externalId: "395718204163"),
+            Listing(id: 202, owner: owner, itemId: 20, title: "Large Fabric Bean Bag Chair, Gray - Clean, Comfortable",
+                    description: "Oversized bean bag with a removable, washable cover.\n\nCover was washed last month. Pickup only, it's bulky.",
+                    priceCents: 1_800, status: .sold, externalId: "395718209877"),
+            Listing(id: 203, owner: owner, itemId: 21, title: "Frigidaire Compact Mini Fridge 3.2 cu ft, Black - Works Great",
+                    description: "Quiet compact fridge with a small freezer section. Clean inside, adjustable thermostat.\n\nPerfect for a dorm or office.",
+                    priceCents: 7_000, status: .draft),
+        ]
         return s
     }
 }

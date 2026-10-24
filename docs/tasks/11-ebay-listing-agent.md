@@ -7,7 +7,7 @@ stretch: false
 ---
 
 ## Goal
-For every "sell" item, an agent writes a strong listing (title, description, price, photos) and posts it to eBay (sandbox), with a status the user can track.
+For every "sell" item, an agent writes a strong listing (title, description, price, photos) and posts it to eBay, with a status the user can track. **For the demo the eBay post is simulated** (team call, 2026-10-23): the agent walks the real Sell Inventory API sequence with realistic latency and agentEvents, but calls nothing, and every listing has `simulated=true` and a visible label.
 
 ## Context
 An agent in the worker (`agents/`). It subscribes to items with `disposition=sell` and no listing. It uses comps from #6 for pricing, and expensive listings wait for #12's phone approval before posting. See `docs/architecture.md` and `docs/data-model.md`.
@@ -24,7 +24,7 @@ An agent in the worker (`agents/`). It subscribes to items with `disposition=sel
 
 ## Acceptance criteria
 - [ ] Sell fixture items get drafted listings with prices justified by comps.
-- [ ] At least one listing is actually published in the eBay sandbox, with a viewable URL.
+- [ ] Listings "post" (simulated) with an item number and a viewable listing page, labeled simulated in data and UI.
 - [ ] Expensive items wait for approval and are not posted.
 - [ ] Listing text can be copied for manual cross-posting to FB Marketplace or Craigslist (no APIs exist for those).
 
@@ -32,8 +32,8 @@ An agent in the worker (`agents/`). It subscribes to items with `disposition=sel
 Drafted listings with a "simulated post" badge if eBay sandbox auth fails.
 
 ## Notes & gotchas
-- Sign up for an **eBay developer sandbox keyset NOW**. The OAuth user-token flow for a sandbox seller takes setup. Verify the Sell Inventory API steps against current eBay docs.
-- Photos must be public URLs for eBay. The worker upload endpoint needs to be reachable (tunnel or deployed).
+- Real eBay is out of scope for the demo. If it comes back: developer account approval takes ~1 business day, business-policy opt-in is API-only in sandbox, category suggestions don't work in sandbox, and photos must be public HTTPS URLs.
+- `LISTING_SIM_SOLD_AFTER_SEC` (worker env, default 0 = off) flips posted simulated listings to `sold` after a delay for the demo.
 - `claude-opus-5-5` for listing planning, or sonnet if latency matters (env-overridable).
 
 ## Definition of done
