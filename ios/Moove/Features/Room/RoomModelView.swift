@@ -67,18 +67,19 @@ struct RoomModelView: View {
     /// Recolors furniture for the current mode and selection, and shows labels.
     private func apply(to room: Entity) {
         guard let objects = room.children.first(where: { $0.name == "objects" }) else { return }
-        for case let block as ModelEntity in objects.children {
-            let id = String(block.name.dropFirst(RoomScene.objectPrefix.count))
-            guard let object = geometry.objects.first(where: { $0.id == id }) else { continue }
+        for container in objects.children {
+            let id = String(container.name.dropFirst(RoomScene.objectPrefix.count))
+            guard let object = geometry.objects.first(where: { $0.id == id }),
+                  let body = RoomScene.body(of: container) else { continue }
             let item = items[id]
             let selected = id == selection
             let color = RoomPalette.color(for: object, item: item, mode: mode)
-            block.model?.materials = [RoomScene.material(color, roughness: 0.5, glow: selected)]
-            block.scale = selected ? SIMD3(repeating: 1.06) : .one
+            RoomScene.recolor(body, color, roughness: 0.5, glow: selected)
+            body.scale = selected ? SIMD3(repeating: 1.06) : .one
 
             var text = item?.name ?? object.category.capitalized
             if item?.maybeSentimental == true { text += " ♥" }
-            RoomScene.setLabel((showLabels || selected) ? text : nil, on: block, above: object, fontSize: labelSize)
+            RoomScene.setLabel((showLabels || selected) ? text : nil, on: container, above: object, fontSize: labelSize)
         }
     }
 }
