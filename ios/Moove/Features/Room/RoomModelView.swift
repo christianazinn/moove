@@ -12,6 +12,10 @@ struct RoomModelView: View {
     let showLabels: Bool
     @Binding var selection: String?
 
+    @State private var models = ObjectModelStore.shared
+    /// Loaded Object Capture models by object id (prototypes; the scene holds clones).
+    @State private var prototypes: [String: Entity] = [:]
+
     var body: some View {
         RealityView { content in
             AppliedLookComponent.registerComponent()
@@ -27,6 +31,7 @@ struct RoomModelView: View {
             apply(to: room)
         }
         .realityViewCameraControls(.orbit)
+        .task(id: models.revision) { await loadModels() }
         .gesture(
             SpatialTapGesture().targetedToAnyEntity().onEnded { value in
                 var entity: Entity? = value.entity
@@ -73,28 +78,65 @@ struct RoomModelView: View {
         return max(b.max.x - b.min.x, b.max.z - b.min.z, 1) * 0.04
     }
 
-    /// Recolors furniture for the current mode and selection, and shows labels.
-    /// Incremental: each container remembers the look it last got, so SwiftUI
-    /// updates only rebuild materials or labels whose inputs changed.
+    /// Loads the USDZ for every object that has a captured model.
+    private func loadModels() async {
+        for object in geometry.objects {
+            guard let url = models.modelURL(for: object.id) else {
+                prototypes[object.id] = nil
+                continue
+            }
+            if prototypes[object.id]?.name == url.absoluteString { continue }
+            guard let entity = try? await Entity(contentsOf: url) else { continue }
+            entity.name = url.absoluteString  // remembers which file it came from
+            prototypes[object.id] = entity
+        }
+    }
+
+    /// Recolors furniture for the current mode and selection, swaps in captured
+    /// models, and shows labels. Incremental: each container remembers the look
+    /// it last got, so SwiftUI updates only rebuild what changed. A captured
+    /// model beats the procedural furniture, which beats the plain block.
     private func apply(to room: Entity) {
         guard let objects = room.children.first(where: { $0.name == "objects" }) else { return }
         let byId = Dictionary(geometry.objects.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let fontSize = labelSize
         for container in objects.children {
             let id = String(container.name.dropFirst(RoomScene.objectPrefix.count))
-            guard let object = byId[id],
-                  let body = RoomScene.body(of: container) else { continue }
+            guard let object = byId[id] else { continue }
             let item = items[id]
             let selected = id == selection
             let color = RoomPalette.color(for: object, item: item, mode: mode)
+            let prototype = prototypes[id]
+            let turns = models.extraTurns(for: id)
             let look = RoomObjectLook(color: RoomSceneCache.rgba(color), selected: selected,
                                       label: showLabels || selected ? RoomObjectLook.labelText(for: object, item: item) : nil,
-                                      labelSize: fontSize)
+                                      labelSize: fontSize,
+                                      model: prototype.map { "\($0.name)#\(turns)" })
             let changes = look.changes(since: container.components[AppliedLookComponent.self]?.look)
             guard !changes.isEmpty else { continue }
 
-            if changes.contains(.color) { RoomScene.recolor(body, color, roughness: 0.5, glow: selected) }
-            if changes.contains(.selection) { RoomScene.setSelected(body, selected: selected) }
+            if changes.contains(.model) {
+                if let prototype { RoomScene.attachModel(prototype, to: container, object: object, extraQuarterTurns: turns) }
+                RoomScene.showCapturedModel(container, prototype != nil)
+            }
+            if prototype != nil {
+                // Captured model: keep its own textures, color the base under it,
+                // and show the measured box as a translucent highlight when selected.
+                let block = container.findEntity(named: "block") as? ModelEntity
+                if changes.contains(.color) {
+                    if let base = container.findEntity(named: "base") { RoomScene.recolor(base, color, roughness: 0.6, glow: selected) }
+                    var highlight = RoomScene.material(color, roughness: 0.4, glow: true)
+                    highlight.blending = .transparent(opacity: .init(floatLiteral: 0.22))
+                    block?.model?.materials = [highlight]
+                }
+                block?.isEnabled = selected
+                if changes.contains(.selection), let model = container.findEntity(named: "model") {
+                    RoomScene.setSelected(model, selected: selected)
+                }
+            } else if let body = RoomScene.body(of: container) {
+                if changes.contains(.color) { RoomScene.recolor(body, color, roughness: 0.5, glow: selected) }
+                if changes.contains(.selection) { RoomScene.setSelected(body, selected: selected) }
+            }
             if changes.contains(.label) {
                 container.children.filter { $0.name == "label" }.forEach { $0.removeFromParent() }
                 if let text = look.label { container.addChild(RoomScene.label(text, above: object, fontSize: fontSize)) }

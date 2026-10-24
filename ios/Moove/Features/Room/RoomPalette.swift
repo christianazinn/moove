@@ -32,6 +32,12 @@ enum RoomPalette {
         case "fireplace": hex(0xE07A5F)
         case "stairs": hex(0xC9B79C)
         case "decor": hex(0xFF7EB6)
+        case "bicycle", "motorcycle", "skateboard", "surfboard", "skis", "snowboard": hex(0xFF6B4A)  // sports & rides
+        case "plant": hex(0x6BCB77)
+        case "suitcase", "backpack": hex(0xC08552)
+        case "microwave", "laptop": hex(0x5CCBF2)
+        case "bench": hex(0x4FC9A4)
+        case "vase", "teddy bear": hex(0xFF7EB6)
         default: hex(0xA0AEC0)
         }
     }

@@ -19,6 +19,18 @@ import Testing
         #expect(look(label: nil).changes(since: look(label: nil, size: 0.5)).isEmpty)  // hidden label ignores size
     }
 
+    @Test func capturedModelArrivingRebuildsEverything() {
+        let plain = look()
+        var captured = look()
+        captured.model = "file:///models/demo-11/model.usdz#0"
+        #expect(captured.changes(since: plain) == .all)
+        var turned = captured
+        turned.model = "file:///models/demo-11/model.usdz#1"
+        #expect(turned.changes(since: captured) == .all)  // "Rotate 90°" rebuilds too
+        #expect(plain.changes(since: captured) == .all)   // removed model
+        #expect(captured.changes(since: captured).isEmpty)
+    }
+
     @Test func colorChangeOnlyRecolors() {
         #expect(look(blue).changes(since: look()) == .color)
     }
