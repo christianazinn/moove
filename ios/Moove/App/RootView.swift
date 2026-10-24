@@ -46,6 +46,10 @@ struct RootView: View {
         }
         .tint(Theme.accentStrong)
         .sheet(isPresented: $showSettings) { SettingsView() }
+        #if DEBUG
+        // Screenshot/UI-test hook: open Settings on launch.
+        .onAppear { if ProcessInfo.processInfo.environment["MOOVE_OPEN_SETTINGS"] != nil { showSettings = true } }
+        #endif
     }
 
     private func screen(_ content: some View) -> some View {
