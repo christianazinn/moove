@@ -18,6 +18,10 @@ struct MooveApp: App {
                     )
                 }
                 .environment(store)
+            } else if let id = ProcessInfo.processInfo.environment["MOOVE_ITEM_PREVIEW"].flatMap(UInt64.init) {
+                // Screenshot harness: one demo item's detail screen, offline, no login.
+                NavigationStack { ItemDetailView(itemId: id) }
+                    .environment(Self.itemPreviewStore)
             } else {
                 gate
             }
@@ -28,6 +32,8 @@ struct MooveApp: App {
     }
 
     #if DEBUG
+    @MainActor private static let itemPreviewStore = MooveStore.preview()
+
     /// Harness items; MOOVE_PREVIEW_GLB=<url> gives the desk a synced SAM 3D model.
     private static func previewItems() -> [String: Item] {
         var items = DemoFixtures.inventory(owner: "me").items
