@@ -115,6 +115,35 @@ final class MooveStore {
         await run { try await $0.addItemPhoto(itemId: itemId, url: url) }
     }
 
+    /// Another photo of an item (#84): uploads the JPEG to the worker and calls
+    /// `add_item_photo`, which re-runs vision and SAM 3D on the better set of
+    /// photos. Offline (fixture backend) the photo stays on this phone.
+    @discardableResult
+    func addItemPhoto(_ jpeg: Data, to item: Item) async -> Bool {
+        let dir = URL.documentsDirectory.appending(path: "item-photos", directoryHint: .isDirectory)
+        let file = dir.appending(path: "\(UUID().uuidString).jpg")
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try jpeg.write(to: file)
+            let url: String
+            if backendKind == .fixture {
+                url = try await LocalUploader().upload(file, contentType: "image/jpeg")
+            } else {
+                guard let base = config.uploadBaseURL else {
+                    try? FileManager.default.removeItem(at: file)
+                    lastError = "No upload server configured (MooveUploadBaseURL), so the photo can't be shared"
+                    return false
+                }
+                defer { try? FileManager.default.removeItem(at: file) }
+                url = try await HTTPUploader(baseURL: base).upload(file, contentType: "image/jpeg")
+            }
+            return await run { try await $0.addItemPhoto(itemId: item.id, url: url) }
+        } catch {
+            lastError = "Photo upload failed: \(error.localizedDescription)"
+            return false
+        }
+    }
+
     func setDisposition(_ disposition: Disposition, for item: Item) async {
         await run { try await $0.setDisposition(itemId: item.id, disposition: disposition) }
     }
