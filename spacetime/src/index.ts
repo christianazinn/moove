@@ -142,6 +142,9 @@ const item = table(
     modelUrl: t.string().default(''), // USDZ (capture) or GLB (sam3d), '' if none
     modelSource: t.string().default(''), // MODEL_SOURCE or ''
     modelStatus: t.string().default('pending'), // STAGE: the SAM 3D agent picks up pending items with a photo
+    // Voxel look (#110). Appended with defaults so existing rows migrate.
+    attributesJson: t.string().default('[]'), // JSON array of RoomPlan attributes, e.g. ["ChairType.swivel"]
+    colorsJson: t.string().default(''), // {"primary":"#RRGGBB","secondary":"#RRGGBB"}, '' if unknown
   }
 );
 
@@ -564,6 +567,99 @@ export const importScan = spacetimedb.reducer(
   }
 );
 
+// ---------- RoomPlan attributes + colors (#110) ----------
+const ScanObjectInputV2 = t.object('ScanObjectInputV2', {
+  scanObjectId: t.string(),
+  name: t.string(),
+  category: t.string(),
+  widthM: t.f64(),
+  heightM: t.f64(),
+  depthM: t.f64(),
+  photoUrl: t.string(), // '' if none
+  attributes: t.array(t.string()), // RoomPlan attribute raw values, type-prefixed ("ChairType.swivel"); [] if none
+});
+
+const MAX_ATTRIBUTES = 32;
+const ATTRIBUTE_RE = /^[A-Za-z][A-Za-z0-9]{0,40}\.[A-Za-z0-9_]{1,40}$/;
+// Validated, de-duplicated, stored as a JSON array.
+function attributesJsonOf(list: readonly string[]): string {
+  if (list.length > MAX_ATTRIBUTES) throw new SenderError(`at most ${MAX_ATTRIBUTES} attributes per item`);
+  for (const a of list) if (!ATTRIBUTE_RE.test(a)) throw new SenderError(`attribute '${a.slice(0, 70)}' must look like Type.value`);
+  return JSON.stringify([...new Set(list)]);
+}
+
+const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
+function colorsJsonOf(json: string): string {
+  if (json === '') return '';
+  let v: unknown;
+  try {
+    v = JSON.parse(json);
+  } catch {
+    throw new SenderError('colors must be JSON');
+  }
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw new SenderError('colors must be a JSON object');
+  const out: Record<string, string> = {};
+  for (const [k, c] of Object.entries(v as Record<string, unknown>)) {
+    if (k !== 'primary' && k !== 'secondary') throw new SenderError(`unknown color key '${k.slice(0, 20)}' (primary|secondary)`);
+    if (typeof c !== 'string' || !HEX_COLOR_RE.test(c)) throw new SenderError(`color ${k} must be #RRGGBB`);
+    out[k] = c.toUpperCase();
+  }
+  return JSON.stringify(out);
+}
+
+// import_scan plus RoomPlan attributes per object. import_scan itself is unchanged so existing
+// app builds keep working; new builds call this one.
+export const importScanV2 = spacetimedb.reducer(
+  { name: 'import_scan_v2' },
+  {
+    roomName: t.string(),
+    home: t.string(),
+    usdzUrl: t.string(),
+    capturedRoomJsonUrl: t.string(),
+    objects: t.array(ScanObjectInputV2),
+  },
+  (ctx, { roomName, home, usdzUrl, capturedRoomJsonUrl, objects }) => {
+    const attrs = objects.map(o => attributesJsonOf(o.attributes)); // validate everything before writing
+    const r = ctx.db.room.insert({
+      id: 0n,
+      owner: ctx.sender,
+      name: roomName,
+      home: oneOf('home', home, HOME),
+      joinCode: newJoinCode(ctx),
+      createdAt: ctx.timestamp,
+    });
+    const s = ctx.db.scan.insert({
+      id: 0n,
+      owner: ctx.sender,
+      roomId: r.id,
+      usdzUrl,
+      capturedRoomJsonUrl,
+      createdAt: ctx.timestamp,
+      sweepStatus: 'none',
+    });
+    objects.forEach((o, i) => insertItem(ctx, ctx.sender, r.id, s.id, o, attrs[i]));
+  }
+);
+
+export const setItemAttributes = spacetimedb.reducer(
+  { itemId: t.u64(), attributes: t.array(t.string()) },
+  (ctx, { itemId, attributes }) => {
+    const it = getItem(ctx, itemId);
+    if (!isWorker(ctx)) requireRoomAccess(ctx, it.roomId);
+    ctx.db.item.id.update({ ...it, attributesJson: attributesJsonOf(attributes), updatedAt: ctx.timestamp });
+  }
+);
+
+// Colors sampled from scan frames or photos (app or worker). '' clears.
+export const setItemColors = spacetimedb.reducer(
+  { itemId: t.u64(), colorsJson: t.string() },
+  (ctx, { itemId, colorsJson }) => {
+    const it = getItem(ctx, itemId);
+    if (!isWorker(ctx)) requireRoomAccess(ctx, it.roomId);
+    ctx.db.item.id.update({ ...it, colorsJson: colorsJsonOf(colorsJson), updatedAt: ctx.timestamp });
+  }
+);
+
 // Re-scan an existing room: creates the scan row and one item per RoomPlan object (re-running with the same
 // scanObjectIds updates dimensions instead of duplicating).
 export const createScan = spacetimedb.reducer(
@@ -625,7 +721,8 @@ function insertItem(
     heightM: number;
     depthM: number;
     photoUrl: string;
-  }
+  },
+  attributesJson?: string // JSON array (#110); '[]' when omitted
 ) {
   return ctx.db.item.insert({
     id: 0n,
@@ -657,6 +754,8 @@ function insertItem(
     modelUrl: '',
     modelSource: '',
     modelStatus: 'pending',
+    attributesJson: attributesJson ?? '[]',
+    colorsJson: '',
   });
 }
 
