@@ -10,8 +10,10 @@ import Foundation
 /// `VoxelModels.surfaces`, so a prop lands exactly on the voxel top it sits on.
 public struct PropPlacer: Sendable {
     public let plan: FloorPlan
-    /// Height of the walls you can see (the dollhouse cuts them at 1.1 m): hung items stay
-    /// below it, and anything too tall to hang there leans against the wall on the floor.
+    /// Height of the walls you can always see (the dollhouse cuts every wall at 1.1 m, and only
+    /// the exterior walls on the far side of the camera rise to full height, which changes as
+    /// the camera orbits): hung items stay below it on every wall, so art never floats above a
+    /// low wall, and anything too tall to hang there leans against the wall on the floor.
     public var wallTopM: Double
     /// Gallery height for the center of hung items (MoveWise's 1.45 m), when the walls allow.
     public var hangCenterM = 1.45

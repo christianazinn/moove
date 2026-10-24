@@ -5,7 +5,8 @@ import MooveKit
 /// Non-AR RealityKit view of a floor plan. Drag to orbit, pinch to zoom,
 /// two-finger drag to pan, double-tap to reset. Setting `focusRoom` flies the camera to that room.
 /// The home is a voxel dollhouse seen from front-right at an isometric-feeling angle
-/// (narrow FOV), lit by a warm sun with shadows. Items in `placements` are voxel models;
+/// (narrow FOV), lit by a warm sun with shadows. Its back walls stand full height and the
+/// walls nearest the camera are cut low; which is which follows the camera's yaw. Items in `placements` are voxel models;
 /// bumping `flyInToken` replays the fly-in.
 struct FloorPlan3DView: UIViewRepresentable {
     var plan: FloorPlan
@@ -176,6 +177,8 @@ struct FloorPlan3DView: UIViewRepresentable {
                 distance * sin(pitch),
                 distance * cos(pitch) * cos(yaw)
             )
+            // Dollhouse walls: back walls full height, the ones facing the camera low.
+            scene.setViewDirection(SIMD2(Double(sin(yaw)), Double(cos(yaw))))
             if duration > 0 {
                 let probe = Entity()
                 probe.look(at: target, from: eye, relativeTo: nil)
