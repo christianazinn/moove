@@ -13,7 +13,7 @@ _By Christian's agent, from what's on `main` (e856e51) and live on maincloud. La
 - **Needs humans:** the decisions at the bottom (keys, the Anthropic pitch community, Devpost text, the demo video).
 
 ## Since 7 AM
-- **Aiden's GitHub account is suspended**, so his PRs, issues and comments return 404 and his agents can't push. His unmerged work was rescued by lisa's agent: #263 (bigger object catalogue + voxel builders, from #141/#230) and #265 (commerce at the largest text size + dark mode). Christian's agent checked his remaining branches, and nothing else is missing from `main`. **Commerce now has no agent of its own:** Christian's agent covers the worker side and lisa's agent the iOS screens. Aiden can still test on a phone in person.
+- **Aiden is back as `AidenJeong8`** (the old `aidenyj` account was suspended, and he has push now). Work from the old account was rescued by lisa's agent: #263 (bigger object catalogue + voxel builders, from #141/#230) and #265 (commerce at the largest text size + dark mode). Nothing else is missing from `main`. Commerce has its owner back. Mention `@AidenJeong8`, not `@aidenyj`.
 - Lisa's iPad scan feedback (#267): lisa's agent is fixing detector boxes (center, facing, duplicates), Inventory clarity (scan dates, Demo tag, origin chips), and sweep renames that respect the scanned size (#270, merged and live).
 - Auth: an expired Auth0 ID token is renewed before connecting (#264).
 
@@ -100,7 +100,7 @@ See "Needs a human" below, then the Devpost draft (`docs/devpost.md`) and the de
 4. **Budget:** overnight work used recorded answers (`LLM_REPLAY`), with only a handful of live Claude calls (the chair listing draft, verification). Live scans call vision (up to 3 at a time), the sweep, listings and the shopping list. The worker refuses live Claude past `CLAUDE_MAX_USD_PER_DAY` (default $3), and Settings shows the running total. Check the real balance before rehearsals, and raise the cap in `.env.local` if it's healthy.
 5. **Deferred decisions (fine to leave until after the demo):**
    - #144 part B: payment rows written before paying.
-   - Aiden's GitHub account: GitHub support, or a new account added as a collaborator. Each member still needs a verified Coinbase account for the x402 prize.
+   - Each member still needs a verified Coinbase account for the x402 prize.
    - #200: a real `approval.decided_by` column. For now an `agent_event` records who decided.
    - `REQUIRE_AUTH0`: the connection gate is built but off, because the app still allows Guest.
 
@@ -108,7 +108,7 @@ See "Needs a human" below, then the Devpost draft (`docs/devpost.md`) and the de
 - The agents unit test `approval agent: an approval tapped just before expiry` can fail under load and passes when rerun. Rerun CI if it's red with no code change.
 - Live `moove` still holds junk items from earlier scans (a 2 m "vacuum", a 6 cm-deep "refrigerator"). Use **Demo** for anything judges see.
 - Quick tunnels change URL when they restart. The app follows via `service_config`, but anything else (curl, docs) should get the URL from `npm run status`.
-- #230 (voxel builders) merged into `aiden/catalog-coverage`, not `main`. It reaches main with that branch.
+- #230 (voxel builders) reached `main` through #263.
 
 ## Reference
 `docs/backends.md` (backends, one-command tests, reseeding) · `docs/demo.md` and `docs/demo-commerce.md` (demo runbooks) · `docs/data-model.md` (contract, views, input limits) · `docs/security.md` · `agents/CLAUDE.md` (every agent) · `npm run e2e -- --replay` (pipeline test).
