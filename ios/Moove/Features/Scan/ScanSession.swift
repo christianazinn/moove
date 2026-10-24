@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 import RoomPlan
 import MooveKit
 
@@ -47,21 +48,29 @@ final class ScanSession {
     init() {
         let stamp = Date.now.formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false))
             .replacingOccurrences(of: ":", with: "-")
+        // Created on first write, so opening and cancelling a scan leaves no empty folder.
         folder = URL.documentsDirectory.appending(path: "scans/\(stamp)", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: folder.appending(path: "photos"), withIntermediateDirectories: true)
     }
 
     var roomJSON: URL { folder.appending(path: "room.json") }
     var roomUSDZ: URL { folder.appending(path: "room.usdz") }
 
+    /// RoomPlan's raw capture data, saved before processing so the room can be rebuilt.
+    var capturedRoomDataJSON: URL { folder.appending(path: "captured-room-data.json") }
+
     func captured(_ room: CapturedRoom) {
+        Task { await save(room) }
+    }
+
+    /// Writes the room files off the main thread, then shows the review.
+    private func save(_ room: CapturedRoom) async {
+        let folder = folder, roomJSON = roomJSON, roomUSDZ = roomUSDZ
         do {
-            try JSONEncoder().encode(room).write(to: roomJSON)
-            try room.export(to: roomUSDZ, exportOptions: .model)
-            let geometry = RoomGeometry(room)
-            self.geometry = geometry
-            try JSONEncoder().encode(geometry).write(to: folder.appending(path: "geometry.json"))
+            geometry = try await Task.detached(priority: .userInitiated) {
+                try Self.write(room, folder: folder, roomJSON: roomJSON, roomUSDZ: roomUSDZ)
+            }.value
         } catch {
+            Logger.scan.error("Couldn't save the scan: \(error.localizedDescription, privacy: .public)")
             phase = .failed("Couldn't save the scan: \(error.localizedDescription)")
             return
         }
@@ -76,6 +85,34 @@ final class ScanSession {
             )
         }
         phase = .reviewing
+    }
+
+    /// JSON encoding and USDZ export are slow for big rooms, so they run off the main actor.
+    private nonisolated static func write(_ room: CapturedRoom, folder: URL, roomJSON: URL, roomUSDZ: URL) throws -> RoomGeometry {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try JSONEncoder().encode(room).write(to: roomJSON)
+        try room.export(to: roomUSDZ, exportOptions: .model)
+        let geometry = RoomGeometry(room)
+        try JSONEncoder().encode(geometry).write(to: folder.appending(path: "geometry.json"))
+        return geometry
+    }
+
+    /// Runs RoomPlan's processing again on raw capture data, e.g. after the
+    /// capture view's own processing failed.
+    nonisolated static func rebuild(_ data: CapturedRoomData) async throws -> CapturedRoom {
+        try await RoomBuilder(options: [.beautifyObjects]).capturedRoom(from: data)
+    }
+
+    /// Rebuilds the room from `capturedRoomDataJSON`, for retrying a scan whose processing failed.
+    func rebuildFromSavedData() async {
+        do {
+            let data = try JSONDecoder().decode(CapturedRoomData.self, from: Data(contentsOf: capturedRoomDataJSON))
+            let room = try await Self.rebuild(data)
+            captured(room)
+        } catch {
+            Logger.scan.error("Couldn't rebuild the scan: \(String(describing: error), privacy: .public)")
+            phase = .failed("Couldn't rebuild the scan: \(error.localizedDescription)")
+        }
     }
 
     /// An item RoomPlan missed, added by its photo. The vision agent names and
@@ -94,6 +131,7 @@ final class ScanSession {
     func setPhoto(_ jpeg: Data, for object: DetectedObject) {
         let url = folder.appending(path: "photos/\(object.id.uuidString).jpg")
         do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try jpeg.write(to: url)
             photos[object.id] = url
         } catch {
