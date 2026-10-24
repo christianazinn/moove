@@ -57,6 +57,7 @@ struct ShoppingView: View {
                         .shoppingChromeRow()
                     ForEach(items) { item in
                         NavigationLink(value: ShoppingRoute(itemId: item.id)) { ShoppingItemRow(item: item) }
+                            .accessibilityIdentifier("shopping.item.\(item.id)")
                             .shoppingLedgerRow()
                     }
                     .onDelete { offsets in remove(offsets.map { items[$0] }) }
@@ -437,6 +438,7 @@ struct VisaPaymentRow: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(badge.accessibilitySummary(amount: payment.formattedAmount))
+        .accessibilityIdentifier("visa.payment.\(payment.id)")
     }
 }
 

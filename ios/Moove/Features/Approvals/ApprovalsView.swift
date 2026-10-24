@@ -131,6 +131,7 @@ struct PendingApprovalRow: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(spokenSummary)
+            .accessibilityIdentifier("approval.pending.\(approval.id)")
             // Re-asked after an expiry (#186): ties this card to the expired ask(s) in History.
             let asks = store.snapshot.asks(for: approval)
             if let caption = asks.pendingCaption {
@@ -170,6 +171,7 @@ struct PendingApprovalRow: View {
                 }
                 .buttonStyle(.pill(.primary))
                 .accessibilityLabel("Approve \(approval.formattedAmount)")
+                .accessibilityIdentifier("approval.approve.\(approval.id)")
             }
             .disabled(working)
         }
@@ -274,6 +276,7 @@ struct DecidedApprovalRow: View {
         .ruled()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(store.snapshot.historyAccessibilitySummary(for: approval))
+        .accessibilityIdentifier("approval.decided.\(approval.id)")
     }
 }
 

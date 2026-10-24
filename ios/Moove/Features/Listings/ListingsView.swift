@@ -135,6 +135,7 @@ struct ListingRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(listing.accessibilitySummary + (problem.map { ". \($0)" } ?? ""))
         .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("listing.\(listing.id)")
     }
 }
 

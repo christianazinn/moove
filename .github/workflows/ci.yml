@@ -112,3 +112,59 @@ jobs:
           brew install xcodegen
           cd ios && xcodegen
           xcodebuild -scheme Moove -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+  ios-ui:
+    # Runs the app in an iOS Simulator on the offline demo backend: the `Moove` scheme's test action
+    # (ios/MooveUITests: MooveSmokeTests + CommerceUITests). Screenshots are in the `ios-ui-screenshots` artifact.
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode and a simulator
+        run: |
+          # Same as `ios`: the Swift SpacetimeDB SDK needs Swift 6.2+, so use the newest Xcode.
+          XC=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1); echo "using $XC"; sudo xcode-select -s "$XC"
+          SDK=$(xcrun --sdk iphonesimulator --show-sdk-version); echo "iphonesimulator SDK $SDK"
+          # Newest iOS runtime the SDK supports, first iPhone on it.
+          xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          sdk = tuple(int(p) for p in sys.argv[1].split("."))
+          best = None
+          for rt, devs in json.load(sys.stdin)["devices"].items():
+              if ".iOS-" not in rt: continue
+              ver = tuple(int(p) for p in rt.split(".iOS-")[1].split("-"))
+              if ver[:2] > sdk[:2]: continue
+              for d in devs:
+                  if d["name"].startswith("iPhone") and (best is None or ver > best[0]):
+                      best = (ver, d["udid"], d["name"])
+          if best is None: sys.exit("no available iPhone simulator")
+          print("SIM_UDID=" + best[1]); print("simulator: %s, iOS %s" % (best[2], ".".join(map(str, best[0]))), file=sys.stderr)
+          ' "$SDK" >> "$GITHUB_ENV"
+      - name: Generate project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen
+      - name: UI tests (offline demo)
+        working-directory: ios
+        run: |
+          xcrun simctl boot "$SIM_UDID" || true
+          xcodebuild test -scheme Moove -destination "id=$SIM_UDID" \
+            -resultBundlePath "$RUNNER_TEMP/MooveUITests.xcresult" CODE_SIGNING_ALLOWED=NO
+      - name: Export screenshots
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/shots"
+          xcrun xcresulttool export attachments --path "$RUNNER_TEMP/MooveUITests.xcresult" --output-path "$RUNNER_TEMP/shots" || true
+          ls -la "$RUNNER_TEMP/shots"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-ui-screenshots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-ui-xcresult
+          path: ${{ runner.temp }}/MooveUITests.xcresult
+          if-no-files-found: warn
