@@ -250,7 +250,7 @@ public enum VoxelModels {
         case "table": return n.has("desk", "workstation") ? .desk : .table
         case "dresser": return .dresser
         case "lamp", "light", "lighting": return .lamp
-        case "tv": return .tv
+        case "tv", "television": return .tv
         case "books", "book": return .books
         case "art": return .art
         case "photos": return .photos

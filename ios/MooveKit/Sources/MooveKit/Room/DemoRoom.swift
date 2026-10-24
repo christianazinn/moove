@@ -2,7 +2,7 @@ import Foundation
 
 extension DemoFixtures {
     /// A 4 m × 3.5 m bedroom laid out like a RoomPlan scan, with one object per
-    /// demo item (`scanObjectId` "demo-<item id>"). Replaced by the real #3 scan.
+    /// demo item (`scanObjectId` "demo-<item id>"), sized like the seeded Bedroom (demo-room.ts).
     public static func roomGeometry() -> RoomGeometry {
         let h: Float = 2.5, w: Float = 4, d: Float = 3.5
         let quarter = Float.pi / 2
@@ -27,18 +27,21 @@ extension DemoFixtures {
                 .init(id: "floor", outline: [SIMD2(-w / 2, -d / 2), SIMD2(w / 2, -d / 2), SIMD2(w / 2, d / 2), SIMD2(-w / 2, d / 2)], elevation: 0),
             ],
             objects: [
-                object(10, "bed", SIMD3(1.6, 0.4, 2.1), -0.9, -0.7),
-                object(15, "storage", SIMD3(0.45, 0.55, 0.4), 0.2, -1.5),
-                object(19, "decor", SIMD3(0.4, 0.5, 0.05), 0.2, -1.6, y: 0.8),
-                object(14, "lamp", SIMD3(0.3, 1.6, 0.3), 0.7, -1.5),
-                object(16, "appliance", SIMD3(0.5, 0.5, 0.2), 1.6, -1.35),
-                object(12, "table", SIMD3(1.4, 0.75, 0.7), 1.65, 0.6, yaw: quarter),
-                object(11, "chair", SIMD3(0.7, 1.1, 0.7), 0.95, 0.5),
-                object(21, "appliance", SIMD3(0.5, 0.85, 0.5), 1.0, 1.45),
-                object(13, "storage", SIMD3(0.8, 1.8, 0.3), -1.85, 1.0, yaw: quarter),
-                object(18, "decor", SIMD3(0.9, 0.9, 0.3), -0.9, 0.6),
-                object(20, "sofa", SIMD3(0.9, 0.7, 0.9), 0.15, 1.15),
-                object(17, "decor", SIMD3(0.6, 0.9, 0.05), 0.4, 1.7),
+                // North wall: bed, nightstand, guitar on its stand, lamp, mini fridge with the TV on it.
+                object(10, "bed", SIMD3(1.4, 0.36, 1.95), -1.25, -0.75),
+                object(19, "storage", SIMD3(0.45, 0.55, 0.4), -0.25, -1.5),
+                object(18, "instrument", SIMD3(0.38, 1.02, 0.12), 0.19, -1.65),
+                object(14, "lamp", SIMD3(0.3, 1.7, 0.3), 0.55, -1.55),
+                object(21, "refrigerator", SIMD3(0.48, 0.85, 0.5), 1.0, -1.45),
+                object(15, "television", SIMD3(0.73, 0.48, 0.18), 1.0, -1.5, y: 0.85 + 0.24),
+                // East wall: the desk with the monitor on it, the mesh chair at it.
+                object(12, "table", SIMD3(1.05, 0.75, 0.5), 1.7, 0.4, yaw: quarter),
+                object(16, "electronics", SIMD3(0.61, 0.45, 0.18), 1.8, 0.4, yaw: quarter, y: 0.75 + 0.225),
+                object(17, "chair", SIMD3(0.64, 1.02, 0.62), 1.0, 0.4),
+                // South side: the Aeron, the bean bag, and the Kallax on the west wall.
+                object(11, "chair", SIMD3(0.7, 1.1, 0.7), 1.0, 1.3),
+                object(20, "sofa", SIMD3(0.9, 0.7, 0.9), 0.0, 1.1),
+                object(13, "storage", SIMD3(0.77, 1.47, 0.39), -1.8, 1.0, yaw: quarter),
             ]
         )
     }
@@ -57,16 +60,16 @@ extension DemoFixtures {
             wallColor: 0xEFE3D0,  // warm cream paint
             floorColor: 0xC49A6C,  // oak boards
             objectColors: [
-                "demo-10": c(0xB98A5A, 0xE9E3D6),  // queen bed: oak frame, linen bedding
+                "demo-10": c(0x2E2F31, 0xE9E3D6),  // black metal bed frame, linen bedding
                 "demo-11": c(0x3A3D42, 0x1E1F21),  // Aeron: graphite mesh, black base
-                "demo-12": c(0xF2F0EB),  // white laminate desk (as the seeded item stores it)
-                "demo-13": c(0xD8BF96),  // birch-effect particleboard bookshelf
+                "demo-12": c(0xF2F0EB),  // white Micke desk
+                "demo-13": c(0xF1EFEA),  // white Kallax
                 "demo-14": c(0x2B2B2D, 0xF1E6CF),  // black metal floor lamp, cream shade
-                "demo-15": c(0xD9B47F, 0x8A6A45),  // pine nightstand, dark knob
-                "demo-16": c(0xE6E6E2, 0x9EA3A8),  // white box fan, gray grille
-                "demo-17": c(0xC4D0D6, 0x6E5A45),  // mirror glass, wood frame
-                "demo-18": c(0x5C4030, 0xB5533C),  // walnut quilt rack, red quilt
-                "demo-19": c(0x2F2A26, 0xD8CBB4),  // dark frames, sepia photos
+                "demo-15": c(0x1B1C1E, 0x3A3C40),  // TV: black screen, dark gray bezel
+                "demo-16": c(0x222326, 0x9EA3A8),  // monitor: black, silver stand
+                "demo-17": c(0x2A2B2E, 0x1E1F21),  // black mesh chair, black base
+                "demo-18": c(0xD9B27C, 0x5A3A22),  // spruce top, mahogany neck
+                "demo-19": c(0xD9B47F, 0x8A6A45),  // pine nightstand, dark knob
                 "demo-20": c(0x8A8D91),  // gray fabric bean bag
                 "demo-21": c(0x262729, 0x8E9093),  // black mini fridge, silver handle
             ]

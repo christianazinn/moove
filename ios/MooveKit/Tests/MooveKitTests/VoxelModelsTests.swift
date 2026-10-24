@@ -37,18 +37,24 @@ import Testing
 
     @Test func fixtureRouting() {
         let kinds = Dictionary(uniqueKeysWithValues: Self.fixtureSpecs.map { ($0.name, VoxelModels.kind($0)) })
-        #expect(kinds["Queen bed frame"] == .bed)
+        #expect(kinds["Full size metal bed frame"] == .bed)
         #expect(kinds["Office chair"] == .chair)
-        #expect(kinds["Desk"] == .desk)
-        #expect(kinds["Bookshelf"] == .bookshelf)
+        #expect(kinds["Mesh office chair"] == .chair)
+        #expect(kinds["IKEA Micke desk"] == .desk)
+        #expect(kinds["IKEA Kallax shelf"] == .bookshelf)
         #expect(kinds["Floor lamp"] == .lamp)
+        #expect(kinds["TCL 32 inch TV"] == .tv)
+        #expect(kinds["Dell 27 inch monitor"] == .electronics)
+        #expect(kinds["Yamaha acoustic guitar"] == .box) // no instrument model yet
         #expect(kinds["Nightstand"] == .dresser)
-        #expect(kinds["Box fan"] == .fan)
-        #expect(kinds["Broken mirror"] == .mirror)
-        #expect(kinds["Grandma's quilt rack"] == .quiltRack)
-        #expect(kinds["Framed photos"] == .framedPhotos)
         #expect(kinds["Bean bag"] == .beanBag)
         #expect(kinds["Mini fridge"] == .appliance)
+        // Kinds the old hand-written fixture covered.
+        #expect(VoxelModels.kind(spec("appliance", "Box fan", 0.5, 0.2, 0.5)) == .fan)
+        #expect(VoxelModels.kind(spec("decor", "Broken mirror", 0.6, 0.05, 0.9)) == .mirror)
+        #expect(VoxelModels.kind(spec("decor", "Grandma's quilt rack", 0.9, 0.3, 0.9)) == .quiltRack)
+        #expect(VoxelModels.kind(spec("decor", "Framed photos", 0.4, 0.05, 0.5)) == .framedPhotos)
+        #expect(VoxelModels.kind(spec("television", "Samsung 55 inch", 1.2, 0.2, 0.7)) == .tv)
         #expect(VoxelModels.kind(spec("sofa", "Grey velvet 3-seat sofa", 2.2, 0.9, 0.85)) == .sofa)
         #expect(VoxelModels.kind(spec("storage", "Plastic storage bin", 0.6, 0.4, 0.35)) == .box)
         #expect(VoxelModels.kind(spec("decor", "Monstera plant", 0.5, 0.5, 1)) == .plant)
@@ -76,7 +82,7 @@ import Testing
 
     @Test func frontFacesPositiveZ() {
         // bed: the headboard is at the back (low z) and rises well above the duvet at the foot
-        let bed = VoxelModels.build(Self.fixtureSpecs.first { $0.name == "Queen bed frame" }!)
+        let bed = VoxelModels.build(Self.fixtureSpecs.first { $0.name == "Full size metal bed frame" }!)
         #expect(bed.ny > VoxelGrid.count(0.4))
         let topY = bed.ny - 2
         #expect(filled(bed, z: 0, 2, above: topY) > bed.nx)
@@ -94,7 +100,7 @@ import Testing
         #expect(filled(chair, z: chair.nz / 2 + 2, chair.nz, above: chairHigh) == 0)
 
         // bookshelf: back panel at z = 0, so the back face is (almost) full and books are visible from +z
-        let shelf = VoxelModels.build(Self.fixtureSpecs.first { $0.name == "Bookshelf" }!)
+        let shelf = VoxelModels.build(Self.fixtureSpecs.first { $0.name == "IKEA Kallax shelf" }!)
         #expect(filled(shelf, z: 0, 1) > shelf.nx * shelf.ny * 9 / 10)
         #expect(colors(shelf).count > 20)
     }
@@ -170,9 +176,9 @@ import Testing
     // MARK: per-item variation (scan data drives the look; the seed only the small details)
 
     @Test func itemInitCarriesScanData() {
-        let item = DemoFixtures.inventory(owner: "me").items.first { $0.name == "Queen bed frame" }!
+        let item = DemoFixtures.inventory(owner: "me").items.first { $0.name == "Bean bag" }!
         let s = VoxelItemSpec(item)
-        #expect(s.id == "demo-10" && s.material == "oak" && s.brand == "IKEA" && s.condition == 4)
+        #expect(s.id == "demo-20" && s.material == "fabric" && s.brand == nil && s.condition == 3)
         #expect(s.attributes.isEmpty && s.primaryColor == nil && s.secondaryColor == nil)
     }
 

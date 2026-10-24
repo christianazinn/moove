@@ -59,14 +59,16 @@ import Testing
     }
 
     @Test func sentimentalItemsTravelWithYou() {
-        let p = plan
+        // The demo's one sentimental item is the guitar; add small framed photos so a box gets used too.
+        let items = items + [item(99, "Framed photos", "decor", (0.4, 0.5, 0.05), fragile: true, sentimental: true, .undecided)]
+        let p = PackingPlanner.plan(items: items)
         let keepIds = Set(p.boxes.filter(\.keepWithYou).flatMap(\.contents).compactMap(\.itemId))
         let carIds = Set(p.furniture.filter { $0.room == "Keep with you" }.map(\.id))
         for sentimental in items.filter({ $0.maybeSentimental && $0.disposition == .undecided }) {
             #expect(keepIds.contains(sentimental.id) || carIds.contains(sentimental.id), "\(sentimental.name)")
         }
-        #expect(keepIds.contains(19)) // framed photos fit a box
-        #expect(carIds.contains(18)) // the quilt rack rides in the car
+        #expect(keepIds.contains(99)) // framed photos fit a box
+        #expect(carIds.contains(18)) // the guitar rides in the car
         for box in p.boxes where box.keepWithYou {
             #expect(box.room == "Keep with you")
             #expect(box.title.hasPrefix("Keep with you"))

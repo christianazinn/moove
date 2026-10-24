@@ -9,14 +9,14 @@ import Testing
         #expect(sections.first?.section == .needsYou)
         let needs = sections[0].items
         #expect(needs.allSatisfy { $0.maybeSentimental })
-        #expect(needs.count == 2)
+        #expect(needs.count == 1) // the guitar, as on the seeded Bedroom
     }
 
     @Test func sentimentalItemMovesOutOfNeedsYouOnceUserDecides() {
-        var quilt = items.first { $0.id == 18 }!
-        quilt.disposition = .keep
-        quilt.dispositionSource = .user
-        #expect(ReviewSection.of(quilt) == .keep)
+        var guitar = items.first { $0.id == 18 }!
+        guitar.disposition = .keep
+        guitar.dispositionSource = .user
+        #expect(ReviewSection.of(guitar) == .keep)
     }
 
     @Test func undecidedNonSentimentalNeedsYou() {
@@ -31,9 +31,10 @@ import Testing
 
     @Test func totalsMatchFixture() {
         let t = Review.totals(items)
-        #expect(t.expectedSaleCents == 42_000 + 4_000 + 2_000 + 7_500)
-        #expect(t.itemsToMove == 3)
-        #expect(t.needsYou == 2)
-        #expect(t.divertedFromLandfill == 6)
+        // Sell: the Aeron, the mesh chair, the nightstand and the bean bag. Keep: the other 7 seeded items.
+        #expect(t.expectedSaleCents == 42_000 + 3_000 + 3_000 + 2_000)
+        #expect(t.itemsToMove == 7)
+        #expect(t.needsYou == 1)
+        #expect(t.divertedFromLandfill == 4)
     }
 }
