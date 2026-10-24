@@ -14,8 +14,8 @@ import Testing
         let after = await it.next()!
         #expect(after.scans.last?.sweepStatus == .done)
         let found = try #require(after.items.first { $0.scanObjectId == "photo:\(scan.id)" })
-        #expect(found.name == "Acoustic guitar" && found.roomId == scan.roomId)
-        // Running it again doesn't add a second guitar.
+        #expect(found.name == "Potted monstera" && found.roomId == scan.roomId)
+        // Running it again doesn't add a second plant.
         try await backend.simulateSweep(scanId: scan.id, step: .milliseconds(1))
         let again = backend.snapshots()
         var it2 = again.makeAsyncIterator()

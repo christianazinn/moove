@@ -5,7 +5,7 @@ import XCTest
 /// so a broken commerce screen fails CI. Every screen is saved as a screenshot attachment
 /// (keepAlways) in the .xcresult that CI uploads.
 ///
-/// Fixture ids come from MooveKit `DemoFixtures` / `ShoppingFixtures`: listing 201 (posted, simulated),
+/// Fixture ids come from MooveKit `DemoFixtures` / `ShoppingFixtures`: listing 201 (the mesh chair, posted, simulated),
 /// approvals 300 (Aeron listing) and 85 (sofa purchase), payment 500 (the real Base Sepolia tx),
 /// shopping item 52 (Desk chair) with deals 74 (Target task chair, $79.99, under the demo user's
 /// $100 approval threshold) and 76 (the planted Craigslist Aeron scam, fraud 0.85).

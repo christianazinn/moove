@@ -27,7 +27,7 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 - **ON SCREEN:** **See inventory** > Items > Inventory. "Identifying items from room photos…" under the room, then names filling in on the item rows (voxel thumbnails, dimensions).
 - **STATE:** Live scan on Demo (vision and the photo sweep need the worker and photos; each costs Claude calls).
 - **TRACK:** Anthropic (vision + room photo sweep).
-- **FALLBACK:** Offline demo after **Load demo scan**: the offline demo plays the sweep (a guitar appears). Then the names are fixture data, so cut "Claude names" to "Moove names" or say it's sample data.
+- **FALLBACK:** Offline demo after **Load demo scan**: the offline demo plays the sweep (a potted monstera appears). Then the names are fixture data, so cut "Claude names" to "Moove names" or say it's sample data.
 
 ### 3. 0:27–0:39 Real comps from Apify
 - **VO:** "Then the pricing agent pulls what similar things actually sold for, eBay sold listings and Facebook Marketplace, scraped with Apify, and prices each item from the median."
@@ -80,7 +80,7 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 
 ### 10. 1:50–2:00 Summary: agents kept you safe
 - **VO:** "The summary shows what you made, what the agents spent, real and simulated, and every guardrail that fired. Moove runs your move, and you stay in control."
-- **ON SCREEN:** **Summary** tab, "Your move, handled.", Money with its **Simulated** tag, then scroll to **Agents kept you safe**: "1 scam deal blocked · fraud score 0.85", the approvals line, "2 sentimental items left for you", spend against the data and card budgets with Sim tags.
+- **ON SCREEN:** **Summary** tab, "Your move, handled.", Money with its **Simulated** tag, then scroll to **Agents kept you safe**: "1 scam deal blocked · fraud score 0.85", the approvals line, "1 sentimental item left for you", spend against the data and card budgets with Sim tags.
 - **STATE:** Offline demo (same take, after shots 6–8).
 - **TRACK:** All of them in one card. Visa trust, Coinbase spend caps, Auth0 approvals.
 - **FALLBACK:** If a figure looks off, hold on Agents kept you safe only (the VO names no numbers).

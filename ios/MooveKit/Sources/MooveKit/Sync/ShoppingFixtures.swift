@@ -26,7 +26,7 @@ extension DemoFixtures {
 
         s.shoppingItems += [
             ShoppingItem(id: 50, owner: owner, name: "Mattress", category: "bed",
-                         reason: "Your queen bed frame is coming with you, but no mattress was scanned.",
+                         reason: "Your full size bed frame is coming with you, but no mattress was scanned.",
                          status: .bought, chosenDealId: 62, createdAt: ago(40)),
             ShoppingItem(id: 51, owner: owner, name: "Sofa", category: "sofa",
                          reason: "The new living room has no seating, and the bean bag is being sold.",

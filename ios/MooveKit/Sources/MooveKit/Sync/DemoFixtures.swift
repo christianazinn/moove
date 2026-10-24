@@ -1,7 +1,7 @@
 import Foundation
 
-/// Hand-written demo inventory for previews and the offline demo.
-/// Replace with the real #3 scan (agents/fixtures/demo-room/) once it's recorded.
+/// Demo inventory for previews and the offline demo. Its Bedroom matches the seeded Demo
+/// backend room (`agents/scripts/demo-room.ts`, docs/demo.md) plus three commerce-only items.
 public enum DemoFixtures {
     public static func inventory(owner: IdentityHex) -> SyncSnapshot {
         var s = SyncSnapshot(me: owner)
@@ -20,23 +20,32 @@ public enum DemoFixtures {
                  fragile: fragile, maybeSentimental: sentimental, attributes: attributes, colors: colors)
         }
 
+        // The 9 seeded Bedroom items (agents/scripts/demo-room.ts, the Demo backend's join code
+        // 4RZ9G8), with the live estimates from docs/demo.md and the sort agent's decisions and
+        // reasons for them (agents/src/agents/sort.ts). Seeded items have no photos, so no brand,
+        // material or condition; the guitar is flagged sentimental. Ids 11, 19 and 20 are extra,
+        // offline-only items that carry the commerce story: the Aeron (the seed's opt-in
+        // SEED_COMMERCE chair), a nightstand and a bean bag, set to sell as if by the user.
+        // DemoSeedTests checks the seeded part against the seed list.
         s.items = [
-            item(10, "Queen bed frame", "bed", (1.6, 0.4, 2.1), material: "oak", brand: "IKEA", condition: 4, value: 12_000, .keep, reason: "Needed in the new bedroom; costs more to replace than to move."),
+            item(10, "Full size metal bed frame", "bed", (1.4, 0.36, 1.95), value: 7_700, .keep, reason: "Beds rarely resell (~$77); ~$59 to move: keep"),
             item(11, "Office chair", "chair", (0.7, 1.1, 0.7), material: "mesh", brand: "Herman Miller", condition: 4, value: 42_000, .sell, reason: "Resells well ($380-$460 comps); new place has a built-in desk nook.",
                  attributes: ["ChairType.swivel", "ChairArmType.existing", "ChairBackType.existing", "ChairLegType.star"],
                  colors: ItemColors(primary: 0x3A3D42, secondary: 0x1E1F21)),
-            item(12, "Desk", "table", (1.4, 0.75, 0.7), material: "laminate", brand: "IKEA", condition: 3, value: 4_000, .sell, reason: "Low value but easy to sell locally.",
-                 attributes: ["TableShapeType.rectangular"], colors: ItemColors(primary: 0xF2F0EB)),
-            item(13, "Bookshelf", "storage", (0.8, 1.8, 0.3), material: "particleboard", brand: "IKEA", condition: 2, value: 1_500, .donate, reason: "Worth less than moving it; usable, so donate rather than trash.",
+            item(12, "IKEA Micke desk", "table", (1.05, 0.75, 0.5), value: 6_000, .keep, reason: "Worth ~$60, ~$24 to move: keep",
+                 attributes: ["TableShapeType.rectangular"]),
+            item(13, "IKEA Kallax shelf", "storage", (0.77, 1.47, 0.39), value: 5_000, .keep, reason: "Worth ~$50, ~$26 to move: keep",
                  attributes: ["StorageType.shelf"]),
-            item(14, "Floor lamp", "lamp", (0.3, 1.6, 0.3), material: "metal", condition: 4, value: 2_500, .keep, reason: "Small and light; cheap to move.", fragile: true),
-            item(15, "Nightstand", "storage", (0.45, 0.55, 0.4), material: "pine", condition: 3, value: 3_000, .keep, reason: "Pairs with the bed.", attributes: ["StorageType.cabinet"]),
-            item(16, "Box fan", "appliance", (0.5, 0.5, 0.2), condition: 2, value: 800, .donate, reason: "New place has central air."),
-            item(17, "Broken mirror", "decor", (0.6, 0.9, 0.05), condition: 1, value: 0, .trash, reason: "Cracked; not safe to sell or donate.", fragile: true),
-            item(18, "Grandma's quilt rack", "decor", (0.9, 0.9, 0.3), material: "walnut", condition: 3, value: 6_000, .undecided, reason: "Handmade and old; left for you to decide.", sentimental: true),
-            item(19, "Framed photos", "decor", (0.4, 0.5, 0.05), condition: 4, .undecided, reason: "Personal photos; left for you to decide.", fragile: true, sentimental: true),
+            item(14, "Floor lamp", "lamp", (0.3, 1.7, 0.3), value: 6_000, .keep, reason: "Worth ~$60, ~$9 to move: keep"),
+            item(15, "TCL 32 inch TV", "television", (0.73, 0.48, 0.18), value: 5_500, .keep, reason: "Worth ~$55, ~$4 to move: keep"),
+            item(16, "Dell 27 inch monitor", "electronics", (0.61, 0.45, 0.18), value: 10_000, .keep, reason: "Worth ~$100, ~$3 to move: keep"),
+            item(17, "Mesh office chair", "chair", (0.64, 1.02, 0.62), value: 3_000, .sell, reason: "Worth ~$30, ~$24 to move: barely worth moving, sell",
+                 attributes: ["ChairType.swivel", "ChairArmType.existing", "ChairBackType.existing", "ChairLegType.star"]),
+            item(18, "Yamaha acoustic guitar", "instrument", (0.38, 1.02, 0.12), value: 10_900, .undecided, reason: "possibly sentimental - your call", sentimental: true),
+            item(19, "Nightstand", "storage", (0.45, 0.55, 0.4), material: "pine", condition: 3, value: 3_000, .sell, reason: "The new bedroom has built-in shelves; easy to sell locally.",
+                 attributes: ["StorageType.cabinet"]),
             item(20, "Bean bag", "sofa", (0.9, 0.7, 0.9), material: "fabric", condition: 3, value: 2_000, .sell, reason: "Bulky for its value."),
-            item(21, "Mini fridge", "appliance", (0.5, 0.85, 0.5), brand: "Frigidaire", condition: 4, value: 7_500, .sell, reason: "New kitchen has a full fridge."),
+            item(21, "Mini fridge", "refrigerator", (0.48, 0.85, 0.5), value: 3_800, .keep, reason: "Worth ~$38, ~$12 to move: keep"),
         ]
         s.comps = [
             Comp(id: 100, itemId: 11, source: "ebay", title: "Herman Miller Aeron size B", priceCents: 45_000, url: "https://www.ebay.com/"),
@@ -50,21 +59,21 @@ public enum DemoFixtures {
             Listing(id: 198, owner: owner, itemId: 11, title: "Herman Miller Aeron Chair Size B - Excellent",
                     description: "Size B Aeron, fully loaded.\n\nFirst draft, priced at the top of the comps.",
                     priceCents: 48_000, status: .rejected, updatedAt: Date.now.addingTimeInterval(-50 * 60)),
-            Listing(id: 199, owner: owner, itemId: 21, title: "Frigidaire Mini Fridge 3.2 cu ft",
-                    description: "Compact fridge with freezer section.",
-                    priceCents: 7_000, status: .failed, updatedAt: Date.now.addingTimeInterval(-40 * 60)),
+            Listing(id: 199, owner: owner, itemId: 19, title: "Pine Nightstand with Drawer",
+                    description: "Solid pine nightstand with one drawer.",
+                    priceCents: 3_000, status: .failed, updatedAt: Date.now.addingTimeInterval(-40 * 60)),
             Listing(id: 200, owner: owner, itemId: 11, title: "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition",
                     description: "Fully adjustable Aeron in size B with lumbar support. Mesh seat and back are intact with no tears.\n\nLight wear on the armrests. Smoke-free home.\n\nLocal pickup in SF, or I can ship.",
                     priceCents: 41_000, status: .awaitingApproval),
-            Listing(id: 201, owner: owner, itemId: 12, title: "IKEA Laminate Desk, 140 x 70 cm, White - Good Condition",
-                    description: "Simple, sturdy desk with plenty of room for a monitor and laptop.\n\nSome surface scratches, nothing structural. Disassembles for transport.",
-                    priceCents: 3_500, status: .posted, externalId: "395718204163"),
+            Listing(id: 201, owner: owner, itemId: 17, title: "Mesh Office Chair with Arms, Black - Good Condition",
+                    description: "Swivel desk chair with a breathable mesh back, armrests and adjustable height.\n\nLight wear on the seat, nothing torn. Local pickup.",
+                    priceCents: 3_000, status: .posted, externalId: "395718204163"),
             Listing(id: 202, owner: owner, itemId: 20, title: "Large Fabric Bean Bag Chair, Gray - Clean, Comfortable",
                     description: "Oversized bean bag with a removable, washable cover.\n\nCover was washed last month. Pickup only, it's bulky.",
                     priceCents: 1_800, status: .sold, externalId: "395718209877"),
-            Listing(id: 203, owner: owner, itemId: 21, title: "Frigidaire Compact Mini Fridge 3.2 cu ft, Black - Works Great",
-                    description: "Quiet compact fridge with a small freezer section. Clean inside, adjustable thermostat.\n\nPerfect for a dorm or office.",
-                    priceCents: 7_000, status: .draft),
+            Listing(id: 203, owner: owner, itemId: 19, title: "Solid Pine Nightstand, 1 Drawer - Good Condition",
+                    description: "Sturdy pine nightstand with a drawer and an open shelf. A few small dings on the top.\n\nPerfect for a dorm or bedroom.",
+                    priceCents: 3_000, status: .draft),
         ]
         // Approval gate (#12): the Aeron listing is over the $100 default threshold.
         // Purchase approvals point at deals, so they're seeded with the shopping rows (`addShopping`).
@@ -96,10 +105,10 @@ public enum DemoFixtures {
             Payment(id: 500, owner: owner, agent: "pricing", purpose: "Premium comps for \"Herman Miller Aeron\"",
                     payee: realX402Payee, amountUsdMicros: 10_000, txHash: realX402TxHash, status: .settled,
                     simulated: false, refTable: "item", refId: 11, createdAt: ago(25)),
-            Payment(id: 501, owner: owner, agent: "pricing", purpose: "Premium comps for \"IKEA laminate desk\"",
+            Payment(id: 501, owner: owner, agent: "pricing", purpose: "Premium comps for \"IKEA Micke desk\"",
                     payee: "simulated", amountUsdMicros: 10_000, status: .settled, simulated: true,
                     refTable: "item", refId: 12, createdAt: ago(18)),
-            Payment(id: 502, owner: owner, agent: "pricing", purpose: "Price history for \"Frigidaire mini fridge\"",
+            Payment(id: 502, owner: owner, agent: "pricing", purpose: "Price history for \"Mini fridge\"",
                     payee: "simulated", amountUsdMicros: 5_000, status: .settled, simulated: true,
                     refTable: "item", refId: 21, createdAt: ago(12)),
             Payment(id: 503, owner: owner, agent: "shopping", purpose: "Seller report for a used dresser",
@@ -127,11 +136,11 @@ public enum DemoFixtures {
                        dataJson: #"{\#(rail("settled", remaining: 4_990_000)),"payee":"\#(realX402Payee)","amountUsdMicros":"10000","txHash":"\#(realX402TxHash)","network":"base-sepolia","explorer":"\#(explorer)"}"#,
                        createdAt: ago(25)),
             AgentEvent(id: 602, owner: owner, agent: "pricing", kind: .payment,
-                       message: "[SIMULATED] Paid $0.01 USDC for premium comps for \"IKEA laminate desk\"", refTable: "item", refId: 12,
+                       message: "[SIMULATED] Paid $0.01 USDC for premium comps for \"IKEA Micke desk\"", refTable: "item", refId: 12,
                        dataJson: #"{\#(rail("settled", remaining: 4_980_000, simulated: true)),"payee":"simulated","amountUsdMicros":"10000"}"#,
                        createdAt: ago(18)),
             AgentEvent(id: 606, owner: owner, agent: "pricing", kind: .payment,
-                       message: "[SIMULATED] Paid $0.005 USDC for price history for \"Frigidaire mini fridge\"", refTable: "item", refId: 21,
+                       message: "[SIMULATED] Paid $0.005 USDC for price history for \"Mini fridge\"", refTable: "item", refId: 21,
                        dataJson: #"{\#(rail("settled", remaining: 4_975_000, simulated: true)),"payee":"simulated","amountUsdMicros":"5000"}"#,
                        createdAt: ago(12)),
             // Failed after the 402 round-trip: comes with failed payment 503, so the log shows it once.
@@ -164,7 +173,7 @@ extension DemoFixtures {
             AgentEvent(id: 621, owner: owner, agent: "listing", kind: .approval,
                        message: "Not posting: denied", refTable: "listing", refId: 198, createdAt: ago(50)),
             AgentEvent(id: 622, owner: owner, agent: "listing", kind: .plan,
-                       message: "Posting \"Frigidaire Mini Fridge 3.2 cu ft\" to eBay at $70 (simulated)",
+                       message: "Posting \"Pine Nightstand with Drawer\" to eBay at $30 (simulated)",
                        refTable: "listing", refId: 199, createdAt: ago(41)),
             AgentEvent(id: 623, owner: owner, agent: "listing", kind: .error,
                        message: "Posting failed: eBay needs at least one public https photo URL (simulated)",
@@ -190,10 +199,11 @@ extension DemoFixtures {
 
     /// What the offline photo sweep "finds" in the demo bedroom (#181): an item RoomPlan
     /// has no category for, with an estimated size, priced and sorted as if the agents ran.
+    /// (Not the guitar: that's one of the seeded Bedroom's scan objects now, #243.)
     public static let sweepFind = Item(
-        id: 0, owner: "demo", roomId: 0, name: "Acoustic guitar", category: "instrument",
-        widthM: 0.4, heightM: 1.0, depthM: 0.12, material: "spruce", brand: "Yamaha", condition: 4,
-        estValueCents: 9_000, disposition: .keep, dispositionReason: "Found in the room photos; easy to carry, worth keeping.",
+        id: 0, owner: "demo", roomId: 0, name: "Potted monstera", category: "plant",
+        widthM: 0.5, heightM: 1.1, depthM: 0.5, material: "ceramic", condition: 4,
+        estValueCents: 2_500, disposition: .keep, dispositionReason: "Found in the room photos; easy to carry, worth keeping.",
         fragile: true
     )
 
