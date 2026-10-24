@@ -1,3 +1,5 @@
+// Safety net: a stray rejected promise (e.g. a reducer call nobody awaited) must not kill the worker.
+process.on('unhandledRejection', (err) => console.error('[agents] UNHANDLED REJECTION (worker kept alive):', err));
 import { connect } from './spacetime.js';
 import { startUploadServer } from './upload.js';
 import { visionAgent } from './agents/vision.js';
