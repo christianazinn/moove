@@ -140,6 +140,41 @@ test("a purchase exactly at the approval threshold goes through without asking; 
   assert.ok(eventsFor(over.deal.id).some(e => /approval denied/.test(e.message)));
 });
 
+test("#186: an expired purchase approval is asked again once; after a restart with the re-ask on file, not again", async () => {
+  const { deal, insert } = chosenDeal({ fraudScore: 0.1, priceCents: 15_000n });
+  insert();
+  await sleep(40);
+  const forDeal = () => [...db.approval.rows.values()].filter(a => a.refId === deal.id);
+  assert.equal(forDeal().length, 1);
+  // The worker's expiry sweep expires it; duplicate updates must not ask twice.
+  const first = forDeal()[0]!;
+  db.approval.update({ ...first, status: "expired" });
+  db.approval.update({ ...first, status: "expired" });
+  await sleep(40);
+  assert.deepEqual(forDeal().map(a => a.status), ["expired", "pending"]);
+  assert.deepEqual(paymentsFor(deal.id), [], "nothing charged on an expired approval");
+  assert.ok(eventsFor(deal.id).some(e => /expired without an answer, asking again \(1 of 2\)/.test(e.message)));
+  // Another pass, as after a restart: the latest row is the pending re-ask, so nothing new is asked.
+  db.shoppingItem.update({ ...db.shoppingItem.rows.get(deal.shoppingItemId)! });
+  await sleep(40);
+  assert.equal(forDeal().length, 2);
+  // Approving the re-ask buys it.
+  const second = forDeal()[1]!;
+  db.approval.update({ ...second, status: "approved" });
+  await sleep(60);
+  assert.deepEqual(paymentsFor(deal.id).map(p => p.status), ["settled"]);
+});
+
+test("#186: a purchase whose approval expired past APPROVAL_MAX_REASKS stops without paying", async () => {
+  const { deal, insert } = chosenDeal({ fraudScore: 0.1, priceCents: 15_000n });
+  for (let i = 0; i < 3; i++) db.approval.rows.set(nextId, { id: nextId++, owner, kind: "purchase", refId: deal.id, amountCents: deal.priceCents, status: "expired" });
+  insert();
+  await sleep(40);
+  assert.equal([...db.approval.rows.values()].filter(a => a.refId === deal.id).length, 3, "no new ask");
+  assert.deepEqual(paymentsFor(deal.id), []);
+  assert.ok(eventsFor(deal.id).some(e => /expired 3 times/.test(e.message)));
+});
+
 test("an approval for a different amount never pays", async () => {
   const { deal, insert } = chosenDeal({ fraudScore: 0.1, priceCents: 20_000n });
   db.approval.rows.set(nextId, { id: nextId++, owner, kind: "purchase", refId: deal.id, amountCents: 19_000n, status: "approved" });
