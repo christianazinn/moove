@@ -42,7 +42,8 @@ struct BoxDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                BoxBadge(box: box, sealed: false)
+                // The title bar already says "Box 04".
+                BoxBadge(box: box, sealed: false).accessibilityHidden(true)
                 Text(box.roomName).eyebrow()
                 if sealed { MonoTag(text: "Sealed", tone: Theme.accentStrong) }
             }
@@ -53,10 +54,13 @@ struct BoxDetailView: View {
                 .accessibilityAddTraits(.isHeader)
             Text("\(box.size.label) · \(Int(box.weightKg.rounded())) kg · \(box.contents.count) \(box.contents.count == 1 ? "line" : "lines")")
                 .monoMeta()
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel("\(box.size.label), \(Int(box.weightKg.rounded())) kilograms, \(box.contents.count) \(box.contents.count == 1 ? "item" : "items")")
             if !box.stamps.isEmpty {
                 Text(box.stamps.map(\.rawValue).joined(separator: " · "))
                     .monoText(13.5, weight: .bold)
                     .foregroundStyle(box.fragile ? Theme.danger : Theme.accentStrong)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let hint = hint {
                 Text(hint).sansText(15).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 4)
@@ -80,6 +84,11 @@ struct BoxDetailView: View {
                     Button(sealed ? "Unpack all" : "Check all") { setAll(!sealed) }
                         .buttonStyle(.pill(.text, compact: true))
                 }
+            }
+            if box.contents.isEmpty {
+                Text("Nothing listed for this box.")
+                    .monoMeta()
+                    .padding(.top, 12)
             }
             ForEach(Array(box.contents.enumerated()), id: \.offset) { index, line in
                 ContentRow(line: line, done: isChecked(index)) { toggle(index) }

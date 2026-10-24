@@ -92,7 +92,6 @@ struct MovingBoxCard: View {
                 Text(meta)
                     .monoText(11.5, maxScale: 1.6)
                     .foregroundStyle(sealed ? Theme.accentStrong : Theme.muted)
-                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

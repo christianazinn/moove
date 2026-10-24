@@ -107,6 +107,7 @@ struct NewHomePicker: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Enter room sizes, width by depth")
 
                 NavigationLink {
                     ListingImportView { name, source, plan in onPick(name, source, plan) }
@@ -150,13 +151,19 @@ struct NewHomePicker: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(DemoHouse.name), \(Self.summary(DemoHouse.floorPlan))")
+        .accessibilityLabel("\(DemoHouse.name), \(Self.spokenSummary(DemoHouse.floorPlan))")
         .accessibilityHint("Uses the demo house as your new home")
     }
 
     static func summary(_ plan: FloorPlan) -> String {
         let bedrooms = plan.rooms.filter { $0.kind == .bedroom }.count
         return "\(bedrooms) bed · \(plan.rooms.count) rooms · \(Int(plan.totalAreaM2.rounded())) m²"
+    }
+
+    /// `summary` for VoiceOver: "2 bedrooms, 5 rooms, 82 square meters".
+    static func spokenSummary(_ plan: FloorPlan) -> String {
+        let bedrooms = plan.rooms.filter { $0.kind == .bedroom }.count
+        return "\(bedrooms) bedroom\(bedrooms == 1 ? "" : "s"), \(plan.rooms.count) rooms, \(Spoken.area(plan.totalAreaM2))"
     }
 }
 
@@ -269,6 +276,7 @@ struct NewHomeDetail: View {
             Text("\(plan.rooms.count) rooms · \(Int(plan.totalAreaM2.rounded())) m²")
                 .monoMeta()
                 .padding(.top, 10)
+                .accessibilityLabel("\(plan.rooms.count) rooms, \(Spoken.area(plan.totalAreaM2))")
             HStack(spacing: 6) {
                 MonoTag(text: sourceLabel)
                 if !saved { MonoTag(text: "Not saved", tone: Theme.ochreInk) }
@@ -294,14 +302,14 @@ struct NewHomeDetail: View {
                 .frame(height: 420)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
                 .accessibilityElement()
-                .accessibilityLabel(focusRoom.map { "3D view of \(name), showing \($0)" } ?? "3D view of \(name)")
-                .accessibilityHint("Drag to orbit, pinch to zoom, double-tap to reset")
+                .accessibilityLabel(stageLabel)
+                .accessibilityHint("Drag to orbit, pinch to zoom, double-tap to reset. Pick a room below to zoom in.")
             HStack(spacing: 10) {
                 Circle().fill(Theme.accent).frame(width: 8, height: 8).accessibilityHidden(true)
                 Text(focusRoom.map { "Showing \($0)" } ?? (starts == nil ? "Drag to orbit · pinch to zoom" : "Flying in from your scanned room · drag to orbit"))
                     .monoText(13)
                     .foregroundStyle(Theme.muted)
-                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
                 if focusRoom != nil {
                     Button("Whole home") { focusRoom = nil }
@@ -314,6 +322,14 @@ struct NewHomeDetail: View {
         .padding(.horizontal, Theme.gutter)
     }
 
+    /// "3D view of Maple House: 6 rooms, 14 pieces placed, showing Bedroom".
+    private var stageLabel: String {
+        let n = shownPlacements.count
+        var text = "3D view of \(name): \(plan.rooms.count) rooms, \(n) piece\(n == 1 ? "" : "s") placed"
+        if let focusRoom { text += ", showing \(focusRoom)" }
+        return text
+    }
+
     private var roomStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
@@ -324,6 +340,7 @@ struct NewHomeDetail: View {
                         meta: String(format: "%.1f×%.1f", room.widthM, room.depthM),
                         selected: focusRoom == room.name
                     ) { focusRoom = room.name }
+                    .accessibilityLabel("\(room.name), \(Spoken.size(room.widthM, room.depthM))")
                 }
             }
             .padding(.horizontal, Theme.gutter)
@@ -410,12 +427,14 @@ struct NewHomeDetail: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("\(row.item.name), \(Spoken.size(row.item.widthM, row.item.depthM)), \(room)\(focusRoom == room ? ", in view" : "")")
                     .accessibilityHint("Shows \(room) in 3D")
                 } else {
                     LedgerRow(title: row.item.name, meta: Self.size(row.item), value: "Didn't fit", valueTint: Theme.danger) {
                         VoxelThumbnail(row.item)
                     }
                     .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(row.item.name), \(Spoken.size(row.item.widthM, row.item.depthM)), didn't fit")
                 }
             }
             if furniture.isDemo {
@@ -429,6 +448,24 @@ struct NewHomeDetail: View {
     static func size(_ item: LayoutItem) -> String {
         String(format: "%.1f × %.1f m", item.widthM, item.depthM)
     }
+}
+
+/// VoiceOver wording for sizes the screens print in short form ("3.2 × 4.1 m", "82 m²").
+enum Spoken {
+    private static func number(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(0...1)))
+    }
+
+    /// "3.2 by 4.1 meters"
+    static func size(_ widthM: Double, _ depthM: Double) -> String {
+        "\(number(widthM)) by \(number(depthM)) meters"
+    }
+
+    /// "82 square meters"
+    static func area(_ m2: Double) -> String { "\(Int(m2.rounded())) square meters" }
+
+    /// "4.5 cubic meters"
+    static func volume(_ m3: Double) -> String { "\(number(m3)) cubic meters" }
 }
 
 #Preview("Picker") {
