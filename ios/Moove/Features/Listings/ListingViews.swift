@@ -10,6 +10,7 @@ extension ListingStatus {
         case .draft: "pencil.line"
         case .awaitingApproval: "hand.raised.fill"
         case .rejected: "xmark.circle.fill"
+        case .posting: "arrow.up.circle"
         case .posted: "dot.radiowaves.left.and.right"
         case .sold: "checkmark.seal.fill"
         case .failed: "exclamationmark.triangle.fill"
@@ -18,7 +19,7 @@ extension ListingStatus {
 
     var tint: Color {
         switch self {
-        case .draft: Theme.muted
+        case .draft, .posting: Theme.muted
         case .awaitingApproval: Theme.ochreInk
         case .rejected, .failed: Theme.danger
         case .posted: Theme.accentStrong
@@ -27,7 +28,7 @@ extension ListingStatus {
     }
 }
 
-/// Status as a colored dot and mono label (the prototype's `.tag`). The dot pulses while drafting.
+/// Status as a colored dot and mono label (the prototype's `.tag`). The dot pulses while drafting or posting.
 /// A simulated listing never says "Live on eBay".
 struct ListingStatusChip: View {
     let status: ListingStatus
@@ -37,7 +38,7 @@ struct ListingStatusChip: View {
         HStack(spacing: 6) {
             Image(systemName: "circle.fill")
                 .font(.system(size: 7))
-                .symbolEffect(.pulse, isActive: status == .draft)
+                .symbolEffect(.pulse, isActive: status == .draft || status == .posting)
                 .accessibilityHidden(true)
             Text(status.displayLabel(simulated: simulated)).monoText(12.5)
         }

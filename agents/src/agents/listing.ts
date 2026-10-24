@@ -5,13 +5,20 @@ import type { Approval, Item, Listing } from '../module_bindings/types.js';
 import { config } from '../config.js';
 import { logEvent } from '../events.js';
 import { structuredCall } from '../integrations/anthropic.js';
-import { chooseEbay, dollars, simulatedEbay, type EbayPoster } from '../integrations/ebay.js';
+import { chooseEbay, dollars, simulatedEbay, type EbayPoster, type PublishResult } from '../integrations/ebay.js';
 import { buildDraftPrompt, clampPrice, finalizeCopy, LISTING_SYSTEM } from './listingPrompt.js';
 import { afterExpiry, approvalExpiry } from './approval-expiry.js';
 
 // Real eBay (sandbox) once scripts/ebay-setup.ts has filled in the EBAY_* keys, otherwise the
 // labeled simulation (#11, #32). Fixed at startup so a draft's `simulated` flag matches how it posts.
-const ebay: EbayPoster = chooseEbay();
+let ebay: EbayPoster = chooseEbay();
+let simulated: EbayPoster = simulatedEbay;
+
+// Tests swap in fake posters (the real one, and the simulated one simulated listings use).
+export function setListingDeps(d: { ebay?: EbayPoster; simulated?: EbayPoster }): void {
+  if (d.ebay) ebay = d.ebay;
+  if (d.simulated) simulated = d.simulated;
+}
 
 // Fallback when the owner has no user row; the user's approval_threshold_cents wins (#12).
 const DEFAULT_THRESHOLD_CENTS = BigInt(process.env.APPROVAL_THRESHOLD_CENTS_DEFAULT || '10000');
@@ -110,7 +117,6 @@ function approvalFor(conn: Conn, l: Listing): Approval | undefined {
 }
 
 async function post(conn: Conn, l: Listing): Promise<void> {
-  const it = conn.db.item.id.find(l.itemId);
   const ref = { owner: l.owner, agent: 'listing', refTable: 'listing', refId: l.id };
   // A listing posts the way it was drafted, so its `simulated` flag stays true to what happened.
   if (!l.simulated && ebay.simulated) {
@@ -118,7 +124,22 @@ async function post(conn: Conn, l: Listing): Promise<void> {
     logEvent(conn, { ...ref, kind: 'error', message: 'Drafted for real eBay, but the eBay keys are no longer configured' });
     return;
   }
-  const poster = l.simulated ? simulatedEbay : ebay;
+  const poster = l.simulated ? simulated : ebay;
+  // Claim the post first (#144): the module allows `posting` only from draft/awaiting_approval, so
+  // if it's refused, another post already owns this listing and publishing here would post it twice.
+  try {
+    await conn.reducers.updateListing({ listingId: l.id, status: 'posting', externalId: '', url: '', priceCents: -1n });
+  } catch (err) {
+    logEvent(conn, { ...ref, kind: 'plan', message: `Not posting: this listing is already being posted (${String(err)})` });
+    return;
+  }
+  await publish(conn, l, poster);
+}
+
+// Publishes a listing this worker holds the `posting` claim on, then marks it posted or failed.
+async function publish(conn: Conn, l: Listing, poster: EbayPoster): Promise<void> {
+  const it = conn.db.item.id.find(l.itemId);
+  const ref = { owner: l.owner, agent: 'listing', refTable: 'listing', refId: l.id };
   logEvent(conn, { ...ref, kind: 'plan', message: `Posting "${l.title}" to eBay at ${dollars(l.priceCents)}${poster.simulated ? ' (simulated)' : ''}` });
   try {
     const r = await poster.publish(
@@ -183,7 +204,54 @@ async function reaskAfterExpiry(conn: Conn, l: Listing): Promise<void> {
   }
 }
 
-// Moves one listing forward: draft -> (awaiting_approval ->) posted, or rejected.
+
+// A listing found in `posting` when the worker starts: the last worker died mid-post (#144), so
+// it may or may not be live. Never publish it blindly.
+// - Real eBay: look the SKU up. Already live -> mark it posted. Not live -> finish the post, which
+//   is idempotent by SKU (the inventory item is replaced, the SKU's offer reused).
+// - Simulated: mark it failed. Nothing external can be checked, and re-running it would make up
+//   a second item number and listing page for the same listing (and the sold timer could then
+//   "sell" it), so failing it loudly is the safer choice. The text can still be cross-posted.
+async function recover(conn: Conn, l: Listing): Promise<void> {
+  if (advancing.has(l.id)) return;
+  advancing.add(l.id);
+  const ref = { owner: l.owner, agent: 'listing', refTable: 'listing', refId: l.id };
+  try {
+    if (l.simulated) {
+      if (await setStatus(conn, l, 'failed')) {
+        logEvent(conn, { ...ref, kind: 'error', message: 'A post was interrupted by a restart; nothing was posted twice. Marked failed (simulated listing).' });
+      }
+      return;
+    }
+    if (!ebay.findLive) {
+      if (await setStatus(conn, l, 'failed')) {
+        logEvent(conn, { ...ref, kind: 'error', message: `A post to real eBay was interrupted by a restart and the eBay keys are no longer configured, so it can't be checked. Marked failed; check eBay for SKU MOOVE-${l.id}.` });
+      }
+      return;
+    }
+    let found: PublishResult | null;
+    try {
+      found = await ebay.findLive(l.id);
+    } catch (err) {
+      // Left in `posting`: the next restart checks again. Better stuck than posted twice.
+      logEvent(conn, { ...ref, kind: 'error', message: `A post was interrupted by a restart, and checking eBay for SKU MOOVE-${l.id} failed: ${String(err)}. Not posting again.` });
+      return;
+    }
+    if (found) {
+      logEvent(conn, { ...ref, kind: 'tool_call', message: `eBay getOffers: a post interrupted by a restart is already live as #${found.externalId}, not posting again`, data: found });
+      if (await setStatus(conn, l, 'posted', found.externalId, found.url)) {
+        logEvent(conn, { ...ref, kind: 'result', message: `Live as item #${found.externalId}`, data: found });
+      }
+      return;
+    }
+    logEvent(conn, { ...ref, kind: 'plan', message: `A post was interrupted by a restart and SKU MOOVE-${l.id} isn't live on eBay yet, so finishing it (same SKU and offer, never a second listing)` });
+    await publish(conn, l, ebay);
+  } finally {
+    advancing.delete(l.id);
+  }
+}
+
+// Moves one listing forward: draft -> (awaiting_approval ->) posting -> posted, or rejected.
 async function advance(conn: Conn, l: Listing): Promise<void> {
   if (advancing.has(l.id)) return;
   const ref = { owner: l.owner, agent: 'listing', refTable: 'listing', refId: l.id };
@@ -240,7 +308,12 @@ export const listingAgent: Agent = {
     };
     const maybeAdvance = (l: Listing) => void advance(conn, l);
     for (const it of conn.db.item.iter()) maybeDraft(it);
-    for (const l of conn.db.listing.iter()) maybeAdvance(l);
+    // `posting` rows at start were left by a worker that died mid-post. Only these are recovered:
+    // later `posting` updates are this worker's own claims, already in `advancing`.
+    for (const l of conn.db.listing.iter()) {
+      if (l.status === 'posting') void recover(conn, l);
+      else maybeAdvance(l);
+    }
     conn.db.item.onInsert((_ctx, it) => maybeDraft(it));
     conn.db.item.onUpdate((_ctx, _old, it) => maybeDraft(it));
     conn.db.listing.onInsert((_ctx, l) => maybeAdvance(l));

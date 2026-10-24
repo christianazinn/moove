@@ -77,6 +77,10 @@ struct ListingDetailView: View {
                     notice("The listing agent is still drafting this. It posts once it's ready, or asks you first if it's over your limit.",
                            systemImage: "pencil.line", tint: Theme.muted)
                         .padding(.top, 20)
+                case .posting:
+                    notice(listing.simulated ? "The listing agent is posting this now. It's a simulated post, so nothing goes to eBay." : "The listing agent is posting this to eBay now.",
+                           systemImage: "arrow.up.circle", tint: Theme.muted)
+                        .padding(.top, 20)
                 case .posted, .sold:
                     EmptyView()
                 }

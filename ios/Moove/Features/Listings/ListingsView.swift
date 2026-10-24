@@ -9,7 +9,7 @@ struct ListingsView: View {
     private static let groups: [(title: String, statuses: [ListingStatus])] = [
         ("Needs approval", [.awaitingApproval]),
         ("Live", [.posted]),
-        ("Drafting", [.draft]),
+        ("Drafting", [.draft, .posting]), // `posting` lasts seconds, so it stays with the work in progress (#144)
         ("Sold", [.sold]),
         ("Not posted", [.rejected, .failed]),
     ]
