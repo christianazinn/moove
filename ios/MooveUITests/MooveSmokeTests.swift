@@ -106,6 +106,7 @@ final class MooveSmokeTests: XCTestCase {
         // Offline photo sweep (#181): the room photos "find" a plant RoomPlan missed.
         let plant = text(matching: "Potted monstera")
         XCTAssertTrue(plant.waitForExistence(timeout: slow) || scrollTo(plant), "item added by the photo sweep")
+        XCTAssertTrue(text(containing: "from room photos").exists, "sweep item is labeled as found in room photos")
         snap("03-inventory-sweep")
     }
 
