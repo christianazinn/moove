@@ -100,6 +100,10 @@ final class MooveSmokeTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Inventory"].waitForExistence(timeout: 10), "jumped to Inventory")
         XCTAssertTrue(scrollTo(text(matching: "Demo bedroom")), "new room in Inventory")
         snap("03-inventory")
+        // Offline photo sweep (#181): the room photos "find" a guitar RoomPlan missed.
+        let guitar = text(matching: "Acoustic guitar")
+        XCTAssertTrue(guitar.waitForExistence(timeout: 15) || scrollTo(guitar), "item added by the photo sweep")
+        snap("03-inventory-sweep")
     }
 
     func testRoomIn3DAndPlan() {
