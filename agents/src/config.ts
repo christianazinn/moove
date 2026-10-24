@@ -34,6 +34,9 @@ export const config = {
     // Comma-separated subset of: ebay, fb, craigslist
     sources: env('APIFY_SOURCES', 'ebay,fb').split(',').map(s => s.trim()).filter(Boolean),
     maxUsdPerRun: Number(env('APIFY_MAX_USD_PER_RUN', '0.10')),
+    // Daily cap on estimated comps-run spend (0 = no cap); running total in spendFile.
+    maxUsdPerDay: Number(env('APIFY_MAX_USD_PER_DAY', '2')),
+    spendFile: env('APIFY_SPEND_FILE', '.cache/apify-spend.json'),
     city: { fb: env('MARKET_CITY_FB', 'sanfrancisco'), craigslist: env('MARKET_CITY_CRAIGSLIST', 'sfbay') },
     // Opt-in Zillow scraper for POST /homes/import (#89, useScraper: true only). See homes/zillowApify.ts.
     zillowActor: env('APIFY_ZILLOW_ACTOR', 'maxcopell~zillow-detail-scraper'),
