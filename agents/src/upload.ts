@@ -14,8 +14,9 @@ const EXT: Record<string, string> = {
   'model/vnd.usdz+zip': 'usdz',
   'application/json': 'json',
 };
-// html is served (simulated listing pages written by integrations/ebay.ts) but never accepted as an upload.
-const TYPE: Record<string, string> = { ...Object.fromEntries(Object.entries(EXT).map(([t, e]) => [e, t])), html: 'text/html; charset=utf-8' };
+// html (simulated listing pages written by integrations/ebay.ts) and glb (SAM 3D models written
+// by agents/sam3d.ts) are served but never accepted as uploads.
+const TYPE: Record<string, string> = { ...Object.fromEntries(Object.entries(EXT).map(([t, e]) => [e, t])), html: 'text/html; charset=utf-8', glb: 'model/gltf-binary' };
 // Served html is static and escaped; this CSP means even an escaping bug can't run script on this origin.
 const HTML_CSP = "default-src 'none'; img-src * data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'";
 // One flat name with a known extension: no slashes, traversal, dotfiles or directory listing.
