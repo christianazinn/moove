@@ -501,6 +501,74 @@ await stage("spending log: payment rows complete + simulated, [SIMULATED] events
   return { detail: `${pays.length} rows (x402 ${by("x402")}; visa ${by("visa")}), all simulated; ${railEvents.length} rail events (${kindList}), all "[SIMULATED] ..."` };
 });
 
+await stage("share: second phone joins by code, sees items, edits sync back", async () => {
+  if (!conn || !me) throw new Error("not connected");
+  const myRoom = [...conn.db.myRoom.iter()].find(r => r.name === "E2E Bedroom");
+  if (!myRoom) throw new Error("owner's my_room view has no E2E Bedroom");
+  const second = await new Promise<{ conn: DbConnection; identity: Identity }>((resolve, reject) => {
+    DbConnection.builder()
+      .withUri(URI)
+      .withDatabaseName(DB)
+      .onConnect((c, identity) => {
+        c.subscriptionBuilder()
+          .onApplied(() => resolve({ conn: c, identity }))
+          .onError(ctx => reject(ctx.event ?? new Error("subscription failed")))
+          .subscribe([tables.myRoom, tables.item, tables.roomMember]);
+      })
+      .onConnectError((_ctx, err) => reject(err))
+      .build();
+  });
+  try {
+    await second.conn.reducers.joinRoom({ code: myRoom.joinCode.toLowerCase() }); // codes are case-insensitive
+    await until("room in the second phone's my_room", () => [...second.conn.db.myRoom.iter()].find(r => r.id === myRoom.id), 15_000);
+    const theirs = [...second.conn.db.item.iter()].filter(i => i.roomId === myRoom.id);
+    const target = theirs.find(i => i.disposition === "keep");
+    if (!target) throw new Error(`second phone sees ${theirs.length} items, none kept`);
+    await second.conn.reducers.setDisposition({ itemId: target.id, disposition: "donate" });
+    await until("owner sees the member's edit", () => {
+      const it = conn!.db.item.id.find(target.id);
+      return it && it.disposition === "donate" && it.dispositionSource === "user" ? it : undefined;
+    }, 15_000);
+    return { detail: `joined with ${myRoom.joinCode}, sees ${theirs.length} items; member set "${target.name}" to donate, owner saw it` };
+  } finally {
+    second.conn.disconnect();
+  }
+});
+
+await stage("vision: a photographed item gets identified (Claude, replayed)", async () => {
+  if (!conn || !me) throw new Error("not connected");
+  const room = [...conn.db.myRoom.iter()].find(r => r.name === "E2E Bedroom")!;
+  await conn.reducers.addItem({
+    roomId: room.id,
+    object: { scanObjectId: "e2e-vision", name: "", category: "table", widthM: 1.2, heightM: 0.75, depthM: 0.6, photoUrl: "" },
+  });
+  const it = await until("new item", () => items().find(i => i.scanObjectId === "e2e-vision"), 10_000);
+  // A user choice, so sort never overrides it and no listing (another Claude call) follows.
+  await conn.reducers.setDisposition({ itemId: it.id, disposition: "keep" });
+  const res = await fetch(`http://localhost:${PORT}/upload`, { method: "POST", headers: { "content-type": "image/png" }, body: new Uint8Array(roomPhoto()) });
+  if (!res.ok) throw new Error(`upload: HTTP ${res.status}`);
+  const { url } = (await res.json()) as { url: string };
+  await conn.reducers.addItemPhoto({ itemId: it.id, url });
+  const done = await until("vision done/failed", () => {
+    const x = conn!.db.item.id.find(it.id);
+    return x && (x.detailsStatus === "done" || x.detailsStatus === "failed") ? x : undefined;
+  }, 90_000);
+  if (done.detailsStatus !== "done") {
+    const err = [...conn.db.agentEvent.iter()].filter(e => e.agent === "vision" && e.kind === "error" && e.refId === it.id).pop();
+    throw new Error(`vision ${done.detailsStatus}: ${err?.message ?? "?"}`);
+  }
+  // Renamed by vision -> pricing runs again, and the guardrail stage already spent the x402 budget,
+  // so its refusal (or "no cached comps") is expected for this item.
+  await until("its pricing settled", () => {
+    const x = conn!.db.item.id.find(it.id);
+    return x && x.pricingStatus !== "pending" && x.pricingStatus !== "running" ? x : undefined;
+  }, 30_000).catch(() => undefined);
+  for (const e of conn.db.agentEvent.iter()) {
+    if (e.refId === it.id && e.agent === "pricing" && e.kind === "error" && /pricing budget|no cached comps/.test(e.message)) expectedErrors.add(e.id);
+  }
+  return { detail: `"${done.name}" (${done.category}; ${done.material || "no material"}; ${done.condition})` };
+});
+
 await stage("agent log: no unexpected errors", async () => {
   const evs = [...conn!.db.agentEvent.iter()].filter(e => me && e.owner.isEqual(me));
   // Expected noise: spend-cap refusals are designed behavior; transient retries recover.
