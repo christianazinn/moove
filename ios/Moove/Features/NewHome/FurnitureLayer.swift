@@ -2,7 +2,7 @@ import RealityKit
 import UIKit
 import MooveKit
 
-/// The kept items as boxes in the new home, plus the fly-in: items start piled
+/// The kept items as voxel models in the new home, plus the fly-in: items start piled
 /// beside the house (the "old room"), lift, arc over the walls and settle into
 /// their layout spots, staggered. Switching layouts glides them to new spots.
 @MainActor
@@ -60,11 +60,11 @@ final class FurnitureLayer {
     }
 
     private func transform(for p: Placement) -> Transform {
-        let h = Float(items[p.itemId]?.heightM ?? 0.5)
-        return Transform(
+        // Voxel models have their origin at the bottom center; they stand on the plank floor.
+        Transform(
             scale: .one,
             rotation: simd_quatf(angle: Float(p.rotationDeg * .pi / 180), axis: [0, 1, 0]),
-            translation: [Float(p.x), h / 2, Float(p.y)]
+            translation: [Float(p.x), Float(VoxelHouse.floorTopM), Float(p.y)]
         )
     }
 
@@ -95,7 +95,7 @@ final class FurnitureLayer {
         let originX = b.minX - 6.0, originZ = b.center.y - 3
         for item in items.sorted(by: { $0.id < $1.id }) {
             if col == columns { col = 0; x = 0; z += rowDepth + 0.3; rowDepth = 0 }
-            out[item.id] = Transform(scale: .one, rotation: simd_quatf(angle: 0, axis: [0, 1, 0]), translation: [Float(originX + x + item.widthM / 2), Float(item.heightM / 2), Float(originZ + z + item.depthM / 2)])
+            out[item.id] = Transform(scale: .one, rotation: simd_quatf(angle: 0, axis: [0, 1, 0]), translation: [Float(originX + x + item.widthM / 2), 0, Float(originZ + z + item.depthM / 2)])
             x += item.widthM + 0.3
             rowDepth = max(rowDepth, item.depthM)
             col += 1
@@ -103,48 +103,8 @@ final class FurnitureLayer {
         return out
     }
 
+    /// The piece's voxel model (cached per spec); it shows its own front, so no marker.
     private static func entity(for item: LayoutItem) -> ModelEntity {
-        let w = Float(item.widthM), h = Float(item.heightM), d = Float(item.depthM)
-        let corner = min(0.04, min(w, h, d) / 4)
-        let color = Self.color(item.category)
-        let body = ModelEntity(mesh: .generateBox(width: w, height: h, depth: d, cornerRadius: corner), materials: [Self.material(color)])
-        // A darker strip on the front face shows which way the piece faces.
-        let front = ModelEntity(mesh: .generateBox(width: w * 0.6, height: min(0.06, h * 0.3), depth: 0.01),
-                                materials: [Self.material(color.withAlphaComponent(1).darker())])
-        front.position = [0, h / 2 - min(0.06, h * 0.3), d / 2 + 0.006]
-        body.addChild(front)
-        body.name = item.name
-        return body
-    }
-
-    private static func material(_ color: UIColor) -> PhysicallyBasedMaterial {
-        var m = PhysicallyBasedMaterial()
-        m.baseColor = .init(tint: color)
-        m.roughness = .init(floatLiteral: 0.6)
-        m.metallic = .init(floatLiteral: 0)
-        return m
-    }
-
-    /// Muted, warm palette matching the app theme: sage, slate, wood, ochre, terracotta.
-    static func color(_ category: String) -> UIColor {
-        switch category.lowercased() {
-        case "bed": Theme.uiColor(0x7B8B99)
-        case "sofa", "couch": Theme.uiColor(0x8B9A7B)
-        case "table", "desk": Theme.uiColor(0xA88B66)
-        case "chair": Theme.uiColor(0x6E7E5F)
-        case "storage", "dresser", "nightstand", "bookshelf": Theme.uiColor(0xB9A07A)
-        case "lamp": Theme.uiColor(0xB48A3E)
-        case "appliance": Theme.uiColor(0x8F8577)
-        case "decor", "plant": Theme.uiColor(0xB0563D)
-        default: Theme.uiColor(0x9C9383)
-        }
-    }
-}
-
-private extension UIColor {
-    func darker() -> UIColor {
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        getRed(&r, green: &g, blue: &b, alpha: &a)
-        return UIColor(red: r * 0.6, green: g * 0.6, blue: b * 0.6, alpha: a)
+        VoxelEntity.furniture(item)
     }
 }

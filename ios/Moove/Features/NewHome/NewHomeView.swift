@@ -40,7 +40,8 @@ struct NewHomeView: View {
             if current != nil {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Change") { showPicker = true }
-                        .font(.mono(13, weight: .bold))
+                        .monoText(13, weight: .bold, maxScale: 1.4)
+                        .accessibilityLabel("Change new home")
                 }
             }
         }
@@ -52,7 +53,7 @@ struct NewHomeView: View {
                 }
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { showPicker = false }.font(.mono(13))
+                        Button("Cancel") { showPicker = false }.monoText(13, maxScale: 1.4)
                     }
                 }
             }
@@ -74,6 +75,8 @@ struct NewHomeView: View {
     }
 }
 
+// MARK: - Picker
+
 /// Where the new home comes from.
 struct NewHomePicker: View {
     var onPick: (_ name: String, _ source: NewHomeSource, _ plan: FloorPlan) -> Void
@@ -81,81 +84,73 @@ struct NewHomePicker: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                MooveWordmark(height: 34).padding(.bottom, 22)
-                Text("New home").eyebrow().padding(.bottom, 10)
-                Text("Where are you moving?")
-                    .font(.system(size: 26, weight: .semibold))
-                    .padding(.bottom, 6)
-                Text("Pick the new place so Moove can lay out what you keep.")
-                    .monoMeta()
-                    .padding(.bottom, 24)
+                MooveWordmark(height: 24).padding(.bottom, 28)
+                PageHeader(
+                    eyebrow: "06 — New home",
+                    title: "Where are you moving?",
+                    lede: "Pick the new place so Moove can lay out everything you keep."
+                )
+                .padding(.bottom, 32)
 
-                Button { onPick(DemoHouse.name, .demo, DemoHouse.floorPlan) } label: {
-                    VStack(alignment: .leading, spacing: 14) {
-                        FloorPlanSketch(plan: DemoHouse.floorPlan)
-                            .frame(height: 190)
-                            .padding(14)
-                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusLarge))
-                        HStack(alignment: .firstTextBaseline) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(DemoHouse.name).blockTitle()
-                                Text(summary(DemoHouse.floorPlan)).monoMeta()
-                            }
-                            Spacer()
-                            Text("Use").font(.mono(13, weight: .bold))
-                                .padding(.horizontal, 16).frame(minHeight: 34)
-                                .foregroundStyle(Theme.accentInk)
-                                .background(Capsule().fill(Theme.accent))
-                        }
-                    }
-                    .padding(.bottom, 20)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .ruled()
+                demoHouse.padding(.bottom, 44)
 
+                ListHeader(title: "Or start from")
                 NavigationLink {
                     ManualRoomsEditor { name, plan in onPick(name, .manual, plan) }
                 } label: {
-                    row(icon: "ruler", title: "Enter room sizes", meta: "Type each room as width × depth", enabled: true)
+                    LedgerRow(title: "Enter room sizes", meta: "Type each room as width × depth", chevron: true) {
+                        IconTile(systemName: "ruler")
+                    }
                 }
                 .buttonStyle(.plain)
 
                 NavigationLink {
                     ListingImportView { name, source, plan in onPick(name, source, plan) }
                 } label: {
-                    row(icon: "link", title: "Import from a listing", meta: "Zillow, Redfin, Realtor.com link", enabled: true)
+                    LedgerRow(title: "Import from a listing", meta: "Zillow, Redfin or Realtor.com link", chevron: true) {
+                        IconTile(systemName: "link")
+                    }
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 24)
+            .padding(.horizontal, Theme.gutter)
+            .padding(.top, 16)
+            .padding(.bottom, 40)
         }
-        .navigationTitle("Pick your new home")
-        .navigationBarTitleDisplayMode(.inline)
         .mooveScreen()
     }
 
-    private func row(icon: String, title: String, meta: String, enabled: Bool) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .light))
-                .frame(width: 36, height: 36)
-                .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusSmall))
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).blockTitle()
-                Text(meta).monoMeta()
+    private var demoHouse: some View {
+        Button { onPick(DemoHouse.name, .demo, DemoHouse.floorPlan) } label: {
+            VStack(alignment: .leading, spacing: 18) {
+                FloorPlanSketch(plan: DemoHouse.floorPlan)
+                    .frame(height: 220)
+                    .padding(18)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+                HStack(alignment: .center, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(DemoHouse.name).blockTitle()
+                        Text(Self.summary(DemoHouse.floorPlan)).monoMeta()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Use this home")
+                        .monoText(13, weight: .bold, maxScale: 1.5)
+                        .lineLimit(1)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 44)
+                        .foregroundStyle(Theme.accentInk)
+                        .background(Capsule().fill(Theme.accentFill))
+                }
             }
-            Spacer()
-            if enabled { Image(systemName: "chevron.right").font(.system(size: 13, weight: .light)).foregroundStyle(Theme.faint) }
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 16)
-        .opacity(enabled ? 1 : 0.5)
-        .contentShape(Rectangle())
-        .ruled()
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(DemoHouse.name), \(Self.summary(DemoHouse.floorPlan))")
+        .accessibilityHint("Uses the demo house as your new home")
     }
 
-    private func summary(_ plan: FloorPlan) -> String {
+    static func summary(_ plan: FloorPlan) -> String {
         let bedrooms = plan.rooms.filter { $0.kind == .bedroom }.count
         return "\(bedrooms) bed · \(plan.rooms.count) rooms · \(Int(plan.totalAreaM2.rounded())) m²"
     }
@@ -167,8 +162,10 @@ struct Furniture: Equatable {
     var isDemo: Bool
 }
 
-/// 3D view with the kept items arranged in it, a layout picker, and a strip of
-/// room chips; tapping a chip flies the camera there.
+// MARK: - Detail
+
+/// The dollhouse: a page header, the 3D home large on the page, layout controls,
+/// and a ledger of the placed pieces. Tapping a room chip or a piece flies the camera to that room.
 struct NewHomeDetail: View {
     @Environment(MooveStore.self) private var store
     var name: String
@@ -184,16 +181,32 @@ struct NewHomeDetail: View {
     @State private var flyInToken = 0
     @State private var savedStyle: LayoutSolver.Style?
 
+    private static let stageID = "stage"
+
     private var saved: Bool { home != nil }
     private var option: LayoutOption? { options.first { $0.style == style } }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            FloorPlan3DView(plan: plan, focusRoom: focusRoom, items: furniture.items, placements: option?.placements ?? [], flyInToken: flyInToken)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge))
-                .padding(.horizontal, 16)
-            controls
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    header
+                        .padding(.horizontal, Theme.gutter)
+                        .padding(.top, 16)
+                        .padding(.bottom, 28)
+                    stage.id(Self.stageID)
+                    roomStrip.padding(.top, 10)
+                    if !furniture.items.isEmpty {
+                        controls
+                            .padding(.horizontal, Theme.gutter)
+                            .padding(.top, 36)
+                    }
+                    pieces(proxy)
+                        .padding(.horizontal, Theme.gutter)
+                        .padding(.top, 44)
+                }
+                .padding(.bottom, 40)
+            }
         }
         .background(Theme.bg)
         .onChange(of: plan) { focusRoom = nil }
@@ -216,20 +229,26 @@ struct NewHomeDetail: View {
         flyInToken += 1
     }
 
+    private func save() async {
+        guard let home, let option else { return }
+        if await store.saveLayout(option.placements, name: option.name, for: home) { savedStyle = option.style }
+    }
+
+    // MARK: Header
+
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(name).font(.system(size: 20, weight: .semibold)).lineLimit(1)
-                Text("\(plan.rooms.count) rooms · \(Int(plan.totalAreaM2.rounded())) m² · \(option?.placements.count ?? 0) pieces")
-                    .monoMeta()
+        VStack(alignment: .leading, spacing: 0) {
+            MooveWordmark(height: 22).padding(.bottom, 24)
+            PageHeader(eyebrow: "06 — New home", title: name)
+            Text("\(plan.rooms.count) rooms · \(Int(plan.totalAreaM2.rounded())) m² · \(option?.placements.count ?? 0) pieces")
+                .monoMeta()
+                .padding(.top, 10)
+            HStack(spacing: 6) {
+                MonoTag(text: sourceLabel)
+                if !saved { MonoTag(text: "Not saved", tone: Theme.ochreInk) }
             }
-            Spacer()
-            if !saved { MonoTag(text: "Not saved", tone: Theme.ochre) }
-            MonoTag(text: sourceLabel)
+            .padding(.top, 14)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 14)
     }
 
     private var sourceLabel: String {
@@ -240,66 +259,148 @@ struct NewHomeDetail: View {
         }
     }
 
-    private var controls: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if !furniture.items.isEmpty {
-                Text("Layout").eyebrow().padding(.top, 16).padding(.bottom, 8)
-                HStack(spacing: 8) {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        PillPicker(options: LayoutSolver.Style.allCases, selection: $style) { $0.label }
-                    }
-                    Button { flyInToken += 1 } label: { Image(systemName: "arrow.triangle.2.circlepath") }
-                        .buttonStyle(.pill(.outline, compact: true))
-                        .accessibilityLabel("Play fly-in again")
-                    Button(savedStyle == style ? "Saved" : "Save") { Task { await save() } }
-                        .buttonStyle(.pill(.primary, compact: true))
-                        .disabled(!saved || savedStyle == style || option == nil)
-                }
-                HStack(spacing: 10) {
-                    if let option, !option.unplaced.isEmpty {
-                        Text("\(option.unplaced.count) didn't fit").font(.mono(12)).foregroundStyle(Theme.danger)
-                    }
-                    if furniture.isDemo { Text("Demo items · nothing kept yet").font(.mono(12)).foregroundStyle(Theme.faint) }
-                }
-                .padding(.top, 8)
-            }
-            Text("Rooms").eyebrow().padding(.top, 16).padding(.bottom, 8)
-            roomStrip
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 12)
-    }
+    // MARK: Stage
 
-    private func save() async {
-        guard let home, let option else { return }
-        if await store.saveLayout(option.placements, name: option.name, for: home) { savedStyle = option.style }
+    private var stage: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            FloorPlan3DView(plan: plan, focusRoom: focusRoom, items: furniture.items, placements: option?.placements ?? [], flyInToken: flyInToken)
+                .frame(height: 420)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+                .accessibilityElement()
+                .accessibilityLabel(focusRoom.map { "3D view of \(name), showing \($0)" } ?? "3D view of \(name)")
+                .accessibilityHint("Drag to orbit, pinch to zoom, double-tap to reset")
+            HStack(spacing: 10) {
+                Circle().fill(Theme.accent).frame(width: 8, height: 8).accessibilityHidden(true)
+                Text(focusRoom.map { "Showing \($0)" } ?? "Drag to orbit · pinch to zoom")
+                    .monoText(13)
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(2)
+                Spacer(minLength: 8)
+                if focusRoom != nil {
+                    Button("Whole home") { focusRoom = nil }
+                        .buttonStyle(.pill(.text, compact: true))
+                }
+            }
+            .frame(minHeight: 44)
+            .padding(.top, 6)
+        }
+        .padding(.horizontal, Theme.gutter)
     }
 
     private var roomStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                chip("Whole home", meta: nil, selected: focusRoom == nil) { focusRoom = nil }
+                ChoiceChip(title: "Whole home", selected: focusRoom == nil) { focusRoom = nil }
                 ForEach(plan.rooms.filter { $0.kind != .hallway }) { room in
-                    chip(room.name, meta: String(format: "%.1f×%.1f", room.widthM, room.depthM), selected: focusRoom == room.name) {
-                        focusRoom = room.name
-                    }
+                    ChoiceChip(
+                        title: room.name,
+                        meta: String(format: "%.1f×%.1f", room.widthM, room.depthM),
+                        selected: focusRoom == room.name
+                    ) { focusRoom = room.name }
                 }
+            }
+            .padding(.horizontal, Theme.gutter)
+        }
+    }
+
+    // MARK: Layout
+
+    private var controls: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ListHeader(title: "Layout", count: option.map { "\($0.placements.count) placed" })
+            ScrollView(.horizontal, showsIndicators: false) {
+                PillPicker(options: LayoutSolver.Style.allCases, selection: $style) { $0.label }
+            }
+            .padding(.top, 16)
+            HStack(spacing: 10) {
+                Button { flyInToken += 1 } label: {
+                    Label("Fly in", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(.pill(.outline, compact: true))
+                .accessibilityLabel("Play fly-in again")
+                Button(savedStyle == style ? "Saved" : "Save layout") { Task { await save() } }
+                    .buttonStyle(.pill(.primary, compact: true))
+                    .disabled(!saved || savedStyle == style || option == nil)
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 10)
+            if let option, !option.unplaced.isEmpty {
+                Text("\(option.unplaced.count) didn't fit in this layout")
+                    .monoText(12.5)
+                    .foregroundStyle(Theme.danger)
+                    .padding(.top, 8)
             }
         }
     }
 
-    private func chip(_ title: String, meta: String?, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text(title).font(.mono(12.5, weight: selected ? .bold : .regular))
-                if let meta { Text(meta).font(.mono(11.5)).foregroundStyle(selected ? Theme.accentInk.opacity(0.75) : Theme.faint) }
+    // MARK: Pieces
+
+    private struct PieceRow: Identifiable {
+        var item: LayoutItem
+        var room: String?
+        var id: UInt64 { item.id }
+    }
+
+    /// Placed pieces in plan room order, then the ones that didn't fit.
+    private var pieceRows: [PieceRow] {
+        let byId = Dictionary(furniture.items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let order = Dictionary(plan.rooms.enumerated().map { ($0.element.name, $0.offset) }, uniquingKeysWith: { a, _ in a })
+        let placed = (option?.placements ?? [])
+            .compactMap { p in byId[p.itemId].map { PieceRow(item: $0, room: p.room) } }
+            .sorted { a, b in
+                let ra = order[a.room ?? ""] ?? .max, rb = order[b.room ?? ""] ?? .max
+                return ra != rb ? ra < rb : a.item.name < b.item.name
             }
-            .padding(.horizontal, 12)
-            .frame(minHeight: 32)
-            .foregroundStyle(selected ? Theme.accentInk : Theme.text)
-            .background(Capsule().fill(selected ? Theme.accent : Theme.surface))
+        let unplaced = (option?.unplaced ?? []).compactMap { byId[$0] }.map { PieceRow(item: $0, room: nil) }
+        return placed + unplaced
+    }
+
+    private func pieces(_ proxy: ScrollViewProxy) -> some View {
+        let rows = pieceRows
+        return VStack(alignment: .leading, spacing: 0) {
+            ListHeader(title: "Pieces", count: "\(rows.count)") {
+                if furniture.isDemo { MonoTag(text: "Demo items") }
+            }
+            if rows.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(furniture.items.isEmpty ? "Nothing to place yet" : "Arranging…").blockTitle()
+                    Text("Items you keep fly in here once they're scanned.").monoMeta()
+                }
+                .padding(.vertical, 28)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .ruled()
+            }
+            ForEach(rows) { row in
+                if let room = row.room {
+                    Button {
+                        focusRoom = room
+                        withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(Self.stageID, anchor: .top) }
+                    } label: {
+                        LedgerRow(title: row.item.name, meta: "\(Self.size(row.item)) · \(room)", chevron: true) {
+                            VoxelThumbnail(row.item)
+                        } trailing: {
+                            if focusRoom == room { MonoTag(text: "In view", tone: Theme.accentStrong) }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Shows \(room) in 3D")
+                } else {
+                    LedgerRow(title: row.item.name, meta: Self.size(row.item), value: "Didn't fit", valueTint: Theme.danger) {
+                        VoxelThumbnail(row.item)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            if furniture.isDemo {
+                Text("Nothing kept yet, so these are the demo inventory's keeps.")
+                    .monoMeta()
+                    .padding(.top, 14)
+            }
         }
-        .buttonStyle(.plain)
+    }
+
+    static func size(_ item: LayoutItem) -> String {
+        String(format: "%.1f × %.1f m", item.widthM, item.depthM)
     }
 }
 
@@ -313,6 +414,7 @@ struct NewHomeDetail: View {
             name: DemoHouse.name, source: .demo, plan: DemoHouse.floorPlan, home: nil,
             furniture: Furniture(items: DemoFixtures.inventory(owner: "demo").items.map(LayoutItem.init), isDemo: true)
         )
+        .mooveScreen()
     }
     .environment(MooveStore.preview())
 }

@@ -4,7 +4,9 @@ import MooveKit
 
 /// Non-AR RealityKit view of a floor plan. Drag to orbit, pinch to zoom,
 /// two-finger drag to pan, double-tap to reset. Setting `focusRoom` flies the camera to that room.
-/// Items in `placements` are drawn as boxes; bumping `flyInToken` replays the fly-in.
+/// The home is a voxel dollhouse seen from front-right at an isometric-feeling angle
+/// (narrow FOV), lit by a warm sun with shadows. Items in `placements` are voxel models;
+/// bumping `flyInToken` replays the fly-in.
 struct FloorPlan3DView: UIViewRepresentable {
     var plan: FloorPlan
     var focusRoom: String? = nil
@@ -14,8 +16,8 @@ struct FloorPlan3DView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    /// Theme `surface`: warm paper in light mode, dark walnut in dark mode.
-    static var sceneBackground: UIColor { Theme.dynamicUIColor(0xEAE3D7, 0x26211B) }
+    /// Warm paper in light mode (Theme `surface`), deep walnut in dark mode (Theme `bg`).
+    static var sceneBackground: UIColor { Theme.dynamicUIColor(0xEAE3D7, 0x1C1814) }
 
     func makeUIView(context: Context) -> ARView {
         let view = ARView(frame: .zero, cameraMode: .nonAR, automaticallyConfigureSession: false)
@@ -40,21 +42,37 @@ struct FloorPlan3DView: UIViewRepresentable {
         private var shownFlyIn: Int?
         private let anchor = AnchorEntity(world: .zero)
         private let camera = PerspectiveCamera()
+        private let sun = DirectionalLight()
+        private weak var view: ARView?
+        /// Front-right of the house (camera on +x, +z), ~35° up: MoveWise's dollhouse angle.
+        static let defaultYaw: Float = 40 * .pi / 180
+        static let defaultPitch: Float = 35 * .pi / 180
+        static let fieldOfView: Float = 26
         private var target: SIMD3<Float> = .zero
-        private var yaw: Float = 0
-        private var pitch: Float = 0.95
-        private var distance: Float = 14
+        private var yaw: Float = Coordinator.defaultYaw
+        private var pitch: Float = Coordinator.defaultPitch
+        private var distance: Float = 30
+        private var shadowDistance: Float = 0
         private var shownFocus: String??
 
         func attach(to view: ARView) {
-            camera.camera.fieldOfViewInDegrees = 50
+            self.view = view
+            camera.camera.fieldOfViewInDegrees = Self.fieldOfView
             anchor.addChild(camera)
             anchor.addChild(scene.root)
             anchor.addChild(furniture.root)
-            let sun = DirectionalLight()
-            sun.light.intensity = 2500
-            sun.look(at: .zero, from: [4, 10, 6], relativeTo: nil)
+
+            // Warm key light from front-right and above, casting soft shadows into the rooms.
+            sun.light.color = Theme.uiColor(0xFFE4C2)
+            sun.light.intensity = 2800
+            sun.look(at: .zero, from: [2.2, 5.5, 3.4], relativeTo: nil)
             anchor.addChild(sun)
+            // Soft warm fill from back-left so shadowed sides aren't black.
+            let fill = DirectionalLight()
+            fill.light.color = Theme.uiColor(0xFFF1E0)
+            fill.light.intensity = 700
+            fill.look(at: .zero, from: [-3, 4, -1], relativeTo: nil)
+            anchor.addChild(fill)
             view.scene.addAnchor(anchor)
 
             let orbit = UIPanGestureRecognizer(target: self, action: #selector(orbit(_:)))
@@ -90,14 +108,20 @@ struct FloorPlan3DView: UIViewRepresentable {
         private func frame(on bounds: PlanBounds, animated: Bool) {
             let f = NewHomeScene.focus(on: bounds)
             target = f.center
-            distance = max(4, f.radius * 2.6)
-            pitch = 0.95
+            // Fit the bounds' circle in the narrower of the two fields of view.
+            let size = view?.bounds.size ?? .zero
+            let aspect = size.width > 0 && size.height > 0 ? Float(size.width / size.height) : 0.8
+            let halfV = Self.fieldOfView / 2 * .pi / 180
+            let halfH = atan(tan(halfV) * aspect)
+            distance = max(3, f.radius * 0.95 / sin(min(halfV, halfH)))
+            pitch = Self.defaultPitch
             updateCamera(duration: animated ? 0.6 : 0)
         }
 
         private func updateCamera(duration: TimeInterval = 0) {
             pitch = min(max(pitch, 0.2), 1.5)
-            distance = min(max(distance, 2), 60)
+            distance = min(max(distance, 2), 150)
+            updateShadow()
             let eye = target + SIMD3(
                 distance * cos(pitch) * sin(yaw),
                 distance * sin(pitch),
@@ -110,6 +134,14 @@ struct FloorPlan3DView: UIViewRepresentable {
             } else {
                 camera.look(at: target, from: eye, relativeTo: nil)
             }
+        }
+
+        /// Shadows reach from the camera to just past the house; refreshed only on big zoom changes.
+        private func updateShadow() {
+            let wanted = distance + 2 * scene.focus.radius + 2
+            guard shadowDistance == 0 || abs(wanted - shadowDistance) / shadowDistance > 0.2 else { return }
+            shadowDistance = wanted
+            sun.shadow = DirectionalLightComponent.Shadow(maximumDistance: wanted, depthBias: 2)
         }
 
         // MARK: Gestures
@@ -126,7 +158,7 @@ struct FloorPlan3DView: UIViewRepresentable {
             let d = g.translation(in: g.view)
             g.setTranslation(.zero, in: g.view)
             // Move the target in the ground plane, relative to where the camera faces.
-            let scale = distance * 0.0016
+            let scale = distance * 0.0009
             let right = SIMD3<Float>(cos(yaw), 0, -sin(yaw))
             let forward = SIMD3<Float>(-sin(yaw), 0, -cos(yaw))
             target += right * Float(-d.x) * scale + forward * Float(d.y) * scale
@@ -141,7 +173,7 @@ struct FloorPlan3DView: UIViewRepresentable {
 
         @objc private func reset(_ g: UITapGestureRecognizer) {
             guard let plan = scene.plan else { return }
-            yaw = 0
+            yaw = Self.defaultYaw
             shownFocus = .some(nil)
             frame(on: plan.bounds, animated: true)
         }
