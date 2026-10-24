@@ -16,7 +16,7 @@ They match the [demo video](demo-video.md) and the commerce [video shot list](de
 | 7 | `07-new-home.gif` | **by hand** (CI `07-new-home` renders blank) | Move | Everything you kept, plus what the buy agent bought, flies from its old spot into the new home's 3D layout (demo house shown). |
 | 8 | `08-summary-safe.png` | **by hand** (CI `08-summary` stops above the card) | Summary | The summary totals what you sold, spent and kept out of landfill, and shows every guardrail that fired; simulated money is tagged Simulated. |
 
-**Extras** (not in the 8, useful for a track write-up or if Devpost allows more): CI `02-items` (Items > Inventory) and CI `03b-item-comps` (an item's price and its comparable listings).
+**Extras** (not in the 8, useful for a track write-up or if Devpost allows more): CI `02-items` (Items > Inventory) and CI `03b-item-comps` (an item's price and its comparable listings). **Room shots** (by hand, see below): one furnished room on its own, to show the layouts look good, e.g. `09-room-bedroom.png` / `10-room-living.png`, caption "Each room of the new home, furnished with what you kept and bought (demo house shown)."
 
 ## Getting the CI screenshots
 Every `ios-ui` CI run (on every push to `main`, and on PRs that touch `ios/`) uploads a `devpost-screenshots` artifact with `01-scan`, `01b-scan-finished`, `02-items`, `03-spending`, `03b-item-comps`, `04-review`, `05-approvals`, `06-desk-chair-deals`, `07-new-home` and `08-summary` (PNG, 1206 × 2622, light mode). The artifact can also hold other PNGs. Ignore anything not on that list.
@@ -95,6 +95,10 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 - **State:** **Money** with the **Simulated** tag ("Visa purchases" tagged Simulated, "x402 data payments" tagged with its simulated share), then **"Agents kept you safe"** (Simulated tag): "1 scam deal blocked · fraud score 0.85", the approvals line ("6 approvals asked · 3 approved · 2 denied · 1 expired", "Anything over $100 needs your OK"), "1 sentimental item left for you", "Spent $0.025 of $10.00 data budget ($0.015 simulated)" and "Spent $689.97 of $1,500.00 card budget (simulated)". If a second image is allowed, CI `08-summary` (the top: Net, "Kept from landfill 49 kg", "Where everything went") is a good partner.
 - **Caption:** "The summary totals what you sold, spent and kept out of landfill, and shows every guardrail that fired; simulated money is tagged Simulated."
 - **Track:** Best Planet-First Hack, Coinbase and Visa (real and simulated spend kept apart), Auth0 (approvals counted).
+
+### Room shots (extras)
+- **Source:** by hand, after the taps in image 7. Move > **New Home**, scroll to **Room shots** under Layout: one card per furnished room (rendered a few seconds after the fly-in). Tap a card, then **Share** > **Save Image** (or AirDrop it to a Mac). The full-screen viewer swipes between rooms; **Orbit** to turn the room, **Use this angle** retakes the photo from there at full-screen resolution, which is the one to upload.
+- The cards are ARView snapshots, so like image 7 they may be blank under XCUITest (`newhome.roomShot.<room>` identifiers exist for a future test, but capture these by hand).
 
 ## Upload tips
 - **GIFs:** `ffmpeg -i flyin.mov -vf "fps=12,scale=600:-1:flags=lanczos" -loop 0 flyin.gif`, or Gifski or Kap. Keep them 3 to 6 s and under a few MB.
