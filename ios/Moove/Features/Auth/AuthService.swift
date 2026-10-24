@@ -54,10 +54,28 @@ final class AuthService {
     }
 
     /// A fresh (renewed if close to expiry) ID token for SpacetimeDB, or nil for guests.
+    /// The credentials manager only renews on the access token's expiry (24 h), but the
+    /// ID token expires first (10 h), and SpacetimeDB rejects an expired one, which
+    /// leaves the app reconnecting forever. So renew on the ID token's own `exp` too.
     func spacetimeToken() async -> String? {
         guard case .signedIn = state, let manager = credentialsManager else { return nil }
-        return try? await manager.credentials(minTTL: 300).idToken
+        guard let token = try? await manager.credentials(minTTL: 300).idToken else { return nil }
+        if let exp = Self.expiry(ofIDToken: token), exp > Date(timeIntervalSinceNow: 300) {
+            connectedTokenExpiry = exp
+            return token
+        }
+        guard let renewed = try? await manager.renew().idToken else {
+            connectedTokenExpiry = nil  // renewal failed: don't loop; the banner's retry tries again
+            return token
+        }
+        connectedTokenExpiry = Self.expiry(ofIDToken: renewed)
+        return renewed
     }
+
+    /// Expiry of the last token handed to SpacetimeDB. The SDK reconnects with that
+    /// same token, so once it has expired a reconnect needs a fresh one.
+    private(set) var connectedTokenExpiry: Date?
+    var connectedTokenExpired: Bool { connectedTokenExpiry.map { $0 <= Date() } ?? false }
 
     func signIn() async {
         guard let domain = config.auth0Domain, let clientId = config.auth0ClientId, let manager = credentialsManager else {
@@ -99,12 +117,24 @@ final class AuthService {
     /// already validated the token's signature and claims when it was issued.
     static func profile(fromIDToken token: String) throws -> Profile {
         struct Claims: Decodable { let sub: String; let name: String?; let nickname: String?; let email: String? }
+        let claims = try JSONDecoder().decode(Claims.self, from: payload(ofIDToken: token))
+        return Profile(sub: claims.sub, name: claims.name ?? claims.nickname ?? claims.email ?? "Mover", email: claims.email)
+    }
+
+    /// The ID token's `exp`, or nil if it can't be read.
+    static func expiry(ofIDToken token: String) -> Date? {
+        struct Claims: Decodable { let exp: TimeInterval }
+        guard let data = try? payload(ofIDToken: token),
+              let claims = try? JSONDecoder().decode(Claims.self, from: data) else { return nil }
+        return Date(timeIntervalSince1970: claims.exp)
+    }
+
+    private static func payload(ofIDToken token: String) throws -> Data {
         let parts = token.split(separator: ".")
         guard parts.count == 3 else { throw URLError(.cannotDecodeContentData) }
         var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
         payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
         guard let data = Data(base64Encoded: payload) else { throw URLError(.cannotDecodeContentData) }
-        let claims = try JSONDecoder().decode(Claims.self, from: data)
-        return Profile(sub: claims.sub, name: claims.name ?? claims.nickname ?? claims.email ?? "Mover", email: claims.email)
+        return data
     }
 }
