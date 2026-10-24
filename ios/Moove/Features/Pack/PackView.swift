@@ -9,6 +9,7 @@ import MooveKit
 struct PackView: View {
     @Environment(MooveStore.self) private var store
     @State private var plan: PackingPlan?
+    @State private var truckLoad: TruckLoad?
     @State private var openBox: MovingBox?
     @State private var expandedFurniture: Set<UInt64> = []
     // Check-off state survives relaunches. Keys: "boxId:lineIndex" and supply names.
@@ -46,7 +47,9 @@ struct PackView: View {
         .navigationBarTitleDisplayMode(.inline)
         .mooveScreen()
         .onChange(of: input, initial: true) { _, new in
-            plan = PackingPlanner.plan(items: new.items, destinationRoom: new.rooms, bought: new.bought)
+            let next = PackingPlanner.plan(items: new.items, destinationRoom: new.rooms, bought: new.bought)
+            plan = next
+            truckLoad = TruckLoader.load(plan: next, items: new.items)
         }
         .sheet(item: $openBox) { box in
             // Look the box up again so a re-plan while the sheet is open shows fresh contents.
@@ -152,6 +155,11 @@ struct PackView: View {
             Text("Rough estimate. Ask movers for a quote.")
                 .monoMeta()
                 .fixedSize(horizontal: false, vertical: true)
+            if let note = truckLoad?.sizeNote(planned: t.truck) { Text(note).monoMeta().foregroundStyle(Theme.ochreInk) }
+            NavigationLink { TruckView(plan: plan, items: inputs.items, load: truckLoad) } label: {
+                Label("See it in 3D", systemImage: "cube.transparent")
+            }
+            .buttonStyle(.pill(.outline, compact: true))
         }
         .padding(18)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
