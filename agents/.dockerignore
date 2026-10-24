@@ -1,0 +1,11 @@
+# Never ship secrets or local state in the image. The identity comes from SPACETIME_WORKER_TOKEN.
+.env
+.env.*
+.worker-token*
+uploads/
+node_modules/
+npm-debug.log*
+*.log
+Dockerfile
+.dockerignore
+fly.toml

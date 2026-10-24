@@ -1,0 +1,40 @@
+# Fly.io config for the agent worker (see docs/deploy.md). Deploy from agents/: fly deploy
+# Rename `app` (and PUBLIC_UPLOAD_BASE_URL) to the name `fly apps create` gave you.
+app = "moove-agents"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# Non-secret config only. Keys and SPACETIME_WORKER_TOKEN go in `fly secrets set`.
+[env]
+  UPLOAD_PORT = "8787"
+  UPLOAD_DIR = "/app/uploads"
+  SPACETIME_URI = "wss://maincloud.spacetimedb.com"
+  SPACETIME_DB_NAME = "moove"
+  PUBLIC_UPLOAD_BASE_URL = "https://moove-agents.fly.dev"
+
+# Uploads survive deploys and restarts. A volume pins the app to one machine, which is what we
+# want: only one worker may run against a database at a time.
+[[mounts]]
+  source = "moove_uploads"
+  destination = "/app/uploads"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  # The worker is a long-lived SpacetimeDB subscriber, not a request handler: never scale to zero.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

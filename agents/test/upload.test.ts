@@ -189,3 +189,25 @@ test('files: no directory listing, traversal or dotfiles; html gets a CSP', asyn
   assert.equal(html.status, 200);
   assert.match(html.headers.get('content-security-policy') ?? '', /default-src 'none'/);
 });
+
+test('GET /healthz returns 200 {ok:true}, query string or not; POST is 404', async () => {
+  for (const p of ['/healthz', '/healthz?probe=1']) {
+    const res = await fetch(base + p);
+    assert.equal(res.status, 200, p);
+    assert.deepEqual(await res.json(), { ok: true });
+  }
+  assert.equal((await fetch(base + '/healthz', { method: 'POST' })).status, 404);
+});
+
+test("saveToken logs instead of throwing when the file can't be written", async () => {
+  const { saveToken } = await import('../src/spacetime.js');
+  const tokDir = mkdtempSync(path.join(tmpdir(), 'moove-token-'));
+  try {
+    assert.equal(saveToken(path.join(tokDir, 'no-such-dir', '.worker-token'), 'tok'), false);
+    const ok = path.join(tokDir, '.worker-token');
+    assert.equal(saveToken(ok, 'tok'), true);
+    assert.equal(readFileSync(ok, 'utf8'), 'tok');
+  } finally {
+    rmSync(tokDir, { recursive: true, force: true });
+  }
+});

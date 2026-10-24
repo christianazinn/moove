@@ -11,6 +11,18 @@ function savedToken(): string | undefined {
   return undefined;
 }
 
+// Persists the token for the next restart. Best effort: a hosted worker gets its identity from
+// SPACETIME_WORKER_TOKEN and may run on a read-only filesystem, so a failed write only logs.
+export function saveToken(file: string, token: string): boolean {
+  try {
+    writeFileSync(file, token);
+    return true;
+  } catch (err) {
+    console.warn(`[spacetime] couldn't save the worker token to ${file} (${(err as Error)?.message ?? err})); only SPACETIME_WORKER_TOKEN keeps this identity across restarts`);
+    return false;
+  }
+}
+
 // Connects as the worker identity, registers it, and subscribes to every table.
 // Resolves once the initial subscription has been applied (the local cache is populated).
 export function connect(): Promise<{ conn: Conn; identity: Identity }> {
@@ -21,7 +33,7 @@ export function connect(): Promise<{ conn: Conn; identity: Identity }> {
       .withToken(savedToken())
       .withAutomaticReconnect()
       .onConnect((conn, identity, token) => {
-        writeFileSync(config.workerTokenFile, token);
+        saveToken(config.workerTokenFile, token);
         console.log(`[spacetime] connected as ${identity.toHexString()}`);
         // Subscribe only once registration succeeds, so a non-worker identity rejects connect() cleanly.
         conn.reducers
@@ -38,7 +50,7 @@ export function connect(): Promise<{ conn: Conn; identity: Identity }> {
             reject(err);
           });
       })
-      .onAutomaticReconnect((_conn, _identity, token) => writeFileSync(config.workerTokenFile, token))
+      .onAutomaticReconnect((_conn, _identity, token) => saveToken(config.workerTokenFile, token))
       .onConnectError((_ctx, err) => reject(err))
       .onDisconnect((_ctx, err) => console.warn('[spacetime] disconnected', err ?? ''))
       .build();
