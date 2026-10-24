@@ -126,6 +126,7 @@ struct ItemDetailView: View {
         if let brand = item.brand { detail("Brand", brand) }
         if let condition = item.condition { detail("Condition", "\(condition) / 5") }
         detail("Size", dims(item))
+        detail("Found by", foundBy(item))
         if item.fragile {
             Label("Fragile", systemImage: "exclamationmark.triangle")
                 .monoText(13.5, weight: .bold)
@@ -186,8 +187,18 @@ struct ItemDetailView: View {
     }
 
     private func dims(_ item: Item) -> String {
+        if item.origin == .photo { return "Not measured" }
         let f = { (v: Double) in v.formatted(.number.precision(.fractionLength(2))) }
-        return "\(f(item.widthM)) × \(f(item.depthM)) × \(f(item.heightM)) m"
+        let size = "\(f(item.widthM)) × \(f(item.depthM)) × \(f(item.heightM)) m"
+        return item.origin == .roomPhotos ? "≈ \(size)" : size
+    }
+
+    private func foundBy(_ item: Item) -> String {
+        switch item.origin {
+        case .scan: "LiDAR scan"
+        case .roomPhotos: "Room photos (size estimated)"
+        case .photo: "Your photo"
+        }
     }
 }
 
