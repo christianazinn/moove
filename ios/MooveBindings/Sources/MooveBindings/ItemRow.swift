@@ -39,6 +39,8 @@ public struct ItemRow: BSATNTableWithPrimaryKey, Equatable, Sendable {
     public let modelUrl: String
     public let modelSource: String
     public let modelStatus: String
+    public let attributesJson: String
+    public let colorsJson: String
 
     public var primaryKey: UInt64 { id }
 
@@ -72,6 +74,8 @@ public struct ItemRow: BSATNTableWithPrimaryKey, Equatable, Sendable {
         self.modelUrl = try reader.readString()
         self.modelSource = try reader.readString()
         self.modelStatus = try reader.readString()
+        self.attributesJson = try reader.readString()
+        self.colorsJson = try reader.readString()
     }
 }
 
@@ -105,6 +109,8 @@ extension ItemRow: BSATNRowQueryable {
         public let modelUrl: QueryColumn<ItemRow, String>
         public let modelSource: QueryColumn<ItemRow, String>
         public let modelStatus: QueryColumn<ItemRow, String>
+        public let attributesJson: QueryColumn<ItemRow, String>
+        public let colorsJson: QueryColumn<ItemRow, String>
     }
     public static func makeCols(tableAlias: String) -> Cols {
         Cols(
@@ -135,7 +141,9 @@ extension ItemRow: BSATNRowQueryable {
             updatedAt: QueryColumn<ItemRow, Timestamp>(tableAlias: tableAlias, name: "updated_at"),
             modelUrl: QueryColumn<ItemRow, String>(tableAlias: tableAlias, name: "model_url"),
             modelSource: QueryColumn<ItemRow, String>(tableAlias: tableAlias, name: "model_source"),
-            modelStatus: QueryColumn<ItemRow, String>(tableAlias: tableAlias, name: "model_status")
+            modelStatus: QueryColumn<ItemRow, String>(tableAlias: tableAlias, name: "model_status"),
+            attributesJson: QueryColumn<ItemRow, String>(tableAlias: tableAlias, name: "attributes_json"),
+            colorsJson: QueryColumn<ItemRow, String>(tableAlias: tableAlias, name: "colors_json")
         )
     }
 }
