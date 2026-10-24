@@ -29,3 +29,5 @@ Each worker writes its own `upload_base_url` into its database on start. A repub
 
 ## Re-seeding the demo
 `SPACETIME_URI=wss://maincloud.spacetimedb.com SPACETIME_DB_NAME=moove-demo npm run seed:demo -- --maincloud --force --wait`. This creates a new room and prints its join code; update this file.
+
+Commerce story (opt-in): add `SEED_COMMERCE=1` to also seed a Herman Miller office chair set to sell (priced ~$350 from the committed replay, so the listing agent drafts it over the $100 threshold and asks approval; the draft is one live Claude call). Without `--force` it only adds the chair to the existing Bedroom, so the join code stays the same.
