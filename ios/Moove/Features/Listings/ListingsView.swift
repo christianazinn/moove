@@ -7,7 +7,7 @@ struct ListingsView: View {
     @Environment(MooveStore.self) private var store
 
     private static let groups: [(title: String, statuses: [ListingStatus])] = [
-        ("Needs you", [.awaitingApproval]),
+        ("Needs approval", [.awaitingApproval]),
         ("Live", [.posted]),
         ("Drafting", [.draft]),
         ("Sold", [.sold]),

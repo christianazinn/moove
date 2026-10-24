@@ -39,8 +39,13 @@ extension SpacetimeBackend {
             "SELECT comp.* FROM comp JOIN item ON comp.item_id = item.id WHERE item.owner = \(id)",
             "SELECT * FROM new_home WHERE owner = \(id)",
             "SELECT * FROM layout WHERE owner = \(id)",
-            "SELECT * FROM listing WHERE owner = \(id)",
+            // Shared-room listings (#195): subscriptions join at most two tables, so
+            // listing -> item -> room_member can't be one query. Take all listings and other
+            // users' listing approvals (public tables) and keep only those for visible items
+            // in makeSnapshot (MooveKit scopedToVisibleItems). Swap for views once #200 lands.
+            "SELECT * FROM listing",
             "SELECT * FROM approval WHERE owner = \(id)",
+            "SELECT * FROM approval WHERE kind = 'listing' AND owner != \(id)",
             "SELECT * FROM payment WHERE owner = \(id)",
             "SELECT * FROM agent_event WHERE owner = \(id)",
             "SELECT * FROM shopping_item WHERE owner = \(id)",
@@ -93,7 +98,7 @@ extension SpacetimeBackend {
         s.serviceConfig = ServiceConfig(values: Dictionary(
             rows("service_config", MooveBindings.ServiceConfigRow.self).map { ($0.key, $0.value) },
             uniquingKeysWith: { a, _ in a }))
-        return s
+        return s.scopedToVisibleItems()
     }
 
     // MARK: Reducers
