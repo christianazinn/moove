@@ -10,7 +10,7 @@ let package = Package(
         .library(name: "MooveKit", targets: ["MooveKit"]),
     ],
     targets: [
-        .target(name: "MooveKit"),
+        .target(name: "MooveKit", resources: [.copy("Resources/demo-house.json")]),
         .testTarget(name: "MooveKitTests", dependencies: ["MooveKit"]),
     ]
 )
