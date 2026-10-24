@@ -197,51 +197,75 @@ public struct AgentEvent: Codable, Sendable, Hashable, Identifiable {
 
     /// A spend-cap refusal from the x402 rail: an `error` event with `refused: true`.
     public var isRefusal: Bool { kind == .error && data.refused == true }
+
+    /// An x402 attempt that errored without writing a `payment` row: the worker's
+    /// "x402 payment for … failed: <reason>" (thrown before settlement) and
+    /// "No USDC payment option …" events. The "failed (HTTP …)" variant is skipped
+    /// because it comes with a failed `payment` row, which the log already shows.
+    public var isFailedX402Attempt: Bool {
+        guard kind == .error, !isRefusal else { return false }
+        if message.hasPrefix("No USDC payment option") { return true }
+        return message.hasPrefix("x402 payment") && message.contains(" failed: ")
+    }
 }
 
 /// Per-agent spend against its cap.
+///
+/// The worker's real ledger is per process, keyed by agent across all owners, resets on
+/// restart, and takes its cap from `AGENT_SPEND_CAP_USDC`. The app only sees this owner's
+/// payment rows, so its own figure is an estimate. When the worker has reported a remaining
+/// balance (on a refusal newer than any of the agent's payments), that number wins.
 public struct AgentBudget: Sendable, Hashable, Identifiable {
     public var agent: String
+    /// Assumed cap (the worker's default); the real one is worker config.
     public var capUsdMicros: Int64
-    /// Non-failed payments, real and simulated (the worker's ledger counts both).
+    /// This owner's non-failed payments, real and simulated (the worker's ledger counts both).
     public var spentUsdMicros: Int64
     /// The part of `spentUsdMicros` that was simulated.
     public var simulatedUsdMicros: Int64
     public var refusals: Int
+    /// `remainingUsdMicros` from the agent's newest refusal, if still current.
+    public var reportedRemainingUsdMicros: Int64? = nil
 
     public var id: String { agent }
-    public var remainingUsdMicros: Int64 { max(0, capUsdMicros - spentUsdMicros) }
+    /// True when "remaining" is the app's own estimate rather than a worker-reported figure.
+    public var isEstimate: Bool { reportedRemainingUsdMicros == nil }
+    public var estimatedRemainingUsdMicros: Int64 { max(0, capUsdMicros - spentUsdMicros) }
+    public var remainingUsdMicros: Int64 { reportedRemainingUsdMicros.map { max(0, $0) } ?? estimatedRemainingUsdMicros }
     /// 0...1, for a progress bar.
     public var fractionUsed: Double {
         guard capUsdMicros > 0 else { return 1 }
-        return min(1, Double(spentUsdMicros) / Double(capUsdMicros))
+        let used = reportedRemainingUsdMicros.map { capUsdMicros - max(0, $0) } ?? spentUsdMicros
+        return min(1, max(0, Double(used) / Double(capUsdMicros)))
     }
-    public var isExhausted: Bool { spentUsdMicros >= capUsdMicros }
+    public var isExhausted: Bool { remainingUsdMicros == 0 }
 }
 
-/// One row of the spending log: a payment, or a refused payment.
+/// One row of the spending log: a payment, a refused payment, or a failed x402 attempt.
 public enum SpendingEntry: Sendable, Hashable, Identifiable {
     case payment(Payment)
     case refusal(AgentEvent)
+    case failedAttempt(AgentEvent)
 
     public var id: String {
         switch self {
         case .payment(let p): "payment-\(p.id)"
         case .refusal(let e): "refusal-\(e.id)"
+        case .failedAttempt(let e): "attempt-\(e.id)"
         }
     }
 
     public var createdAt: Date {
         switch self {
         case .payment(let p): p.createdAt
-        case .refusal(let e): e.createdAt
+        case .refusal(let e), .failedAttempt(let e): e.createdAt
         }
     }
 
     public var agent: String {
         switch self {
         case .payment(let p): p.agent
-        case .refusal(let e): e.agent
+        case .refusal(let e), .failedAttempt(let e): e.agent
         }
     }
 
@@ -249,7 +273,7 @@ public enum SpendingEntry: Sendable, Hashable, Identifiable {
     fileprivate var orderKey: (Date, UInt64, Int) {
         switch self {
         case .payment(let p): (p.createdAt, p.id, 1)
-        case .refusal(let e): (e.createdAt, e.id, 0)
+        case .refusal(let e), .failedAttempt(let e): (e.createdAt, e.id, 0)
         }
     }
 }
@@ -267,7 +291,13 @@ public struct SpendingLog: Sendable, Equatable {
 
     public init(payments: [Payment], events: [AgentEvent], capPerAgentUsdMicros: Int64 = UsdMicros.defaultAgentCap) {
         let refusals = events.filter(\.isRefusal)
-        entries = (payments.map(SpendingEntry.payment) + refusals.map(SpendingEntry.refusal))
+        // Only agents that actually use the x402 rail get failed-attempt rows.
+        let x402Agents = Set(payments.filter { $0.rail == .x402 }.map(\.agent))
+            .union(refusals.map(\.agent))
+            .union(events.filter { $0.kind == .payment }.map(\.agent))
+        let failedAttempts = events.filter { $0.isFailedX402Attempt && x402Agents.contains($0.agent) }
+        entries = (payments.map(SpendingEntry.payment) + refusals.map(SpendingEntry.refusal)
+                   + failedAttempts.map(SpendingEntry.failedAttempt))
             .sorted { a, b in
                 let (ad, aid, ar) = a.orderKey, (bd, bid, br) = b.orderKey
                 if ad != bd { return ad > bd }
@@ -285,12 +315,21 @@ public struct SpendingLog: Sendable, Equatable {
         let agents = Set(payments.map(\.agent)).union(refusals.map(\.agent))
         budgets = agents.sorted().map { agent in
             let mine = counted.filter { $0.agent == agent }
+            let myRefusals = refusals.filter { $0.agent == agent }
+            // Trust the worker's figure only if no payment by this agent came after it.
+            let newestRefusal = myRefusals.max { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
+            let newestPaymentAt = payments.filter { $0.agent == agent }.map(\.createdAt).max()
+            var reported: Int64?
+            if let r = newestRefusal, newestPaymentAt.map({ r.createdAt >= $0 }) ?? true {
+                reported = r.data.remainingUsdMicros
+            }
             return AgentBudget(
                 agent: agent,
                 capUsdMicros: capPerAgentUsdMicros,
                 spentUsdMicros: mine.map(\.amountUsdMicros).reduce(0, +),
                 simulatedUsdMicros: mine.filter(\.simulated).map(\.amountUsdMicros).reduce(0, +),
-                refusals: refusals.filter { $0.agent == agent }.count
+                refusals: myRefusals.count,
+                reportedRemainingUsdMicros: reported
             )
         }
     }

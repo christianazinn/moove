@@ -103,7 +103,8 @@ import Testing
             payment(3, agent: "pricing", micros: 999_000, status: .failed),
             payment(4, agent: "shopping", rail: .visa, micros: 2_000_000, status: .pending),
         ]
-        let log = SpendingLog(payments: payments, events: [refusal(9, agent: "shopping")])
+        // The refusal predates the shopping payment, so its reported balance is stale.
+        let log = SpendingLog(payments: payments, events: [refusal(9, agent: "shopping", at: -1)])
         #expect(log.totalsByRail[.x402] == 15_000)
         #expect(log.totalsByRail[.visa] == 2_000_000)
         #expect(log.realSpentUsdMicros == 2_010_000)
@@ -119,6 +120,50 @@ import Testing
         #expect(pricing.refusals == 0)
         #expect(log.budgets[1].refusals == 1)
         #expect(log.budgets[1].remainingUsdMicros == 3_000_000)
+        #expect(pricing.isEstimate)
+        #expect(log.budgets[1].isEstimate)
+    }
+
+    @Test func workerReportedRemainingWinsWhenNewest() {
+        // Worker says $4.99 left (its ledger spans owners / restarts), app only sees $0.01.
+        let log = SpendingLog(payments: [payment(1, micros: 10_000, at: 0)], events: [refusal(9, at: 5)])
+        let b = log.budgets[0]
+        #expect(!b.isEstimate)
+        #expect(b.reportedRemainingUsdMicros == 4_990_000)
+        #expect(b.remainingUsdMicros == 4_990_000)
+        #expect(b.estimatedRemainingUsdMicros == 4_990_000)
+        #expect(abs(b.fractionUsed - 0.002) < 1e-9)
+
+        // A later payment makes that report stale, so it falls back to the estimate.
+        let later = SpendingLog(payments: [payment(1, micros: 10_000, at: 0), payment(2, micros: 20_000, at: 10)],
+                                events: [refusal(9, at: 5)])
+        #expect(later.budgets[0].isEstimate)
+        #expect(later.budgets[0].remainingUsdMicros == 4_970_000)
+    }
+
+    @Test func failedX402AttemptsWithoutPaymentRowsAreShown() {
+        func err(_ id: UInt64, _ agent: String, _ message: String) -> AgentEvent {
+            AgentEvent(id: id, owner: "me", agent: agent, kind: .error, message: message, createdAt: t0)
+        }
+        let events = [
+            err(20, "pricing", "x402 payment for comps failed: fetch failed"),
+            err(21, "pricing", "No USDC payment option on Base Sepolia for https://x"),
+            err(22, "pricing", "x402 payment for comps failed (HTTP 402, insufficient_funds)"), // has a payment row
+            err(23, "pricing", "Drafting failed: timeout"),                                    // not x402
+            err(24, "vision", "x402 payment for photos failed: boom"),                          // agent never used x402
+        ]
+        let log = SpendingLog(payments: [payment(1, agent: "pricing")], events: events)
+        let attempts = log.entries.compactMap { if case .failedAttempt(let e) = $0 { e.id } else { nil } }
+        #expect(attempts.sorted() == [20, 21])
+        #expect(!log.budgets.contains { $0.agent == "vision" })
+    }
+
+    @Test func demoRefusalBudgetMatchesBudgetRow() {
+        let log = DemoFixtures.inventory(owner: "me").spendingLog()
+        let shopping = try? #require(log.budgets.first { $0.agent == "shopping" })
+        #expect(shopping?.remainingUsdMicros == 5_000_000)
+        #expect(shopping?.estimatedRemainingUsdMicros == 5_000_000)
+        #expect(log.entries.contains { if case .failedAttempt = $0 { true } else { false } })
     }
 
     @Test func budgetClampsWhenOverCap() {

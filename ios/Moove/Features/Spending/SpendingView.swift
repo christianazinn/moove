@@ -20,6 +20,7 @@ struct SpendingView: View {
                         switch entry {
                         case .payment(let payment): PaymentRow(payment: payment)
                         case .refusal(let event): RefusalRow(event: event)
+                        case .failedAttempt(let event): FailedAttemptRow(event: event)
                         }
                     }
                 }
@@ -76,14 +77,25 @@ struct AgentBudgetRow: View {
             HStack {
                 Text(budget.agent.agentLabel).font(.subheadline.weight(.semibold))
                 Spacer()
-                Text("\(UsdMicros.format(budget.remainingUsdMicros)) left")
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(budget.isExhausted ? Color.red : Color.primary)
+                if budget.isEstimate {
+                    // The worker's ledger is per process and its cap is worker config, so the
+                    // app's own sum is only an estimate; don't present it as an exact balance.
+                    Text("\(UsdMicros.format(budget.spentUsdMicros)) spent of \(UsdMicros.format(budget.capUsdMicros)) cap (est.)")
+                        .font(.subheadline.monospacedDigit())
+                } else {
+                    Text("\(UsdMicros.format(budget.remainingUsdMicros)) left")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(budget.isExhausted ? Color.red : Color.primary)
+                }
             }
             ProgressView(value: budget.fractionUsed)
                 .tint(budget.isExhausted ? .red : budget.fractionUsed > 0.8 ? .orange : .green)
             HStack(spacing: 6) {
-                Text("\(UsdMicros.format(budget.spentUsdMicros)) of \(UsdMicros.format(budget.capUsdMicros)) cap")
+                if budget.isEstimate {
+                    Text("Your payments only")
+                } else {
+                    Text("Reported by the agent worker")
+                }
                 if budget.simulatedUsdMicros > 0 {
                     Text("· \(UsdMicros.format(budget.simulatedUsdMicros)) simulated").foregroundStyle(.orange)
                 }
@@ -169,6 +181,30 @@ struct RefusalRow: View {
         .listRowBackground(Color.red.opacity(0.08))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Payment refused by spend cap. \(event.message)")
+    }
+}
+
+/// An x402 attempt that errored before any payment was recorded (no money moved).
+struct FailedAttemptRow: View {
+    let event: AgentEvent
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .font(.title3)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Failed attempt").font(.headline).foregroundStyle(.orange)
+                    Spacer()
+                    Text(event.createdAt.ago).font(.caption).foregroundStyle(.secondary)
+                }
+                Text(event.message).font(.subheadline).lineLimit(3)
+                Text("\(event.agent.agentLabel) · no payment made").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
 }
 

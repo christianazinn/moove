@@ -118,9 +118,13 @@ public enum DemoFixtures {
                        message: "x402 payment for seller report failed (HTTP 402, insufficient_funds)",
                        dataJson: #"{"url":"https://moove.example/x402/seller-report"}"#, createdAt: ago(6)),
             AgentEvent(id: 604, owner: owner, agent: "shopping", kind: .error,
-                       message: "Refused x402 payment for a premium deal scan: $0.25 is over the $0.10 per-call max",
-                       dataJson: #"{"payee":"\#(realX402Payee)","amountUsdMicros":"250000","remainingUsdMicros":"4980000","refused":true}"#,
+                       message: "Refused x402 payment for a premium deal scan: $0.25 is over the per-call max of $0.10",
+                       dataJson: #"{"payee":"\#(realX402Payee)","amountUsdMicros":"250000","remainingUsdMicros":"5000000","refused":true}"#,
                        createdAt: ago(3)),
+            // An attempt that errored before settlement (no payment row), shown as a failed attempt.
+            AgentEvent(id: 605, owner: owner, agent: "pricing", kind: .error,
+                       message: "No USDC payment option on Base Sepolia for https://comps.example/x402/report",
+                       dataJson: #"{"url":"https://comps.example/x402/report"}"#, createdAt: ago(9)),
         ]
     }
 }
