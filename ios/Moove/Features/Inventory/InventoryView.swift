@@ -10,6 +10,9 @@ struct InventoryView: View {
     /// Room id → (scan object id → the scanner's category), from each room's scan geometry,
     /// for the "was: storage" marker on items a later pass renamed (#267).
     @State private var scannedCategories: [UInt64: [String: String]] = [:]
+    /// Fix-it rename from a row's long-press menu.
+    @State private var renaming: Item?
+    @State private var newName = ""
 
     var body: some View {
         let rooms = store.snapshot.roomsNewestFirst(store.visibleRooms)
@@ -44,6 +47,11 @@ struct InventoryView: View {
         }
         .sheet(item: $sharing) { ShareRoomView(room: $0) }
         .sheet(isPresented: $showJoin) { JoinRoomView() }
+        .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }), presenting: renaming) { item in
+            TextField("Name", text: $newName)
+            Button("Save") { Task { await store.renameItem(item, to: newName) } }
+            Button("Cancel", role: .cancel) {}
+        }
         #if DEBUG
         // Screenshot/UI-test hook: MOOVE_OPEN_SHEET=share|join.
         .task {
@@ -122,7 +130,17 @@ struct InventoryView: View {
                 ItemThumbnail(item: item, size: 56)
             }
             .accessibilityElement(children: .combine)
+            // Fix-it (long press): rename, what is it, turn, remove a misread scan item.
+            .contextMenu { ItemFixMenu(item: item) { startRename(item) } }
+            .accessibilityAction(named: "Rename") { startRename(item) }
+            .accessibilityAction(named: "Turn around") { Task { await store.turn(item) } }
+            .accessibilityIdentifier("inventory.item.\(item.id)")
         }
+    }
+
+    private func startRename(_ item: Item) {
+        newName = item.name
+        renaming = item
     }
 
     private func hideButton(_ room: Room) -> some View {

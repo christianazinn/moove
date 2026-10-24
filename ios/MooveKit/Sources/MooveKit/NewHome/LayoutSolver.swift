@@ -12,9 +12,11 @@ public struct LayoutItem: Sendable, Hashable, Identifiable {
     /// Measured from the scan's photos (`ScanColors`); the voxel model uses them over its keyword palette.
     public var primaryColor: VoxelColor?
     public var secondaryColor: VoxelColor?
+    /// The user's fix-it kind (`UserKind.*`, `ItemFix`) only; RoomPlan's attributes aren't carried.
+    public var attributes: [String]
 
     public init(id: UInt64, name: String, category: String, widthM: Double, depthM: Double, heightM: Double,
-                primaryColor: VoxelColor? = nil, secondaryColor: VoxelColor? = nil) {
+                primaryColor: VoxelColor? = nil, secondaryColor: VoxelColor? = nil, attributes: [String] = []) {
         self.id = id
         self.name = name
         self.category = category
@@ -23,6 +25,7 @@ public struct LayoutItem: Sendable, Hashable, Identifiable {
         self.heightM = heightM
         self.primaryColor = primaryColor
         self.secondaryColor = secondaryColor
+        self.attributes = attributes
     }
 
     /// The item with its stored colors (`item.colors`, from `set_item_colors`), if any.
@@ -40,7 +43,7 @@ public struct LayoutItem: Sendable, Hashable, Identifiable {
             (primary, secondary) = (item.colors?.primary, item.colors?.secondary)
         }
         self.init(id: item.id, name: item.name, category: item.category, widthM: item.widthM, depthM: item.depthM, heightM: item.heightM,
-                  primaryColor: primary, secondaryColor: secondary)
+                  primaryColor: primary, secondaryColor: secondary, attributes: item.userKindAttributes)
     }
 }
 
