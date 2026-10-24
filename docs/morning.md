@@ -47,7 +47,7 @@ Expected: `UP maincloud.spacetimedb.com/moove` and `UP …/moove-demo`, each wit
    - prices appear, then keep/sell/donate/trash
 3. Room photo sweep (#92, #156/#178): **no extra step.** After **Add N items**, the app sends up to 4 wide frames from the scan by itself. **Expected:**
    - Items shows "Identifying items from room photos…" under the room for about 10–30 s.
-   - Then "Unidentified item" / "other" boxes get real names, and missed things are added. Item detail says "Found by: Room photos (size estimated)", and those items aren't placed in the 3D room.
+   - Then "Unidentified item" / "other" boxes get real names, and missed things are added. Item detail says "Found by: Room photos (size estimated)", and the dollhouse places them by estimate (#184).
    - The Xcode console prints `[sweep] sent N of M room photos for scan <id>`.
    - Impossible boxes are skipped, and the finished page then says "N objects looked wrong and were skipped" (#180).
 4. Share the room (Items → Share) and join it on a second phone. **Expected:** the same items stream in live, and edits sync both ways.
