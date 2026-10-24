@@ -45,7 +45,7 @@ About 90 PRs merged. Full list: `gh pr list --state merged --search "merged:>=20
 - **Commerce (Aiden):**
   - **Labels and hardening:** `[SIMULATED]` on every simulated money step (#154). A planted scam deal that the demo shows being blocked (#154, #168). Restart hardening (#138/#143).
   - **Approvals:** stale approvals expire and are asked again (#186, #214, #231). Joined members see shared listings (#208) and **may approve listing approvals** (#200, #239). Purchases stay owner-only.
-  - **Visa:** the checkout mode is announced, so purchase approvals say SIMULATED (#191, #235, #238).
+  - **Visa:** the checkout mode is announced (#191, #235, #238). Since ~1:50 PM checkout is a real Authorize.net **sandbox** charge (#302), so approvals say VISA SANDBOX.
   - **Buy agent:** deal search counts toward the Apify cap (#185, #210).
   - **Demo seed:** the Herman Miller chair (#194).
 - **Backend / platform (Christian):**
@@ -84,7 +84,7 @@ Everyone: pull `main`, then `cd ios && xcodegen`, then build to your phone.
 2. **Approving the chair uses up the demo beat.** To check it during testing, approve it, check that it posts, then re-arm it from a laptop: `cd agents && SPACETIME_URI=wss://maincloud.spacetimedb.com SPACETIME_DB_NAME=moove-demo npm run seed:demo -- --maincloud --reset-commerce --wait` (#246). That's one Claude call, and the join code stays the same. Otherwise, approve it only on stage.
 3. Create the new home (Move tab). **Expected:**
    - The shopping list fills in, deals appear, and fraud flags show. The planted Zelle-only Aeron is blocked.
-   - When you choose a card deal, the purchase approval says **SIMULATED** (#238). Approve it, and a simulated Visa payment appears in Spending.
+   - When you choose a card deal, the purchase approval says **VISA SANDBOX** (#238, #302). Approve it, and a sandbox Visa payment (hold, then capture, test card) appears in Spending.
 4. Spending log: every x402 comps payment is listed. **Since ~12:40 PM the worker has CDP keys**, so new lookups are real Base Sepolia payments with a Basescan link. Older rows stay SIMULATED. A joined phone shows only its own payments, so scan something on Live to see a real row.
 
 ### Christian: decisions + submission
