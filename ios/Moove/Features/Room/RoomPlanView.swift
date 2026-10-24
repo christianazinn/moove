@@ -37,8 +37,8 @@ struct RoomPlanView: View {
     private func drawFloors(_ context: inout GraphicsContext, _ map: PlanMapping) {
         for outline in geometry.floorOutlines {
             let path = map.path(outline)
-            context.fill(path, with: .color(Color(RoomPalette.floor)))
-            context.stroke(path, with: .color(Color(RoomPalette.floorEdge).opacity(0.5)), lineWidth: 1)
+            context.fill(path, with: .color(Theme.planFloor))
+            context.stroke(path, with: .color(Theme.lineStrong), lineWidth: 1)
         }
     }
 
@@ -51,13 +51,13 @@ struct RoomPlanView: View {
             let corners = RoomGeometry.footprint(width: object.dimensions.x, depth: object.dimensions.z, object.transform)
             let path = map.path(corners, cornerRadius: 4)
             context.fill(path, with: .color(color.opacity(0.9)))
-            context.stroke(path, with: .color(selected ? .primary : .black.opacity(0.3)), lineWidth: selected ? 3 : 1.2)
+            context.stroke(path, with: .color(selected ? Theme.planWall : .black.opacity(0.3)), lineWidth: selected ? 2.5 : 1)
 
             guard showLabels || selected else { continue }
             let center = map.point(SIMD2(object.transform.position.x, object.transform.position.z))
             var name = item?.name ?? object.category.capitalized
             if item?.maybeSentimental == true { name += " ♥" }
-            let text = context.resolve(Text(name).font(.caption2.weight(.semibold)).foregroundStyle(.black.opacity(0.8)))
+            let text = context.resolve(Text(name).font(.mono(10, weight: .bold)).foregroundStyle(.black.opacity(0.85)))
             let footprintWidth = CGFloat(max(object.dimensions.x, object.dimensions.z)) * map.scale
             if text.measure(in: CGSize(width: 400, height: 40)).width < footprintWidth + 24 || selected {
                 context.draw(text, at: center)
@@ -66,7 +66,7 @@ struct RoomPlanView: View {
     }
 
     private func drawWalls(_ context: inout GraphicsContext, _ map: PlanMapping) {
-        let wallColor = Color(RoomPalette.wallTop)
+        let wallColor = Theme.planWall
         for wall in geometry.walls {
             let footprint = RoomGeometry.footprint(width: wall.dimensions.x, depth: wallThickness, wall.transform)
             context.fill(map.path(footprint), with: .color(wallColor))
@@ -84,7 +84,7 @@ struct RoomPlanView: View {
                                          .at(center, yaw: wall.transform.yaw))
         switch hole.kind {
         case .door, .opening:
-            context.fill(map.path(gap), with: .color(Color(RoomPalette.floor)))
+            context.fill(map.path(gap), with: .color(Theme.planFloor))
             guard hole.kind == .door else { return }
             // Leaf + quarter-circle swing from the hinge side.
             let hingeWorld = wall.transform.apply(SIMD3(hole.center.x - hole.size.x / 2, 0, 0))
@@ -95,14 +95,14 @@ struct RoomPlanView: View {
             var swing = Path()
             swing.move(to: a)
             swing.addQuadCurve(to: b, control: CGPoint(x: a.x + b.x - hinge.x, y: a.y + b.y - hinge.y))
-            context.stroke(swing, with: .color(Color(RoomPalette.door).opacity(0.7)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            context.stroke(swing, with: .color(Theme.muted), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
             var leaf = Path()
             leaf.move(to: hinge)
             leaf.addLine(to: b)
-            context.stroke(leaf, with: .color(Color(RoomPalette.door)), lineWidth: 3)
+            context.stroke(leaf, with: .color(Theme.planWall), lineWidth: 2)
         case .window:
-            context.fill(map.path(gap), with: .color(Color(RoomPalette.glass).opacity(1)))
-            context.stroke(map.path(gap), with: .color(Color(RoomPalette.wallTop)), lineWidth: 1)
+            context.fill(map.path(gap), with: .color(Theme.bg))
+            context.stroke(map.path(gap), with: .color(Theme.slate), lineWidth: 2)
         case .wall:
             break
         }
@@ -116,8 +116,8 @@ struct RoomPlanView: View {
         bar.addLine(to: CGPoint(x: origin.x + length, y: origin.y))
         bar.move(to: CGPoint(x: origin.x, y: origin.y - 4)); bar.addLine(to: CGPoint(x: origin.x, y: origin.y + 4))
         bar.move(to: CGPoint(x: origin.x + length, y: origin.y - 4)); bar.addLine(to: CGPoint(x: origin.x + length, y: origin.y + 4))
-        context.stroke(bar, with: .color(.secondary), lineWidth: 1.5)
-        context.draw(Text("1 m").font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: origin.x + length / 2, y: origin.y - 9))
+        context.stroke(bar, with: .color(Theme.muted), lineWidth: 1)
+        context.draw(Text("1 m").font(.mono(10)).foregroundStyle(Theme.muted), at: CGPoint(x: origin.x + length / 2, y: origin.y - 9))
     }
 
     private func contains(_ polygon: [SIMD2<Float>], _ p: SIMD2<Float>) -> Bool {
