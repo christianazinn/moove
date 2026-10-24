@@ -90,7 +90,58 @@ export function replayKey(opts: { model: string; system: string; text: string; i
   return h.digest('hex').slice(0, 24);
 }
 
+// ---------- daily Claude spend cap ----------
+// The API key's balance is small, and a scan now photographs every object, so a runaway loop or a
+// big room could drain it mid-demo. Every live call is priced from its token usage (list prices
+// per million tokens, input/output) and added to a per-day total in CLAUDE_SPEND_FILE. Past
+// CLAUDE_MAX_USD_PER_DAY, live calls are refused (agents log the error; replayed answers are free).
+const PRICE_PER_MTOK: Record<string, [number, number]> = {
+  'claude-opus-5-5': [4, 20],
+  'claude-sonnet-5-5': [2, 10],
+  'claude-haiku-5-5': [0.1, 0.5],
+  'claude-fable-5-1': [10, 50],
+};
+export class SpendCapError extends Error {}
+
+export function callCostUsd(model: string, usage: { input_tokens?: number | null; output_tokens?: number | null; cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null }): number {
+  const [inP, outP] = PRICE_PER_MTOK[model] ?? PRICE_PER_MTOK['claude-opus-5-5']; // unknown model: assume the dearest common tier
+  const input = (usage.input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) * 1.25 + (usage.cache_read_input_tokens ?? 0) * 0.1;
+  return (input * inP + (usage.output_tokens ?? 0) * outP) / 1_000_000;
+}
+
+type SpendLog = Record<string, { usd: number; calls: number }>;
+const day = (d = new Date()) => d.toISOString().slice(0, 10);
+function readSpend(): SpendLog {
+  try {
+    return JSON.parse(readFileSync(config.claudeSpendFile, 'utf8')) as SpendLog;
+  } catch {
+    return {};
+  }
+}
+export function claudeSpentToday(): { usd: number; calls: number } {
+  return readSpend()[day()] ?? { usd: 0, calls: 0 };
+}
+function addSpend(usd: number): { usd: number; calls: number } {
+  const log = readSpend();
+  const today = log[day()] ?? { usd: 0, calls: 0 };
+  const next = { usd: today.usd + usd, calls: today.calls + 1 };
+  try {
+    mkdirSync(path.dirname(config.claudeSpendFile), { recursive: true });
+    writeFileSync(config.claudeSpendFile, JSON.stringify({ ...log, [day()]: next }, null, 2));
+  } catch (err) {
+    console.warn(`[llm] couldn't record spend: ${String(err)}`);
+  }
+  return next;
+}
+
 async function liveCall<S extends z.ZodType>(opts: Parameters<typeof structuredCall<S>>[0]): Promise<z.infer<S>> {
+  const cap = config.claudeMaxUsdPerDay;
+  if (cap > 0) {
+    const spent = claudeSpentToday();
+    if (spent.usd >= cap) {
+      throw new SpendCapError(`Claude spend cap reached: ~$${spent.usd.toFixed(2)} of $${cap.toFixed(2)} today (${spent.calls} calls); raise CLAUDE_MAX_USD_PER_DAY to continue`);
+    }
+  }
   const response = await anthropic.beta.messages.parse({
     model: opts.model,
     max_tokens: opts.maxTokens ?? 16000,
@@ -114,5 +165,7 @@ async function liveCall<S extends z.ZodType>(opts: Parameters<typeof structuredC
     throw new RefusalError(`declined: ${response.stop_details?.category ?? 'unknown'}`);
   }
   if (response.parsed_output == null) throw new Error(`no parsed output (stop_reason=${response.stop_reason})`);
+  const total = addSpend(callCostUsd(response.model ?? opts.model, response.usage ?? {}));
+  if (cap > 0 && total.usd >= cap * 0.8) console.warn(`[llm] ~$${total.usd.toFixed(2)} of the $${cap.toFixed(2)} daily Claude cap used (${total.calls} calls)`);
   return response.parsed_output;
 }
