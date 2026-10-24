@@ -7,17 +7,19 @@ import type { Deal } from "../src/module_bindings/types.js";
 // already-scored rows skipped, and the failure paths. Own file so FRAUD_SETTLE_MS can be set
 // before fraud.ts reads it (node --test runs each file in its own process).
 process.env.FRAUD_SETTLE_MS = "40";
+process.env.FRAUD_RETRY_DELAY_MS = "5";
 const { fraudAgent, setAiTextDetector } = await import("../src/agents/fraud.js");
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const owner = { toHexString: () => "owner" };
 
-function fakeConn(opts: { failFraudFor?: bigint } = {}) {
+function fakeConn(opts: { failFraudFor?: bigint; failTimes?: number } = {}) {
   const deals = new Map<bigint, Deal>();
   const inserts: ((ctx: unknown, d: Deal) => void)[] = [];
   const updates: ((ctx: unknown, old: Deal, d: Deal) => void)[] = [];
   const fraudCalls: { dealId: bigint; fraudScore: number; aiTextScore: number; reasons: string[] }[] = [];
   const events: { kind: string; message: string; refId: bigint }[] = [];
+  let failed = 0;
   const conn = {
     db: {
       deal: {
@@ -30,7 +32,7 @@ function fakeConn(opts: { failFraudFor?: bigint } = {}) {
     reducers: {
       setDealFraud: async (a: { dealId: bigint; fraudScore: number; aiTextScore: number; reasons: string[] }) => {
         fraudCalls.push(a);
-        if (a.dealId === opts.failFraudFor) throw new Error("SenderError: no deal");
+        if (a.dealId === opts.failFraudFor && (opts.failTimes === undefined || failed++ < opts.failTimes)) throw new Error("SenderError: no deal");
         const old = deals.get(a.dealId)!;
         const d = { ...old, fraudScore: a.fraudScore, aiTextScore: a.aiTextScore, fraudReasons: a.reasons };
         deals.set(d.id, d);
@@ -99,13 +101,28 @@ test("fraud agent: a burst is screened once per deal after it settles, scored ro
   setAiTextDetector(null);
 });
 
-test("fraud agent: a rejected set_deal_fraud logs an error and leaves the deal for the next pass", async () => {
+test("fraud agent: set_deal_fraud is retried 3 times, then logs one error and leaves the deal for the next pass", async () => {
   setAiTextDetector(null);
   const f = fakeConn({ failFraudFor: 1n });
   await fraudAgent.start(f.conn);
   const d = f.insert();
-  await sleep(80);
-  assert.equal(f.fraudCalls.length, 1);
-  assert.ok(f.events.some(e => e.kind === "error" && e.refId === d.id && /Fraud screen failed/.test(e.message)));
+  await sleep(120);
+  assert.equal(f.fraudCalls.length, 3);
+  const errors = f.events.filter(e => e.kind === "error" && e.refId === d.id);
+  assert.equal(errors.length, 1, "one error event, on the final failure only");
+  assert.match(errors[0].message, /Fraud screen failed.*after 3 tries/);
   assert.equal(f.deals.get(d.id)!.fraudScore, -1);
+  assert.ok(!f.events.some(e => e.kind === "result" && e.refId === d.id));
+});
+
+test("fraud agent: a set_deal_fraud that fails once is retried and the deal gets scored", async () => {
+  setAiTextDetector(null);
+  const f = fakeConn({ failFraudFor: 1n, failTimes: 1 });
+  await fraudAgent.start(f.conn);
+  const d = f.insert();
+  await sleep(120);
+  assert.equal(f.fraudCalls.length, 2);
+  assert.notEqual(f.deals.get(d.id)!.fraudScore, -1);
+  assert.ok(!f.events.some(e => e.kind === "error" && e.refId === d.id));
+  assert.equal(f.events.filter(e => e.kind === "result" && e.refId === d.id).length, 1);
 });

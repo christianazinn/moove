@@ -131,7 +131,7 @@ Agent worker                                          |
   - `stillValid` also aborts if the user picked another deal, the item or deal was removed, or the fraud score crossed the block line.
   - Any failed check reverses the hold instead of capturing.
 - **Spend caps.**
-  - `CardSpendLedger` reserves budget before the hold. There is a per-agent cap (`VISA_SPEND_CAP_USD`, default 1500) and a per-purchase max (`VISA_MAX_PER_PURCHASE_USD`, default 750).
+  - `CardSpendLedger` reserves budget before the hold. There is a per-agent cap (`VISA_SPEND_CAP_USD`, default 1500) and a per-purchase max (`VISA_MAX_PER_PURCHASE_USD`, default 750). A non-numeric or negative value logs a loud `[caps] WARNING` at worker startup and the default is used; `0` means no card spending.
   - Budget comes back only after a confirmed reversal or a decline.
   - At startup the cap is seeded from the last 24 h of non-simulated (sandbox or real) card payments, so a restart doesn't reset it. Simulated rehearsals never count. `VISA_SEED_BUDGETS=0` turns seeding off.
   - x402 data calls have their own caps (`AGENT_SPEND_CAP_USDC`, `X402_MAX_PER_CALL_USDC`, see `docs/coinbase-x402.md`). The per-agent budgets in the app's Spending screen are x402-only; card spend shows in the per-rail totals.
@@ -140,7 +140,7 @@ Agent worker                                          |
   - Signals, combined as a weighted noisy-OR: price far below the other deals and cached comps, off-platform payment asks (Zelle, Cash App, wire, gift cards, crypto, deposits), new-seller text, duplicate listings, and AI-written text (only when `PANGRAM_URL` is set; otherwise off).
   - The buy agent refuses deals with `fraudScore >= BUY_FRAUD_BLOCK` (0.7). One payment ask alone crosses it; a cheap price alone only reaches "some risk" (0.3).
   - `agents/test/fraud.test.ts` checks a planted set (`fixtures/fraud-deals.json`): every scam caught with the right reasons, no false positives. In the latest e2e run on main, 3 of 44 deals scored 0.3 or more.
-  - With `BUY_REQUIRE_FRAUD_SCORE=0` (the default), a deal chosen in the short window before it is scored can still be bought, and the plan event says "Not fraud-screened yet." Set it to `1` to wait for the score.
+  - A deal is never bought before the fraud screen has scored it. A deal chosen in the short window before it is scored waits (plan event "Waiting for the fraud screen to check ... before buying it") and the purchase continues once the score lands. If `set_deal_fraud` fails, the fraud agent retries it 3 times with backoff and then logs a `fraud` error event.
 - **Simulated labeling.**
   - Simulated rows have `simulated: true`, their messages start with `[SIMULATED]`, and the app shows the SIMULATED badge.
   - Sandbox rows are `simulated: false`, with `sandbox: true` in the event data. Their purposes start with `[Visa sandbox]`, their messages with `[VISA SANDBOX]`, and the app shows VISA SANDBOX.
@@ -171,14 +171,14 @@ Run `npm run visa:demo -- 1.00` once to check it. With no `VISA_PROVIDER`, the b
 
 Other settings in `.env.example`:
 - `VISA_FALLBACK_SIMULATED`, `VISA_SPEND_CAP_USD`, `VISA_MAX_PER_PURCHASE_USD`, `VISA_SEED_BUDGETS`, `VISA_SIM_DELAY_MS` (400)
-- `BUY_AUTO_CHOOSE` (0), `BUY_FRAUD_BLOCK` (0.7), `BUY_REQUIRE_FRAUD_SCORE` (0), `BUY_RETRY_DELAY_MS` (60000)
+- `BUY_AUTO_CHOOSE` (0), `BUY_FRAUD_BLOCK` (0.7), `BUY_RETRY_DELAY_MS` (60000)
 - `DEALS_SOURCE`, `DEALS_APIFY_SOURCES`, `DEALS_SEARCH_CONCURRENCY`, `DEALS_PER_SOURCE` (6), `DEALS_HOME_LAT` / `DEALS_HOME_LNG`
 
 ## Known limitations
 - **The real sandbox charge hasn't succeeded.** CyberSource returns HTTP 502 `SYSTEM_ERROR` (latest request ids `7928329698276400003813` and `7928175635416253203813`), a merchant-side setup problem (most likely no card processor enabled) that needs a human in the sandbox Business Center. The demo uses the labeled simulation. Don't set `VISA_PROVIDER=acceptance` for a demo until a `visa:demo -- 1.00` run succeeds, or every checkout fails.
 - **VIC is not implemented.** Credentials are gated, so `vic` is a seam that falls back to simulated. The mandate is only logged, not enforced by Visa. Our code does not check its 24-hour `effectiveUntil`.
 - **Replays cover the 16 demo item names.** An item named differently (Claude may write "Full size mattress") is searched live, or gets labeled sample data.
-- **The fraud screen is rules only.** The AI-text signal needs a `PANGRAM_URL` service, and a deal chosen before it is scored can be bought unless `BUY_REQUIRE_FRAUD_SCORE=1`.
+- **The fraud screen is rules only.** The AI-text signal needs a `PANGRAM_URL` service. A deal chosen before it is scored waits for the score, so if the fraud agent can't write a score (3 failed `set_deal_fraud` tries, logged as an error), that purchase waits until the worker restarts.
 - **The card budget lives in the worker.** It is per agent name rather than per user, and it is enforced in our code, not by the processor.
 - **The live shopping flow on the phone is unverified on device.** It is wired (PR #28) and the worker side passes `npm run e2e`; the Offline demo is the fallback.
 - **Bought items don't appear in the new-home layout** (#14) yet.
