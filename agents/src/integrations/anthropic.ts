@@ -23,7 +23,8 @@ export function loadImage(url: string): Promise<ImageInput> {
 export class RefusalError extends Error {}
 
 // One structured-output call: images + instructions in, schema-validated object out.
-// Server-side fallbacks re-run on another model if the request is declined.
+// Server-side fallbacks re-run on another model if the request is declined. Haiku has none,
+// so pass fallbacks: false for MODEL_FAST calls.
 export async function structuredCall<S extends z.ZodType>(opts: {
   model: string;
   system: string;
@@ -31,12 +32,14 @@ export async function structuredCall<S extends z.ZodType>(opts: {
   images?: ImageInput[];
   schema: S;
   effort?: 'low' | 'medium' | 'high';
+  // Thinking counts toward this, so leave room above the answer's size.
+  maxTokens?: number;
+  fallbacks?: boolean;
 }): Promise<z.infer<S>> {
   const response = await anthropic.beta.messages.parse({
     model: opts.model,
-    max_tokens: 16000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
+    max_tokens: opts.maxTokens ?? 16000,
+    ...(opts.fallbacks === false ? {} : { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }),
     system: opts.system,
     output_config: { format: betaZodOutputFormat(opts.schema), effort: opts.effort ?? 'low' },
     messages: [

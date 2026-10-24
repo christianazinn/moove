@@ -84,6 +84,8 @@ Scraped comps and deals are written by strangers, so we treat them as data:
 
 The vision prompt also says that text visible in photos is evidence, never instructions.
 
+The pricing agent's comp relevance filter (`agents/src/agents/comp-filter.ts`, Haiku) uses the same clean + fence + rule. It can't add comps or change their prices (indices outside the list are ignored; keeping none falls back to the rule-filtered comps), but a fooled filter could still skew the estimate by keeping only a planted comp, and the listing clamp above is relative to that estimate. Open gap: no code-side floor on how many comps it may drop. Tests: `agents/test/comp-filter.test.ts` plants the same injection title.
+
 ### Simulated actions are labeled
 Anything not real says so in the data (`simulated: true` on `listing` and `payment`), in event messages (`[SIMULATED]`, `(simulated)`), and in the UI. Today that covers the simulated eBay posts (whenever eBay sandbox keys are absent), and the simulated x402 rail (no CDP keys or `X402_SIMULATE=1`). ⏳ Visa checkout labelling arrives with #40 (simulated until the Starter Pack is wired). Real x402 payments link to the Base Sepolia explorer.
 
