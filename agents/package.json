@@ -10,6 +10,7 @@
     "x402:wallet": "tsx scripts/x402-wallet.ts",
     "x402:demo": "tsx scripts/x402-demo.ts",
     "x402:e2e": "tsx scripts/x402-e2e.ts",
+    "x402:recall": "tsx scripts/x402-recall.ts",
     "ebay:setup": "tsx scripts/ebay-setup.ts",
     "spotcheck:injection": "tsx scripts/injection-spotcheck.ts",
     "visa:demo": "tsx scripts/visa-demo.ts",

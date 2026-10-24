@@ -330,3 +330,34 @@ test("listing agent (#144): a real-eBay `posting` row with the keys gone is mark
   assert.deepEqual(statuses(f, 26n), ["failed"]);
   assert.ok(f.events.some(e => e.kind === "error" && e.refId === 26n && /SKU MOOVE-26/.test(e.message)));
 });
+
+// ---- CPSC recall check (RECALL_CHECK_X402=1): a probable recall asks for approval at any price ----
+
+test("listing agent: a probable CPSC recall asks for approval even under the threshold, with the recall in the summary", async () => {
+  const f = fakeConn({ threshold: 10000n });
+  f.item(200n);
+  f.listing(20n, 5000n); // itemId 200, under the threshold: would post right away
+  let cachedCalls = 0;
+  setListingDeps({
+    recalls: {
+      check: async () => ({ status: "skipped", reason: "test" }),
+      cached: () => {
+        cachedCalls++;
+        return [{ title: 'IKEA Recalls "MALM" Dressers', recallNumber: "16221", date: "2016-06-28", description: "", products: "", hazard: "", url: "" }];
+      },
+    },
+  });
+  process.env.RECALL_CHECK_X402 = "1";
+  try {
+    listingAgent.start(f.conn);
+    await sleep(30);
+  } finally {
+    delete process.env.RECALL_CHECK_X402;
+  }
+  assert.ok(cachedCalls > 0);
+  const asks = f.named("requestApproval");
+  assert.equal(asks.length, 1);
+  assert.match(String(asks[0].args.summary), /^Sell "Thing 20" for \$50\.00\. Possible CPSC recall: IKEA Recalls 'MALM' Dressers \(#16221\)$/);
+  assert.equal(f.listings.get(20n)!.status, "awaiting_approval");
+  assert.ok(f.events.some(e => e.kind === "approval" && /Possible CPSC recall/.test(e.message)));
+});
