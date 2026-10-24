@@ -186,6 +186,32 @@ import Testing
         #expect(!log.budgets.contains { $0.agent == "vision" })
     }
 
+    @Test func amountlessFailureIsNotDedupedAgainstANearbyFailedPayment() {
+        let events = [
+            x402Event(30, kind: .error, outcome: "failed", remaining: 5_000_000, at: 0),                  // no USDC option
+            x402Event(31, kind: .error, outcome: "failed", remaining: 5_000_000, amount: 20_000, at: 0.5), // has failed row 3
+            x402Event(32, kind: .error, outcome: "failed", remaining: 5_000_000, amount: 99_000, at: 0.5), // different amount
+        ]
+        let payments = [payment(3, micros: 20_000, status: .failed, at: 0.2)]
+        let log = SpendingLog(payments: payments, events: events)
+        let attempts = log.entries.compactMap { if case .failedAttempt(let e) = $0 { e.id } else { nil } }
+        #expect(attempts.sorted() == [30, 32])
+        #expect(log.entries.contains { $0.id == "payment-3" })
+    }
+
+    @Test func simulatedFlagOnRefusalsAndFailedAttempts() {
+        let simRefusal = AgentEvent(id: 40, owner: "me", agent: "shopping", kind: .error, message: "Refused",
+                                    dataJson: #"{"rail":"x402","outcome":"refused","simulated":true}"#, createdAt: t0)
+        let simFailed = AgentEvent(id: 41, owner: "me", agent: "shopping", kind: .error, message: "failed",
+                                   dataJson: #"{"rail":"x402","outcome":"failed","simulated":true}"#, createdAt: t0)
+        #expect(simRefusal.isRefusal && simRefusal.isSimulated)
+        #expect(simFailed.isFailedX402Attempt && simFailed.isSimulated)
+        // Real (simulated: false), legacy (no flag) and malformed data are not simulated.
+        #expect(!x402Event(42, kind: .error, outcome: "refused", remaining: 0).isSimulated)
+        #expect(!refusal(43).isSimulated)
+        #expect(!AgentEvent(id: 44, owner: "me", agent: "a", kind: .error, message: "", dataJson: "nope").isSimulated)
+    }
+
     @Test func demoRefusalBudgetMatchesBudgetRow() {
         let log = DemoFixtures.inventory(owner: "me").spendingLog()
         let shopping = try? #require(log.budgets.first { $0.agent == "shopping" })
