@@ -18,6 +18,11 @@ import Foundation
 ///   too big for a box get a note in "Keep with you" and ride in the car.
 /// - Box numbers follow the schedule: what you pack first gets the lowest
 ///   numbers. Within a stage boxes go by room (A-Z), then kind.
+/// - Bought pieces (Sell & Buy) ship straight to the new home: they're listed as
+///   `delivered`, never boxed and not on the truck.
+/// - Every decision carries a short reason: each box (`reason`: why these things
+///   share it, `roomReason`: where it goes and how Moove knows), each scanned line
+///   (`BoxContent.reason`), each furniture note and each delivered piece.
 public enum PackingPlanner {
     /// Share of a box's volume you can fill once things are wrapped.
     static let packingEfficiency = 0.7
@@ -32,10 +37,17 @@ public enum PackingPlanner {
     ///     so passing the whole inventory is fine.
     ///   - destinationRoom: item id -> room name in the new home (from the saved
     ///     layout). Missing items are guessed from their category.
-    public static func plan(items: [Item], destinationRoom: [UInt64: String] = [:]) -> PackingPlan {
+    ///   - bought: purchased shopping items. Their destination is looked up under
+    ///     `BoughtFurniture.layoutId(forShoppingItem:)`, as the saved layout stores it.
+    public static func plan(items: [Item], destinationRoom: [UInt64: String] = [:], bought: [BoughtPiece] = []) -> PackingPlan {
         let moving = movingItems(items)
-        guard !moving.isEmpty else { return .empty }
         let rooms = RoomGuesser(items: moving, mapped: destinationRoom)
+        let delivered = deliveries(bought, rooms: rooms)
+        guard !moving.isEmpty else {
+            var plan = PackingPlan.empty
+            plan.delivered = delivered
+            return plan
+        }
 
         var units: [PackUnit] = []
         var furniture: [FurnitureNote] = []
@@ -46,12 +58,15 @@ public enum PackingPlanner {
             case let .boxed(unit):
                 if unit.kind == .keepWithYou { keepUnits.append(unit) } else { units.append(unit) }
             case let .furniture(steps):
-                furniture.append(FurnitureNote(id: item.id, name: item.name, room: room, steps: steps))
+                furniture.append(FurnitureNote(id: item.id, name: item.name, room: room, steps: steps,
+                                               reason: Reasons.furniture(item), roomReason: rooms.reason(room, mapped: rooms.isMapped(item.id))))
             case let .floorLamp(shade, steps):
                 units.append(shade)
-                furniture.append(FurnitureNote(id: item.id, name: "\(item.name): base and pole", room: room, steps: steps))
+                furniture.append(FurnitureNote(id: item.id, name: "\(item.name): base and pole", room: room, steps: steps,
+                                               reason: Reasons.floorLamp, roomReason: rooms.reason(room, mapped: rooms.isMapped(item.id))))
             case let .car(steps):
-                furniture.append(FurnitureNote(id: item.id, name: item.name, room: keepWithYouRoom, steps: steps))
+                furniture.append(FurnitureNote(id: item.id, name: item.name, room: keepWithYouRoom, steps: steps,
+                                               reason: Reasons.sentimental, roomReason: Reasons.ridesWithYou))
             case let .expanded(parts):
                 units += parts
             }
@@ -71,7 +86,13 @@ public enum PackingPlanner {
         let keepFragile = keepUnits.contains(where: \.fragile)
         units += keepUnits.map { var u = $0; u.fragile = keepFragile; return u }
 
-        let numbered = finalize(merge(pack(units)))
+        var numbered = finalize(merge(pack(units)))
+        for i in numbered.indices {
+            let box = numbered[i].box
+            let mapped = box.contents.contains { $0.itemId.map(rooms.isMapped) ?? false } || rooms.mappedRooms.contains(box.room)
+            numbered[i].box.roomReason = box.keepWithYou ? Reasons.ridesWithYou
+                : box.openFirst ? Reasons.openFirstRoom : rooms.reason(box.room, mapped: mapped)
+        }
         let boxes = numbered.map(\.box)
         furniture.sort { a, b in
             let ak = a.room == keepWithYouRoom, bk = b.room == keepWithYouRoom
@@ -83,8 +104,31 @@ public enum PackingPlanner {
             furniture: furniture,
             supplies: supplies(boxes: boxes, furniture: furniture, items: moving),
             truck: VolumeEstimator.estimate(items: moving, boxes: boxes),
-            schedule: schedule(numbered)
+            schedule: schedule(numbered),
+            delivered: delivered
         )
+    }
+
+    /// Bought pieces, with their destination room (the saved layout's, else a guess) and seller.
+    static func deliveries(_ bought: [BoughtPiece], rooms: RoomGuesser) -> [DeliveredItem] {
+        bought.sorted { $0.item.id < $1.item.id }.map { piece in
+            let layout = LayoutItem(bought: piece.item, deal: piece.deal)
+            let room = rooms.room(id: layout.id, category: layout.category)
+            let title = piece.deal?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return DeliveredItem(
+                id: piece.item.id, name: piece.item.name, title: title.isEmpty ? piece.item.name : title,
+                seller: piece.deal.map(seller) ?? "", room: room, reason: Reasons.bought,
+                roomReason: rooms.reason(room, mapped: rooms.isMapped(layout.id)), voxelSpec: VoxelItemSpec(layout)
+            )
+        }
+    }
+
+    /// "IKEA" or "Craigslist · Dana" (the deal's source, plus who from its seller info).
+    static func seller(_ deal: Deal) -> String {
+        let source = deal.source.count <= 4 ? deal.source.uppercased() : deal.source.prefix(1).uppercased() + deal.source.dropFirst()
+        let who = deal.sellerInfo.split(separator: "·").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+        if who.isEmpty || who.lowercased() == deal.source.lowercased() { return source }
+        return "\(source) · \(who)"
     }
 
     // MARK: What moves, and how
@@ -121,6 +165,7 @@ public enum PackingPlanner {
         let dims = [item.widthM, item.heightM, item.depthM].sorted(by: >)
         if item.maybeSentimental {
             var unit = PackUnit(item: item, kind: .keepWithYou, room: keepWithYouRoom, density: kind.density)
+            unit.why = "sentimental, rides with you"
             unit.sizes = PackKind.keepWithYou.sizes + [.picture]
             if unit.bestSize != nil { return .boxed(unit) }
             return .car([
@@ -134,6 +179,7 @@ public enum PackingPlanner {
             var shade = PackUnit(itemId: item.id, name: "\(item.name) shade", quantity: 1, litres: side * side * 0.3 * 1100,
                                  kg: 0.4, room: room, kind: .lamps, fragile: true, dims: [side, side, 0.3])
             shade.lightOnly = true
+            shade.why = "shade off the floor lamp"
             return .floorLamp(shade: shade, steps: [
                 "Take off the bulb and shade; the shade goes in a box on its own",
                 "Wrap the base and pole in a moving blanket",
@@ -162,6 +208,7 @@ public enum PackingPlanner {
             var unit = PackUnit(typical: line, room: room)
             unit.itemId = item.id
             unit.quantity = line.quantity * sets
+            unit.why = "too much for one box, split up"
             return unit
         }
     }
@@ -344,13 +391,19 @@ public enum PackingPlanner {
             }
             return MovingBox(
                 id: i + 1, size: d.size, room: d.room, title: title,
-                contents: d.lines.map { BoxContent(name: $0.name, quantity: $0.quantity, itemId: $0.itemId) },
+                contents: d.lines.map { line in
+                    BoxContent(name: line.name, quantity: line.quantity, itemId: line.itemId,
+                               reason: line.itemId == nil ? nil : Reasons.line(room: d.room, box: i + 1, why: line.why),
+                               category: line.category)
+                },
                 weightKg: (d.kg * 10).rounded() / 10,
                 fragile: d.fragile,
                 openFirst: d.kinds == [.openFirst],
                 keepWithYou: d.kinds == [.keepWithYou],
                 thisSideUp: d.fragile || [.dishPack, .picture, .wardrobe].contains(d.size)
-                    || d.kinds.contains(.electronics) || d.kinds == [.openFirst]
+                    || d.kinds.contains(.electronics) || d.kinds == [.openFirst],
+                kinds: d.kinds.map(\.key),
+                reason: Reasons.box(d)
             )
         }
         // "Bedroom · books (1 of 2)" when a title repeats.
@@ -426,6 +479,8 @@ struct PackUnit: Sendable {
     /// A lampshade: only light things share its box.
     var lightOnly = false
     var sizes: [BoxSize]
+    /// Short detail for this line's reason ("fragile, wrapped"); nil uses the box's kind.
+    var why: String?
 
     init(itemId: UInt64?, name: String, quantity: Int, litres: Double, kg: Double, room: String, kind: PackKind,
          fragile: Bool, dims: [Double]? = nil) {
@@ -448,6 +503,7 @@ struct PackUnit: Sendable {
         self.init(itemId: item.id, name: item.name, quantity: 1, litres: v * 1000 * (fragile ? 1.5 : 1.1),
                   kg: max(0.1, v * density), room: room, kind: kind, fragile: fragile,
                   dims: [item.widthM, item.heightM, item.depthM])
+        if fragile { why = "fragile, wrapped" }
     }
 
     init(typical: TypicalLine, room: String) {
@@ -472,6 +528,8 @@ struct DraftLine: Sendable {
     var itemId: UInt64?
     var litres: Double
     var kg: Double
+    var why: String
+    var category: String
 }
 
 struct DraftBox: Sendable {
@@ -514,7 +572,8 @@ struct DraftBox: Sendable {
         if let i = lines.firstIndex(where: { $0.itemId == unit.itemId && $0.name == unit.name }) {
             lines[i].quantity += quantity
         } else {
-            lines.append(DraftLine(name: unit.name, quantity: quantity, itemId: unit.itemId, litres: unit.litres, kg: unit.kg))
+            lines.append(DraftLine(name: unit.name, quantity: quantity, itemId: unit.itemId, litres: unit.litres, kg: unit.kg,
+                                   why: unit.why ?? unit.kind.label, category: unit.kind.voxelCategory))
         }
     }
 
@@ -560,12 +619,78 @@ struct RoomGuesser {
         self.known = known.sorted()
     }
 
-    func room(for item: Item) -> String {
-        if let r = mapped[item.id] { return r }
-        let kinds = LayoutSolver.preferredKinds(for: item.category)
+    /// Rooms the saved layout uses.
+    var mappedRooms: Set<String> { Set(mapped.values) }
+
+    func isMapped(_ id: UInt64) -> Bool { mapped[id] != nil }
+
+    func room(for item: Item) -> String { room(id: item.id, category: item.category) }
+
+    func room(id: UInt64, category: String) -> String {
+        if let r = mapped[id] { return r }
+        let kinds = LayoutSolver.preferredKinds(for: category)
         for kind in kinds {
             if let r = known.first(where: { roomKind(named: $0) == kind }) { return r }
         }
         return kinds.first?.label ?? RoomKind.other.label
+    }
+
+    /// "Goes to Bedroom 2 (from your saved layout)" or "Room not set yet: best guess".
+    func reason(_ room: String, mapped: Bool) -> String {
+        mapped ? Reasons.fromLayout(room) : Reasons.guessed
+    }
+}
+
+/// The short reasons behind each packing decision. Kept to a few words: they show under rows.
+enum Reasons {
+    static let sentimental = "Sentimental: rides with you"
+    static let ridesWithYou = "Rides with you, not on the truck"
+    static let openFirstRoom = "Load it last, open it first"
+    static let floorLamp = "Too tall for a box: shade boxed, base wrapped"
+    static let bought = "Bought: ships straight to the new place, nothing to pack"
+    static let guessed = "Room not set yet: best guess from what it is"
+
+    static func fromLayout(_ room: String) -> String { "Goes to \(room) (from your saved layout)" }
+
+    /// "Kitchen → Box 7 · fragile, wrapped"
+    static func line(room: String, box: Int, why: String) -> String {
+        room == PackingPlanner.keepWithYouRoom ? "Box \(box) · \(why)" : "\(room) → Box \(box) · \(why)"
+    }
+
+    /// Why these things share a box.
+    static func box(_ d: DraftBox) -> String {
+        let kg = Int(d.capKg.rounded())
+        if d.kinds == [.openFirst] { return "First-night things, all in one place" }
+        if d.kinds == [.keepWithYou] { return "Valuables and keepsakes: never on the truck" }
+        if d.lightOnly { return "Lamp shade: light things only, under \(kg) kg" }
+        if d.fragile { return "Fragile: wrapped, nothing heavy, under \(kg) kg" }
+        if d.size == .wardrobe { return "Hanging clothes stay on their hangers" }
+        if d.kinds.contains(.books) || d.kinds.contains(.desk) { return "Heavy: small box, under \(kg) kg" }
+        if d.kinds.allSatisfy({ [.clothes, .shoes, .bedding].contains($0) }) { return "Light and soft: big box, under \(kg) kg" }
+        if d.kinds == [.kitchen] { return "Pots and pans: sturdy, under \(kg) kg" }
+        return "Same room, same kind, under \(kg) kg"
+    }
+
+    /// Why a piece isn't boxed, with the one step that matters most.
+    static func furniture(_ item: Item) -> String {
+        let c = item.category.lowercased(), n = item.name.lowercased()
+        let lead = "Too big for a box: "
+        if c == "mattress" || n.contains("mattress") { return lead + "bag it, carry it on its side" }
+        if c == "bed" { return lead + "take it apart, bag the bolts" }
+        if c == "sofa" || c == "couch" { return lead + "legs off, wrap in blankets" }
+        if c == "table" || c == "desk" { return lead + "take the legs off, wrap the top" }
+        if c == "dresser" || c == "wardrobe" { return lead + "drawers shut, wrap in a blanket" }
+        if c == "tv" || c == "television" { return lead + "keep the screen upright" }
+        if c == "chair" { return lead + "wrap in a blanket" }
+        if ["appliance", "refrigerator", "washer", "dryer"].contains(c) { return lead + "unplug, keep it upright" }
+        return lead + "wrap in a blanket"
+    }
+}
+
+extension SyncSnapshot {
+    /// What the user bought for the new home, for `PackingPlanner.plan(bought:)`: purchased shopping
+    /// items only (still-shopping ones aren't coming), each with its chosen deal.
+    public var boughtPieces: [BoughtPiece] {
+        purchasedShoppingItems.map { BoughtPiece(item: $0, deal: chosenDeal(for: $0)) }
     }
 }

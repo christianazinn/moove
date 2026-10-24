@@ -7,10 +7,13 @@ import MooveKit
 struct VoxelThumbnail: View {
     var spec: VoxelItemSpec
     var size: CGFloat = 56
+    /// Draw the rounded tile behind the model (off for models that sit on other art).
+    var tile = true
 
-    init(spec: VoxelItemSpec, size: CGFloat = 56) {
+    init(spec: VoxelItemSpec, size: CGFloat = 56, tile: Bool = true) {
         self.spec = spec
         self.size = size
+        self.tile = tile
     }
 
     init(_ item: LayoutItem, size: CGFloat = 56) {
@@ -19,13 +22,13 @@ struct VoxelThumbnail: View {
 
     /// With the item's attributes, material and stored colors (`item.colors`); a demo bedroom
     /// item with none stored uses the demo room's fixture colors.
-    init(_ item: Item, size: CGFloat = 56) {
+    init(_ item: Item, size: CGFloat = 56, tile: Bool = true) {
         var spec = VoxelItemSpec(item)
         if item.colors == nil, DemoFixtures.isDemoItem(item), let c = DemoFixtures.scanColors().colors(for: item) {
             spec.primaryColor = c.primary
             spec.secondaryColor = c.secondary
         }
-        self.init(spec: spec, size: size)
+        self.init(spec: spec, size: size, tile: tile)
     }
 
     var body: some View {
@@ -45,7 +48,7 @@ struct VoxelThumbnail: View {
             }
         }
         .frame(width: size, height: size)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+        .background(tile ? Theme.surface : .clear, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
         .accessibilityHidden(true)
     }
 }
