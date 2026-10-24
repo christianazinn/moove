@@ -76,7 +76,11 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
     // MARK: Connection
 
     public func connect(token: String?) async throws -> (identity: IdentityHex, token: String) {
-        mutate { $0.me = identity }
+        mutate {
+            $0.me = identity
+            // What a live worker announces about today's budget (#221), so Settings shows it offline too.
+            if $0.serviceConfig.values["spend_today"] == nil { $0.serviceConfig.values["spend_today"] = Self.sampleSpendToday() }
+        }
         broadcast(status: .connected)
         return (identity, token ?? "fixture-token")
     }
