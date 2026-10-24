@@ -91,6 +91,11 @@ public struct Reducers: Sendable {
     }
 
     @discardableResult
+    public func expireApproval(approvalid: UInt64) async throws -> ReducerSuccess {
+        try await client.callReducer(ExpireApprovalReducer(approvalid: approvalid))
+    }
+
+    @discardableResult
     public func importScan(roomname: String, home: String, usdzurl: String, capturedroomjsonurl: String, objects: [ScanObjectInput]) async throws -> ReducerSuccess {
         try await client.callReducer(ImportScanReducer(roomname: roomname, home: home, usdzurl: usdzurl, capturedroomjsonurl: capturedroomjsonurl, objects: objects))
     }
@@ -203,6 +208,11 @@ public struct Reducers: Sendable {
     @discardableResult
     public func setItemDetails(itemid: UInt64, nameArg: String, category: String, material: String, brand: String, condition: String, fragile: Bool, maybesentimental: Bool) async throws -> ReducerSuccess {
         try await client.callReducer(SetItemDetailsReducer(itemid: itemid, nameArg: nameArg, category: category, material: material, brand: brand, condition: condition, fragile: fragile, maybesentimental: maybesentimental))
+    }
+
+    @discardableResult
+    public func setItemIdentify(itemid: UInt64, confidence: String, closeuphint: String) async throws -> ReducerSuccess {
+        try await client.callReducer(SetItemIdentifyReducer(itemid: itemid, confidence: confidence, closeuphint: closeuphint))
     }
 
     @discardableResult

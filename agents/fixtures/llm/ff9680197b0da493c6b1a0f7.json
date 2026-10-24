@@ -1,0 +1,15 @@
+{
+  "model": "claude-sonnet-5-5",
+  "output": {
+    "name": "brown wood rectangular table with orange legs",
+    "category": "table",
+    "material": "wood top with painted metal legs",
+    "brand": "",
+    "condition": "good",
+    "fragile": false,
+    "maybeSentimental": false,
+    "notes": "Image is a small, low-detail view showing a brown rectangular top on thin orange-red legs; no logos or wear visible, so condition and brand are assumed.",
+    "identifyConfidence": "low",
+    "closeupHint": ""
+  }
+}
