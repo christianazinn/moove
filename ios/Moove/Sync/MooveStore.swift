@@ -200,6 +200,16 @@ final class MooveStore {
         return written
     }
 
+    // MARK: Sharing (#10)
+
+    /// Joins another person's room by its 6-character code. Its items then stream in
+    /// through the `room_member` subscription. Returns false if the write failed
+    /// (the error is in `lastError`).
+    @discardableResult
+    func joinRoom(code: String) async -> Bool {
+        await run { try await $0.joinRoom(code: code) }
+    }
+
     // MARK: Shopping (#15)
 
     var shoppingItems: [ShoppingItem] { snapshot.myShoppingItems }
