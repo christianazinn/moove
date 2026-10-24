@@ -4,8 +4,9 @@ import type { Conn } from '../spacetime.js';
 import type { Approval, Deal, ShoppingItem } from '../module_bindings/types.js';
 import { logEvent } from '../events.js';
 import { visaCheckout } from '../checkout.js';
-import { CARD_CHECKOUT_SOURCES, fixtureDealSource, rankDeals, sanitizeText, sellerInfo, type DealSource, type RankedDeal } from '../integrations/deals.js';
+import { CARD_CHECKOUT_SOURCES, rankDeals, sanitizeText, sellerInfo, type DealSource, type RankedDeal } from '../integrations/deals.js';
 import { approvalGate, dollars } from '../integrations/visa.js';
+import { createDealSource } from '../integrations/deals-apify.js';
 
 // Buy agent (#15). For each open shopping_item:
 //   1. search deals (fixture replay until the shared Apify client from #6 exists), rank them by
@@ -26,9 +27,9 @@ const AUTO_CHOOSE = (process.env.BUY_AUTO_CHOOSE ?? '1') !== '0';
 // 1 = wait for the fraud screen (#18) to score a deal before buying it. Off until a fraud agent runs.
 const REQUIRE_FRAUD_SCORE = process.env.BUY_REQUIRE_FRAUD_SCORE === '1';
 
-// The one place the deal source is chosen. Live Apify search (aiden/15-live-deals) plugs in here as
-// `createDealSource(process.env)`, which falls back to this fixture replay.
-const dealSource: DealSource = fixtureDealSource();
+// The one place the deal source is chosen: live Apify search (DEALS_SOURCE / APIFY_TOKEN), else
+// the labeled fixture replay. See integrations/deals-apify.ts.
+const dealSource: DealSource = createDealSource(process.env);
 
 const searching = new Set<bigint>(); // shopping item ids searched this session
 const busyItems = new Set<bigint>(); // shopping item ids in checkout

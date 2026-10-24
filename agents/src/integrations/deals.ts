@@ -120,6 +120,10 @@ export interface RankedDeal extends DealCandidate {
   why: string;
 }
 
+// Live sources score unknown distances as 25 mi, so say "distance unknown" rather than a made-up number.
+const distanceLabel = (c: DealCandidate): string =>
+  c.distanceMiles < 0 ? 'ships' : c.seller.includes('distance unknown') ? 'distance unknown' : `${c.distanceMiles} mi`;
+
 const CONDITION_SCORE: Record<Condition, number> = { new: 1, like_new: 0.85, good: 0.65, fair: 0.4, unknown: 0.3 };
 
 /**
@@ -139,7 +143,7 @@ export function rankDeals(cands: DealCandidate[]): RankedDeal[] {
       const why = [
         `${Math.round(price * 100)}% of best price`,
         c.condition.replace('_', ' '),
-        c.distanceMiles < 0 ? 'ships' : `${c.distanceMiles} mi`,
+        distanceLabel(c),
         c.checkout === 'visa' ? 'card checkout' : 'message seller',
       ].join(', ');
       return { ...c, score: Math.round(score * 1000) / 1000, why };
@@ -156,7 +160,8 @@ export function sellerInfo(d: RankedDeal): string {
   return [
     d.seller || d.source,
     d.condition.replace('_', ' '),
-    d.distanceMiles < 0 ? 'ships' : `${d.distanceMiles} mi`,
+    // The seller text already says "distance unknown" when a source has no coordinates.
+    ...(d.seller.includes('distance unknown') ? [] : [distanceLabel(d)]),
     d.checkout === 'visa' ? 'Visa checkout' : 'message seller',
     `score ${d.score.toFixed(2)}`,
     ...(d.replay ? ['cached replay'] : []),
