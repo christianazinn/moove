@@ -46,6 +46,8 @@ Every agent step and every payment is a row in SpacetimeDB, so the app shows a l
 - A real x402 payment from an agent's CDP wallet, settled on Base Sepolia, with the budget checked before signing ([tx](https://sepolia.basescan.org/tx/0xc7942646380456c56dde204434aeb6115338b521b6e91a0901ec05dde1fe136c)). Pricing now pays for its comps through the same rail.
 - Agents that coordinate only through database tables, with every step visible to the user as it happens.
 - Guardrails built into the data model: spend caps, an approval threshold, sentimental items left to the user, and `simulated` labels that the UI can't hide.
+- Privacy in the database itself: room and user rows are private tables that each phone reads only through its own views (`my_room`, `my_user`), so a room can only be joined with a code its owner shared.
+- One command proves the pipeline: `npm run e2e -- --replay` runs scan → pricing → sort → sweep → listing → approval → shopping → deals → fraud → purchase → sharing → privacy on a local SpacetimeDB in about 15 seconds, on every PR.
 - An end-to-end test in CI that runs the whole pipeline on replayed data and proves the guardrails say no: x402 calls past the budget are refused before signing, a card purchase over the card budget is refused, and a scam deal the fraud screen scores 0.85 is refused with no approval and no charge. It prints a PASS table on every PR and makes no paid calls.
 - Your scanned room rebuilt as a voxel dollhouse, with each piece at its real spot and in its real color.
 - A layout solver that puts your actual furniture against the walls of the new home without overlaps or blocked doors, in three styles, with a fly-in animation.
