@@ -12,3 +12,8 @@ Lanes: backend (vision, pricing, sort, fraud) and commerce (x402 spending, eBay 
 - Cache real Apify responses into `fixtures/` so the demo can replay them if live calls fail. Label any replay.
 - Config comes from `.env.local` (see root `.env.example`).
 - x402/CDP, Apify, eBay, Auth0 for AI Agents and Visa APIs change often, so check current docs first.
+
+## What's here
+- `src/upload.ts`: file store on `UPLOAD_PORT` (8787). `POST /upload` takes a raw body with Content-Type `image/jpeg|png|heic|webp`, `model/vnd.usdz+zip` or `application/json`, and returns `201 {"url": ...}`. `GET /files/<name>` serves it. URLs use `PUBLIC_UPLOAD_BASE_URL`, so set it to your laptop's LAN IP when testing from phones. Store the returned URLs via `import_scan` / `add_item_photo`.
+- `src/integrations/anthropic.ts`: `structuredCall({model, system, text, images, schema})` returns a zod-validated object (beta `parse` + server-side refusal fallbacks). `loadImage(url)` fetches and base64-encodes an image, so the API never has to reach LAN URLs.
+- `src/agents/vision.ts` (#5): items with `details_status = pending` and at least one photo go to Claude vision, then `set_item_details`. Adding a photo re-queues the item. Unloadable photos are skipped.

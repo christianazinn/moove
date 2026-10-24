@@ -16,6 +16,10 @@ export const config = {
   // worker role, so the same token must be reused across restarts.
   workerTokenFile: env('SPACETIME_WORKER_TOKEN_FILE', '.worker-token'),
   workerToken: env('SPACETIME_WORKER_TOKEN'),
+  uploadPort: Number(env('UPLOAD_PORT', '8787')),
+  uploadDir: env('UPLOAD_DIR', 'uploads'),
+  // What phones/the worker use to fetch uploads; set to your LAN IP for devices.
+  publicUploadBaseUrl: env('PUBLIC_UPLOAD_BASE_URL', 'http://localhost:8787'),
   models: {
     vision: env('MODEL_VISION', 'claude-sonnet-5-5'),
     fast: env('MODEL_FAST', 'claude-haiku-5-5'),
