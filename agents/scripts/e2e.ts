@@ -256,7 +256,10 @@ await stage("service_config: worker announced its upload URL", async () => {
   const row = await until("upload_base_url", () => conn!.db.serviceConfig.key.find("upload_base_url"), 15_000);
   if (row.value !== want) throw new Error(`upload_base_url=${row.value}, want ${want}`);
   const v = conn!.db.serviceConfig.key.find("worker_version");
-  return { detail: `upload_base_url=${row.value}, worker_version=${v?.value ?? "?"}` };
+  const spend = await until("spend_today", () => conn!.db.serviceConfig.key.find("spend_today"), 15_000);
+  const s = JSON.parse(spend.value) as { claude?: { capUsd?: number }; apify?: { capUsd?: number } };
+  if (typeof s.claude?.capUsd !== "number" || typeof s.apify?.capUsd !== "number") throw new Error(`spend_today has no caps: ${spend.value}`);
+  return { detail: `upload_base_url=${row.value}, worker_version=${v?.value ?? "?"}, spend_today caps claude $${s.claude.capUsd} apify $${s.apify.capUsd}` };
 });
 
 const items = () => (conn ? [...conn.db.item.iter()].filter(it => me && it.owner.isEqual(me)) : []);
