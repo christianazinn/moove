@@ -46,12 +46,14 @@ struct JoinRoomView: View {
                         .ruled()
                         .accessibilityLabel("Room code")
                         .accessibilityHint("Six letters and numbers")
+                        .accessibilityIdentifier("join.code")
 
                     if let error {
                         Label(error, systemImage: "exclamationmark.triangle")
                             .monoText(13.5)
                             .foregroundStyle(Theme.danger)
                             .padding(.top, 14)
+                            .accessibilityIdentifier("join.error")
                     }
                     if joined {
                         Label("Joined. The room will appear in your inventory.", systemImage: "checkmark.circle")
@@ -69,6 +71,7 @@ struct JoinRoomView: View {
                     }
                     .buttonStyle(.pill(.primary))
                     .disabled(code.count != Self.length || joining || joined)
+                    .accessibilityIdentifier("join.submit")
                     .padding(.top, 24)
                 }
                 .padding(.horizontal, Theme.gutter)

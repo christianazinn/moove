@@ -29,6 +29,7 @@ struct ShareRoomView: View {
                             .ruled()
                             .padding(.top, 28)
                             .accessibilityLabel("Join code " + code.map(String.init).joined(separator: " "))
+                            .accessibilityIdentifier("share.code")
                         HStack(spacing: 12) {
                             Button {
                                 UIPasteboard.general.string = code

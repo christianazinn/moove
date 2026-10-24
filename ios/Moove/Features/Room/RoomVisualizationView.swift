@@ -40,6 +40,8 @@ struct RoomVisualizationView: View {
             // double-tap to select (which opens the item card below).
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilitySummary)
+            // On the combined element: `.ignore` hides identifiers set inside it.
+            .accessibilityIdentifier(style == .model ? "room.model" : "room.plan")
             .accessibilityChildren {
                 ForEach(geometry.objects) { object in
                     Text(accessibilityName(object))
@@ -74,6 +76,7 @@ struct RoomVisualizationView: View {
                 } label: {
                     Label("Display", systemImage: "paintpalette")
                 }
+                .accessibilityIdentifier("room.display")
             }
         }
         .mooveScreen()
@@ -179,6 +182,8 @@ private struct SelectedObjectCard: View {
         .padding(.vertical, 12)
         .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("room.selection")
     }
 
     private var size: String {
