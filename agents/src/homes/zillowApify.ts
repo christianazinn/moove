@@ -9,14 +9,19 @@
 // Fields used (curated output schema): listingAddress.full, bedrooms, bathrooms, livingArea, and
 // photos whose caption (or field name) says floor plan. Only photos.zillowstatic.com images are loaded.
 //
-// Runs are cached (trimmed: facts + floor-plan image URLs, no agent or description text) in
-// .cache/zillow/<zpid>.json, so the same link never pays twice; a cached hit is labeled a replay.
+// No photo captioned as a floor plan? floorplanFinder.ts classifies the other listing photos in one
+// MODEL_FAST call and passes any floor plans it finds on like captioned ones.
+//
+// Runs are cached (trimmed: facts, floor-plan and listing photo URLs + captions, no agent or
+// description text) in .cache/zillow/<zpid>.json, so the same link never pays twice; a cached hit is
+// labeled a replay. The photo classification's outcome is written into the same entry.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
 import type { EventKind } from '../events.js';
 import { loadPhoto, type ImageInput } from '../integrations/photos.js';
 import { cleanUntrusted } from '../untrusted.js';
+import { findFloorPlanInPhotos, type ListingPhoto, type PhotoPlanScan } from './floorplanFinder.js';
 
 type Log = (kind: EventKind, message: string, data?: unknown) => void;
 
@@ -26,7 +31,10 @@ export type ZillowFacts = {
   baths: number | null;
   sqft: number | null;
   floorPlanImageUrls: string[];
+  /** Every listing photo in order (zillowstatic only), for the floor-plan finder. Older caches lack it. */
+  listingPhotos?: ListingPhoto[];
 };
+type CacheEntry = ZillowFacts & { fetchedAt?: string; photoPlanScan?: PhotoPlanScan };
 export type ScrapeResult = ZillowFacts & { floorPlanImages: ImageInput[]; notes: string[]; replayed: boolean };
 
 const IMAGE_HOST = 'photos.zillowstatic.com';
@@ -86,6 +94,64 @@ export function findFloorPlanImages(row: unknown, max = 4): string[] {
   return [...found].slice(0, max);
 }
 
+const MAX_LISTING_PHOTOS = 200;
+const SKIP_PHOTO_KEYS = /agent|broker|attribution|logo|avatar|profile|floor\s*-?\s*plan|nearby|similar|comparable/i;
+
+/** The largest variant, and the largest one at most 640 px wide, from a Zillow mixedSources object. */
+function variants(mixed: unknown): { large: string | null; small: string | null } {
+  const list: { url: string; width: number }[] = [];
+  if (mixed && typeof mixed === 'object') {
+    for (const arr of Object.values(mixed as Record<string, unknown>)) {
+      if (!Array.isArray(arr)) continue;
+      for (const v of arr.slice(0, 20)) {
+        const url = zillowImage(v?.url);
+        const width = typeof v?.width === 'number' ? v.width : NaN;
+        if (url && Number.isFinite(width)) list.push({ url, width });
+      }
+    }
+  }
+  if (!list.length) return { large: null, small: null };
+  list.sort((a, b) => a.width - b.width);
+  const small = [...list].reverse().find(v => v.width <= 640) ?? null;
+  return { large: list[list.length - 1].url, small: small?.url ?? null };
+}
+
+/**
+ * The listing's photos, in listing order: objects with a zillowstatic url / hiRes / mixedSources
+ * (and their caption), or bare zillowstatic URL strings in a photo-ish array. Agent logos, nearby
+ * homes and the floor-plan fields are skipped. Captions are scraped text, so they are cleaned.
+ */
+export function extractListingPhotos(row: unknown): ListingPhoto[] {
+  const out: ListingPhoto[] = [];
+  const seen = new Set<string>();
+  const add = (url: string | null, thumb: string | null, caption: unknown) => {
+    if (!url || seen.has(url) || out.length >= MAX_LISTING_PHOTOS) return;
+    seen.add(url);
+    const c = typeof caption === 'string' ? cleanUntrusted(caption, 120) : '';
+    out.push({ url, thumb: thumb && thumb !== url ? thumb : null, caption: c || null });
+  };
+  const walk = (v: unknown, key: string, depth: number) => {
+    if (out.length >= MAX_LISTING_PHOTOS || depth > 6 || v == null) return;
+    if (Array.isArray(v)) {
+      for (const x of v.slice(0, MAX_LISTING_PHOTOS)) {
+        if (typeof x === 'string') {
+          if (/photo|image|picture/i.test(key)) add(zillowImage(x), null, null);
+        } else walk(x, key, depth + 1);
+      }
+      return;
+    }
+    if (typeof v !== 'object') return;
+    const o = v as Record<string, unknown>;
+    const caption = [o.caption, o.description, o.title, o.label].find(x => typeof x === 'string');
+    const mixed = variants(o.mixedSources);
+    const url = zillowImage(o.hiRes) ?? mixed.large ?? zillowImage(o.url);
+    if (url) return add(url, mixed.small, caption);
+    for (const [k, x] of Object.entries(o)) if (!SKIP_PHOTO_KEYS.test(k)) walk(x, k, depth + 1);
+  };
+  walk(row, '', 0);
+  return out;
+}
+
 /** One actor row -> the facts we use. Everything is scraped (untrusted) and cleaned. */
 export function extractZillowFacts(row: Record<string, any>): ZillowFacts {
   const la = row.listingAddress ?? {};
@@ -99,6 +165,7 @@ export function extractZillowFacts(row: Record<string, any>): ZillowFacts {
     baths: num(row.bathrooms ?? row.baths, 50),
     sqft: num(row.livingArea ?? row.livingAreaValue, 100_000),
     floorPlanImageUrls: findFloorPlanImages(row),
+    listingPhotos: extractListingPhotos(row),
   };
 }
 
@@ -124,7 +191,14 @@ async function runActor(url: string, token: string, fetchImpl: typeof fetch): Pr
 /** Runs (or replays) the Zillow actor for one listing and loads its floor-plan images. */
 export async function scrapeZillow(
   listingUrl: string,
-  opts: { token: string; log: Log; fetch?: typeof fetch; loadImage?: (url: string) => Promise<ImageInput>; cacheDir?: string }
+  opts: {
+    token: string;
+    log: Log;
+    fetch?: typeof fetch;
+    loadImage?: (url: string) => Promise<ImageInput>;
+    cacheDir?: string;
+    classify?: Parameters<typeof findFloorPlanInPhotos>[1]['classify'];
+  }
 ): Promise<ScrapeResult> {
   const url = zillowRunUrl(listingUrl);
   if (!url) throw new Error('not a zillow.com link');
@@ -132,9 +206,11 @@ export async function scrapeZillow(
   const file = path.join(opts.cacheDir ?? CACHE_DIR, `${cacheKey(url)}.json`);
   const notes: string[] = [];
   let facts: ZillowFacts;
+  let cachedScan: PhotoPlanScan | undefined;
   let replayed = false;
   if (existsSync(file)) {
-    const cached = JSON.parse(readFileSync(file, 'utf8')) as ZillowFacts & { fetchedAt?: string };
+    const cached = JSON.parse(readFileSync(file, 'utf8')) as CacheEntry;
+    cachedScan = cached.photoPlanScan;
     facts = cached;
     replayed = true;
     notes.push(`Replayed a cached Apify Zillow result${cached.fetchedAt ? ` from ${cached.fetchedAt.slice(0, 10)}` : ''}.`);
@@ -142,14 +218,10 @@ export async function scrapeZillow(
   } else {
     log('tool_call', `Running Apify ${config.apify.zillowActor} for ${url} (cap $${config.apify.maxUsdPerRun})`, { actor: config.apify.zillowActor, maxUsd: config.apify.maxUsdPerRun });
     facts = extractZillowFacts(await runActor(url, opts.token, opts.fetch ?? fetch));
-    try {
-      mkdirSync(path.dirname(file), { recursive: true });
-      writeFileSync(file, JSON.stringify({ ...facts, fetchedAt: new Date().toISOString() }, null, 2));
-    } catch (err) {
-      console.warn(`[homes] couldn't cache the Zillow result: ${String(err)}`);
-    }
+    writeCache(file, { ...facts, fetchedAt: new Date().toISOString() });
   }
-  log('result', `Zillow scraper: ${[facts.address, facts.beds != null && `${facts.beds} bd`, facts.baths != null && `${facts.baths} ba`, facts.sqft != null && `${facts.sqft} sqft`].filter(Boolean).join(', ') || 'no facts'}; ${facts.floorPlanImageUrls.length} floor-plan image(s)`, { ...facts, replayed });
+  const { listingPhotos = [], ...shown } = facts;
+  log('result', `Zillow scraper: ${[facts.address, facts.beds != null && `${facts.beds} bd`, facts.baths != null && `${facts.baths} ba`, facts.sqft != null && `${facts.sqft} sqft`].filter(Boolean).join(', ') || 'no facts'}; ${facts.floorPlanImageUrls.length} floor-plan image(s), ${listingPhotos.length} photo(s)`, { ...shown, photos: listingPhotos.length, replayed });
 
   // Floor-plan images: zillowstatic only, through the same SSRF-safe loader as item photos.
   const load =
@@ -161,7 +233,64 @@ export async function scrapeZillow(
     log('error', "Zillow floor-plan images couldn't be loaded");
     notes.push("The listing's floor-plan images couldn't be loaded.");
   } else if (!facts.floorPlanImageUrls.length) {
-    notes.push('The Zillow listing has no floor-plan image.');
+    // Nothing captioned as a floor plan: look for one among the listing photos.
+    const found = await photoFloorPlans(listingPhotos, cachedScan, { log, load, classify: opts.classify });
+    floorPlanImages.push(...found.images);
+    notes.push(found.note);
+    if (found.scan) {
+      try {
+        const entry = JSON.parse(readFileSync(file, 'utf8')) as CacheEntry;
+        writeCache(file, { ...entry, photoPlanScan: found.scan });
+      } catch (err) {
+        console.warn(`[homes] couldn't cache the floor-plan photo scan: ${String(err)}`);
+      }
+    }
   }
   return { ...facts, floorPlanImages, notes, replayed };
+}
+
+function writeCache(file: string, entry: CacheEntry): void {
+  try {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify(entry, null, 2));
+  } catch (err) {
+    console.warn(`[homes] couldn't cache the Zillow result: ${String(err)}`);
+  }
+}
+
+const NO_PLAN_NOTE = 'The Zillow listing has no floor-plan image.';
+
+/**
+ * Floor plans among the listing photos (one MODEL_FAST call, or the cached outcome). Never throws:
+ * any failure means no images, and the app estimates the plan. `scan` is set only when there is a
+ * fresh outcome to cache.
+ */
+async function photoFloorPlans(
+  photos: ListingPhoto[],
+  cached: PhotoPlanScan | undefined,
+  deps: { log: Log; load: (url: string) => Promise<ImageInput>; classify?: Parameters<typeof findFloorPlanInPhotos>[1]['classify'] }
+): Promise<{ images: ImageInput[]; note: string; scan?: PhotoPlanScan }> {
+  const { log, load } = deps;
+  if (!photos.length) return { images: [], note: NO_PLAN_NOTE };
+  const found = (n: number) => `The floor plan was found among the listing photos (${n} image${n === 1 ? '' : 's'}).`;
+  const none = (checked: number) => `${NO_PLAN_NOTE} No floor plan was found among ${checked} listing photo${checked === 1 ? '' : 's'}.`;
+  const summary = (scan: PhotoPlanScan) => ({ checked: scan.checked, picked: scan.picked.map(p => ({ photoIndex: p.photoIndex, confidence: p.confidence })) });
+
+  if (cached) {
+    const settled = await Promise.allSettled(cached.picked.map(p => load(p.url).catch(() => (p.thumb ? load(p.thumb) : Promise.reject(new Error('unloadable'))))));
+    const images = settled.flatMap(r => (r.status === 'fulfilled' ? [r.value] : []));
+    log('result', `[REPLAYED] ${images.length ? `Found ${images.length} floor plan${images.length === 1 ? '' : 's'} in the listing photos` : 'No floor plan in the listing photos; estimating from beds/baths/sqft'}`, { ...summary(cached), replayed: true });
+    return { images, note: images.length ? found(images.length) : none(cached.checked) };
+  }
+
+  log('plan', `Looking for a floor plan among ${photos.length} listing photos`, { photos: photos.length });
+  try {
+    const r = await findFloorPlanInPhotos(photos, { log, loadImage: load, classify: deps.classify });
+    const n = r.images.length;
+    log('result', n ? `Found ${n} floor plan${n === 1 ? '' : 's'} in the listing photos` : 'No floor plan in the listing photos; estimating from beds/baths/sqft', summary(r.scan));
+    return { images: r.images, note: n ? found(n) : none(r.scan.checked), scan: r.scan };
+  } catch (err) {
+    log('error', `Floor-plan search in the listing photos failed: ${(err instanceof Error ? err.message : String(err)).slice(0, 200)}`);
+    return { images: [], note: `${NO_PLAN_NOTE} Checking the listing photos for one failed.` };
+  }
 }
