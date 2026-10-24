@@ -14,7 +14,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 ## Checks, in app order
 
 ### 1. Hide old test rooms
-- **Taps:** Items → Inventory → on each old room's header tap **⋯** (or long-press the header) → **Hide room**.
+- **Taps:** Items → Inventory → in the **Rooms** chips at the top, tap each old room's **⋯** (or long-press its chip) → **Hide room**.
 - **Expected:** the room disappears from Inventory, its totals, Review, the Scan hero, New Home and Pack. **Show hidden rooms (N)** appears at the bottom, and **Unhide** brings a room back.
 - **Report if wrong:** which screen still shows the hidden room, plus a screenshot.
 
@@ -34,20 +34,22 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Report if wrong:** the wall or piece, which camera angle, plus a screenshot. For a misplaced piece, say where it really stood.
 
 ### 4. Items → room 3D: Voxel vs Plan
-- **Taps:** Items → Inventory → the new room's **3D** pill. Switch the style picker between **Voxel** and **Plan**.
+- **Taps:** Items → Inventory → the new room's **3D** pill (on its chip in the Rooms strip). Switch the style picker between **Voxel** and **Plan**.
 - **Expected:** Voxel is the dollhouse from check 3. Plan is the floor plan with RoomPlan's raw boxes, top down. Use the two to tell the errors apart:
   - The **Plan box is wrong** (wrong size, spot or label): that's a scan error.
   - The **Plan box is right but the voxel piece is wrong**: that's a model error.
 - **Report if wrong:** the piece, its Plan box (size, spot), what Voxel drew, and which of the two errors it is. Screenshots of both.
 
-### 5. Inventory: origin chips, "was: …", dates, Demo tag
-- **Taps:** Items → Inventory.
+### 5. Inventory: the museum (halls by function, placards)
+- **Taps:** Items → Inventory. Scroll the halls; tap a placard's story line and type "Grandma's, 1974", **Save**; tap an exhibit; long-press another. Then rotate the iPad, and try the largest text size.
 - **Expected:**
-  - The newest room is on top, with the scan time under its header ("Today 15:42").
-  - Rooms from **Load demo scan** show a **Demo** tag, and joined rooms say "Shared by …".
-  - Every row has one chip: **Scanned**, **From photos**, **Added by photo** or **Shared**.
-  - A renamed scanned item reads, for example, "Lamp · was: storage".
-- **Report if wrong:** the item, its chip, what it should be, plus a screenshot.
+  - A **Rooms** strip on top: one chip per room, newest scan first, with item count, scan time ("Today 15:42"), a **Demo** tag for **Load demo scan** rooms and "Shared by …" for joined ones, plus Share / **3D** / **⋯** (Add item here, Hide room).
+  - Halls by what things are for, biggest first ("The Work & Study Hall · 4 pieces · est. $610"), "Cabinet of Curiosities" last. An office chair is in Work & study, a nightstand in Sleep.
+  - Each exhibit: the voxel model on a plinth under a soft light, the most valuable piece of each hall a bit taller, a gold ribbon on possibly sentimental ones. The placard: name (serif), catalog line in small caps ("MESH, HERMAN MILLER · 70 × 110 CM", "≈" for estimated sizes, "· WAS: STORAGE" on renamed scan items), a one-line story, the price and one origin chip (**Scanned**, **From photos**, **Added by photo**, **Added by you** or **Shared**), then "Catalogued Oct 24, 2026 · from the Bedroom".
+  - Your story replaces the auto one in quotes, and its year shows as "Acquired 1974 · catalogued …". It stays after relaunch (this iPad only).
+  - Tap opens the item; long-press shows Open, Edit story, Rename, What is it?, Turn around, Rotate 90°, Not a real item, Delete item.
+  - iPad: three columns, staggered like a hung wall (iPhone two, largest text sizes one). Dark mode reads well.
+- **Report if wrong:** the item, its hall or line, what it should be, plus a screenshot (this is the first look on an iPad).
 
 ### 6. Misread pieces
 - **Taps:** the 3D pill → **Voxel**. Find the pieces that were wrong this morning.
