@@ -16,7 +16,8 @@ const DISPOSITION_SOURCE = ['auto', 'user'] as const;
 const STAGE = ['pending', 'running', 'done', 'failed'] as const;
 const SWEEP_STATUS = ['none', 'pending', 'running', 'done', 'failed'] as const;
 const MODEL_SOURCE = ['capture', 'sam3d'] as const; // Object Capture on the phone, or SAM 3D from a photo (#65)
-const LISTING_STATUS = ['draft', 'awaiting_approval', 'rejected', 'posted', 'sold', 'failed'] as const;
+// `posting`: the worker is publishing it right now (#144), so a restarted worker doesn't post it twice.
+const LISTING_STATUS = ['draft', 'awaiting_approval', 'rejected', 'posting', 'posted', 'sold', 'failed'] as const;
 const APPROVAL_KIND = ['listing', 'purchase'] as const;
 const APPROVAL_STATUS = ['pending', 'approved', 'denied', 'expired'] as const;
 const APPROVAL_DECISION = ['approved', 'denied'] as const; // what decide_approval / record_ciba_decision accept
@@ -195,7 +196,7 @@ const approval = table(
     requestedAt: t.timestamp(),
     updatedAt: t.timestamp(),
     // #42, appended last with defaults so existing rows migrate
-    decidedVia: t.string().default(''), // '' while pending | 'app' (owner in the app) | 'ciba' (worker relayed Auth0)
+    decidedVia: t.string().default(''), // '' while pending | 'app' (owner in the app) | 'ciba' (worker relayed Auth0) | 'expired' (#186)
     cibaSubject: t.string().default(''), // Auth0 `sub` the worker reported from the CIBA id_token
   }
 );
@@ -1243,6 +1244,10 @@ export const updateListing = spacetimedb.reducer(
     requireWorker(ctx);
     const l = ctx.db.listing.id.find(listingId);
     if (!l) throw new SenderError(`no listing ${listingId}`);
+    // Claiming a post: only an unposted listing can start one, and only once.
+    if (status === 'posting' && l.status !== 'draft' && l.status !== 'awaiting_approval') {
+      throw new SenderError(`listing ${listingId} is ${l.status}, can't start posting`);
+    }
     ctx.db.listing.id.update({
       ...l,
       status: oneOf('status', status, LISTING_STATUS),
@@ -1321,6 +1326,20 @@ export const recordCibaDecision = spacetimedb.reducer(
     });
   }
 );
+
+// #186: the worker gives up on an approval nobody answered. Only pending ones, and only after
+// APPROVAL_MIN_EXPIRE_MICROS, so a buggy worker can't expire one before the owner can see it.
+const APPROVAL_MIN_EXPIRE_MICROS = 15n * 60n * 1_000_000n;
+export const expireApproval = spacetimedb.reducer({ approvalId: t.u64() }, (ctx, { approvalId }) => {
+  requireWorker(ctx);
+  const a = ctx.db.approval.id.find(approvalId);
+  if (!a) throw new SenderError(`no approval ${approvalId}`);
+  if (a.status !== 'pending') throw new SenderError(`approval already ${a.status}`);
+  if (ctx.timestamp.microsSinceUnixEpoch - a.requestedAt.microsSinceUnixEpoch < APPROVAL_MIN_EXPIRE_MICROS) {
+    throw new SenderError('approval is less than 15 minutes old');
+  }
+  ctx.db.approval.id.update({ ...a, status: 'expired', decidedVia: 'expired', updatedAt: ctx.timestamp });
+});
 
 // ---------- shopping & deals (#15, #18) ----------
 export const addShoppingItem = spacetimedb.reducer(
