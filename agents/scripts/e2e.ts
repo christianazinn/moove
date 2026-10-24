@@ -28,7 +28,7 @@ import { deflateSync, crc32 } from "node:zlib";
 import path from "node:path";
 import type { Identity } from "spacetimedb";
 import { DbConnection, tables } from "../src/module_bindings/index.js";
-import { CARD_CHECKOUT_SOURCES } from "../src/integrations/deals.js";
+import { CARD_CHECKOUT_SOURCES, hasPlantedDeal } from "../src/integrations/deals.js";
 import { DEMO_OBJECTS } from "./demo-room.js";
 
 const args = process.argv.slice(2);
@@ -391,10 +391,10 @@ await stage("buy: deals found and fraud-screened", async () => {
     return ds.length && ds.every(d => d.fraudScore >= 0) ? ds : undefined;
   }, 120_000);
   const flagged = deals.filter(d => d.fraudScore >= 0.3);
-  // The planted demo scam (fixtures/deals.json, "planted": true) rides along on "Desk chair".
-  const chair = [...conn!.db.shoppingItem.iter()].find(s => me && s.owner.isEqual(me) && s.name.toLowerCase() === "desk chair");
+  // The planted demo scam (fixtures/deals.json, "planted": true) rides along on a desk/office chair item.
+  const chair = [...conn!.db.shoppingItem.iter()].find(s => me && s.owner.isEqual(me) && hasPlantedDeal(s));
   const planted = chair && deals.find(d => d.shoppingItemId === chair.id && d.sellerInfo.startsWith("Planted demo scam"));
-  if (chair && !planted) throw new Error(`no planted demo scam deal on "Desk chair"`);
+  if (chair && !planted) throw new Error(`no planted demo scam deal on "${chair.name}"`);
   if (planted && (!/sample data$/.test(planted.sellerInfo) || planted.fraudScore < FRAUD_BLOCK)) throw new Error(`planted demo scam: ${planted.fraudScore.toFixed(2)}, "${planted.sellerInfo}"`);
   const plantedNote = planted ? `; planted demo scam scored ${planted.fraudScore.toFixed(2)}` : "";
   return { detail: `${deals.length} deals, ${flagged.length} flagged >= 0.3${flagged[0] ? ` (e.g. "${flagged[0].title}": ${flagged[0].fraudReasons.join("; ")})` : ""}${plantedNote}` };

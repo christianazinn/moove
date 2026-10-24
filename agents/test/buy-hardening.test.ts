@@ -161,7 +161,8 @@ test("the planted demo scam on Desk chair is written, labeled sample data, score
   assert.ok(planted.sample);
   assert.match(sellerInfo(planted), /^Planted demo scam \(not a real listing\) · .*sample data$/);
   assert.equal(planted.checkout, "seller_message");
-  assert.ok(!(await createDealSource({}).search({ name: "Office chair", category: "chair" })).some(d => d.planted), "only planted for Desk chair");
+  assert.ok((await createDealSource({}).search({ name: "Office chair", category: "chair" })).some(d => d.planted), "also planted for Office chair (replayed live search)");
+  assert.ok(!(await createDealSource({}).search({ name: "Dining chairs", category: "dining chair" })).some(d => d.planted), "never for dining chairs");
 
   // Score it the way the fraud agent does: against the other written deals and cached comps.
   const itemId = nextId++;
