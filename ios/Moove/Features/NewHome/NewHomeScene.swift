@@ -26,6 +26,12 @@ final class NewHomeScene {
     private var wallPieces: [(layer: VoxelHouse.Layer, entity: Entity)] = []
     /// Horizontal direction from the orbit target to the camera, world (x, z).
     private var viewDirection = SIMD2<Double>(0, 1)
+    /// Floating room names; off for room shots.
+    var showsLabels = true
+    /// True once the shell's meshes are in the scene for the current plan.
+    private(set) var isBuilt = false
+    /// Called each time the shell finishes building (room shots wait for it before a snapshot).
+    var onBuilt: (() -> Void)?
 
     /// `wallColor` / `floorColor`: colors measured from the scan's photos, when known.
     func build(_ plan: FloorPlan, wallColor: VoxelColor? = nil, floorColor: VoxelColor? = nil) {
@@ -35,7 +41,8 @@ final class NewHomeScene {
         houseTask?.cancel()
         root.children.removeAll()
         wallPieces = []
-        for room in plan.rooms { root.addChild(Self.label(for: room)) }
+        isBuilt = false
+        if showsLabels { for room in plan.rooms { root.addChild(Self.label(for: room)) } }
 
         // Voxelizing and meshing the whole house is pure MooveKit work: do it off the main actor.
         let height = Double(Self.cutawayHeightM)
@@ -59,6 +66,8 @@ final class NewHomeScene {
                 self.wallPieces.append((layer, walls))
             }
             self.applyViewDirection()
+            self.isBuilt = true
+            self.onBuilt?()
         }
     }
 
