@@ -22,7 +22,7 @@ final class ScanSession {
 
     struct DetectedObject: Identifiable, Hashable {
         let id: UUID
-        let category: String
+        var category: String
         let widthM: Double
         let heightM: Double
         let depthM: Double
@@ -105,6 +105,7 @@ final class ScanSession {
                                heightM: Double(extra.dimensions.y), depthM: Double(extra.dimensions.z))
             }
         }
+        objects = Self.sanitized(objects)
         phase = .reviewing
         analyzeColors()
         if let photographer, let geometry = self.geometry { takeAutoPhotos(of: geometry.objects, with: photographer) }
@@ -227,7 +228,7 @@ final class ScanSession {
             roomName: roomName,
             usdzUrl: usdzUrl,
             capturedRoomJsonUrl: jsonUrl,
-            objects: objects.map {
+            objects: Self.sanitized(objects).map {
                 ScanObject(scanObjectId: $0.id.uuidString, category: $0.category,
                            widthM: $0.widthM, heightM: $0.heightM, depthM: $0.depthM,
                            photoUrl: photoUrls[$0.id], attributes: $0.attributes)
@@ -238,6 +239,31 @@ final class ScanSession {
             self.store = store
             await persistColors()
             await sendRoomPhotos(to: store, uploader: uploader)
+        }
+    }
+}
+
+// MARK: - Size sanity (#182)
+
+extension ScanSession {
+    /// `ObjectSanity` on every scanned box: drops impossible ones, renames ones that are
+    /// the wrong size for their label to "other" (vision then names them from the photo).
+    /// Items added by photo have no size and pass through. Idempotent.
+    nonisolated static func sanitized(_ objects: [DetectedObject]) -> [DetectedObject] {
+        objects.compactMap { object in
+            guard !object.manual else { return object }
+            switch ObjectSanity.check(category: object.category, width: object.widthM, height: object.heightM, depth: object.depthM) {
+            case .ok:
+                return object
+            case let .relabel(category, reason):
+                print("[sanity] \(object.category) → \(category): \(reason)")
+                var renamed = object
+                renamed.category = category
+                return renamed
+            case let .drop(reason):
+                print("[sanity] dropped \(object.category): \(reason)")
+                return nil
+            }
         }
     }
 }
