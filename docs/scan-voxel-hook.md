@@ -5,6 +5,19 @@ position and rotation) in the new-home lane's voxel dollhouse
 (`ScanResultsView` / `FloorPlan3DView`) instead of today's estimated
 single-rectangle layout.
 
+## Status on `main`
+**Wired (#105, #119, #121):**
+- The Scan page's finished state shows `ScanFinishedResults` (`Features/Scan/ScanFinishedResults.swift`). It finds the room just scanned (the newest home-`old` room with the session's room name), loads its geometry with `RoomGeometryLoader.load(room:snapshot:)`, and passes it to `ScanResultsView`.
+- `ScanResultsView(room:items:comps:geometry:colors:onSelect:)` (`Moove/Shared/ScanResultsView.swift`) builds `EstimatedRoom.scanned(...)` from `geometry.dollhouse(roomName:items:)` when geometry is there, and falls back to `EstimatedRoom.build` (estimated single room + `LayoutSolver`) when it isn't. The caption says which.
+- Real colors: `ScanFrameRecorder` keeps up to 40 camera keyframes during capture, `ScanColorAnalysis` + MooveKit `ColorSampler` turn them into `ScanColors`, and the furniture uses each object's measured color over its keyword palette.
+- RoomPlan attributes (chair/sofa/table/storage types) go to the backend with `import_scan_v2` and drive the voxel model's shape.
+
+**Still open:**
+- Large items without a matching scanned object (added by photo) are left out of the 3D view; they stay in the list. Small ones (lamps, books, art) are placed on the scanned furniture or walls by `PropPlacer` (#124).
+- The app doesn't write measured colors to the backend yet (`set_item_colors` exists in the bindings but has no caller), so the colors only show on the device that scanned, in that session.
+- The room screen (Inventory or Scan → a room, `RoomDetailView`) still draws the scan with `RoomVisualizationView`'s colored blocks, not the voxel dollhouse. "Load demo scan" goes to Inventory, so it doesn't show the dollhouse page.
+- `RoomGeometry+Dollhouse.swift` is still in the app target (`Features/Room/`), so it has no `swift test` coverage. The facing check below is still unverified on a device.
+
 ## What's here
 
 `ios/Moove/Features/Room/RoomGeometry+Dollhouse.swift` (new file, pure math, no
@@ -57,7 +70,7 @@ and making every wall 7 cm too long. Both gave the same 4 × 3.5 m polygon at (0
 
 ## What ScanResultsView needs (new-home lane, PR for #76)
 
-Proposed overload:
+*Done differently on `main`: `ScanResultsView` takes `geometry: RoomGeometry?` and calls `dollhouse` itself. The original proposal, for reference:*
 
 ```swift
 init(room: Room?, items: [Item], comps: [Comp],
@@ -76,8 +89,7 @@ init(room: Room?, items: [Item], comps: [Comp],
 
 ## What Rio's side needs (one call site)
 
-Nothing is wired yet, because `ScanResultsView` isn't on this branch. Once both PRs are in,
-the call on the Scan page (in `ScanFlowView`'s `.finished` state, or the room screen) is:
+*Done on `main` as `ScanFinishedResults` (see Status). The original sketch:* the call on the Scan page (in `ScanFlowView`'s `.finished` state, or the room screen) is:
 
 ```swift
 let roomItems = store.items.filter { $0.roomId == room.id }

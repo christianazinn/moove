@@ -1,0 +1,6 @@
+# Known false positives in the full-history scan (ci.yml "gitleaks full-history scan").
+# Both are an empty `FAL_KEY=` in .env.example that gitleaks read across the newline into the next
+# line (`SAM3D_MAX_USD=1.00`). No secret was committed; .env.example now keeps a comment line after
+# FAL_KEY= so new commits don't trip it. Format: <commit>:<file>:<rule>:<line>.
+7007d94b11ba4077a8f427ccde8f4f4cddb80fb9:.env.example:generic-api-key:81
+e7d7e512333a31fc85082380515b5d87d92cc90b:.env.example:generic-api-key:149

@@ -230,6 +230,13 @@ export const ScanPhoto = __t.object("ScanPhoto", {
 });
 export type ScanPhoto = __Infer<typeof ScanPhoto>;
 
+export const ServiceConfig = __t.object("ServiceConfig", {
+  key: __t.string(),
+  value: __t.string(),
+  updatedAt: __t.timestamp(),
+});
+export type ServiceConfig = __Infer<typeof ServiceConfig>;
+
 export const ShoppingItem = __t.object("ShoppingItem", {
   id: __t.u64(),
   owner: __t.identity(),

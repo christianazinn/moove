@@ -51,14 +51,14 @@ The live worker must be running against maincloud for `--wait` to see prices. No
 ## The 2-minute script
 Two phones if we have them: A (presenter) and B (shows live sync). Have the worker, tunnel and SpacetimeDB up, the seeded room's join code at hand, and the app on the live backend.
 
-1. **Scan (20s).** "Moving is mostly deciding what to do with your stuff." Scan a corner of the table with RoomPlan. The objects show up as items. If the scan is slow, cut to the seeded Bedroom (join with the code).
+1. **Scan (20s).** "Moving is mostly deciding what to do with your stuff." Scan tab, **Start scan**, scan a corner of the table with RoomPlan, **Done**, **Looks right: photograph items**, snap the photos, then **Add N items**. The finished page shows the room as a voxel dollhouse (real walls, doors, windows, each piece where it stood, colored from the scan) with the items below. If the scan is slow, cut to the seeded Bedroom (join with the code), or tap **Load demo scan** (it imports a recorded bedroom and jumps to Inventory; no dollhouse page).
 2. **Inventory (10s).** The room's items, with dimensions from LiDAR. Vision names and conditions come from Claude when there are photos.
 3. **Prices (20s).** Each item gets an estimate and its real eBay sold / FB Marketplace comps. Open the spending log: the pricing agent paid $0.01 per lookup over x402 (Base Sepolia, or labeled simulated). Comps from the cache say `[REPLAYED]`.
 4. **Sort (15s).** Keep/sell/donate/trash, each with a reason. The guitar is flagged sentimental, so the agent leaves it to you. Change one on phone A and phone B updates live (SpacetimeDB).
 5. **List and approve (20s).** Mark something sell. The listing agent drafts an eBay listing. Anything over the $100 threshold needs approval: a Guardian push (Auth0 CIBA) or the in-app Approvals inbox.
 6. **Buy (15s).** The new place needs something. The buy agent finds deals, screens them for fraud, and checks out after approval.
-7. **Fly-in (15s).** Everything you kept flies into a 3D model of the new home.
-8. **Summary (5s).** Money made, money spent (real vs simulated), and kg kept out of landfill.
+7. **New home and fly-in (15s).** New Home tab. Pick the demo house (**Use this home**), or **Import from a listing**: paste a Zillow link, optionally add floor-plan screenshots, **Build floor plan**, **Use this home**. Everything you kept flies into the voxel dollhouse. Switch layout style (By function / Compact / Open), **Fly in** replays it, **Save layout** saves it. If there's time: More, then **Pack** for the boxes and the truck estimate.
+8. **Summary (5s).** More, then **Summary**. Money made, money spent (real vs simulated), and kg kept out of landfill.
 
 ## Fallbacks
 Everything simulated says so, in the data (`simulated: true`) and in the UI.
@@ -66,7 +66,8 @@ Everything simulated says so, in the data (`simulated: true`) and in the UI.
 | If this breaks | Do this |
 |---|---|
 | Wifi or the backend | Settings, then backend "Offline demo (fixtures)". The banner says "Offline demo: fixture data, nothing is synced". The whole flow runs on `MooveKit/DemoFixtures`. |
-| The live scan | Join the seeded Bedroom with its code, or use the offline demo. |
+| The live scan | Join the seeded Bedroom with its code, tap **Load demo scan** on the Scan tab, or use the offline demo. |
+| Listing import | With no worker reachable it builds an estimate from beds, baths and square feet (labeled Estimated). Or skip it and use the demo house. |
 | Apify (slow, down, out of credit) | Comps replay from `agents/fixtures/comps/` and are labeled `[REPLAYED]`. Seeded items always replay. |
 | x402 / CDP | Without CDP keys, or with `X402_SIMULATE=1`, payments are recorded `simulated: true` and badged in the spending log. If a paid call fails, pricing falls back to Apify directly. `PRICING_PAY_X402=0` skips paying. |
 | eBay sandbox | Without every `EBAY_*` key, listings are simulated (`simulated: true`) and written to `uploads/listing-<id>.html`. |

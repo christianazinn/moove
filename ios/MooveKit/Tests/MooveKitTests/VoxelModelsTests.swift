@@ -173,6 +173,19 @@ import Testing
         let item = DemoFixtures.inventory(owner: "me").items.first { $0.name == "Queen bed frame" }!
         let s = VoxelItemSpec(item)
         #expect(s.id == "demo-10" && s.material == "oak" && s.brand == "IKEA" && s.condition == 4)
+        #expect(s.attributes.isEmpty && s.primaryColor == nil && s.secondaryColor == nil)
+    }
+
+    @Test func itemInitCarriesAttributesAndColors() {
+        let chair = DemoFixtures.inventory(owner: "me").items.first { $0.name == "Office chair" }!
+        let s = VoxelItemSpec(chair)
+        #expect(s.attributes.contains("ChairLegType.star"))
+        #expect(s.primaryColor == 0x3A3D42 && s.secondaryColor == 0x1E1F21)
+        #expect(VoxelModels.kind(s) == .chair)
+        // Measured colors change the model; attributes and colors both reach the builder.
+        var plain = chair
+        plain.colors = nil
+        #expect(VoxelModels.build(VoxelItemSpec(plain)) != VoxelModels.build(s))
     }
 
     @Test func differentItemsOfOneKindDiffer() {

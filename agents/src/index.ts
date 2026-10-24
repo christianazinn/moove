@@ -5,6 +5,7 @@ process.on('unhandledRejection', (err) => console.error('[agents] UNHANDLED REJE
 for (const sig of ['SIGTERM', 'SIGINT'] as const) process.on(sig, () => { console.log(`[agents] ${sig}, exiting`); process.exit(0); });
 import { connect } from './spacetime.js';
 import { startUploadServer } from './upload.js';
+import { announceService } from './service.js';
 import { attachHomesEvents } from './homes/listing.js';
 import { visionAgent } from './agents/vision.js';
 import { pricingAgent, setCompsSource } from './agents/pricing.js';
@@ -28,6 +29,7 @@ const { conn, identity } = await connect();
 // POST /homes/import (#89) has no caller identity yet, so its agent_events are owned by the worker.
 attachHomesEvents(conn, identity);
 console.log(`[agents] cache ready: ${conn.db.item.count()} items`);
+await announceService(conn);
 // #7: pricing buys its comps over x402 (PRICING_PAY_X402=0 keeps direct Apify lookups).
 if (pricingPaysX402()) await installPaidComps({ start: () => startCompsPaywall(), install: url => setCompsSource(paidCompsSource(conn, url)) });
 for (const a of agents) {

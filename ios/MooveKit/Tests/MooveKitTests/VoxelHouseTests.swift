@@ -121,4 +121,68 @@ import Testing
         #expect(g.nx == 66 && g.nz == 46)
         _ = VoxelHouse.build(FloorPlan(rooms: []))
     }
+
+    // MARK: Realism
+
+    static func count(_ g: VoxelGrid, _ colors: Set<VoxelColor>) -> Int {
+        g.cells.reduce(0) { $0 + ($1 != 0 && colors.contains($1 & 0xFFFFFF) ? 1 : 0) }
+    }
+
+    @Test func curtainsBesideEveryWindow() {
+        let g = Self.grid
+        let curtain: Set<VoxelColor> = [VoxelHouse.Palette.curtain, VoxelHouse.Palette.curtainFold]
+        for window in Self.plan.windows {
+            let d = window.to - window.from, dir = d * (1 / d.length)
+            // Just outside each end of the window, on some side, there's curtain from the floor up.
+            for end in [window.from - dir * (2.5 * Self.V), window.to + dir * (2.5 * Self.V)] {
+                let n = PlanPoint(-dir.y, dir.x)
+                let found = [1.0, -1.0].contains { side in
+                    let (i, k) = Self.column(end.x + n.x * side * 1.5 * Self.V, end.y + n.y * side * 1.5 * Self.V)
+                    return g[i, VoxelHouse.baseVoxels, k].map(curtain.contains) == true
+                        && g[i, g.ny - 2, k].map(curtain.contains) == true
+                }
+                #expect(found, "curtain at \(end.x),\(end.y)")
+            }
+        }
+        #expect(Self.count(g, [VoxelHouse.Palette.curtainRod]) > 0)
+        let plain = VoxelHouse.build(Self.plan, realism: false)
+        #expect(Self.count(plain, curtain.union([VoxelHouse.Palette.curtainRod, VoxelHouse.Palette.baseboardTop])) == 0)
+        // Realism only adds trim inside rooms; the shell itself is the same.
+        #expect(plain.filledCount < g.filledCount)
+    }
+
+    @Test func protrudingBaseboards() {
+        let g = Self.grid
+        // Living/kitchen wall at x = 6: the room column just left of the two wall voxels.
+        let (i, k) = Self.column(6.0, 0.6)
+        #expect(g[i - 2, VoxelHouse.baseVoxels, k] == VoxelHouse.Palette.baseboard)
+        #expect(g[i - 2, VoxelHouse.baseVoxels + 1, k] == VoxelHouse.Palette.baseboardTop)
+        #expect(g[i - 2, VoxelHouse.baseVoxels + 2, k] == nil)
+        #expect(g[i - 3, VoxelHouse.baseVoxels, k] == nil)
+        // Not across door gaps.
+        for door in Self.plan.doors {
+            let mid = (door.from + door.to) * 0.5
+            let (di, dk) = Self.column(mid.x, mid.y)
+            let horizontal = abs(door.to.x - door.from.x) > abs(door.to.y - door.from.y)
+            for n in [-2, 1] {
+                let (ii, kk) = horizontal ? (di, dk + n) : (di + n, dk)
+                #expect(g[ii, VoxelHouse.baseVoxels + 1, kk] != VoxelHouse.Palette.baseboardTop, "no baseboard across the door at \(mid.x),\(mid.y)")
+            }
+        }
+    }
+
+    @Test func measuredWallAndFloorColors() {
+        let wall: VoxelColor = 0x9DB4C0, floor: VoxelColor = 0x8A6A4A
+        let g = VoxelHouse.build(Self.plan, wallColor: wall, floorColor: floor)
+        #expect(Self.count(g, Set(VoxelHouse.Palette.wallTile)) == 0)
+        #expect(Self.count(g, Set(VoxelHouse.Palette.oak)) == 0)
+        #expect(Self.count(g, [wall]) > 100 && Self.count(g, [floor]) > 100)
+        // Still varied: tiles + grout, planks + seams.
+        let living = Self.plan.rooms.first { $0.kind == .living }!.centroid
+        let (i, k) = Self.column(living.x, living.y)
+        var floorColors = Set<VoxelColor>()
+        for dk in -6...6 { for di in -12...12 { if let v = g[i + di, 1, k + dk] { floorColors.insert(v) } } }
+        #expect(floorColors.count >= 3)
+        #expect(VoxelHouse.build(Self.plan, cutawayHeightM: 1.1) == Self.grid)
+    }
 }

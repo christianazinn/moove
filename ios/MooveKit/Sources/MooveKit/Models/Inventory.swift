@@ -90,13 +90,19 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
     public var fragile: Bool
     public var maybeSentimental: Bool
     public var updatedAt: Date
+    /// RoomPlan (iOS 17) object attributes, type-prefixed raw values like "ChairType.swivel",
+    /// "ChairLegType.star", "TableShapeType.circularElliptic" (`attributes_json`, #110). [] if none.
+    public var attributes: [String]
+    /// Main / accent colors measured from scan photos (`colors_json`, #110). nil until sampled.
+    public var colors: ItemColors?
 
     public init(
         id: UInt64, owner: IdentityHex, roomId: UInt64, scanObjectId: String? = nil,
         name: String, category: String, widthM: Double, heightM: Double, depthM: Double,
         photoUrls: [String] = [], material: String? = nil, brand: String? = nil, condition: Int? = nil,
         estValueCents: Int64? = nil, disposition: Disposition = .undecided, dispositionSource: DispositionSource = .auto,
-        dispositionReason: String? = nil, fragile: Bool = false, maybeSentimental: Bool = false, updatedAt: Date = .now
+        dispositionReason: String? = nil, fragile: Bool = false, maybeSentimental: Bool = false, updatedAt: Date = .now,
+        attributes: [String] = [], colors: ItemColors? = nil
     ) {
         self.id = id
         self.owner = owner
@@ -118,12 +124,67 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
         self.fragile = fragile
         self.maybeSentimental = maybeSentimental
         self.updatedAt = updatedAt
+        self.attributes = attributes
+        self.colors = colors
     }
 
     public var volumeM3: Double { widthM * heightM * depthM }
 
     /// Sentimental or undecided items go in the review screen's "Needs you" section.
     public var needsUser: Bool { maybeSentimental || disposition == .undecided }
+
+    /// Parses `attributes_json` (a JSON array of strings). [] for '' or anything malformed;
+    /// non-string entries are skipped.
+    public static func attributes(json: String) -> [String] {
+        guard let array = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [Any] else { return [] }
+        return array.compactMap { $0 as? String }
+    }
+}
+
+/// An item's measured colors (`item.colors_json`, #110): `{"primary":"#RRGGBB","secondary":"#RRGGBB"}`,
+/// either key optional. Colors are packed 0xRRGGBB like `VoxelColor`.
+public struct ItemColors: Codable, Sendable, Hashable {
+    public var primary: VoxelColor?
+    public var secondary: VoxelColor?
+
+    public init(primary: VoxelColor? = nil, secondary: VoxelColor? = nil) {
+        self.primary = primary
+        self.secondary = secondary
+    }
+
+    /// Parses `colors_json`. nil for '' (unknown), bad JSON, or no valid color; a bad
+    /// entry is dropped rather than failing the whole value.
+    public init?(json: String) {
+        guard !json.isEmpty,
+              let object = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else { return nil }
+        let primary = (object["primary"] as? String).flatMap(Self.color(hex:))
+        let secondary = (object["secondary"] as? String).flatMap(Self.color(hex:))
+        guard primary != nil || secondary != nil else { return nil }
+        self.init(primary: primary, secondary: secondary)
+    }
+
+    /// The `colors_json` wire form, keys in a fixed order; '' when both colors are unknown.
+    public var json: String {
+        let parts = [("primary", primary), ("secondary", secondary)].compactMap { key, c in
+            c.map { "\"\(key)\":\"\(Self.hex($0))\"" }
+        }
+        return parts.isEmpty ? "" : "{" + parts.joined(separator: ",") + "}"
+    }
+
+    /// "#RRGGBB" (case-insensitive, '#' required) → 0xRRGGBB; nil for anything else.
+    public static func color(hex: String) -> VoxelColor? {
+        guard hex.count == 7, hex.first == "#" else { return nil }
+        let digits = hex.dropFirst()
+        guard digits.allSatisfy(\.isHexDigit), let value = UInt32(digits, radix: 16) else { return nil }
+        return value
+    }
+
+    /// 0xRRGGBB → "#RRGGBB" (uppercase, as the module stores it).
+    public static func hex(_ color: VoxelColor) -> String {
+        let v = color & 0xFFFFFF
+        let digits = String(v, radix: 16, uppercase: true)
+        return "#" + String(repeating: "0", count: 6 - digits.count) + digits
+    }
 }
 
 public struct Comp: Codable, Sendable, Hashable, Identifiable {

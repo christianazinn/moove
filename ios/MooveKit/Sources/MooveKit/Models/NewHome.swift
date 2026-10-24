@@ -28,20 +28,34 @@ public struct NewHome: Codable, Sendable, Hashable, Identifiable {
 }
 
 /// Where one item sits in the new home. `x`/`y` are plan meters (world x/z), the item's center.
+/// Optional fields (from `PropPlacer`) are left out of the JSON when nil, so older layouts
+/// decode unchanged and older readers ignore them.
 public struct Placement: Codable, Sendable, Hashable {
     public var itemId: UInt64
     public var room: String
     public var x: Double
     public var y: Double
     public var rotationDeg: Double
+    /// Height of the item's bottom above the floor, in meters (nil: on the floor).
+    public var elevationM: Double?
+    /// The item it sits on (a lamp on a nightstand), if any.
+    public var onTopOf: UInt64?
+    /// Hung on a wall (art, mirror, mounted TV): rendered with the flat wall variant.
+    public var wallMounted: Bool?
 
-    public init(itemId: UInt64, room: String, x: Double, y: Double, rotationDeg: Double = 0) {
+    public init(itemId: UInt64, room: String, x: Double, y: Double, rotationDeg: Double = 0,
+                elevationM: Double? = nil, onTopOf: UInt64? = nil, wallMounted: Bool? = nil) {
         self.itemId = itemId
         self.room = room
         self.x = x
         self.y = y
         self.rotationDeg = rotationDeg
+        self.elevationM = elevationM
+        self.onTopOf = onTopOf
+        self.wallMounted = wallMounted
     }
+
+    public var isWallMounted: Bool { wallMounted == true }
 }
 
 public struct Layout: Codable, Sendable, Hashable, Identifiable {
