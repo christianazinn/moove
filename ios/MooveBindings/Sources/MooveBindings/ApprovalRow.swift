@@ -19,6 +19,8 @@ public struct ApprovalRow: BSATNTableWithPrimaryKey, Equatable, Sendable {
     public let status: String
     public let requestedAt: Timestamp
     public let updatedAt: Timestamp
+    public let decidedVia: String
+    public let cibaSubject: String
 
     public var primaryKey: UInt64 { id }
 
@@ -32,6 +34,8 @@ public struct ApprovalRow: BSATNTableWithPrimaryKey, Equatable, Sendable {
         self.status = try reader.readString()
         self.requestedAt = try Timestamp(reader: reader)
         self.updatedAt = try Timestamp(reader: reader)
+        self.decidedVia = try reader.readString()
+        self.cibaSubject = try reader.readString()
     }
 }
 
@@ -46,6 +50,8 @@ extension ApprovalRow: BSATNRowQueryable {
         public let status: QueryColumn<ApprovalRow, String>
         public let requestedAt: QueryColumn<ApprovalRow, Timestamp>
         public let updatedAt: QueryColumn<ApprovalRow, Timestamp>
+        public let decidedVia: QueryColumn<ApprovalRow, String>
+        public let cibaSubject: QueryColumn<ApprovalRow, String>
     }
     public static func makeCols(tableAlias: String) -> Cols {
         Cols(
@@ -57,7 +63,9 @@ extension ApprovalRow: BSATNRowQueryable {
             summary: QueryColumn<ApprovalRow, String>(tableAlias: tableAlias, name: "summary"),
             status: QueryColumn<ApprovalRow, String>(tableAlias: tableAlias, name: "status"),
             requestedAt: QueryColumn<ApprovalRow, Timestamp>(tableAlias: tableAlias, name: "requested_at"),
-            updatedAt: QueryColumn<ApprovalRow, Timestamp>(tableAlias: tableAlias, name: "updated_at")
+            updatedAt: QueryColumn<ApprovalRow, Timestamp>(tableAlias: tableAlias, name: "updated_at"),
+            decidedVia: QueryColumn<ApprovalRow, String>(tableAlias: tableAlias, name: "decided_via"),
+            cibaSubject: QueryColumn<ApprovalRow, String>(tableAlias: tableAlias, name: "ciba_subject")
         )
     }
 }

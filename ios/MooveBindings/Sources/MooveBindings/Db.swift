@@ -91,6 +91,11 @@ public struct Reducers: Sendable {
     }
 
     @discardableResult
+    public func recordCibaDecision(approvalid: UInt64, status: String, cibasubject: String) async throws -> ReducerSuccess {
+        try await client.callReducer(RecordCibaDecisionReducer(approvalid: approvalid, status: status, cibasubject: cibasubject))
+    }
+
+    @discardableResult
     public func recordPayment(owner: Identity, agent: String, rail: String, purpose: String, payee: String, amountusdmicros: Int64, txhash: String, status: String, simulated: Bool, reftable: String, refid: UInt64) async throws -> ReducerSuccess {
         try await client.callReducer(RecordPaymentReducer(owner: owner, agent: agent, rail: rail, purpose: purpose, payee: payee, amountusdmicros: amountusdmicros, txhash: txhash, status: status, simulated: simulated, reftable: reftable, refid: refid))
     }
@@ -106,6 +111,11 @@ public struct Reducers: Sendable {
     }
 
     @discardableResult
+    public func removeMember(roomid: UInt64, member: Identity) async throws -> ReducerSuccess {
+        try await client.callReducer(RemoveMemberReducer(roomid: roomid, member: member))
+    }
+
+    @discardableResult
     public func removeShoppingItem(shoppingitemid: UInt64) async throws -> ReducerSuccess {
         try await client.callReducer(RemoveShoppingItemReducer(shoppingitemid: shoppingitemid))
     }
@@ -118,6 +128,11 @@ public struct Reducers: Sendable {
     @discardableResult
     public func requestApproval(owner: Identity, kind: String, refid: UInt64, amountcents: Int64, summary: String) async throws -> ReducerSuccess {
         try await client.callReducer(RequestApprovalReducer(owner: owner, kind: kind, refid: refid, amountcents: amountcents, summary: summary))
+    }
+
+    @discardableResult
+    public func rotateJoinCode(roomid: UInt64) async throws -> ReducerSuccess {
+        try await client.callReducer(RotateJoinCodeReducer(roomid: roomid))
     }
 
     @discardableResult
