@@ -254,13 +254,26 @@ import Testing
         let out = PropPlacer(plan: Self.scanRoom).place([Self.desk, Self.nightstand, lamp], items: Self.scanItems, scanned: [1, 2, 3])
         let deskTop = VoxelModels.buildWithSurfaces(VoxelItemSpec(Self.scanItems[0])).surfaces.map(\.y).max()!
         #expect(out[2].onTopOf == 1, "on the desk, not the nightstand")
-        #expect(out[2].x == 1.4 && out[2].y == 3.1 && out[2].rotationDeg == 30)
+        #expect(out[2].x == 1.4 && out[2].y == 3.1 && out[2].rotationDeg == 0, "squared to the desk")
         #expect(abs(out[2].elevationM! - Double(deskTop) * Self.V) < 1e-9)
         // Just past the desk's edge (within 15 cm) still counts; far past it doesn't.
         let edge = Placement(itemId: 3, room: "Room", x: 1.0, y: 3.38)
         #expect(PropPlacer(plan: Self.scanRoom).place([Self.desk, edge], items: Self.scanItems, scanned: [1, 3])[1].onTopOf == 1)
         let off = Placement(itemId: 3, room: "Room", x: 1.0, y: 3.6)
         #expect(PropPlacer(plan: Self.scanRoom).place([Self.desk, off], items: Self.scanItems, scanned: [1, 3])[1] == off)
+    }
+
+    @Test func scannedSmallThingsAreNotSlanted() {
+        // On the floor: a lamp scanned at 17° is squared to the room.
+        let floorLamp = Placement(itemId: 3, room: "Room", x: 2.5, y: 2.0, rotationDeg: 17)
+        let out = PropPlacer(plan: Self.scanRoom).place([Self.desk, Self.nightstand, floorLamp], items: Self.scanItems, scanned: [1, 2, 3])
+        #expect(out[2].x == 2.5 && out[2].y == 2.0 && out[2].rotationDeg == 0)
+        // On a desk turned 90°: a lamp scanned at 100° lines up with the desk (90°).
+        let turnedDesk = Placement(itemId: 1, room: "Room", x: 1.0, y: 2.0, rotationDeg: 90)
+        let lamp = Placement(itemId: 3, room: "Room", x: 1.0, y: 2.0, rotationDeg: 100)
+        let onDesk = PropPlacer(plan: Self.scanRoom).place([turnedDesk, lamp], items: Self.scanItems, scanned: [1, 3])
+        #expect(onDesk[1].onTopOf == 1 && onDesk[1].rotationDeg == 90)
+        #expect(PropPlacer.squared(-44, to: 0) == 0 && PropPlacer.squared(46, to: 0) == 90 && PropPlacer.squared(181, to: 0) == 180)
     }
 
     @Test func unscannedBookStillGoesOnASurfaceAroundAScannedLamp() {
