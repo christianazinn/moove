@@ -87,6 +87,15 @@ They match the commerce [video shot list](demo-commerce.md#video-shot-list-comme
 - Name files in story order (`01-scan.gif`, `02-items.png`, ...) and upload in that order.
 
 ## Fallback: screenshots from CI
+**Quickest:** every `ios-ui` CI run (on PRs touching `ios/` and on `main`) uploads a **`devpost-screenshots`** artifact. `DevpostShotsTests` (#242) walks the Offline demo and saves one PNG per shot above: `01-scan`, `01b-scan-finished`, `02-items`, `03-spending`, `03b-item-comps`, `04-review`, `05-approvals`, `06-desk-chair-deals`, `07-new-home`, `08-summary`. Download the newest one from `main`:
+
+```sh
+gh run download $(gh run list -R christianazinn/moove --workflow ci.yml --branch main --status success --limit 1 --json databaseId -q '.[0].databaseId') \
+  -R christianazinn/moove -n devpost-screenshots -D ~/Desktop/moove-devpost
+```
+
+The shots are taken before the taps in shots 5 and 6, so they show the starting state (Approvals · 2, no purchases yet). Under XCUITest the RealityKit dollhouses that don't auto-turn (the scan finished page and the new home) can come out blank. Take 01b and 07 on a phone or in the Simulator by hand. The Scan hero (01) renders.
+
 Rio's UI smoke tests (#161, merged, `ios/MooveUITests/MooveSmokeTests.swift`) and the commerce UI test (#155, merged, `CommerceUITests.swift`) run on the Offline demo in the Simulator and attach screenshots (`XCTAttachment`, `.keepAlways`). CI's `ios-ui` job runs them on PRs that touch `ios/` and on pushes to `main`, and uploads the PNGs as the `ios-ui-screenshots` artifact (about 15 min per run). To fetch them from a finished run on `main`:
 
 ```sh

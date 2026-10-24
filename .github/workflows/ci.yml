@@ -153,7 +153,9 @@ jobs:
           xcrun simctl boot "$SIM_UDID" || true
           # Only the commerce suite gates CI for now: MooveSmokeTests (#161) still has two tests that time
           # out on the slower CI runner, and running both suites goes past ~15 min.
+          # DevpostShotsTests (#242, ~2 min) walks the Offline demo and saves the Devpost shots.
           xcodebuild test -scheme Moove -destination "id=$SIM_UDID" -only-testing:MooveUITests/CommerceUITests \
+            -only-testing:MooveUITests/DevpostShotsTests \
             -resultBundlePath "$RUNNER_TEMP/MooveUITests.xcresult" CODE_SIGNING_ALLOWED=NO
       - name: Export screenshots
         if: always()
@@ -184,6 +186,13 @@ jobs:
         with:
           name: ios-ui-screenshots
           path: ${{ runner.temp }}/shots
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          # The shots named in docs/devpost-media.md (01-scan, 02-items, ...), #242.
+          name: devpost-screenshots
+          path: ${{ runner.temp }}/shots/DevpostShotsTests
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         if: always()
