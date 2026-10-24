@@ -1,0 +1,86 @@
+# Devpost draft: Moove
+
+Draft for the Cal Hacks 13.0 submission (due **Sun 9:00 AM**). Written from what's on `main`; anything that's still an open PR or simulated is marked. **Before submitting, re-check every "(open PR)" and "not verified" note against `main`**, and delete the ones that have landed.
+
+Tagline (pick one):
+- *Scan your room. Agents handle the rest of your move.*
+- *Your move, run by agents that ask before they spend.*
+
+## Inspiration
+*(TODO humans: replace with our own moving story, ideally tied to the Anthropic community below.)* Moving is mostly admin. You decide what to keep, look up what everything is worth, list things one by one, haggle, donate the rest, and then buy what the new place is missing. It takes days, and the easy way out is a dumpster. Agents should be good at this kind of work, but nobody wants an agent with their card and no supervision. So we wanted to see what a move looks like when agents do the tedious parts and the user keeps the final say on money and on anything that matters to them.
+
+## What it does
+1. **Scan.** You scan a room with the iPhone's LiDAR (RoomPlan) and snap a photo of each object. *(Scan -> inventory upload: open PR #28. A demo scan works in the Offline demo.)*
+2. **Identify.** Claude vision looks at the photos plus the scan's dimensions and fills in the name, brand, material, condition and whether it's fragile. It also flags items that might be sentimental, and those are never decided automatically.
+3. **Price.** A pricing agent pulls comparable sold and local listings through Apify (eBay sold listings, Facebook Marketplace) and sets an estimate with a low/high range. It pays for that data itself, $0.01 per lookup over **x402** in USDC on Base Sepolia, from a CDP wallet with a per-agent budget.
+4. **Review.** You confirm keep / sell / donate / trash on a review screen. Possibly sentimental items sit in their own section until you decide. Moove pre-sorts with rules (value vs. moving cost, condition, category) and never overrides you.
+5. **Sell.** A listing agent writes the eBay listing and posts it. Anything above your approval threshold waits for you: an Auth0 push to your phone (CIBA), or the in-app Approvals inbox.
+6. **Buy.** For the new home, Claude drafts what's still missing, a buy agent searches deals, scores them for fraud risk, and checks out through a Visa Acceptance (CyberSource) flow, with approval above the threshold. *(The demo checkout is the labeled simulation.)*
+7. **Move in.** Everything you kept flies into a 3D model of the new home, with three layout styles to pick from. A summary screen totals what went where, what you earned and spent, and roughly how much stayed out of landfill.
+
+Every agent step and every payment is a row in SpacetimeDB, so the app shows a live spending log: amount, agent, purpose, remaining budget, a basescan link, and a SIMULATED badge on anything that isn't real. *(The phone shows it live once #10 lands; until then it runs on Offline demo data.)*
+
+## How we built it
+- **iOS app** (SwiftUI, Swift 6): RoomPlan for the scan, RealityKit for the 3D new home and the fly-in, and a pure-Swift `MooveKit` package for the models, layout solver and summary math, so they're unit tested on Linux too. The project is generated with XcodeGen.
+- **SpacetimeDB** (TypeScript module) is the whole backend. Tables are the shared state and reducers are the only writes. The app and the agent worker are both just subscribers. The iOS client uses the community Swift SDK (`ekscrypto/spacetimedb-swift-sdk`), which we vetted in an hour-0 spike (~1.5 ms live update between two clients).
+- **Agent worker** (Node/TS) holds all outbound I/O. Each agent subscribes to rows that need work and writes results back through reducers: vision (Claude), pricing (Apify), listing (Claude + eBay Sell API sandbox) and approval (Auth0 CIBA). Each integration sits behind an interface with a labeled simulated fallback, so the demo never depends on one flaky API.
+- **x402 payment rail**: `@coinbase/cdp-sdk` (`CdpX402Client`, `createX402Server`), `@x402/*` v2 and the CDP facilitator. We drive the 402 flow by hand so each call carries its agent and purpose, and so the budget check happens before anything is signed. Details: [`docs/coinbase-x402.md`](coinbase-x402.md).
+- **Coordination**: four people plus their Claude Code agents, who coordinated through GitHub issues and PRs. Every task has a brief in `docs/tasks/`, and the data model doc is the contract between lanes.
+
+## Challenges we ran into
+- **No official Swift SDK for SpacetimeDB.** We spiked the community SDK in the first hour instead of building a gateway. It worked, with quirks: it needs Swift 6.2, initial rows arrive as inserts, and it doesn't replay subscriptions on reconnect. Mapping every table into the app is still the last piece (#10).
+- **x402 packaging.** `@coinbase/cdp-sdk/x402` crashes on import unless its optional peer dependencies are installed by hand, and its CJS/ESM type split needed a cast. The buyer-side docs also don't say how to get the settlement tx hash, so we read the type definitions to find it.
+- **Per-agent budgets.** The SDK's hooks apply to the whole client, so we built our own reserve/release ledger to keep concurrent calls from one agent from overspending.
+- **Sandboxes that need onboarding.** eBay, Auth0 CIBA and Visa Acceptance all need accounts, keys or plan features before a single real call. We built each against stubbed HTTP and kept a labeled simulation, so the demo is honest about what's real.
+- **Lidar on stage.** RoomPlan needs a physical LiDAR device, so we keep a demo scan and a hardcoded demo house as fallbacks.
+
+## Accomplishments that we're proud of
+- A real x402 payment from an agent's CDP wallet, settled on Base Sepolia, with the budget checked before signing ([tx](https://sepolia.basescan.org/tx/0xc7942646380456c56dde204434aeb6115338b521b6e91a0901ec05dde1fe136c)). Pricing now pays for its comps through the same rail.
+- Agents that coordinate only through database tables, with every step visible to the user as it happens.
+- Guardrails built into the data model: spend caps, an approval threshold, sentimental items left to the user, and `simulated` labels that the UI can't hide.
+- A layout solver that puts your actual furniture against the walls of the new home without overlaps or blocked doors, in three styles, with a fly-in animation.
+
+## What we learned
+- Agents are much easier to trust when every action is a row you can see, rather than a log line on a server.
+- The useful agent-payment primitive is a per-agent budget with reserve and release, plus a fetch that returns the receipt. Signing a payment is the easy part.
+- Contract-first planning (one data model doc, one schema file) let four lanes and their agents work in parallel against fixtures before the real pieces existed.
+- Label simulated actions from the start. Retrofitting honesty into a demo is much harder.
+
+## What's next for Moove
+- Land live sync on the phone (#28/#10) and the room-photo capture step, and run with real CDP, eBay and CyberSource sandbox keys instead of the labeled simulations.
+- Real sandbox runs for eBay, Auth0 CIBA and Visa once keys arrive, then production rails.
+- Fraud screening for deals (#18), including an AI-generated-listing-text signal.
+- A truck size and packing plan from the scanned dimensions (#19).
+- Pull the new home's floor plan from a listing instead of a hardcoded demo house.
+- Third-party x402 data sellers instead of our own paywall, and on-chain per-agent budgets (sub-accounts).
+
+## Built with
+swift, swiftui, roomplan, realitykit, typescript, node.js, spacetimedb, claude, anthropic-api, apify, coinbase-cdp, x402, base-sepolia, usdc, auth0, ebay-api, visa-acceptance, xcodegen
+
+---
+
+## Per-track blurbs
+Requirements are in [`docs/tracks.md`](tracks.md). Devpost may cap how many tracks we select. The priority order is Coinbase > Spacetime > Apify > Visa > Anthropic > Auth0.
+
+### Coinbase: Best Use of x402 (Payment Agents)
+Paste from [`docs/coinbase-x402.md`](coinbase-x402.md); it already has the summary, the architecture diagram, controls, known limitations, setup and builder feedback that the track asks for. Short version: Moove's pricing agent buys a $0.01 comps report per item over x402, in USDC on Base Sepolia, from a CDP server wallet. A payment rail enforces a per-agent budget and a per-call max **before signing**, and only pays Base Sepolia USDC. Every payment and refusal is a SpacetimeDB row that the app's spending log shows, with a basescan link. Simulated payments are labeled in data and UI. Proof tx linked above. Still to do for this track: every member's verified Coinbase account, and the demo video.
+
+### Spacetime
+SpacetimeDB isn't an add-on in Moove, it's the only backend. The iOS app and the agent worker never talk to each other. Both subscribe to the same tables and write only through reducers. Agents coordinate through rows: vision fills in an item's details, then pricing sees a priced-pending item, then listing sees a priced sell item, then approval sees a pending approval, and each step writes an `agent_event` the app can show. Payments and refusals are rows too, which is what makes the live spending log possible. Shared rooms (`join_room` with a 6-character code) are designed for two phones reviewing the same inventory live. Authorization uses `ctx.sender`: owners, room members and a registered worker identity. Code: `spacetime/src/index.ts`, `docs/data-model.md`. **Honest status:** the Swift SDK spike passed, but the app's table mapping (#10) is still open, so the two-phone demo depends on it landing.
+
+### Apify
+The pricing agent's comps come from Apify actors: `caffein.dev~ebay-sold-listings` for what things actually sold for, and `apify~facebook-marketplace-scraper` for local asking prices (`ivanvs~craigslist-scraper` optional). Runs are cost-capped (`maxItems`, `maxTotalChargeUsd`), outliers are dropped, and the estimate is the condition-adjusted median with a quartile range. Every query is cached, and replays are labeled `[REPLAYED]` so a flaky scrape never breaks the demo. The buy agent's live deal search adds `ivanvs~craigslist-scraper-pay-per-result` and `automation-lab~ebay-scraper` *(open PR #52/#40)*. Code: `agents/src/integrations/apify.ts`, `agents/src/agents/pricing.ts`. We didn't publish our own Actor, so we're not entering Best Actor.
+
+### Visa: Reimagining Shopping
+Moving is a shopping problem: the new place needs a bed frame, a desk and a shower curtain, and you don't want to spend a weekend comparing listings. Moove's buy agent works from the new home's floor plan, minus what you're keeping, to draft what's still missing. It ranks deals by price, condition and distance, and screens for fraud risk. Then it checks out through a Visa Acceptance (CyberSource) sandbox flow: an authorization hold, a re-check of your approval and the current threshold, then capture, or a void if anything changed. **Trust & responsibility:** anything above your threshold needs your approval, the amount you approved must match what's charged, one purchase per item, marketplace sellers get a drafted message instead of a payment, and every step is visible. **Honest status:** no real sandbox call yet (no keys), so the demo checkout is labeled SIMULATED. The VIC (Visa Intelligent Commerce) path is a documented seam only.
+
+### Anthropic
+> **TODO (humans): pick the community and pitch line.** The track wants a *specific* community, a problem we've lived, and evidence that we know where Claude could go wrong for those users. Suggestions:
+> 1. **College students moving out at the end of a lease or term.** Hard deadline, small budget, lots of furniture that's cheap to buy and painful to sell, and dorm dumpsters overflowing every June. We've all lived it.
+> 2. **Older adults downsizing** from a family home. Hundreds of items, many sentimental, and family members helping remotely (shared rooms). Sentimental handling and approvals matter most here.
+> 3. **People relocating for a new job on short notice** (interns, new grads, people moving across states). Tight timeline, buying a whole apartment's worth of basics on arrival.
+
+Draft blurb (fill in the community): Moove is for *[community]*. Claude does the tedious judgment work: identifying each item from photos and LiDAR dimensions, writing honest listings, and *(open PR #40)* working out what the new home still needs. We designed around where it could go wrong for users. It names a brand only with visible evidence, because a wrong brand misprices an item. When it's unsure whether something is sentimental, it says yes, and sentimental items are never decided for you. It never sets a price on its own: prices are clamped to the range real comps support. Every output is schema-validated, with fallbacks when the model refuses. Scraped marketplace text is fenced as untrusted data and links are scrubbed from published copy, so a listing can't instruct the agent (#38, with a spot check). Code: `agents/src/integrations/anthropic.ts`, `agents/src/agents/vision.ts`, `agents/src/agents/listing.ts`.
+
+### Auth0 (MLH)
+Auth0 for AI Agents is the human-in-the-loop for spending. When the listing agent wants to post something above your threshold, the worker sends an Auth0 async authorization (CIBA) request, which is a Guardian push to your phone with a short binding message like `Moove: sell 420.00 USD: Herman Miller chair` (the amount comes first, so a scraped title can't read as the price). It polls for your answer, checks the token's subject matches you, and only then proceeds. If push isn't set up, the request waits in the app's Approvals inbox. The app signs in with Auth0 Universal Login (#25), and the ID token becomes your SpacetimeDB identity. Code: `agents/src/integrations/auth0.ts`, `agents/src/agents/approval.ts`. **Honest status:** CIBA is tested only against stubbed HTTP. A real tenant run is pending, and login against the live backend waits on the app's table mapping (#10).
