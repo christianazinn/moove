@@ -128,8 +128,9 @@ extension SpacetimeBackend {
             usdzurl: scan.usdzUrl ?? "",
             capturedroomjsonurl: scan.capturedRoomJsonUrl ?? "",
             objects: scan.objects.map {
-                // name '' = the module names it from the category until vision runs.
-                ScanObjectInputV2(scanObjectId: $0.scanObjectId, name: "", category: $0.category,
+                // name '' = the module names it from the category until vision runs; a name the
+                // user gave it in the checklist is kept through vision by `MooveStore.keptNames`.
+                ScanObjectInputV2(scanObjectId: $0.scanObjectId, name: $0.name ?? "", category: $0.category,
                                   widthM: $0.widthM, heightM: $0.heightM, depthM: $0.depthM, photoUrl: $0.photoUrl ?? "",
                                   attributes: $0.attributes)
             }
