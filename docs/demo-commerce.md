@@ -38,8 +38,8 @@ Wallet and keys
 - [ ] `npm run x402:demo` once as a rehearsal. It should end with an `On-chain: https://sepolia.basescan.org/tx/...` line. If it prints "UNPAYWALLED, simulated mode", the CDP keys aren't loaded.
 
 Pipeline rehearsal (no spend)
-- [ ] In one terminal `spacetime start` (a **local** server on :3000). In `agents/`: `X402_SIMULATE=1 npm run e2e -- --replay`. It publishes the module to a fresh local `moove-e2e` database, starts its own worker on spare ports (8790, 8412), drives the app's reducers as a normal user and prints a PASS/FAIL table: scan, pricing over x402, sort, sweep, listing + approval (simulated eBay), new home, shopping list, deals + fraud, purchase + approval (simulated Visa). Expect lines like `44 deals, 3 flagged >= 0.3` and `payment settled, simulated: true` (that's the latest CI run on main). It exits non-zero on any FAIL.
-- [ ] Why the extra flags: `--replay` replays recorded Claude answers from `agents/fixtures/llm` and fails instead of calling the API on a miss (the default `auto` would make one live call and record it). `X402_SIMULATE=1` keeps the x402 rail simulated: e2e passes `.env.local` through, so with CDP keys loaded it would otherwise sign real testnet payments. Apify is never called (the script blanks `APIFY_TOKEN`) and Visa is always `simulated`. It refuses any non-local `E2E_URI`, so it can't touch maincloud.
+- [ ] In one terminal `spacetime start` (a **local** server on :3000). In `agents/`: `npm run e2e`. It publishes the module to a fresh local `moove-e2e` database, starts its own worker on spare ports (8790, 8412), drives the app's reducers as a normal user and prints a PASS/FAIL table: scan, pricing over x402, sort, sweep, listing + approval (simulated eBay), new home, shopping list, deals + fraud, purchase + approval (simulated Visa). Expect lines like `44 deals, 3 flagged >= 0.3` and `payment settled, simulated: true` (that's the latest CI run on main). It exits non-zero on any FAIL.
+- [ ] Why no flags: since #133 and #157 `npm run e2e` is safe by default, even with `.env.local` loaded. Claude runs in replay mode (`LLM_REPLAY=replay`: recorded answers from `agents/fixtures/llm`, and a miss fails instead of calling the API), x402 is simulated (`X402_SIMULATE=1`, so CDP keys never sign Base Sepolia payments), Visa is always `simulated`, and the Apify, fal, Pangram, eBay and Auth0 CIBA keys are blanked (listings use the simulated eBay, approvals are decided in-app by the test). Opt-ins: `E2E_REAL_X402=1` for real testnet payments (the commerce stages then fail, since they assert simulated rows), and `E2E_LLM=auto|record` or `--live` for live Claude calls. The table header prints the modes that ran. It refuses any non-local `E2E_URI`, so it can't touch maincloud.
 
 Required env vars (names only; values live in the repo-root `.env.local`, which `agents/scripts/env.ts` and `agents/src/config.ts` load)
 - [ ] x402: `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET`. Optional, with code defaults: `AGENT_SPEND_CAP_USDC` (default 5), `X402_MAX_PER_CALL_USDC` (default 0.10). Leave `X402_SIMULATE` empty for real payments.
@@ -106,13 +106,14 @@ Merged (PR #36). Since #28 the live backend subscribes to `payment` and `agent_e
 **Tap:** Sell & Buy > Spending.
 
 **Judges see (Offline demo fixture):**
-- Totals row: **Spent $0.01** (the real tx), **Simulated $180.005** (orange: $0.015 of simulated x402 plus the $179.99 simulated Visa mattress; the declined rug isn't counted) and **Refused 1**.
+- Totals row: **Spent $0.01** (the real tx), **Simulated $180.005** (orange: $0.015 of simulated x402 plus the $179.99 simulated Visa mattress; the declined rug isn't counted) and **Refused 1**. After the scripted actions (approve the Aeron, choose the Target chair, approve the sofa) it reads **Spent $0.01**, **Simulated $689.985** (plus the $79.99 chair and the $429.99 sofa) and **Refused 1**. `DemoNumbersTests` in MooveKit checks these against the fixture rows.
+- The $0.01 Aeron comps payment is the only non-simulated payment in the fixture; every other payment, listing and purchase is `simulated: true`.
 - Budgets section: "Pricing agent" ($4.975 left) and "Shopping agent" ($5.00 left), each out of the $5 cap with a progress bar. Rows show "Reported by the agent worker" when the worker sent its budget (otherwise "Your payments only").
 - Activity list:
   - The real $0.01 payment "Premium comps for "Herman Miller Aeron"" with a **"Basescan 0xc794…136c"** link (it opens the real proof tx).
   - Three rows with the filled **SIMULATED** pill and **no** Basescan link: two x402 data calls ($0.01 IKEA desk comps, $0.005 mini-fridge price history) and the $179.99 Visa mattress ("Buy agent · Visa", Settled).
   - The $89.99 Visa rug, struck through, SIMULATED and Failed, with the red reason "Did not buy "5x7 flatweave area rug, cream/gray": declined (card declined by the issuer, simulated)".
-  - The struck-through, Failed $0.02 "Seller report for a used dresser" with "x402 payment for seller report for a used dresser failed (HTTP 402, insufficient_funds)".
+  - The struck-through, Failed $0.02 "Seller report for a used dresser", SIMULATED, with "x402 payment for seller report for a used dresser failed (HTTP 402, insufficient_funds)".
   - A red "Refused" $0.25 row ("$0.25 is over the per-call max of $0.10", "Nothing was signed or paid.") and a "Failed attempt" row.
 - Tap the Basescan link to open the real Base Sepolia transaction.
 
@@ -130,7 +131,7 @@ Merged: eBay listing agent (#30, real sandbox posting #34), Auth0 CIBA + in-app 
 **Tap (Offline demo, the reliable path):**
 1. Sell & Buy > Approvals (the segment reads "Approvals · 2"). Section **"Needs you · 2"**: a Sell request for the Aeron at $410 and a Buy request for the 78" upholstered sofa at $429.99 "from wayfair", then the note "Also sent to your phone via Auth0 Guardian when set up. Approving here works too."
 2. The listing request: "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition", **$410**, tagged Sell with the SIMULATED pill (fixture listings are simulated).
-3. **History · 3**, each with an outcome line: the denied $480 Aeron ("You denied it. The listing wasn't posted."), the denied $189 sofa ("You denied it. Nothing was bought.") and the approved $125 dresser ("You approved it. The buy agent checks out with Visa.").
+3. **History · 3**, each with an outcome line: newest first, the denied $699 IKEA KIVIK sofa ("You denied it. Nothing was bought."; the user picked the Wayfair sofa instead), the approved $179.99 Target mattress ("You approved it. The buy agent checks out with Visa."; it's the Bought mattress in Shopping) and the denied $480 Aeron ("You denied it. The listing wasn't posted.").
 4. Tap **Approve** on the $410 Aeron. A spinner, then it moves to History as Approved ("You approved it. The listing agent posts it."), and "Needs you" drops to 1.
 5. Optional: Sell & Buy > Listings. Groups: **Needs you** (the Aeron $410, until you approve it), **Live** (the IKEA desk $35, plus the Aeron once approved), **Drafting** (mini fridge $70), **Sold** (bean bag $18, "Sold (simulated)") and **Not posted · 2**: the Aeron $480 with "Not posting: denied", and the Mini Fridge $70 "Failed to post" with "Posting failed: eBay needs at least one public https photo URL (simulated)". Live rows read **"Posted (simulated)"**, never "Live on eBay", and every row has the SIMULATED pill. Tap the desk: the notice "Simulated post. Not live on eBay, and no buyer can see it." and no eBay item number. Tap the failed fridge: "Couldn't post this listing. Posting failed: … You can still copy the text and post it yourself."
 
@@ -189,7 +190,13 @@ It prints `Visa checkout: SIMULATED`, the payment row, every agent event (`[SIMU
 ## Step 6: Summary
 Merged (#31, restyled in #49). **Tap:** the Summary tab.
 
-**Judges see:** "07 — Summary", "Your move, handled." and "N items: where each one went, what it brought in, and what the agents did.", the Net and kept-from-landfill stats, "Where everything went" (Kept / Sold / Donated / Trashed / Undecided), and a **Money** block with sold, still selling, spent and net, plus one line per rail ("x402 data payments", and "Visa purchases" once there are card payments). The Money block shows a **Simulated** tag whenever any money in it is simulated, so on the fixture it will show. Then the landfill line ("~N kg kept out of landfill") and "What the agents did". With no payment or event rows (a fresh live account), it shows labeled demo lines and a "Demo" tag. Exact figures depend on the fixture; read them off the screen rather than quoting numbers.
+**Judges see:** "07 — Summary", "Your move, handled." and "N items: where each one went, what it brought in, and what the agents did.", the Net and kept-from-landfill stats, "Where everything went" (Kept / Sold / Donated / Trashed / Undecided), and a **Money** block with sold, still selling, spent and net, plus one line per rail ("x402 data payments", and "Visa purchases" once there are card payments). The Money block shows a **Simulated** tag whenever any money in it is simulated, so on the fixture it will show. Then the landfill line ("~N kg kept out of landfill") and "What the agents did". With no payment or event rows (a fresh live account), it shows labeled demo lines and a "Demo" tag.
+
+**Offline demo figures** (checked by `DemoNumbersTests`, which re-derives them from the Spending, Listings and Shopping rows):
+- Where everything went: 12 items, Kept 3, Selling 4, Donated 2, Trashed 1, Undecided 2.
+- Money before the scripted actions: **Sold $18** (the bean bag), **Still selling $520** (Aeron $410 awaiting approval, desk $35 posted, mini fridge $75 at its estimate since its listing is only a draft), **Spent $180.015**, **Net $357.99**. Rails: "Visa purchases" $179.99 tagged Simulated, "x402 data payments" $0.025 tagged "$0.015 sim" (the other $0.01 is the real tx). Simulated tag on the block.
+- After approving the Aeron, choosing the Target chair and approving the sofa: Sold $18 and Still selling $520 are unchanged (the Aeron moves from awaiting approval to posted at the same $410), **Spent $689.995**, **Net −$152**. Visa purchases $689.97 (Simulated), x402 $0.025 ("$0.015 sim").
+- Spent always equals Spending's Spent plus Simulated.
 
 **Fallback:** Offline demo.
 

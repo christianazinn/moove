@@ -11,19 +11,12 @@ struct SummaryView: View {
     /// rows yet (nothing has run), show labeled demo lines so the closing slide isn't empty.
     private var usingDemoActivity: Bool { store.snapshot.payments.isEmpty && store.snapshot.agentEvents.isEmpty }
 
-    private var sales: [MoveSummary.Sale] {
-        MoveSummary.estimatedSales(from: store.snapshot.items) + MoveSummary.sales(from: store.snapshot.listings)
-    }
+    private var sales: [MoveSummary.Sale] { MoveSummary.sales(from: store.snapshot) }
 
     private var summary: MoveSummary {
         let snap = store.snapshot
-        let demo = usingDemoActivity
-        return MoveSummary(
-            items: snap.items,
-            sales: sales,
-            spend: demo ? SummaryDemo.spend : MoveSummary.spend(from: snap.payments),
-            events: demo ? SummaryDemo.events() : MoveSummary.events(from: snap.agentEvents)
-        )
+        guard usingDemoActivity else { return MoveSummary(snapshot: snap) }
+        return MoveSummary(items: snap.items, sales: sales, spend: SummaryDemo.spend, events: SummaryDemo.events())
     }
 
     var body: some View {
