@@ -22,7 +22,9 @@ struct ScanFlowView: View {
         }
         .fullScreenCover(item: $photographing) { object in
             CameraPicker { jpeg in
-                if let jpeg { session.setPhoto(jpeg, for: object) }
+                if let jpeg {
+                    if object.manual { session.addManual(object, photo: jpeg) } else { session.setPhoto(jpeg, for: object) }
+                }
                 photographing = nil
             }
             .ignoresSafeArea()
@@ -103,18 +105,40 @@ struct ScanFlowView: View {
             } footer: {
                 Text("Take a photo of each item so Moove can tell what it is, its brand and its condition.")
             }
+            if session.objects.isEmpty {
+                Section {
+                    Label("RoomPlan didn't recognize any furniture", systemImage: "exclamationmark.magnifyingglass")
+                        .font(.headline)
+                    Text("It detects beds, sofas, chairs, tables, storage, appliances, TVs and similar, and needs each one in view for a moment. Add your items by photo below, or cancel and scan again more slowly. The room itself is saved either way.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            }
+            Section {
+                Button {
+                    photographing = .manual()
+                } label: {
+                    Label("Add an item by photo", systemImage: "camera.badge.ellipsis")
+                }
+            } footer: {
+                Text("For anything RoomPlan missed: small things, decor, items on shelves. Moove identifies it from the photo.")
+            }
             Section("\(session.photos.count) of \(session.objects.count) photographed") {
                 ForEach(session.objects) { object in
                     Button { photographing = object } label: {
                         HStack(spacing: 12) {
                             photoThumb(object)
                             VStack(alignment: .leading) {
-                                Text(object.category.capitalized).foregroundStyle(.primary)
+                                Text(object.manual ? "New item" : object.category.capitalized).foregroundStyle(.primary)
                                 Text(dims(object)).font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
                             Image(systemName: session.photos[object.id] == nil ? "camera" : "checkmark.circle.fill")
                                 .foregroundStyle(session.photos[object.id] == nil ? Color.accentColor : .green)
+                        }
+                    }
+                    .swipeActions {
+                        if object.manual {
+                            Button("Remove", systemImage: "trash", role: .destructive) { session.remove(object) }
                         }
                     }
                 }
@@ -126,12 +150,12 @@ struct ScanFlowView: View {
             Button {
                 Task { await session.submit(to: store, uploader: uploader) }
             } label: {
-                Text("Add \(session.objects.count) items").frame(maxWidth: .infinity)
+                Text(session.objects.isEmpty ? "Save room" : "Add \(session.objects.count) item\(session.objects.count == 1 ? "" : "s")")
+                    .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .padding()
-            .disabled(session.objects.isEmpty)
         }
     }
 
@@ -157,6 +181,7 @@ struct ScanFlowView: View {
     }
 
     private func dims(_ o: ScanSession.DetectedObject) -> String {
+        if o.manual { return "Added by photo" }
         let f = { (v: Double) in v.formatted(.number.precision(.fractionLength(1))) }
         return "\(f(o.widthM)) × \(f(o.depthM)) × \(f(o.heightM)) m"
     }
