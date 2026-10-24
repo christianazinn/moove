@@ -1,12 +1,13 @@
 import { connect } from './spacetime.js';
 import { startUploadServer } from './upload.js';
 import { visionAgent } from './agents/vision.js';
+import { pricingAgent } from './agents/pricing.js';
 import { listingAgent } from './agents/listing.js';
 import { approvalAgent } from './agents/approval.js';
 import type { Agent } from './agents/types.js';
 
 // Register agents here as they land (vision, pricing, sort, listing, buy, fraud, ...).
-const agents: Agent[] = [visionAgent, listingAgent, approvalAgent];
+const agents: Agent[] = [visionAgent, pricingAgent, listingAgent, approvalAgent];
 
 startUploadServer();
 
