@@ -165,9 +165,11 @@ struct DealRow: View {
     let isChosen: Bool
     @State private var working = false
     @State private var failed = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         let payments = store.snapshot.visaPayments(for: deal.id)
+        let large = dynamicTypeSize.isAccessibilitySize
         let locked = store.snapshot.isCheckoutLocked(item)
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 14) {
@@ -179,7 +181,7 @@ struct DealRow: View {
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.accentStrong)
                         }
-                        Text(deal.title).blockTitle().lineLimit(3)
+                        Text(deal.title).blockTitle().lineLimit(large ? 8 : 3)
                         Spacer(minLength: 8)
                         if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
                     }
@@ -190,10 +192,10 @@ struct DealRow: View {
                         Label(deal.supportsCardCheckout ? "Visa checkout" : "Message seller",
                               systemImage: deal.supportsCardCheckout ? "creditcard" : "envelope")
                             .monoMeta()
-                            .lineLimit(1)
+                            .lineLimit(large ? 2 : 1)
                     }
                     if !deal.sellerDetails.isEmpty {
-                        Text(deal.sellerDetails).sansText(14).foregroundStyle(Theme.muted).lineLimit(3)
+                        Text(deal.sellerDetails).sansText(14).foregroundStyle(Theme.muted).lineLimit(large ? 8 : 3)
                     }
                     if let level = deal.fraudLevel, let score = deal.fraudScore {
                         FraudChip(level: level, score: score)
@@ -215,7 +217,10 @@ struct DealRow: View {
             if failed {
                 CommerceProblem(text: "Couldn't send your choice. Check the connection and try again.")
             }
-            HStack(spacing: 8) {
+            // At accessibility sizes "View" and the Choose button / Blocked tag stack instead of
+            // squeezing "View" to "Vi…".
+            let actions = large ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+            actions {
                 if let url = deal.link {
                     Link(destination: url) {
                         Label("View", systemImage: "arrow.up.right.square")
