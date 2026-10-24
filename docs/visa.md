@@ -93,7 +93,7 @@ Agent worker                                          |
 - The iOS Shopping tab (`ios/Moove/Features/Shopping/`) shows:
   - the list, with add and swipe-to-remove
   - the deals for each item, with SAMPLE, REPLAY and fraud badges
-  - Choose
+  - Choose (a card-checkout deal at or under the approval limit pays right away, so Choose first asks "Buy this for $79.99?" with **Pay $79.99 to target** and the rail: SIMULATED, VISA SANDBOX, or a neutral line for sandbox+fallback; over-limit and marketplace deals stay one tap)
   - Approve/Deny for purchase approvals ("Over your approval limit. The agent pays with Visa only after you approve.")
   - Visa payment rows
 - Sellers are shown as "FB Marketplace seller, <city>" or "eBay seller". FB seller names are private individuals, so they are never read or stored.
