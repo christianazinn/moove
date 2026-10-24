@@ -27,6 +27,12 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
     private let lock = NSLock()
     private var client: SpacetimeDBClient?
     private var cache: [String: [AnyHashable: Any]] = [:]
+    /// While (re)subscribing, rows fill this instead, and screens keep showing the
+    /// last complete snapshot. Swapped into `cache` once the subscription is applied,
+    /// so a reconnect never shows a half-empty room (which would also tear down,
+    /// e.g., an Object Capture presented from a screen whose item vanished).
+    private var staging: [String: [AnyHashable: Any]]?
+    private var publishScheduled = false
     private var me: IdentityHex?
     private var tasks: [Task<Void, Never>] = []
     private var snapshotContinuations: [UUID: AsyncStream<SyncSnapshot>.Continuation] = [:]
@@ -79,10 +85,10 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
                         let hex = identity.description
                         self.lock.withLock {
                             self.me = hex
-                            self.cache = [:]
+                            self.staging = [:]
                         }
                         do {
-                            try await self.subscribe(client)
+                            try await self.subscribe(client, me: hex)
                             self.broadcast(status: .connected)
                             pending?.resume(returning: (hex, newToken))
                             pending = nil
@@ -108,6 +114,7 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
                 self.client = nil
                 self.tasks = []
                 self.cache = [:]
+                self.staging = nil
                 self.me = nil
             }
             return (self.client, self.tasks)
@@ -122,25 +129,53 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
         lock.withLock { tasks.append(task) }
     }
 
-    private func subscribe(_ client: SpacetimeDBClient) async throws {
-        guard !Self.subscriptionQueries.isEmpty else { return publish() }
-        let handle = try await client.subscribe(Self.subscriptionQueries)
+    private func subscribe(_ client: SpacetimeDBClient, me: IdentityHex) async throws {
+        let handle = try await client.subscribe(Self.subscriptionQueries(me: me))
         try await handle.applied()
+        // Initial rows reach `apply` through per-table row streams, which can lag
+        // the applied() callback a little; let them drain before the swap.
+        try? await Task.sleep(for: .milliseconds(250))
+        lock.withLock {
+            if let staged = staging { cache = staged }
+            staging = nil
+        }
         publish()
     }
 
     private func apply(_ event: RowEvent, table: String) {
-        lock.withLock {
-            switch event {
-            case let .inserted(row):
-                if let key = Self.primaryKey(of: row) { cache[table, default: [:]][key] = row }
-            case let .deleted(row):
-                if let key = Self.primaryKey(of: row) { cache[table]?.removeValue(forKey: key) }
-            case let .updated(_, row):
-                if let key = Self.primaryKey(of: row) { cache[table, default: [:]][key] = row }
+        let syncing = lock.withLock { () -> Bool in
+            func write(_ target: inout [String: [AnyHashable: Any]]) {
+                switch event {
+                case let .inserted(row), let .updated(_, row):
+                    if let key = Self.primaryKey(of: row) { target[table, default: [:]][key] = row }
+                case let .deleted(row):
+                    if let key = Self.primaryKey(of: row) { target[table]?.removeValue(forKey: key) }
+                }
             }
+            if staging != nil {
+                write(&staging!)
+                return true
+            }
+            write(&cache)
+            return false
         }
-        publish()
+        if !syncing { schedulePublish() }
+    }
+
+    /// Coalesces bursts (a reducer touching many rows, agents writing) into at
+    /// most one snapshot rebuild every 50 ms instead of one per row.
+    private func schedulePublish() {
+        let first = lock.withLock { () -> Bool in
+            if publishScheduled { return false }
+            publishScheduled = true
+            return true
+        }
+        guard first else { return }
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            guard let self else { return }
+            self.lock.withLock { self.publishScheduled = false }
+            self.publish()
+        }
     }
 
     // MARK: Streams
@@ -184,6 +219,9 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
             for c in statusContinuations.values { c.yield(status) }
         }
     }
+
+    /// The connected identity (hex), for reducers that take the owner as an argument.
+    var currentIdentity: IdentityHex? { lock.withLock { me } }
 
     // MARK: Reducers
 

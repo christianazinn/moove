@@ -104,7 +104,10 @@ final class MooveStore {
         await run { try await $0.registerUser(name: name, email: email, auth0Sub: auth0Sub) }
     }
 
-    func importScan(_ scan: ScanImport) async {
+    /// Returns whether the import landed. Don't infer success from `lastError`:
+    /// it's only cleared when the banner is tapped, so an older error lingers.
+    @discardableResult
+    func importScan(_ scan: ScanImport) async -> Bool {
         await run { try await $0.importScan(scan) }
     }
 
