@@ -45,7 +45,8 @@ public struct PropPlacer: Sendable {
     static let floorKinds: Set<VoxelModels.Kind> = [.sofa, .bed, .mattress, .desk, .chair, .table, .dresser, .bookshelf, .rug, .appliance, .beanBag, .quiltRack, .box,
                                                          .guitar, .piano, .keyboard, .drums, .vacuum, .scooter, .bag, .fitness, .board,
                                                          .motorcycle, .stroller, .wheelchair, .grill, .lawnMower, .crib, .ladder, .trunk, .basket,
-                                                         .trashCan, .toolbox, .petCrate, .petBed, .catTree, .rack]
+                                                         .trashCan, .toolbox, .petCrate, .petBed, .catTree, .rack,
+                                                         .toilet, .sink, .bathtub, .fireplace, .stairs, .screen, .unknown, .ironingBoard]
 
     /// `elevationM`: a known height (a scanned wall-mounted TV is a wall item whatever its name).
     public static func role(of spec: VoxelItemSpec, elevationM: Double? = nil) -> Role {

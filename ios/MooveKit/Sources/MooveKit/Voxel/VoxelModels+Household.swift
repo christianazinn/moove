@@ -400,7 +400,52 @@ extension Canvas {
         if name.has("dollhouse", "doll house", "play kitchen") { dollhouse(X, Y, Z, name); return }
         if name.has("rocking horse", "hobby horse") { rockingHorse(X, Y, Z, name); return }
         if name.has("lego", "blocks", "duplo") || (name.word("toys") && !name.has("stuffed", "plush", "teddy")) { toyBlocks(X, Y, Z, name); return }
+        // a low box is a plush lying down (scan 9: a 16 cm tall "toy" on the bed)
+        if D(Y) < D(max(X, Z)) * 0.7 { lyingPlush(X, Y, Z, name); return }
         teddy(X, Y, Z, name)
+    }
+
+    /// A plush lying on its belly along the footprint's long side: body, a round head with ears
+    /// and a light muzzle at one end, stubby paws at the sides.
+    func lyingPlush(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
+        let a = AlongAxis(X, Z), L = a.L, W = a.W
+        let fur = colorFromName(name, pick([0xC9A875, 0xEBE6DC, 0xD9A5A0, 0x8F8D88, 0xB98A5E]))
+        let light = mix(fur, 0xF4EBDD, 0.55)
+        let H = D(Y), cw = D(W - 1) / 2
+        func blob(_ cu: Double, _ cy: Double, _ ru: Double, _ ry: Double, _ rw: Double, _ c: (Int, Int, Int, Double) -> Int?) {
+            for y in thru(max(0, fl(cy - ry)), min(Y - 1, ce(cy + ry))) {
+                for u in thru(max(0, fl(cu - ru)), min(L - 1, ce(cu + ru))) {
+                    for w in thru(max(0, fl(cw - rw)), min(W - 1, ce(cw + rw))) {
+                        let du = (D(u) - cu) / ru, dy = (D(y) - cy) / ry, dw = (D(w) - cw) / rw
+                        let d = du * du + dy * dy + dw * dw
+                        if d <= 1, let col = c(u, y, w, d) { put(a, u, y, w, col) }
+                    }
+                }
+            }
+        }
+        // body over the back two thirds, head at the high-u end
+        let bodyLen = D(L) * 0.68
+        blob(bodyLen / 2, H * 0.36, bodyLen / 2, max(1, H * 0.36), D(W) * 0.36) { _, _, _, _ in fur }
+        let headR = max(1.2, min(D(L) * 0.2, H * 0.48, D(W) * 0.42))
+        let hu = D(L) - headR - 0.3, hy = min(H - 1 - headR * 0.4, headR)
+        blob(hu, hy, headR, headR, headR) { _, _, _, _ in fur }
+        // ears on top of the head, a muzzle and nose at the front, eyes
+        for s in [-1.0, 1.0] {
+            let ew = rd(cw + s * headR * 0.65)
+            put(a, rd(hu - 0.3), min(Y - 1, rd(hy + headR * 0.95)), ew, light)
+            put(a, rd(hu), min(Y - 1, rd(hy + headR * 0.95)), ew, fur)
+            if headR >= 2 { put(a, min(L - 1, rd(hu + headR * 0.8)), rd(hy + headR * 0.3), rd(cw + s * headR * 0.45), P.black) }
+        }
+        put(a, L - 1, rd(hy - headR * 0.2), rd(cw), light)
+        put(a, L - 1, rd(hy), rd(cw), P.black)
+        // paws stretched out at the sides
+        for s in [-1.0, 1.0] {
+            for pu in [bodyLen * 0.2, bodyLen * 0.85] {
+                let pw = s < 0 ? 0 : W - 1
+                put(a, rd(pu), 0, pw, light); put(a, rd(pu) + 1, 0, pw, fur)
+            }
+        }
+        put(a, 0, max(0, rd(H * 0.4)), rd(cw), light) // tail
     }
 
     func teddy(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {

@@ -1272,14 +1272,19 @@ extension Canvas {
             cyl(cx, cz, max(1, R - 0.3), sb, sb + 1, flat: true) { _, _, _, d2 in d2 > inner ? 0xF6DEAC : nil }
             return
         }
-        // table lamp: ceramic base, neck, drum shade
+        // table lamp: ceramic base, neck, drum shade. The base is a neutral glaze (scan 9: a sage
+        // base under a cream shade read as a potted plant)
         let bh = max(2, rd(D(Y) * 0.4))
-        let baseC = colorFromName(name, P.sage)
+        let baseC = colorFromName(name, pick([0x8F8D88, P.charcoal, 0xB9A58A, 0x7E95A8]))
         let baseLo = shade(baseC, 0.8)
         ellipsoid(cx, D(bh) / 2, cz, max(1, R * 0.55), D(bh) / 2, max(1, R * 0.55)) { _, y, _, _ in y == 0 ? baseLo : baseC }
         let sb = max(bh + 1, rd(D(Y) * 0.55))
         box(rd(cx), bh, rd(cz), rd(cx) + 1, sb + 1, rd(cz) + 1, P.brass)
-        for y in upTo(sb, Y) { cyl(cx, cz, max(1, R - 0.2 - D(y - sb) / D(max(1, Y - sb)) * 0.8), y, y + 1, P.cream, hollow: true) }
+        // a solid, smooth drum (a hollow lumpy shade read as a white flower head on a stem)
+        for y in upTo(sb, Y) {
+            let r = max(1, R - 0.1 - D(y - sb) / D(max(1, Y - sb)) * 0.6)
+            cyl(cx, cz, r, y, y + 1, y == sb ? shade(P.cream, 0.9) : y == Y - 1 ? shade(P.cream, 1.03) : P.cream, flat: true)
+        }
         set(rd(cx), sb + 1, rd(cz), P.bulb, flat: true)
     }
 }

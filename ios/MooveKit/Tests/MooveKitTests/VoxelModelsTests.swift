@@ -136,12 +136,13 @@ import Testing
         #expect(huge.nx == 160 && huge.nz == 160)
     }
 
-    @Test func unknownCategoryIsABox() {
+    @Test func unknownCategoryIsTheDrapedThing() {
         let s = spec("spaceship", "Mystery thing", 0.5, 0.4, 0.4)
-        #expect(VoxelModels.kind(s) == .box)
+        #expect(VoxelModels.kind(s) == .unknown)
         let g = VoxelModels.build(s)
         #expect(g.nx == 10 && g.ny == 8 && g.nz == 8)
-        #expect(g.filledCount == 10 * 8 * 8) // a solid kraft box
+        #expect(g.filledCount > 10 * 8 * 8 / 2) // a solid block under a dust sheet
+        #expect(VoxelModels.kind(spec("spaceship", "Cardboard box", 0.5, 0.4, 0.4)) == .box)
     }
 
     @Test func everyKindBuilds() {

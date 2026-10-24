@@ -143,16 +143,33 @@ import Testing
 
     // MARK: routing
 
-    /// Detector categories that still have no builder of their own (small sports / music gear).
-    static let stillBoxes: Set<String> = ["ball", "helmet", "ironing board", "racket", "room divider", "saxophone", "trumpet", "weights", "yoga mat", "box"]
+    /// The vision agent's category list (agents/src/agents/vision.ts, the `category` field) plus
+    /// the plain nouns its prompt suggests.
+    static let visionCategories = [
+        "sofa", "bed", "mattress", "desk", "chair", "table", "nightstand", "dresser", "bookshelf", "storage", "bench", "ottoman",
+        "lamp", "tv", "books", "art", "photos", "plant", "rug", "mirror", "kitchenware", "clothes", "electronics", "refrigerator",
+        "stove", "microwave", "dishwasher", "washer", "fan", "bike", "suitcase", "appliance", "decor", "instrument", "bicycle", "bag",
+    ]
 
-    @Test func detectorCategoriesRouteOffTheBox() {
-        var boxed: Set<String> = []
-        for (label, cat) in ObjectVocabulary.categories {
-            let name = label.prefix(1).uppercased() + label.dropFirst()
-            if kind(cat, name) == .box || kind(cat, cat) == .box { boxed.insert(cat) }
+    /// Scan 9 follow-up: every name the app can produce (detector labels and their categories,
+    /// RoomPlan's categories, vision's categories) has a model of its own; only boxes are boxes.
+    @Test func everyKnownNameHasAModel() {
+        let boxes: Set<String> = ["box", "boxes", "cardboard box"]
+        var boxed: [String] = []
+        func check(_ cat: String, _ name: String) {
+            if kind(cat, name) == .box && !boxes.contains(cat.lowercased()) && !boxes.contains(name.lowercased()) { boxed.append("\(cat)/\(name)") }
         }
-        #expect(boxed == Self.stillBoxes, "boxed: \(boxed.sorted())")
+        for (label, cat) in ObjectVocabulary.categories {
+            check(cat, label.prefix(1).uppercased() + label.dropFirst())
+            check(cat, cat)
+        }
+        for cat in ObjectVocabulary.roomPlanCategories { check(cat, cat) }
+        for cat in Self.visionCategories { check(cat, cat) }
+        #expect(boxed.isEmpty, "still moving boxes: \(boxed.sorted())")
+        #expect(kind("box", "Cardboard box") == .box)
+    }
+
+    @Test func detectorCategoriesRoute() {
         let cases: [(String, String, VoxelModels.Kind)] = [
             ("motorcycle", "Motorcycle", .motorcycle), ("stroller", "Stroller", .stroller), ("wheelchair", "Wheelchair", .wheelchair),
             ("crib", "Crib", .crib), ("ladder", "Ladder", .ladder), ("trunk", "Trunk", .trunk), ("bin", "Storage bin", .basket),
@@ -188,8 +205,8 @@ import Testing
             ("storage", "Ladder shelf", .bookshelf), ("furniture", "Bunk bed", .bed), ("furniture", "Rocking chair", .chair),
             ("furniture", "High chair", .chair), ("bicycle", "Kids BMX bike", .bike), ("scooter", "Electric scooter", .scooter),
             ("kitchenware", "Grill pan", .kitchenware), ("kitchenware", "Bread bin", .kitchenware), ("appliance", "Chest freezer", .appliance),
-            ("furniture", "Ski rack", .box), ("box", "Cardboard box", .box), ("storage", "Moving box", .box), ("bag", "Tote bag", .bag),
-            ("clothes", "Motorcycle jacket", .clothes), ("other", "Motorcycle helmet", .box), ("decor", "Towel rack", .quiltRack),
+            ("furniture", "Ski rack", .unknown), ("box", "Cardboard box", .box), ("storage", "Moving box", .box), ("bag", "Tote bag", .bag),
+            ("clothes", "Motorcycle jacket", .clothes), ("other", "Motorcycle helmet", .helmet), ("decor", "Towel rack", .quiltRack),
             ("mattress", "Crib mattress", .mattress), ("bench", "Weight bench", .bench), ("storage", "Shoe cabinet", .dresser),
             ("decor", "Throw pillow", .decor), ("furniture", "Desk lamp", .lamp),
         ]

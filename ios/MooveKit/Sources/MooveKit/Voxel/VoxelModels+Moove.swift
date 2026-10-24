@@ -96,13 +96,26 @@ extension Canvas {
             return
         }
         if name.has("humidifier") && !name.has("dehumidifier") {
-            let R = D(min(X, Z)) / 2, tankTop = max(1, rd(D(Y) * 0.55))
-            cyl(cx, cz, R, 0, Y) { _, y, _, _ in
-                if y == 0 { return shade(body, 0.8) }
-                return y < tankTop ? 0x9FC1D6 : body
+            // an oval tank filling the footprint (a wide one is a console humidifier), the body on top
+            let tankTop = max(1, rd(D(Y) * 0.55))
+            for z in 0..<Z {
+                for x in 0..<X where footEllipse(x, z, X, Z) <= 1.08 {
+                    for y in 0..<Y { set(x, y, z, y == 0 ? shade(body, 0.8) : y < tankTop ? 0x9FC1D6 : body, flat: y > 0 && y < tankTop) }
+                }
             }
             set(rd(cx), Y - 1, rd(cz), P.charcoal) // mist nozzle
-            set(rd(cx), tankTop, min(Z - 1, rd(cz + R - 0.5)), 0x7FC4E8, flat: true)
+            if X >= 8 { set(rd(cx) - 2, Y - 1, rd(cz), P.charcoal); set(rd(cx) + 2, Y - 1, rd(cz), P.charcoal) }
+            set(rd(cx), tankTop, Z - 1, 0x5FD07A, flat: true)
+            return
+        }
+        if name.has("heater") {
+            // tower heater: a ceramic column with a glowing grille down the front and a dial on top
+            box(0, 0, 0, X, Y, Z) { x, y, z in
+                if y == 0 { return shade(body, 0.7) }
+                if z == Z - 1 && x > 0 && x < X - 1 && y > 1 && y < Y - 2 { return y % 2 == 0 ? 0xE0782A : 0x7A3418 }
+                return body
+            }
+            set(X / 2, Y - 1, Z / 2, P.charcoal)
             return
         }
         // tower: purifier / portable AC / dehumidifier

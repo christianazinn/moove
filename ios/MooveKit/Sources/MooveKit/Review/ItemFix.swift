@@ -126,7 +126,7 @@ public enum ItemFix {
     public static func renamed(to name: String, attributes: [String]) -> [String] {
         let n = VName(name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
         let kind = VoxelModels.routeByName(category: "", name: n)
-        if kind == .box && !n.word("box", "boxes", "crate", "bin") { return attributes }
+        if (kind == .box || kind == .unknown) && !n.word("box", "boxes", "crate", "bin") { return attributes }
         return replacing(kindType, with: "\(kindType).\(kind.rawValue)", in: attributes)
     }
 
