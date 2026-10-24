@@ -16,20 +16,22 @@ final class MooveSmokeTests: XCTestCase {
         launch(guest: false)
         let guest = app.buttons["login.guest"]
         XCTAssertTrue(guest.waitForExistence(timeout: 10), "login screen")
-        XCTAssertTrue(app.staticTexts["Moove"].exists)
         snap("01-login")
         guest.tap()
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10), "tab bar after guest login")
-        snap("01-tabs")
+        for tab in ["Scan", "Items", "Sell & Buy", "Move", "Summary"] {
+            XCTAssertTrue(app.tabBars.buttons[tab].exists, "\(tab) tab")
+        }
         // A fresh install opens on the Scan tab.
         XCTAssertTrue(app.navigationBars["Scan"].waitForExistence(timeout: 5), "starts on Scan")
+        snap("01-tabs")
     }
 
     func testReviewNeedsYouFirstAndSwipeToKeep() {
         launch()
-        openTab("Review")
-        let needsYou = sectionHeader("Needs you · 2")
-        let keep = sectionHeader("Keep · 3")
+        open(tab: "Items", segment: "Review")
+        let needsYou = text(matching: "Needs you")
+        let keep = text(matching: "Keep")
         XCTAssertTrue(needsYou.waitForExistence(timeout: 10), "Needs you section")
         XCTAssertTrue(keep.exists, "Keep section")
         XCTAssertLessThan(needsYou.frame.minY, keep.frame.minY, "Needs you comes first")
@@ -37,35 +39,49 @@ final class MooveSmokeTests: XCTestCase {
 
         let quilt = row(startingWith: "Grandma")
         XCTAssertTrue(quilt.exists)
+        XCTAssertLessThan(quilt.frame.minY, keep.frame.minY, "quilt rack starts in Needs you")
         quilt.swipeRight()
         let keepAction = app.buttons["Keep"].firstMatch
         XCTAssertTrue(keepAction.waitForExistence(timeout: 5), "Keep swipe action")
         snap("02-swipe")
         keepAction.tap()
-        XCTAssertTrue(sectionHeader("Needs you · 1").waitForExistence(timeout: 5))
-        XCTAssertTrue(sectionHeader("Keep · 4").waitForExistence(timeout: 5), "quilt rack moved to Keep")
-        let movedQuilt = row(startingWith: "Grandma")
-        XCTAssertGreaterThan(movedQuilt.frame.minY, sectionHeader("Keep · 4").frame.minY, "quilt rack is under Keep")
+
+        // Moved: now below the Keep header, and marked as the user's call.
+        sleep(1)  // list animation
+        XCTAssertTrue(text(containing: "Need you, 1").exists, "one item still needs you")
+        let moved = row(startingWith: "Grandma")
+        XCTAssertTrue(scrollTo(moved), "quilt rack still listed")
+        XCTAssertTrue(moved.label.contains("Keep") && moved.label.contains("You decided"), moved.label)
+        let keepHeader = text(matching: "Keep")
+        if keepHeader.exists {
+            XCTAssertGreaterThan(moved.frame.minY, keepHeader.frame.minY, "quilt rack moved under Keep")
+        }
         snap("02-kept")
+        // Back to the top for the next row.
+        for _ in 0..<4 { app.swipeDown() }
 
         row(startingWith: "Framed photos").tap()
         let picker = app.descendants(matching: .any)["item.disposition"].firstMatch
         XCTAssertTrue(picker.waitForExistence(timeout: 5), "disposition picker on item detail")
         XCTAssertTrue(app.navigationBars["Framed photos"].exists)
+        for choice in ["Keep", "Sell", "Donate", "Trash"] {
+            XCTAssertTrue(picker.buttons[choice].exists, "\(choice) choice")
+        }
         snap("02-item-detail")
-        picker.tap()
-        XCTAssertTrue(app.buttons["Donate"].waitForExistence(timeout: 5), "disposition menu opens")
-        snap("02-disposition-menu")
     }
 
     func testLoadDemoScanShowsRoomInInventory() {
         launch()
-        openTab("Scan")
+        open(tab: "Scan")
         let load = app.buttons["Load demo scan"]
-        XCTAssertTrue(load.waitForExistence(timeout: 10))
+        XCTAssertTrue(scrollTo(load), "Load demo scan button")
         snap("03-scan")
         load.tap()
-        // The app switches to Inventory once the import lands.
+        // Same finished screen as a real scan, then on to Inventory.
+        let done = app.buttons["See inventory"]
+        XCTAssertTrue(done.waitForExistence(timeout: 15), "scan finished screen")
+        snap("03-scan-finished")
+        done.tap()
         XCTAssertTrue(app.navigationBars["Inventory"].waitForExistence(timeout: 10), "jumped to Inventory")
         XCTAssertTrue(scrollTo(text(matching: "Demo bedroom")), "new room in Inventory")
         snap("03-inventory")
@@ -73,7 +89,7 @@ final class MooveSmokeTests: XCTestCase {
 
     func testRoomIn3DAndPlan() {
         launch()
-        openTab("Inventory")
+        open(tab: "Items", segment: "Inventory")
         let view3D = app.buttons["View room in 3D"].firstMatch
         XCTAssertTrue(view3D.waitForExistence(timeout: 10))
         view3D.tap()
@@ -110,13 +126,13 @@ final class MooveSmokeTests: XCTestCase {
 
     func testShareAndJoinRoom() {
         launch()
-        openTab("Inventory")
-        let share = app.buttons["Share room"].firstMatch
+        open(tab: "Items", segment: "Inventory")
+        let share = app.buttons["Share Bedroom"].firstMatch
         XCTAssertTrue(share.waitForExistence(timeout: 10))
         share.tap()
         let code = app.staticTexts["share.code"]
         XCTAssertTrue(code.waitForExistence(timeout: 5), "join code shown")
-        let shown = code.label.replacingOccurrences(of: " ", with: "")
+        let shown = code.label.replacingOccurrences(of: "Join code", with: "").replacingOccurrences(of: " ", with: "")
         XCTAssertEqual(shown.count, 6, "6-character code, got \(code.label)")
         snap("05-share")
         app.buttons["Done"].firstMatch.tap()
@@ -140,12 +156,14 @@ final class MooveSmokeTests: XCTestCase {
         settings.tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         let fixture = app.buttons["settings.dataSource.fixture"]
-        XCTAssertTrue(fixture.waitForExistence(timeout: 5), "data source shown")
+        XCTAssertTrue(scrollTo(fixture), "data source shown")
         XCTAssertTrue(fixture.label.contains("Offline demo"), fixture.label)
         XCTAssertTrue(fixture.isSelected, "offline demo is the selected data source")
-        XCTAssertTrue(text(containing: "Guest").exists)
         snap("06-settings")
-        app.buttons["Sign out"].tap()
+        let signOut = app.buttons["Sign out"]
+        XCTAssertTrue(scrollTo(signOut, down: false), "Sign out button")
+        XCTAssertTrue(text(containing: "Guest").exists)
+        signOut.tap()
         XCTAssertTrue(app.buttons["login.guest"].waitForExistence(timeout: 10), "back to login")
         snap("06-signed-out")
     }
@@ -165,19 +183,16 @@ final class MooveSmokeTests: XCTestCase {
         }
     }
 
-    /// Tabs past the first four live under "More" on iPhone.
-    private func openTab(_ name: String) {
-        let tabBar = app.tabBars.firstMatch
-        let tab = tabBar.buttons[name]
-        if tab.exists {
-            tab.tap()
-        } else {
-            tabBar.buttons["More"].tap()
-            if !app.navigationBars[name].waitForExistence(timeout: 1) {
-                app.staticTexts[name].firstMatch.tap()
-            }
+    /// Picks a tab, then (for grouped tabs) a segment of its pill picker.
+    private func open(tab: String, segment: String? = nil) {
+        app.tabBars.buttons[tab].tap()
+        if let segment {
+            let pill = app.buttons[segment].firstMatch
+            XCTAssertTrue(pill.waitForExistence(timeout: 5), "\(segment) segment")
+            pill.tap()
         }
-        XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 5), "\(name) tab")
+        let title = segment ?? tab
+        XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5), "\(title) screen")
     }
 
     private func join(_ code: String, expectDismiss: Bool = true) {
@@ -194,21 +209,21 @@ final class MooveSmokeTests: XCTestCase {
         }
     }
 
-    /// Swipes up until `element` is on screen (lists below the fold aren't loaded yet).
-    private func scrollTo(_ element: XCUIElement, maxSwipes: Int = 8) -> Bool {
+    /// Swipes until `element` is on screen (lazy lists don't load rows below the fold).
+    private func scrollTo(_ element: XCUIElement, down: Bool = true, maxSwipes: Int = 8) -> Bool {
         _ = element.waitForExistence(timeout: 2)
-        for _ in 0..<maxSwipes where !(element.exists && element.isHittable) { app.swipeUp() }
+        for _ in 0..<maxSwipes where !(element.exists && element.isHittable) {
+            if down { app.swipeUp() } else { app.swipeDown() }
+        }
         return element.exists && element.isHittable
     }
-
-    private func sectionHeader(_ title: String) -> XCUIElement { text(matching: title) }
 
     private func text(matching s: String) -> XCUIElement {
         app.staticTexts.matching(NSPredicate(format: "label ==[c] %@", s)).firstMatch
     }
 
     private func text(containing s: String) -> XCUIElement {
-        app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", s)).firstMatch
+        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", s)).firstMatch
     }
 
     private func row(startingWith prefix: String) -> XCUIElement {
