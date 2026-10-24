@@ -164,7 +164,10 @@ export function reserveApifySpend(usd: number, opts: { file?: string; cap?: numb
 // fraud (#18) can use comps for free without triggering a paid run.
 export function cachedComps(query: string): Comp[] | null {
   const file = cacheFile(query);
-  return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Comp[]) : null;
+  if (!existsSync(file)) return null;
+  const comps = JSON.parse(readFileSync(file, 'utf8')) as Comp[];
+  // An empty cache (from before only complete lookups were saved) is a miss, not "worth $0".
+  return comps.length ? comps : null;
 }
 
 // When Apify can't run (out of credit, the daily cap, no token), the pricing agent falls back to the
@@ -234,7 +237,13 @@ export async function lookupComps(query: string): Promise<CompsResult> {
   const comps = settled.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
   const errors = settled.flatMap(r => (r.status === 'rejected' ? [String(r.reason)] : []));
   if (comps.length === 0 && errors.length) throw new Error(errors.join('; '));
-  mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, JSON.stringify(comps, null, 2));
+  // Save only a complete lookup: a source that failed (concurrency limit, timeout) would
+  // otherwise leave the query on one source's comps forever, and an empty result on "$0".
+  if (errors.length === 0 && comps.length > 0) {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify(comps, null, 2));
+  } else if (errors.length) {
+    console.warn(`[apify] "${query}": not caching a partial lookup (${errors.join('; ').slice(0, 200)})`);
+  }
   return { comps, replayed: false };
 }
