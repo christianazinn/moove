@@ -88,7 +88,7 @@ struct ScanFlowView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .mooveScreen()
         case .finished:
-            ScanFinishedScreen(roomName: session.roomName, colors: session.colors, uploadProblem: session.uploadProblem,
+            ScanFinishedScreen(roomName: session.roomName, colors: session.colors, uploadProblem: session.uploadProblem, pendingPhotos: session.pendingPhotos.count,
                                importedCount: session.objects.count) { dismiss() }
         case .failed(let why):
             ScanStatusPanel(
@@ -262,8 +262,8 @@ struct ScanFlowView: View {
 
     private var uploader: Uploader {
         if store.backendKind == .fixture { return LocalUploader() }
-        guard let base = store.uploadBaseURL else { return LocalUploader() }
-        return HTTPUploader(baseURL: base, token: nil)
+        guard store.uploadBaseURL != nil else { return LocalUploader() }
+        return HTTPUploader()
     }
 
     private func photoThumb(_ object: ScanSession.DetectedObject) -> some View {

@@ -58,6 +58,9 @@ final class ScanSession {
     @ObservationIgnored private var colorsSaved = false
     /// Set when some files couldn't reach the worker's upload server.
     private(set) var uploadProblem: String?
+    /// Item photos that didn't reach the worker yet (#222), keyed by object. After the
+    /// import they keep retrying in the background and are attached with `add_item_photo`.
+    private(set) var pendingPhotos: [UUID: URL] = [:]
     let folder: URL
 
     init() {
@@ -210,7 +213,7 @@ final class ScanSession {
             do {
                 return try await uploader.upload(file, contentType: type)
             } catch {
-                uploadProblem = error.localizedDescription
+                uploadProblem = (error as? UploadFailure)?.message ?? error.localizedDescription
                 return nil
             }
         }
@@ -222,7 +225,9 @@ final class ScanSession {
         // raw room.json stays in the on-device fixture folder.
         let jsonUrl = await send(geometryJSON, "application/json") ?? geometryJSON.absoluteString
         var photoUrls: [UUID: String] = [:]
-        for (id, file) in photos { photoUrls[id] = await send(file, "image/jpeg") }
+        for (id, file) in photos {
+            if let url = await send(file, "image/jpeg") { photoUrls[id] = url } else { pendingPhotos[id] = file }
+        }
 
         let imported = await store.importScan(ScanImport(
             roomName: roomName,
@@ -239,6 +244,9 @@ final class ScanSession {
             self.store = store
             await persistColors()
             await sendRoomPhotos(to: store, uploader: uploader)
+            if !pendingPhotos.isEmpty, !(uploader is LocalUploader) {
+                Task { await self.drainPendingPhotos(to: store, uploader: uploader) }
+            }
         }
     }
 }
@@ -265,6 +273,30 @@ extension ScanSession {
                 return nil
             }
         }
+    }
+}
+
+// MARK: - Queued photo uploads (#222)
+
+extension ScanSession {
+    /// Keeps trying photos that didn't upload during `submit` (server down, rate limited,
+    /// tunnel restarting) for up to 15 minutes, then attaches each to its imported item.
+    /// Each attempt already backs off (`UploadRetry`); this outer loop rides out longer outages.
+    fileprivate func drainPendingPhotos(to store: MooveStore, uploader: Uploader) async {
+        let deadline = Date.now.addingTimeInterval(15 * 60)
+        while !pendingPhotos.isEmpty, Date.now < deadline, !Task.isCancelled {
+            guard let room = store.newestRoom(named: roomName) else { break }
+            for (id, file) in pendingPhotos {
+                guard let url = try? await uploader.upload(file, contentType: "image/jpeg") else { break }
+                if let item = store.items.first(where: { $0.roomId == room.id && $0.scanObjectId == id.uuidString }),
+                   await store.addItemPhoto(itemId: item.id, url: url) {
+                    pendingPhotos[id] = nil
+                }
+            }
+            if pendingPhotos.isEmpty { uploadProblem = nil; break }
+            try? await Task.sleep(for: .seconds(20))
+        }
+        if !pendingPhotos.isEmpty { print("[uploads] \(pendingPhotos.count) photos still waiting after the retry window") }
     }
 }
 
