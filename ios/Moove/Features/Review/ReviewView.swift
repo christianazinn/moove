@@ -25,6 +25,13 @@ struct ReviewView: View {
                     ReviewEmptyState().chromeRow()
                 } else {
                     ReviewTotalsHeader(totals: Review.totals(store.items)).chromeRow()
+                    if !sections.contains(where: { $0.section == .needsYou }) {
+                        Label("All caught up: nothing needs you. Swipe any row to change it.", systemImage: "checkmark.circle")
+                            .monoMeta()
+                            .foregroundStyle(Theme.accentStrong)
+                            .padding(.top, 16)
+                            .chromeRow()
+                    }
                 }
             }
             .listSectionSeparator(.hidden)
