@@ -186,6 +186,30 @@ private struct SplitMix {
         #expect(abs((out.first?.box.center.x ?? 0) - 3) < 0.2)
     }
 
+    @Test func dropsABunkLadderBetweenTheBunkAndAShelf() {
+        // Rio's bunk room (Oct 24): the bunk's ladder sat 38% inside the bunk and 20% inside
+        // the fridge shelf (the footprint rule from #272 catches it).
+        var merger = SightingMerger(floorY: 0)
+        for seed in 1...2 {
+            merger.add(Sighting(label: "ladder", confidence: 0.8, points: boxPoints(center: SIMD3(0, 0.475, 0), size: SIMD3(0.6, 0.95, 0.3), yaw: 0, seed: UInt64(seed))))
+        }
+        let bunk = RoomGeometry.Object(id: "b", category: "bed", dimensions: SIMD3(1.1, 1.47, 2.0), transform: .at(SIMD3(0.4, 0.735, 1.0)))
+        let shelf = RoomGeometry.Object(id: "s", category: "storage", dimensions: SIMD3(0.7, 1.42, 1.9), transform: .at(SIMD3(-0.25, 0.71, -0.9)))
+        #expect(merger.results().count == 1)
+        #expect(merger.results(excluding: [bunk, shelf]).isEmpty)
+    }
+
+    @Test func dropsAFindSunkIntoAMattress() {
+        // A "mirror" (really a dark wall panel) 0.28-1.23 m up, over a bed 0.57 m tall.
+        var merger = SightingMerger(floorY: 0)
+        for seed in 1...2 {
+            merger.add(Sighting(label: "mirror", confidence: 0.8, points: boxPoints(center: SIMD3(0, 0.755, 0.6), size: SIMD3(0.55, 0.95, 0.17), yaw: 0, seed: UInt64(seed))))
+        }
+        let bed = RoomGeometry.Object(id: "b", category: "bed", dimensions: SIMD3(1.56, 0.57, 2.08), transform: .at(SIMD3(0, 0.285, 0)))
+        #expect(merger.results().count == 1)
+        #expect(merger.results(excluding: [bed]).isEmpty)
+    }
+
     @Test func trackIDsAreStable() {
         var merger = SightingMerger(floorY: 0)
         let a = merger.add(Sighting(label: "scooter", confidence: 0.7, points: boxPoints(center: scooter.center, size: scooter.size, yaw: 0)))

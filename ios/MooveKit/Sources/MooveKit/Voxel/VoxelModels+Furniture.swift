@@ -258,6 +258,54 @@ extension Canvas {
         }
     }
 
+    /// Two decks on four posts, a guard rail around the top and a ladder on the side.
+    /// Metal (dark) unless the name says wood. Tall RoomPlan "bed" boxes route here.
+    func bunkBed(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
+        let wooden = name.has("wood", "oak", "pine", "walnut", "birch")
+        let frameC = wooden ? colorFromName(name, P.oak) : name.word("white") ? 0xE4E1DA : colorFromName(name, 0x4A4744)
+        let sheet = 0xF3EEE4, duvet = name.word("grey", "gray") ? 0xB8B6B0 : 0xD9CCB6
+        let mat = clamp(vox(0.15), 2, 4)
+        let lowDeck = clamp(vox(0.25), 2, Y / 3)
+        let rail = clamp(vox(0.3), 3, 7)  // guard rail height above the top mattress
+        let highDeck = max(lowDeck + mat + vox(0.6), Y - rail - mat - 1)
+        let post = 1
+        // posts
+        for (px, pz) in [(0, 0), (X - post, 0), (0, Z - post), (X - post, Z - post)] {
+            box(px, 0, pz, px + post, Y, pz + post, frameC)
+        }
+        // a deck: rails round the frame, slats, mattress, pillow, duvet
+        func deck(_ y: Int) {
+            box(0, y, 0, X, y + 1, 1, frameC); box(0, y, Z - 1, X, y + 1, Z, frameC)
+            box(0, y, 0, 1, y + 1, Z, frameC); box(X - 1, y, 0, X, y + 1, Z, frameC)
+            for z in stride(from: 2, to: Z - 1, by: 3) { box(1, y, z, X - 1, y + 1, z + 1, shade(frameC, 0.9)) }
+            box(1, y + 1, 1, X - 1, y + 1 + mat, Z - 1, sheet)
+            let pd = clamp(rd(D(Z) * 0.13), 2, 6)
+            box(3, y + 1 + mat, 2, X - 3, y + 2 + mat, 2 + pd, 0xFBF8F1)
+            box(1, y + mat, 3 + pd, X - 1, y + 1 + mat, Z - 1, duvet)
+        }
+        deck(lowDeck)
+        deck(highDeck)
+        // head and foot panels above each deck
+        for z in [0, Z - 1] {
+            box(0, lowDeck + mat + 1, z, X, lowDeck + mat + 2, z + 1, frameC)
+            box(0, Y - 1, z, X, Y, z + 1, frameC)
+        }
+        // guard rail along both sides of the top bunk, open where the ladder comes up
+        let ladderZ0 = Z - post - clamp(vox(0.45), 4, Z / 3), ladderZ1 = Z - post - 1
+        for x in [0, X - 1] {
+            for z in 0..<Z where !(x == X - 1 && z >= ladderZ0 && z <= ladderZ1) {
+                set(x, Y - 1, z, frameC)
+            }
+        }
+        // ladder on the open side, near the foot: two uprights and rungs every ~25 cm
+        let lx = X - 1
+        box(lx, 0, ladderZ0, lx + 1, highDeck + 1, ladderZ0 + 1, frameC)
+        box(lx, 0, ladderZ1, lx + 1, highDeck + 1, ladderZ1 + 1, frameC)
+        for y in stride(from: vox(0.25), through: highDeck, by: max(3, vox(0.25))) {
+            box(lx, y, ladderZ0, lx + 1, y + 1, ladderZ1 + 1, shade(frameC, 1.1))
+        }
+    }
+
     func mattress(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
         let c = colorFromName(name, 0xEEEAE2)
         let side = name.has("foam", "memory") ? 0xB9B4AB : shade(c, 0.9)
