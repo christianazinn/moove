@@ -165,6 +165,9 @@ public enum VoxelModels {
         case .toy: g.toy(X, NY, Z, name)
         case .rack: g.rack(X, NY, Z, name)
         case .screen: g.screen(X, NY, Z, name)
+        case .toilet: g.toilet(X, NY, Z, name)
+        case .sink: g.sink(X, NY, Z, name)
+        case .bathtub: g.bathtub(X, NY, Z, name)
         case .box: g.kraftBox(X, NY, Z, name)
         }
         return (g.output(), g.surfaces)
@@ -207,7 +210,7 @@ public enum VoxelModels {
         case framedPhotos, stove, dishwasher, microwave, bench, ottoman, bike, suitcase
         case guitar, piano, keyboard, drums, vacuum, monitor, scooter, bag, fitness, board
         case motorcycle, stroller, wheelchair, grill, lawnMower, crib, ladder, trunk, basket, trashCan, toolbox
-        case petCrate, petBed, catTree, clock, toy, rack, screen, box
+        case petCrate, petBed, catTree, clock, toy, rack, screen, toilet, sink, bathtub, box
 
         /// Default size (w, d, h) in meters when a dimension is missing or invalid.
         var defaultSize: (Double, Double, Double) {
@@ -273,6 +276,9 @@ public enum VoxelModels {
             case .toy: (0.35, 0.3, 0.4)
             case .rack: (0.5, 0.5, 1.8)
             case .screen: (1.2, 0.4, 1.7)
+            case .toilet: (0.4, 0.7, 0.8)
+            case .sink: (0.55, 0.45, 0.3)
+            case .bathtub: (1.5, 0.75, 0.5)
             case .box: (0.5, 0.4, 0.4)
             }
         }
@@ -329,6 +335,9 @@ public enum VoxelModels {
             case .toy: (6, 6, 5)
             case .rack: (5, 8, 3)
             case .screen: (6, 10, 2)
+            case .toilet: (7, 12, 10)
+            case .sink: (8, 4, 7)
+            case .bathtub: (16, 7, 10)
             default: nil
             }
         }
@@ -500,6 +509,10 @@ public enum VoxelModels {
         case "coat rack", "shoe rack", "clothes rack", "rack", "garment rack", "coat stand", "hat stand": return .rack
         case "workbench", "work bench": return .desk
         case "room divider", "divider", "folding screen", "privacy screen", "screen divider", "curtain", "curtains", "shower curtain", "drapes": return .screen
+        // RoomPlan's bathroom fixtures (a toilet drew as a dresser by its size)
+        case "toilet", "wc", "commode": return .toilet
+        case "sink", "basin", "washbasin", "vanity sink": return .sink
+        case "bathtub", "bath", "tub", "bath tub": return .bathtub
         case "cart", "rolling cart", "utility cart": return n.has("bar cart", "tea cart") ? .table : .bookshelf
         case "decor":
             // a wall clock, a basket, a cat bed, a plush: household things, but not a "toy motorcycle" figurine
