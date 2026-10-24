@@ -75,6 +75,28 @@ struct SimulatedBadge: View {
     }
 }
 
+/// An approval nobody answered in time (#186): an outlined muted pill, so it reads as a status and
+/// can't be mistaken for the filled SIMULATED pill. Contrast: muted ink on the page color is about
+/// 5.5:1 in light mode and 6.7:1 in dark mode.
+struct ExpiredBadge: View {
+    var body: some View {
+        Label {
+            Text("EXPIRED").monoText(10.5, weight: .bold, maxScale: 1.6).tracking(0.5)
+        } icon: {
+            Image(systemName: "clock.badge.xmark").font(.system(size: 10, weight: .semibold))
+        }
+        .labelStyle(.titleAndIcon)
+        .lineLimit(1)
+        .fixedSize()
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .foregroundStyle(Theme.muted)
+        .overlay(Capsule().strokeBorder(Theme.muted, lineWidth: 1))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Expired, no answer in \(ApprovalExpiry.hours) hours")
+    }
+}
+
 /// A failure or refusal explained in words: danger-tinted, with an icon, never truncated.
 struct CommerceProblem: View {
     let text: String
