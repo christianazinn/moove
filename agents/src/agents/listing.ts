@@ -35,10 +35,16 @@ function hasListing(conn: Conn, itemId: bigint): boolean {
   return false;
 }
 
+// Vision has had its chance: done, failed, or no photo to look at (scanned items without photos
+// would otherwise never be listed). Same rule as pricing.
+export function visionSettled(it: Pick<Item, 'detailsStatus' | 'photoUrls'>): boolean {
+  return it.detailsStatus === 'done' || it.detailsStatus === 'failed' || it.photoUrls.length === 0;
+}
+
 function needsDraft(conn: Conn, it: Item): boolean {
   return (
     it.disposition === 'sell' &&
-    it.detailsStatus === 'done' &&
+    visionSettled(it) &&
     (it.pricingStatus === 'done' || it.pricingStatus === 'failed') &&
     !drafting.has(it.id) &&
     !hasListing(conn, it.id)
