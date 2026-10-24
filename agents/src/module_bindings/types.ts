@@ -103,6 +103,8 @@ export const Item = __t.object("Item", {
   modelUrl: __t.string(),
   modelSource: __t.string(),
   modelStatus: __t.string(),
+  attributesJson: __t.string(),
+  colorsJson: __t.string(),
 });
 export type Item = __Infer<typeof Item>;
 
@@ -206,6 +208,18 @@ export const ScanObjectInput = __t.object("ScanObjectInput", {
   photoUrl: __t.string(),
 });
 export type ScanObjectInput = __Infer<typeof ScanObjectInput>;
+
+export const ScanObjectInputV2 = __t.object("ScanObjectInputV2", {
+  scanObjectId: __t.string(),
+  name: __t.string(),
+  category: __t.string(),
+  widthM: __t.f64(),
+  heightM: __t.f64(),
+  depthM: __t.f64(),
+  photoUrl: __t.string(),
+  attributes: __t.array(__t.string()),
+});
+export type ScanObjectInputV2 = __Infer<typeof ScanObjectInputV2>;
 
 export const ScanPhoto = __t.object("ScanPhoto", {
   id: __t.u64(),
