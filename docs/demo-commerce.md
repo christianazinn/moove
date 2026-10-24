@@ -40,19 +40,19 @@ Required env vars (names only; values live in the repo-root `.env.local`, which 
 - [ ] eBay (real sandbox posting only; otherwise listings are simulated and labeled): `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, `EBAY_RUNAME`, `EBAY_REFRESH_TOKEN`, `EBAY_FULFILLMENT_POLICY_ID`, `EBAY_PAYMENT_POLICY_ID`, `EBAY_RETURN_POLICY_ID`, `EBAY_LOCATION_KEY`, plus optional `EBAY_FALLBACK_IMAGE_URL`.
 - [ ] Pricing pays over x402: `X402_PORT` (default 8402), `PRICING_PAY_X402` (on unless set to `0`/`false`/`off`). Merged in #46.
 - [ ] Visa and buy agent (merged, #40):
-  - **Leave `VISA_PROVIDER` empty or set it to `simulated`.** Do **not** set `VISA_PROVIDER=acceptance` for the demo while the CyberSource sandbox returns HTTP 502. With an explicit `acceptance`, every checkout would fail (retried 3 times, then given up) instead of being simulated.
+  - **Set `VISA_PROVIDER=simulated` for the demo** (on the worker's command line or in the worker's env). The demo checkout is the labeled simulation; we are not attempting live sandbox charges. Don't leave it empty: with the CyberSource keys present in `.env.local`, an empty `VISA_PROVIDER` picks the `acceptance` backend from the keys, so every purchase would still call the sandbox (and only fall back to simulated after its 502). Don't set `VISA_PROVIDER=acceptance` either: every checkout would fail (retried 3 times, then given up).
   - With no provider and no `VISA_ACCEPTANCE_*` keys, checkout is simulated and labeled.
   - Defaults: `VISA_SPEND_CAP_USD` 1500, `VISA_MAX_PER_PURCHASE_USD` 750, `VISA_SIM_DELAY_MS` 400, `BUY_AUTO_CHOOSE` 0 (the user chooses), `BUY_FRAUD_BLOCK` 0.7, `BUY_RETRY_DELAY_MS` 60000.
   - Deals: `DEALS_SOURCE` (default `apify`), `DEALS_APIFY_SOURCES` (default `fb,ebay`), `DEALS_SEARCH_CONCURRENCY` (2), `DEALS_PER_SOURCE` (6), optional `DEALS_HOME_LAT` / `DEALS_HOME_LNG`. Deal search reuses `APIFY_TOKEN`.
 
 Worker
 - [ ] **Only one worker against maincloud**, on Christian's machine, with the token in `agents/.worker-token.maincloud`. Nobody else runs `npm start` / `npm run dev` with maincloud settings.
-- [ ] Start it from `agents/`: `npm start` (with the maincloud vars above). Expect `[spacetime] connected as ...`, `[agents] cache ready: N items`, `[agents] started vision`, `pricing`, `listing`, `approval`, the shopping-list agent and `buy`, and `[visa] checkout ready (SIMULATED)` once the first checkout runs.
+- [ ] Start it from `agents/`: `VISA_PROVIDER=simulated npm start` (with the maincloud vars above). Expect `[spacetime] connected as ...`, `[agents] cache ready: N items`, `[agents] started vision`, `pricing`, `listing`, `approval`, the shopping-list agent and `buy`, and `[visa] checkout ready (SIMULATED)` once the first checkout runs.
 - [ ] Don't run `npm run x402:e2e` against maincloud. It connects as a worker and is meant for a local `spacetime start` + `npm run publish:local`. `npm run x402:demo` is fine anywhere because it doesn't touch SpacetimeDB.
 
 Budgets
 - [ ] **Budgets survive a restart** (merged, #38). With `X402_SEED_BUDGETS=1` (the default) the worker counts the last 24 h of x402 `payment` rows against each agent's $5 budget at startup (`agents/src/payments.ts`), so a restart does not hand out a fresh budget.
-- [ ] **Budget reset after rehearsals:** start the demo worker with `X402_SEED_BUDGETS=0 VISA_SEED_BUDGETS=0 npm start`. Every agent then starts at $0 of $5 (x402) and $0 of $1,500 (card). Card seeding only counts non-simulated (sandbox or real) card payments from the last 24 h, so simulated rehearsals never use up the card cap anyway.
+- [ ] **Budget reset after rehearsals:** start the demo worker with `VISA_PROVIDER=simulated X402_SEED_BUDGETS=0 VISA_SEED_BUDGETS=0 npm start`. Every agent then starts at $0 of $5 (x402) and $0 of $1,500 (card). Card seeding only counts non-simulated (sandbox or real) card payments from the last 24 h, so simulated rehearsals never use up the card cap anyway.
 - [ ] `X402_ALLOWED_PAYEES` (merged, #38) is an optional comma-separated `payTo` allowlist. If you set it, include the comps paywall receiver `0x6644b110FD0B1671599E36db749d09b1EAeEF952`, or every pricing payment is refused.
 
 Photos for eBay (only for a real sandbox post)
