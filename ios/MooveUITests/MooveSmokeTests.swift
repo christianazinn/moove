@@ -139,7 +139,10 @@ final class MooveSmokeTests: XCTestCase {
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
         settings.tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
-        XCTAssertTrue(text(containing: "Offline demo (fixtures)").exists, "data source shown")
+        let fixture = app.buttons["settings.dataSource.fixture"]
+        XCTAssertTrue(fixture.waitForExistence(timeout: 5), "data source shown")
+        XCTAssertTrue(fixture.label.contains("Offline demo"), fixture.label)
+        XCTAssertTrue(fixture.isSelected, "offline demo is the selected data source")
         XCTAssertTrue(text(containing: "Guest").exists)
         snap("06-settings")
         app.buttons["Sign out"].tap()
