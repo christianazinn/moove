@@ -79,6 +79,11 @@ export const approvalAgent: Agent = {
       });
 
     const stillPending = (id: bigint) => conn.db.approval.id.find(id)?.status === 'pending';
+    // Why a row stopped being pending while a push was out: the inbox, or the worker's expiry (#186).
+    const decidedFirst = (id: bigint) => {
+      const status = conn.db.approval.id.find(id)?.status ?? 'gone';
+      return status === 'expired' ? 'Expired with no answer first' : `Decided in the Moove app first (${status})`;
+    };
 
     // Waits until starting one more CIBA request for this owner stays within the rate limit.
     async function reserveStart(owner: Identity): Promise<void> {
@@ -143,7 +148,7 @@ export const approvalAgent: Agent = {
       for (;;) {
         await sleep(intervalSec * 1000);
         if (!stillPending(a.id)) {
-          log(a, 'approval', `Decided in the Moove app first (${conn.db.approval.id.find(a.id)?.status ?? 'gone'}), ignoring the phone request${sim(g)}`);
+          log(a, 'approval', `${decidedFirst(a.id)}, ignoring the phone request${sim(g)}`);
           return;
         }
         let r;
@@ -165,7 +170,7 @@ export const approvalAgent: Agent = {
           continue;
         }
         if (!stillPending(a.id)) {
-          log(a, 'approval', `Decided in the Moove app first (${conn.db.approval.id.find(a.id)?.status ?? 'gone'}), ignoring the phone answer${sim(g)}`);
+          log(a, 'approval', `${decidedFirst(a.id)}, ignoring the phone answer${sim(g)}`);
           return;
         }
         // Auth0 reports expiry as access_denied too, so our own clock tells them apart.

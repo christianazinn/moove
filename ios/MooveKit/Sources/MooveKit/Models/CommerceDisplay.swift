@@ -117,8 +117,8 @@ extension Approval {
         case (.approved, .purchase): "You approved it. The buy agent checks out with Visa."
         case (.denied, .listing): "You denied it. The listing wasn't posted."
         case (.denied, .purchase): "You denied it. Nothing was bought."
-        case (.expired, .listing): "The request expired. The listing wasn't posted."
-        case (.expired, .purchase): "The request expired. Nothing was bought."
+        case (.expired, .listing): "Nobody answered in time, so it expired. The listing agent asks again if it still applies."
+        case (.expired, .purchase): "Nobody answered in time, so it expired. Nothing was bought; the buy agent asks again if it still applies."
         }
     }
 
