@@ -7,7 +7,7 @@ Read the "Today's reality" box first. Labels like **(needs PR #40)** mean the st
 > **Today's reality (origin/main, Sat):**
 > - **The phone cannot show live worker data yet.** `ios/Moove/Sync/SpacetimeBackend+Contract.swift` on main subscribes to no tables, and every reducer call throws "waiting on the SpacetimeDB module". So every phone screen in this segment runs in **Offline demo** mode (fixture data). Draft PR #28 wires some tables (listing, approval) but not `payment` or `agent_event`, so even with #28 the spending log stays offline.
 > - **Live proof comes from the laptop:** terminal output from `npm run x402:demo` or the worker, and the basescan tx page.
-> - Open PRs this runbook depends on: #40 (buy agent, Visa, Shopping tab, draft), #38 (security pass + seeded budgets, draft), #25 (login), #28 (scan + live sync, draft). Merged: #46 (pricing pays over x402), #36 (spending log), #31 (summary), #51 (worker no longer crashes on rejected reducer calls).
+> - Open PRs this runbook depends on: #40 (buy agent, Visa, Shopping tab, draft), #52 (live Apify deals, draft), #28 (scan + live sync, draft). Merged: #46 (pricing pays over x402), #55 (paywall start-up failure falls back to unpaid Apify, no double Apify run), #38 (security pass, seeded budgets, payee allowlist), #25 (login), #53 (amount-first push text), #36 (spending log), #31 (summary), #51 (worker no longer crashes on rejected reducer calls).
 
 ## Setup at the table
 - **Laptop A (Christian's):** the only worker against maincloud. One terminal running the worker, one free terminal in `agents/`.
@@ -37,13 +37,15 @@ Worker
 - [ ] Don't run `npm run x402:e2e` against maincloud. It connects as a worker and is meant for a local `spacetime start` + `npm run publish:local`. `npm run x402:demo` is fine anywhere because it doesn't touch SpacetimeDB.
 
 Budgets
-- [ ] **Budgets are in memory and reset when the worker restarts** (`SpendLedger` in `agents/src/integrations/x402.ts`). Restarting the worker before the demo gives every agent a fresh $5.
-- [ ] `X402_SEED_BUDGETS` **(needs PR #38, still open)**: if #38 merges, the rail counts the last 24 h of x402 `payment` rows per agent at startup, so a restart no longer resets budgets. `X402_SEED_BUDGETS=0` turns that off, for example so rehearsal spend doesn't eat the demo-day budget. Until #38 merges this variable does nothing.
+- [ ] **Budgets survive a restart** (merged, #38). With `X402_SEED_BUDGETS=1` (the default) the worker counts the last 24 h of x402 `payment` rows against each agent's $5 budget at startup (`agents/src/payments.ts`), so a restart does not hand out a fresh budget.
+- [ ] **Budget reset after rehearsals:** start the demo worker with `X402_SEED_BUDGETS=0` so rehearsal spend doesn't count against the demo. Every agent then starts at $0 of $5.
+- [ ] `X402_ALLOWED_PAYEES` (merged, #38) is an optional comma-separated `payTo` allowlist. If you set it, include the comps paywall receiver `0x6644b110FD0B1671599E36db749d09b1EAeEF952`, or every pricing payment is refused.
 
 Photos for eBay (only for a real sandbox post)
 - [ ] eBay needs public **https** photo URLs. Uploads are served at `PUBLIC_UPLOAD_BASE_URL/files/<name>` on `UPLOAD_PORT` (8787). `agents/src/integrations/ebay.ts` throws "eBay needs at least one public https photo URL: set PUBLIC_UPLOAD_BASE_URL to an https tunnel, or EBAY_FALLBACK_IMAGE_URL". So either point `PUBLIC_UPLOAD_BASE_URL` at an https tunnel to port 8787 (the repo doesn't pick a tunnel tool) or set `EBAY_FALLBACK_IMAGE_URL`. Without eBay keys, the listing is simulated and needs no tunnel.
 
 Phone
+- [ ] On launch the login screen appears (merged, #25). Tap **"Continue without an account"** unless you are demoing a real sign-in. End-to-end sign-in was not verified in #25 ("Callback URL mismatch").
 - [ ] Settings (gear icon, top right) > Backend > Data source: **"Offline demo (fixtures)"**. The banner should read "Offline demo: fixture data, nothing is synced".
 - [ ] Tabs visible: Scan, Review, Spending, New Home, then **More** for Inventory, Listings, Approvals, Summary (and Shopping **(needs PR #40)**). The Approvals tab shows a badge with the pending count.
 - [ ] To reset the fixture between rehearsals, switch Data source to live and back, or relaunch the app. Untested; check once.
@@ -63,7 +65,7 @@ X402_MAX_PER_CALL_USDC=0.005 npm run x402:demo
 ```
 The rail refuses before signing: `Refused x402 payment for comps for 'IKEA Poang armchair': $0.01 is over the per-call max of $0.0050`. The script then exits with the `SpendRefusedError`, which is expected. Rehearse once to confirm the inline var wins over `.env.local`.
 
-**Inside the worker (merged, #46):** every pricing run buys its comps from `127.0.0.1:8402/x402/comps` for $0.01 (one `payment` row per item), unless `PRICING_PAY_X402=0`. On a refusal or payment failure it logs a fallback event ("looking up comps ... directly (unpaid)") and calls Apify directly. Merged just before this runbook was written and not yet rehearsed against maincloud, so do one dry run.
+**Inside the worker (merged, #46):** every pricing run buys its comps from `127.0.0.1:8402/x402/comps` for $0.01 (one `payment` row per item), unless `PRICING_PAY_X402=0`. On a refusal or payment failure it logs a fallback event ("looking up comps ... directly (unpaid)") and calls Apify directly. If the paywall itself fails to start (port 8402 taken, CDP outage), the worker logs `[x402] COMPS PAYWALL FAILED TO START, pricing will use direct (unpaid) Apify lookups` and keeps running (#55). If the paywall's own Apify lookup fails (502), pricing does not run Apify a second time: the payment is refunded and the item is marked failed (#55). Not yet rehearsed against maincloud, so do one dry run.
 
 **Numbers:** $0.01 per comps call (`COMPS_PRICE_USD` in `agents/src/paywall.ts`). Per-call max $0.10, per-agent cap $5 (code defaults).
 
@@ -92,7 +94,7 @@ Merged: eBay listing agent (#30, real sandbox posting #34), Auth0 CIBA + in-app 
 
 **How it works:** a "sell" item gets a Claude-written listing. If the price is over the owner's `approval_threshold_cents` ($100 by default), the agent calls `request_approval` and waits. With Auth0 configured and the owner's `user.auth0_sub` set, the worker sends a CIBA push to Auth0 Guardian on the owner's phone (expires after 300 s). Otherwise the approval waits in the in-app Approvals inbox.
 
-**Live CIBA path (hard today):** it needs a `sell` item on maincloud and a `user` row with `auth0_sub`, and the app can't create either until login (#25) and live sync (#28) land. The worker log lines to point at: `Sent approval request to the owner's phone via Auth0 Guardian: ...`, then `Approved on the phone (...)`, then `Posting "..." to eBay at $...` and `Live as item #...` (with `(simulated)` when the eBay keys aren't set). A CLI-only setup is possible (`register_user` takes auth0Sub, name, email and must be called from the owner's identity), but it's untested. Don't attempt it at the table.
+**Live CIBA path (hard today):** it needs a `sell` item on maincloud and a `user` row with `auth0_sub`, and the app can't create either yet. Login is merged (#25) and passes the Auth0 `sub` to `registerUser`, but the live `registerUser` is still a stub until the Swift bindings land, and live sync is in draft #28. The worker log lines to point at: `Sent approval request to the owner's phone via Auth0 Guardian: ...`, then `Approved on the phone (...)`, then `Posting "..." to eBay at $...` and `Live as item #...` (with `(simulated)` when the eBay keys aren't set). A CLI-only setup is possible (`register_user` takes auth0Sub, name, email and must be called from the owner's identity), but it's untested. Don't attempt it at the table.
 
 **Tap (Offline demo, the reliable path):**
 1. More > Approvals. Section "Needs you · 2", with the note "Also sent to your phone via Auth0 Guardian when set up. Approving here works too."
