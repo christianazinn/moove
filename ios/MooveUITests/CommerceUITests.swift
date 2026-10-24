@@ -125,8 +125,15 @@ final class CommerceUITests: XCTestCase {
 
     /// #140 claimed dark-mode contrast: the same read-only pass in dark mode.
     func testCommerceScreensInDarkMode() {
-        launchOfflineDemo(["-AppleInterfaceStyle", "Dark"])
+        // `-AppleInterfaceStyle Dark` is ignored on iOS; the Simulator-wide appearance works (reset in tearDown).
+        XCUIDevice.shared.appearance = .dark
+        launchOfflineDemo()
         tourCommerceScreens(prefix: "dark")
+    }
+
+    override func tearDown() {
+        XCUIDevice.shared.appearance = .light
+        super.tearDown()
     }
 
     // MARK: Helpers
@@ -148,11 +155,11 @@ final class CommerceUITests: XCTestCase {
         XCTAssertTrue(sellBuy.waitForExistence(timeout: 10), "no Sell & Buy tab")
         sellBuy.tap()
         let tabs = ["Listings", "Shopping", "Approvals", "Spending"].map(segment)
-        for s in tabs { XCTAssertTrue(s.waitForExistence(timeout: 10) && s.isHittable, "segment \(s) not hittable") }
+        for s in tabs { XCTAssertTrue(s.waitForExistence(timeout: 10), "missing segment \(s)") }
         let (listingsTab, shoppingTab, approvalsTab, spendingTab) = (tabs[0], tabs[1], tabs[2], tabs[3])
         shot("\(prefix)-0-sell-and-buy")
 
-        listingsTab.tap()
+        tapSegment(listingsTab)
         XCTAssertTrue(app.staticTexts["Your listings."].waitForExistence(timeout: 10))
         shot("\(prefix)-1-listings")
         let posted = byId("listing.201")
@@ -160,7 +167,7 @@ final class CommerceUITests: XCTestCase {
         XCTAssertTrue(posted.label.localizedCaseInsensitiveContains("simulated"), posted.label)
         shot("\(prefix)-1-listings-simulated")
 
-        shoppingTab.tap()
+        tapSegment(shoppingTab)
         XCTAssertTrue(app.staticTexts["What the new place needs."].waitForExistence(timeout: 10))
         shot("\(prefix)-2-shopping")
         let deskChair = byId("shopping.item.52")
@@ -175,13 +182,13 @@ final class CommerceUITests: XCTestCase {
         back.tap()
 
         XCTAssertTrue(approvalsTab.waitForExistence(timeout: 10))
-        approvalsTab.tap()
+        tapSegment(approvalsTab)
         XCTAssertTrue(app.staticTexts["Your go-ahead."].waitForExistence(timeout: 10))
         shot("\(prefix)-3-approvals")
         XCTAssertTrue(scrollTo(byId("approval.approve.300")), "Approve not hittable")
         shot("\(prefix)-3-approvals-approve")
 
-        spendingTab.tap()
+        tapSegment(spendingTab)
         XCTAssertTrue(app.staticTexts["Where the money went."].waitForExistence(timeout: 10))
         shot("\(prefix)-4-spending")
         let simulated = app.descendants(matching: .any)
@@ -194,6 +201,21 @@ final class CommerceUITests: XCTestCase {
 
     private func segment(_ title: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", title, "\(title) ·")).firstMatch
+    }
+
+    /// The segment picker scrolls sideways (at large text sizes "Spending" starts off screen), so swipe
+    /// it until the segment is fully on screen, then tap. Frames, not `isHittable`: that fails outright
+    /// for an element with no on-screen point.
+    private func tapSegment(_ s: XCUIElement) {
+        let screen = app.windows.firstMatch.frame
+        for _ in 0..<4 where !(s.frame.minX >= screen.minX && s.frame.maxX <= screen.maxX) {
+            let y = s.frame.midY
+            let mid = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: screen.midX, dy: y))
+            let dx = s.frame.minX > screen.midX ? -screen.width * 0.4 : screen.width * 0.4
+            mid.press(forDuration: 0.05, thenDragTo: mid.withOffset(CGVector(dx: dx, dy: 0)))
+        }
+        XCTAssertTrue(s.isHittable, "segment \(s.label) not hittable")
+        s.tap()
     }
 
     private func byId(_ id: String) -> XCUIElement {
