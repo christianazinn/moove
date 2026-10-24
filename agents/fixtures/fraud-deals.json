@@ -30,6 +30,6 @@
     { "item": "office chair", "source": "ikea", "title": "MARKUS office chair, Vissle dark gray", "priceCents": 22999, "url": "https://www.ikea.com/us/en/search/?q=markus", "sellerInfo": "IKEA · new · ships · Visa checkout · score 0.67", "scam": false },
     { "item": "office chair", "source": "target", "title": "Mesh task chair with arms, black", "priceCents": 7999, "url": "https://www.target.com/s?searchTerm=task+chair", "sellerInfo": "Target · new · ships · Visa checkout · score 0.73", "scam": false },
     { "item": "office chair", "source": "craigslist", "title": "Herman Miller Aeron size B", "priceCents": 35000, "url": "https://sfbay.craigslist.org/sfc/fuo/6001.html", "sellerInfo": "Craigslist, SF · good · 14 mi · message seller · score 0.70", "scam": false },
-    { "item": "office chair", "source": "fb", "title": "Herman Miller Embody, barely used, email me at deals4u@mailbox.org", "priceCents": 12000, "url": "https://www.facebook.com/marketplace/item/6002", "sellerInfo": "Marketplace seller · like new · ships · message seller · score 0.84", "scam": true, "expect": ["contacted off-platform", "email address"] }
+    { "item": "office chair", "source": "fb", "title": "Herman Miller Embody, barely used, email me at deals4u@example.invalid", "priceCents": 12000, "url": "https://www.facebook.com/marketplace/item/6002", "sellerInfo": "Marketplace seller · like new · ships · message seller · score 0.84", "scam": true, "expect": ["contacted off-platform", "email address"] }
   ]
 }

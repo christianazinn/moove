@@ -46,10 +46,10 @@ function fakeFal(result: unknown, glb = Buffer.from('glTF\x02\0\0\0rest-of-file'
       const body = JSON.parse(String(init?.body));
       assert.match(body.image_url, /^data:image\/jpeg;base64,/);
       assert.equal(body.prompt, 'office chair');
-      return json({ request_id: 'r1', status_url: 'https://q/status', response_url: 'https://q/result' });
+      return json({ request_id: 'r1', status_url: 'https://queue.fal.run/q/status', response_url: 'https://queue.fal.run/q/result' });
     }
-    if (u === 'https://q/status') return json({ status: polls++ === 0 ? 'IN_PROGRESS' : 'COMPLETED' });
-    if (u === 'https://q/result') return json(result);
+    if (u === 'https://queue.fal.run/q/status') return json({ status: polls++ === 0 ? 'IN_PROGRESS' : 'COMPLETED' });
+    if (u === 'https://queue.fal.run/q/result') return json(result);
     if (u === 'https://cdn/m.glb') return new Response(glb);
     return new Response('nope', { status: 404 });
   }) as typeof fetch;
@@ -61,7 +61,7 @@ test('reconstruct: submits, polls, downloads the GLB', async () => {
   const r = await reconstruct({ imageUrl: 'data:image/jpeg;base64,AAAA', prompt: 'office chair' }, { key: 'test-key', fetch: f, pollMs: 1 });
   assert.equal(r.requestId, 'r1');
   assert.equal(r.glb.subarray(0, 4).toString('latin1'), 'glTF');
-  assert.deepEqual(calls.map(c => c.split(' ')[1]), ['https://queue.fal.run/fal-ai/sam-3/3d-objects', 'https://q/status', 'https://q/status', 'https://q/result', 'https://cdn/m.glb']);
+  assert.deepEqual(calls.map(c => c.split(' ')[1]), ['https://queue.fal.run/fal-ai/sam-3/3d-objects', 'https://queue.fal.run/q/status', 'https://queue.fal.run/q/status', 'https://queue.fal.run/q/result', 'https://cdn/m.glb']);
 });
 
 test('reconstruct: rejects a download that is not a GLB, and missing keys', async () => {

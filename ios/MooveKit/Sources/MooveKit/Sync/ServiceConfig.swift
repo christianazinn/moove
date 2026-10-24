@@ -9,12 +9,25 @@ public struct ServiceConfig: Sendable, Equatable {
 
     public init(values: [String: String] = [:]) { self.values = values }
 
-    /// The worker's upload origin, if it announced a valid http(s) one.
+    /// The worker's upload origin, if it announced a valid one. Photos and scans go there, so
+    /// (#17 follow-up) it must be a bare origin: no user@, query or fragment, and plain http only
+    /// to a local host (localhost, *.local, loopback or a private IPv4 LAN address).
     public var uploadBaseURL: URL? {
         guard let raw = values["upload_base_url"]?.trimmingCharacters(in: .whitespaces), !raw.isEmpty,
-              let url = URL(string: raw), let scheme = url.scheme?.lowercased(),
-              scheme == "http" || scheme == "https", url.host != nil else { return nil }
-        return url
+              let parts = URLComponents(string: raw), let url = parts.url,
+              let scheme = parts.scheme?.lowercased(), let host = parts.host?.lowercased(), !host.isEmpty,
+              parts.user == nil, parts.password == nil, parts.query == nil, parts.fragment == nil
+        else { return nil }
+        if scheme == "https" { return url }
+        return scheme == "http" && Self.isLocalHost(host) ? url : nil
+    }
+
+    static func isLocalHost(_ host: String) -> Bool {
+        if host == "localhost" || host.hasSuffix(".local") { return true }
+        let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+        let o = labels.compactMap { UInt8($0) }
+        guard labels.count == 4, o.count == 4 else { return false }
+        return o[0] == 127 || o[0] == 10 || (o[0] == 192 && o[1] == 168) || (o[0] == 172 && (16...31).contains(o[1]))
     }
 
     public var workerVersion: String? { values["worker_version"].flatMap { $0.isEmpty ? nil : $0 } }

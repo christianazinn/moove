@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import type { EventKind } from '../events.js';
 import { structuredCall, type ImageInput } from '../integrations/anthropic.js';
+import { OVER_CAP_NOTE, takePaidCall } from './budget.js';
 import { cleanUntrusted, untrustedBlock, UNTRUSTED_RULE } from '../untrusted.js';
 
 export const ROOM_KINDS = ['bedroom', 'living', 'kitchen', 'dining', 'bathroom', 'office', 'hallway', 'other'] as const;
@@ -158,8 +159,10 @@ function uniqueName(name: string, seen: Set<string>): string {
   return n;
 }
 
+const MAX_OPENINGS = 8; // per room, doors and windows each
+
 function cleanOpenings(list: z.infer<typeof Opening>[], w: number, d: number): RelOpening[] {
-  return list.flatMap(o => {
+  return list.slice(0, MAX_OPENINGS).flatMap(o => {
     const len = o.wall === 'N' || o.wall === 'S' ? w : d;
     if (!Number.isFinite(o.offsetM) || !Number.isFinite(o.widthM) || o.widthM <= 0.2) return [];
     return [opening(o.wall, o.offsetM, o.widthM, len)];
@@ -443,6 +446,8 @@ export function planIssues(plan: FloorPlan): string[] {
     else if (!r.polygon.flat().every(Number.isFinite)) issues.push(`${r.name}: bad coordinates`);
     else if (Math.abs(signedArea(r.polygon)) < 0.25) issues.push(`${r.name}: no area`);
     if (!(r.widthM > 0 && r.depthM > 0)) issues.push(`${r.name}: non-positive size`);
+    // A drawn layout rescales sides from the boxes, so re-check the cap roomsFromReading clamped to.
+    if (r.widthM > MAX_SIDE_M + 0.5 || r.depthM > MAX_SIDE_M + 0.5) issues.push(`${r.name}: larger than ${MAX_SIDE_M} m`);
     if (seen.has(r.name)) issues.push(`duplicate room name ${r.name}`);
     seen.add(r.name);
   }
@@ -512,7 +517,11 @@ export async function readFloorPlan(
 ): Promise<{ floorPlan: FloorPlan | null; notes: string[] }> {
   const imgs = images.slice(0, 4);
   const { log } = opts;
-  log('tool_call', `Reading ${imgs.length} floor-plan image(s) with Claude vision (${config.models.vision})`);
+  if (!takePaidCall()) {
+    log('error', OVER_CAP_NOTE);
+    return { floorPlan: null, notes: [`${OVER_CAP_NOTE} The app estimates the plan instead.`] };
+  }
+  log('tool_call', `Reading ${imgs.length} floor-plan image(s) with Claude vision (${config.models.vision})`, { images: imgs.length, paid: true });
   let reading: PlanReading;
   try {
     const call = opts.call ?? ((a: Parameters<typeof structuredCall>[0]) => structuredCall(a) as Promise<PlanReading>);

@@ -56,6 +56,19 @@ export function requestBody(req: Sam3dRequest): Record<string, unknown> {
   };
 }
 
+/** Throws unless `u` is an https URL on fal.run (where the Key header may be sent). */
+export function falQueueUrl(u: unknown): string {
+  let host = '';
+  try {
+    const url = new URL(String(u));
+    if (url.protocol === 'https:' && !url.username && !url.password) host = url.hostname.toLowerCase();
+  } catch {
+    // not a URL
+  }
+  if (host !== 'fal.run' && !host.endsWith('.fal.run')) throw new Sam3dError('fal returned a queue URL off fal.run');
+  return String(u);
+}
+
 export async function reconstruct(
   req: Sam3dRequest,
   opts: { key?: string; fetch?: Fetch; pollMs?: number; timeoutMs?: number } = {}
@@ -77,6 +90,9 @@ export async function reconstruct(
     throw unavailable(submit.status) ? new Sam3dUnavailableError(msg) : new Sam3dError(msg);
   }
   const queued = (await submit.json()) as { request_id: string; status_url: string; response_url: string };
+  // These URLs come from fal's reply and get our FAL_KEY header, so they must stay on fal.
+  falQueueUrl(queued.status_url);
+  falQueueUrl(queued.response_url);
 
   for (;;) {
     if (Date.now() > deadline) throw new Sam3dError(`timed out waiting for ${queued.request_id}`);
