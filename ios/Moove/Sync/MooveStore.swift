@@ -280,7 +280,7 @@ final class MooveStore {
     // MARK: Approvals (#12)
 
     /// The signed-in user's undecided approvals, oldest first.
-    var pendingApprovals: [Approval] { snapshot.pendingApprovals }
+    var pendingApprovals: [Approval] { snapshot.actionableApprovals } // own + shared-room listing ones (#195)
 
     /// Approve or deny through `decide_approval`. The listing agent posts or
     /// rejects once it sees the decision. Returns false if the write failed.

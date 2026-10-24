@@ -14,7 +14,7 @@ import MooveBindings
 extension SpacetimeBackend {
     static let tableNames = [
         "my_user", "my_room", "room_member", "scan", "item", "comp",
-        "new_home", "layout", "listing", "approval",
+        "new_home", "layout", "my_listing", "my_approval",
         "payment", "agent_event", "shopping_item", "deal",
         "service_config",
     ]
@@ -39,13 +39,10 @@ extension SpacetimeBackend {
             "SELECT comp.* FROM comp JOIN item ON comp.item_id = item.id WHERE item.owner = \(id)",
             "SELECT * FROM new_home WHERE owner = \(id)",
             "SELECT * FROM layout WHERE owner = \(id)",
-            // Shared-room listings (#195): subscriptions join at most two tables, so
-            // listing -> item -> room_member can't be one query. Take all listings and other
-            // users' listing approvals (public tables) and keep only those for visible items
-            // in makeSnapshot (MooveKit scopedToVisibleItems). Swap for views once #200 lands.
-            "SELECT * FROM listing",
-            "SELECT * FROM approval WHERE owner = \(id)",
-            "SELECT * FROM approval WHERE kind = 'listing' AND owner != \(id)",
+            // Own listings/approvals plus listing ones for items in joined rooms (#195, #200).
+            // Per-user views: subscriptions can't join listing -> item -> room_member.
+            "SELECT * FROM my_listing",
+            "SELECT * FROM my_approval",
             "SELECT * FROM payment WHERE owner = \(id)",
             "SELECT * FROM agent_event WHERE owner = \(id)",
             "SELECT * FROM shopping_item WHERE owner = \(id)",
@@ -65,8 +62,8 @@ extension SpacetimeBackend {
         { await $0.registerTableRowDecoder(MooveBindings.CompRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.NewHomeRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.LayoutRow.self) },
-        { await $0.registerTableRowDecoder(MooveBindings.ListingRow.self) },
-        { await $0.registerTableRowDecoder(MooveBindings.ApprovalRow.self) },
+        { await $0.registerTableRowDecoder(table: "my_listing", decoder: MooveBindings.ListingRow.decoder()) },
+        { await $0.registerTableRowDecoder(table: "my_approval", decoder: MooveBindings.ApprovalRow.decoder()) },
         { await $0.registerTableRowDecoder(MooveBindings.PaymentRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.AgentEventRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.ShoppingItemRow.self) },
@@ -89,8 +86,8 @@ extension SpacetimeBackend {
         s.comps = rows("comp", MooveBindings.CompRow.self).map(Comp.init).sorted { $0.id < $1.id }
         s.newHomes = rows("new_home", MooveBindings.NewHomeRow.self).compactMap(NewHome.init).sorted { $0.id < $1.id }
         s.layouts = rows("layout", MooveBindings.LayoutRow.self).map(Layout.init).sorted { $0.id < $1.id }
-        s.listings = rows("listing", MooveBindings.ListingRow.self).compactMap(Listing.init).sorted { $0.id < $1.id }
-        s.approvals = rows("approval", MooveBindings.ApprovalRow.self).compactMap(Approval.init).sorted { $0.id < $1.id }
+        s.listings = rows("my_listing", MooveBindings.ListingRow.self).compactMap(Listing.init).sorted { $0.id < $1.id }
+        s.approvals = rows("my_approval", MooveBindings.ApprovalRow.self).compactMap(Approval.init).sorted { $0.id < $1.id }
         s.payments = rows("payment", MooveBindings.PaymentRow.self).map(Payment.init).sorted { $0.id < $1.id }
         s.agentEvents = rows("agent_event", MooveBindings.AgentEventRow.self).map(AgentEvent.init).sorted { $0.id < $1.id }
         s.shoppingItems = rows("shopping_item", MooveBindings.ShoppingItemRow.self).map(ShoppingItem.init).sorted { $0.id < $1.id }
@@ -98,7 +95,7 @@ extension SpacetimeBackend {
         s.serviceConfig = ServiceConfig(values: Dictionary(
             rows("service_config", MooveBindings.ServiceConfigRow.self).map { ($0.key, $0.value) },
             uniquingKeysWith: { a, _ in a }))
-        return s.scopedToVisibleItems()
+        return s
     }
 
     // MARK: Reducers
