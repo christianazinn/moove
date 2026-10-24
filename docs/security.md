@@ -25,7 +25,7 @@ How Moove protects users' data and money, what is built today, and what is still
 | T7 | Secrets committed, logged, or shipped in the app | repo, CI, `ios/` | ✅ gitleaks on every PR + full history, `.env.local` only, iOS holds only public Auth0 config |
 | T8 | Worker SSRF: the worker fetches photo URLs that clients supply | `agents/` | ✅ own uploads are read from disk, other hosts need `ALLOWED_PHOTO_HOSTS` (default none) + https + public addresses only, no redirects, 15 MB cap, 15 s timeout ([#44](https://github.com/christianazinn/moove/issues/44)) |
 | T9 | Anyone who reaches the upload port makes the worker spend: `POST /homes/import` (no auth yet) can start Apify Zillow runs and Claude vision reads | `agents/src/homes/` | ✅ capped at `HOMES_MAX_PAID_CALLS` (30) per `HOMES_SPEND_WINDOW_H` (24 h), and the cap survives restarts; concurrent imports of one link share a run. ⏳ auth on the endpoint (with upload auth) |
-| T10 | The app uploads to whatever `upload_base_url` says (#122) | `ios/MooveKit` `ServiceConfig`, `spacetime/` | 🟡 only the worker can write it, and the app now refuses `user@`, query, fragment and plain http to a non-local host. ⏳ the worker isn't pinned on databases other than `moove`, and the module regex is looser than the app's check ([#146](https://github.com/christianazinn/moove/issues/146)) |
+| T10 | The app uploads to whatever `upload_base_url` says (#122) | `ios/MooveKit` `ServiceConfig`, `spacetime/` | ✅ only the pinned worker can write it (pinned on maincloud `moove` and `moove-demo`), and both the module and the app accept only a bare https origin or local/LAN http ([#146](https://github.com/christianazinn/moove/issues/146), decision [0146](decisions/0146-module-input-hardening.md), #159) |
 
 Out of scope for a hackathon: DoS against maincloud, a compromised laptop, an Auth0 tenant takeover.
 
@@ -129,12 +129,7 @@ Tests for every fix are in `agents/test/security-followup.test.ts` and `ios/Moov
   - It refuses a non-local `E2E_URI`. CI runs `--replay` with no secrets.
 - **No `LLM_REPLAY` against maincloud.** With `replay`, `record` or `auto`, a file in `LLM_REPLAY_DIR` stands in for the model, or a live answer is written to disk. The worker now refuses to start when `LLM_REPLAY` is anything but `off` and `SPACETIME_URI` is maincloud (`replayGuardError` in `agents/src/integrations/anthropic.ts`). The live worker runs with it off (the `.env.example` default), so nothing changes there.
 
-**Proposed (contract change, backend lane): [#146](https://github.com/christianazinn/moove/issues/146)**
-- Pin the worker identity on databases other than `moove`. A `moove-demo` published to maincloud would be first-caller-wins, and that caller could redirect uploads.
-- Tighten the module's `upload_base_url` rule to match the app's.
-- Require item sizes to be finite and within 0-30 m. A room member can store `1e300`, and the app's truck estimate then traps.
-- Cap the number of objects per `import_scan(_v2)` call, and string lengths.
-- Validate `set_item_model` URLs.
+**Module-side hardening (#146, implemented in #159, decision [0146](decisions/0146-module-input-hardening.md)):** worker pinned on maincloud `moove` and `moove-demo`; strict `upload_base_url` origin; finite 0–30 m item sizes; at most 200 objects per import, with bad objects skipped and logged; length caps; `set_item_model` URL check. Limits: `docs/data-model.md` "Input limits (#146)".
 
 **Checked, no change needed:**
 - **Listing links are never fetched.**
