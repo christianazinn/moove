@@ -132,6 +132,10 @@ extension SpacetimeBackend {
         try await call(MooveBindings.ChooseDealReducer(shoppingitemid: shoppingItemId, dealid: dealId))
     }
 
+    func setItemModel(itemId: UInt64, url: String, source: ModelSource) async throws {
+        try await call(MooveBindings.SetItemModelReducer(itemid: itemId, url: url, source: source.rawValue))
+    }
+
     func createNewHome(name: String, source: NewHomeSource, floorPlanJson: String) async throws {
         try await call(CreateNewHomeReducer(nameArg: name, source: source.rawValue, floorplanjson: floorPlanJson))
     }
@@ -180,7 +184,8 @@ private extension Item {
             disposition: Disposition(rawValue: r.disposition) ?? .undecided,
             dispositionSource: DispositionSource(rawValue: r.dispositionSource) ?? .auto,
             dispositionReason: optional(r.dispositionReason),
-            fragile: r.fragile, maybeSentimental: r.maybeSentimental, updatedAt: r.updatedAt.date
+            fragile: r.fragile, maybeSentimental: r.maybeSentimental, updatedAt: r.updatedAt.date,
+            modelUrl: optional(r.modelUrl), modelSource: ModelSource(rawValue: r.modelSource)
         )
     }
 

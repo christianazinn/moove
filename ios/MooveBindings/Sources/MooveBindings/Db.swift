@@ -161,6 +161,11 @@ public struct Reducers: Sendable {
     }
 
     @discardableResult
+    public func setItemModel(itemid: UInt64, url: String, source: String) async throws -> ReducerSuccess {
+        try await client.callReducer(SetItemModelReducer(itemid: itemid, url: url, source: source))
+    }
+
+    @discardableResult
     public func setItemStage(itemid: UInt64, stage: String, field: String) async throws -> ReducerSuccess {
         try await client.callReducer(SetItemStageReducer(itemid: itemid, stage: stage, field: field))
     }

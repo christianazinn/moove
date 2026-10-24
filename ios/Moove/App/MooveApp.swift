@@ -14,9 +14,10 @@ struct MooveApp: App {
                 NavigationStack {
                     RoomVisualizationView(
                         geometry: DemoFixtures.roomGeometry(),
-                        items: Dictionary(uniqueKeysWithValues: DemoFixtures.inventory(owner: "me").items.map { ($0.scanObjectId!, $0) })
+                        items: Self.previewItems()
                     )
                 }
+                .environment(store)
             } else {
                 gate
             }
@@ -25,6 +26,18 @@ struct MooveApp: App {
             #endif
         }
     }
+
+    #if DEBUG
+    /// Harness items; MOOVE_PREVIEW_GLB=<url> gives the desk a synced SAM 3D model.
+    private static func previewItems() -> [String: Item] {
+        var items = DemoFixtures.inventory(owner: "me").items
+        if let glb = ProcessInfo.processInfo.environment["MOOVE_PREVIEW_GLB"], let i = items.firstIndex(where: { $0.id == 12 }) {
+            items[i].modelUrl = glb
+            items[i].modelSource = .sam3d
+        }
+        return Dictionary(uniqueKeysWithValues: items.map { ($0.scanObjectId!, $0) })
+    }
+    #endif
 
     private var gate: some View {
         AuthGate()
