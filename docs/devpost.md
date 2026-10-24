@@ -4,6 +4,8 @@ Draft for the Cal Hacks 13.0 submission (due **Sun 9:00 AM**). Written from what
 
 **Gallery images:** the 8 screenshots/GIFs, with taps, state and captions, are in [`docs/devpost-media.md`](devpost-media.md).
 
+**Demo video:** the 2-minute script and shot list (timings, VO, state, track and fallback per shot) are in [`docs/demo-video.md`](demo-video.md).
+
 Tagline (pick one):
 - *Scan your room. Agents handle the rest of your move.*
 - *Your move, run by agents that ask before they spend.*

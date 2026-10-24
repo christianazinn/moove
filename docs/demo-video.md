@@ -1,0 +1,103 @@
+# Demo video: 2-minute script and shot list
+
+The Devpost video, due with the submission **Sun 9:00 AM**. It's recorded in the morning, one shot at a time, and cut together. Every shot gives the timecode, the voice-over (VO), what's on screen, the state to record in, the sponsor track it hits, and a fallback.
+
+It follows [`docs/demo.md`](demo.md) (the 2-minute script) and [`docs/demo-commerce.md`](demo-commerce.md) (commerce shots, exact fixture strings), with tracks from [`docs/tracks.md`](tracks.md). The stills in [`docs/devpost-media.md`](devpost-media.md) use the same screens.
+
+**Honesty rule:** say "simulated" when the screen shows a simulated thing. Real today: the scan, Claude vision and listing copy, the Apify comps (live or replayed from real scrapes), SpacetimeDB sync, the fraud rules, and **one** x402 payment (the $0.01 Basescan row / `npm run x402:demo`). Simulated and labeled: the eBay post, every Visa checkout, and every x402 row on the Live/Demo workers (they have no CDP keys). Not shown working: the Auth0 Guardian push (the in-app inbox is shown) and two-phone sync on real devices (not yet tested).
+
+## States
+- **Demo**: Settings (gear, top right) > Backend > Data source "SpacetimeDB (live)" > Database "Demo (moove-demo)", then Items > Inventory > **Join a room** > `4RZ9G8` > **Join**. The seeded Bedroom: 9 priced items, the guitar flagged sentimental.
+- **Offline demo**: Data source "Offline demo (fixtures)". Banner: "Offline demo: fixture data, nothing is synced". Strings and figures are fixed and checked by `DemoNumbersTests`.
+- **Live scan**: a LiDAR iPhone or iPad Pro on Demo (or Offline demo for the scan only; the scan still runs on device).
+
+Switching data source mid-take is untested, so record the Demo shots and the Offline demo shots as separate takes and relaunch the app after switching.
+
+## Shots (≤ 2:00)
+
+### 1. 0:00–0:15 Scan → voxel dollhouse
+- **VO:** "Moving is mostly deciding what to do with your stuff. With Moove, you scan your room with the phone's LiDAR, and it rebuilds the room in 3D, every piece where it stood."
+- **ON SCREEN:** Scan tab, the turning voxel dollhouse hero ("Scan a room."). Tap **Scan a room**, sweep a corner (the "Also found: …" chip if the detector catches a bike, plant or guitar), **Done**, **Looks right: check photos** (auto photos marked Auto), **Add N items**. The finished page: "01 — Scan · Done", "N items added", the voxel dollhouse with real walls, doors and windows, colored from the scan.
+- **STATE:** Live scan, on Demo.
+- **TRACK:** Spacetime (the scan imports through the `import_scan_v2` reducer). Sets up Anthropic (shot 2).
+- **FALLBACK:** Offline demo, Scan tab > **Load demo scan**: the same finished page, tagged **Demo scan** ("A recorded bedroom, not a live scan…"). Change the VO's last line to "here's a recorded bedroom".
+
+### 2. 0:15–0:27 Claude names what it sees
+- **VO:** "Claude looks at the photos the scan already took, plus the LiDAR sizes, and names each item: brand, material, condition. It also catches things the scanner missed."
+- **ON SCREEN:** **See inventory** > Items > Inventory. "Identifying items from room photos…" under the room, then names filling in on the item rows (voxel thumbnails, dimensions).
+- **STATE:** Live scan on Demo (vision and the photo sweep need the worker and photos; each costs Claude calls).
+- **TRACK:** Anthropic (vision + room photo sweep).
+- **FALLBACK:** Offline demo after **Load demo scan**: the offline demo plays the sweep (a guitar appears). Then the names are fixture data, so cut "Claude names" to "Moove names" or say it's sample data.
+
+### 3. 0:27–0:39 Real comps from Apify
+- **VO:** "Then the pricing agent pulls what similar things actually sold for, eBay sold listings and Facebook Marketplace, scraped with Apify, and prices each item from the median."
+- **ON SCREEN:** Items > Review > tap **Mesh office chair** (or **IKEA Micke desk**): the estimate and "Comparable listings" with their sources.
+- **STATE:** Demo `4RZ9G8` (the seeded items price from committed real Apify scrapes, replayed and labeled `[REPLAYED]` in the event log).
+- **TRACK:** Apify.
+- **FALLBACK:** Offline demo, Items > Review > **Office chair** ($420, three comps). These are fixture comps: change the VO to "comps like these come from Apify's eBay-sold and Marketplace actors".
+
+### 4. 0:39–0:51 Sort, and two phones in sync
+- **VO:** "It suggests keep, sell, donate or trash, with a reason. It never decides sentimental things, like this guitar. Your roommate joins with a code, and SpacetimeDB keeps both phones in sync live."
+- **ON SCREEN:** Items > Review: the Needs you section with the Yamaha acoustic guitar and "Moove never decides possibly sentimental items for you." On phone A, swipe a row (e.g. Floor lamp) to **Sell**; phone B's Review moves it at the same moment. Split screen in the edit.
+- **STATE:** Demo `4RZ9G8`, **two devices** both joined to the room.
+- **TRACK:** Spacetime (two-phone sync, live shared state). Anthropic (knowing where the model shouldn't decide).
+- **FALLBACK:** Two-phone sync is **not yet tested on real devices**. If it lags or fails: one device only. Show the guitar, then on the Bedroom header in Inventory tap the share icon to show the 6-character code ("On the other phone, open Inventory → Join a room…"). VO: "a roommate can join with this code". Don't claim the live sync you didn't show.
+
+### 5. 0:51–1:04 The agent pays for its own data (x402)
+- **VO:** "When the pricing agent needs premium data, it pays for it itself: one cent of USDC over x402 on Base Sepolia, from a Coinbase server wallet. This Basescan link is the real transaction. Rows tagged Simulated are simulated, and a request over the per-call cap was refused before anything was signed."
+- **ON SCREEN:** Sell & Buy > **Spending**. Totals **Spent $0.01**, **Simulated $180.005**, **Refused 1**. The $0.01 "Premium comps for "Herman Miller Aeron"" row, tap **Basescan 0xc794…136c** (Safari shows the tx). Scroll to the red **Refused** $0.25 row, "Nothing was signed or paid."
+- **STATE:** Offline demo (the only state with the real payment's row; on Demo every x402 row is simulated with no Basescan link).
+- **TRACK:** Coinbase x402 (spending log, budget + per-call cap). Spacetime (every payment is a row).
+- **FALLBACK:** Laptop cutaway: `npm run x402:demo -- "Herman Miller Aeron"` in `agents/`, then the `On-chain:` link (a real 0.01 testnet USDC payment; its comps are canned fixture data, so don't call the data live). If the wallet is empty: open the proof tx https://sepolia.basescan.org/tx/0xc7942646380456c56dde204434aeb6115338b521b6e91a0901ec05dde1fe136c and say "settled earlier".
+
+### 6. 1:04–1:15 Big decisions come to you (Auth0)
+- **VO:** "Claude writes the listing, and anything over your $100 limit waits for your OK, by an Auth0 push or right here. Once approved it posts. The eBay post is simulated today, and it says so."
+- **ON SCREEN:** Sell & Buy > **Approvals · 2**. "Needs you · 2", the Sell request "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition" **$410** with the SIMULATED pill, "Also sent to your phone via Auth0 Guardian when set up. Approving here works too." Tap **Approve**: it moves to History, "You approved it. The listing agent posts it." Optional flash of Listings: **"Posted (simulated)"**.
+- **STATE:** Offline demo, fresh launch (continue in the same take through shot 10, don't relaunch).
+- **TRACK:** Auth0 (approval above the threshold). Anthropic (Claude-written listing).
+- **FALLBACK:** Demo with the seeded commerce chair (`SEED_COMMERCE=1`; re-arm with `npm run seed:demo -- --maincloud --reset-commerce`), approved from the joined phone (needs the #200 member-approval module on `moove-demo`). Never say "you just got a push".
+
+### 7. 1:15–1:28 The fraud screen blocks a scam (Visa trust)
+- **VO:** "For the new place, the buy agent shops deals and screens every one for fraud. This Zelle-only 'brand new' Aeron is a scam we planted for the demo. It scores 0.85, and the agent won't buy it. The $79 chair checks out on a simulated Visa rail."
+- **ON SCREEN:** Sell & Buy > **Shopping** > **Desk chair**. "Herman Miller Aeron, brand new, $95, Zelle only, ship only", seller "Planted demo scam (not a real listing)", **"Likely fraud · 0.85"**, "asks for payment by Zelle", "shipping only, no meetup", red **"Blocked: likely fraud"**. Tap **Choose** on the Target "Mesh task chair with arms, black" ($79.99): "Paid through the simulated Visa rail. No real card was charged."
+- **STATE:** Offline demo (same take). The 0.85 is a fixture value; the real fraud rules give the same planted deal 0.85 live.
+- **TRACK:** Visa (fraud check, trust and responsibility). Apify (deal search; fixture deals carry a Sample badge).
+- **FALLBACK:** If the screen misbehaves, relaunch and redo shots 6–7. Fraud screening is rules, not Claude, so don't credit Claude here.
+
+### 8. 1:28–1:36 Over the limit, it asks before paying
+- **VO:** "Over your limit, it asks first and pays with Visa only after you approve. Our Visa sandbox isn't processing cards yet, so this checkout is a labeled simulation."
+- **ON SCREEN:** Shopping list, the **Needs you · 1** card: "78" upholstered sofa, gray", "$429.99 from wayfair", "Over your approval limit. The agent pays with Visa only after you approve." Tap **Approve**.
+- **STATE:** Offline demo (same take).
+- **TRACK:** Visa (approval before checkout). Auth0.
+- **FALLBACK:** Cut this shot if over time; shots 9 and 10 still work (only the Summary figures change).
+
+### 9. 1:36–1:50 Everything flies into the new home
+- **VO:** "Paste the new place's listing link, and Moove builds the floor plan. Then everything you kept flies from where it stood in your old room into the new home, with what the agent bought."
+- **ON SCREEN:** Move > **New Home** > **Import from a listing** (Zillow, Redfin, Realtor.com): paste a link, add a floor-plan screenshot, **Build floor plan**, **Use this home**. The fly-in: pieces lift from the scanned room drawn beside the house, arc over the walls and land. Tap **Fly in** to replay; flash a layout style.
+- **STATE:** Offline demo (same take) for the house; the import needs the worker (Claude reads the floor-plan screenshot), so record the import part on Demo and cut it in.
+- **TRACK:** Anthropic (floor plan from screenshots). Visa (bought items land in the layout).
+- **FALLBACK:** The **Demo house** card > **Use this home**, and drop the first sentence of the VO. With no worker reachable, the import builds an estimate from beds, baths and square feet (labeled Estimated); say "estimated".
+
+### 10. 1:50–2:00 Summary: agents kept you safe
+- **VO:** "The summary shows what you made, what the agents spent, real and simulated, and every guardrail that fired. Moove runs your move, and you stay in control."
+- **ON SCREEN:** **Summary** tab, "Your move, handled.", Money with its **Simulated** tag, then scroll to **Agents kept you safe**: "1 scam deal blocked · fraud score 0.85", the approvals line, "2 sentimental items left for you", spend against the data and card budgets with Sim tags.
+- **STATE:** Offline demo (same take, after shots 6–8).
+- **TRACK:** All of them in one card. Visa trust, Coinbase spend caps, Auth0 approvals.
+- **FALLBACK:** If a figure looks off, hold on Agents kept you safe only (the VO names no numbers).
+
+## Before recording
+- [ ] **Devices:** a LiDAR iPad Pro or iPhone for shot 1, a second phone for shot 4, both on the latest `main` build, charged.
+- [ ] **Backend:** `cd agents && npm run status` shows `moove-demo` UP (worker online, uploads healthy). Check the Claude/Apify daily caps aren't used up (`docs/demo.md`, "Before the demo").
+- [ ] **Seeded room:** both devices on Demo and joined to `4RZ9G8`, the Bedroom visible with prices. For the Demo approval fallback in shot 6, ask Christian to run `--reset-commerce`.
+- [ ] **Do Not Disturb** on every device and the laptop (no Guardian, Slack or message banners).
+- [ ] **Screen recording** in Control Center on each device; laptop browser tab with the Basescan proof tx loaded.
+- [ ] **Reset data:** force-quit and relaunch before the Offline demo take (resets "Approvals · 2" and the totals). Don't run **Load demo scan** on Demo before shot 1 (it adds a "Demo bedroom" room that then shows in the hero and the room list).
+- [ ] Tap **"Continue without an account"** at login unless you're showing sign-in.
+
+## Recording tips
+- Record each shot separately, with a second of stillness at each end. Cut in the edit.
+- Use the built-in iOS/iPadOS screen recording (Control Center) and export the edit at 60 fps so the dollhouse turn and fly-in stay smooth. Same orientation and appearance (light/dark) on every shot.
+- Record the VO separately, after the cut, reading the lines above. Trim screen time to fit, not the words.
+- Shot 4: start both devices' screen recordings, then clap or tap at the same time to sync the split screen.
+- Move slowly while scanning (RoomPlan needs it), and let the fly-in finish before cutting.
+- Keep the SIMULATED pills and Demo tags in frame; don't crop them out.
