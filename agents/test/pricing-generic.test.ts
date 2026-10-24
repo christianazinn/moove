@@ -10,6 +10,8 @@ test('generic RoomPlan names are not priced until something names the item', () 
   assert.equal(isGenericQuery(item({ name: 'other' })), true);
   assert.equal(isGenericQuery(item({ name: '', category: 'Storage' })), true);
   assert.equal(needsPricing(item({ name: 'other' })), false);
+  // the app's placeholder for an item added by photo whose photo hasn't arrived yet
+  assert.equal(needsPricing(item({ name: 'New item' })), false);
   // vision or a rename gives it a real name -> priced
   assert.equal(needsPricing(item({ name: 'IKEA Kallax shelf', detailsStatus: 'done' })), true);
   // a brand alone makes the query specific enough

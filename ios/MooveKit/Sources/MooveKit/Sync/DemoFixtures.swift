@@ -207,6 +207,24 @@ extension DemoFixtures {
         fragile: true
     )
 
+    /// Offline demo only (`FixtureBackend.simulateIdentify`): what "vision" names an item added by
+    /// photo. Samples, not read from the photo; the item and its agent event say so.
+    public static let photoAddSamples: [Item] = [
+        Item(id: 0, owner: "demo", roomId: 0, name: "Desk lamp", category: "lamp",
+             widthM: 0, heightM: 0, depthM: 0, material: "metal", brand: "IKEA", condition: 4, estValueCents: 1_500),
+        Item(id: 0, owner: "demo", roomId: 0, name: "Ceramic vase", category: "decor",
+             widthM: 0, heightM: 0, depthM: 0, material: "ceramic", condition: 4, estValueCents: 1_200, fragile: true),
+        Item(id: 0, owner: "demo", roomId: 0, name: "Bluetooth speaker", category: "electronics",
+             widthM: 0, heightM: 0, depthM: 0, material: "plastic", brand: "JBL", condition: 3, estValueCents: 4_000),
+    ]
+
+    /// The sample for an item id (stable, so a re-run names it the same).
+    public static func photoAddSample(for itemId: UInt64) -> Item {
+        photoAddSamples[Int(itemId % UInt64(photoAddSamples.count))]
+    }
+
+    public static let photoAddSampleNote = "Offline demo: a sample identification, not read from your photo."
+
     /// Code for the roommate's room in the offline demo (#10): enter it in "Join a room".
     public static let roommateJoinCode = "DEMO42"
 

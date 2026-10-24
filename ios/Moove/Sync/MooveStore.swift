@@ -184,9 +184,49 @@ final class MooveStore {
         await run { try await $0.importScan(scan) }
     }
 
+    /// `add_item_photo` re-queues vision; offline, the fixture plays it (`simulateIdentify`).
     @discardableResult
     func addItemPhoto(itemId: UInt64, url: String) async -> Bool {
-        await run { try await $0.addItemPhoto(itemId: itemId, url: url) }
+        guard await run({ try await $0.addItemPhoto(itemId: itemId, url: url) }) else { return false }
+        simulateIdentify(itemId: itemId)
+        return true
+    }
+
+    // MARK: Add item (Inventory's **+ Add item**: a photo of something the scan missed)
+
+    /// `add_item`. Returns whether it landed; the error is in `lastError`.
+    @discardableResult
+    func addItem(roomId: UInt64, name: String, object: ScanObject) async -> Bool {
+        await run { try await $0.addItem(roomId: roomId, name: name, object: object) }
+    }
+
+    /// `create_room(name, "old")`, then the new room once it reaches the snapshot (~5 s), since
+    /// reducers can't return its id. Nil when the write failed or the room never showed up.
+    func createRoom(named name: String) async -> Room? {
+        let before = Set(snapshot.rooms.map(\.id))
+        guard await run({ try await $0.createRoom(name: name) }) else { return nil }
+        for attempt in 0..<20 {
+            if let room = snapshot.rooms.filter({ $0.name == name && $0.owner == snapshot.me && !before.contains($0.id) })
+                .max(by: { $0.id < $1.id }) { return room }
+            if attempt < 19 { try? await Task.sleep(for: .milliseconds(250)) }
+        }
+        return nil
+    }
+
+    /// The item whose `scan_object_id` is `id`, once it reaches the snapshot (~5 s).
+    func item(withScanObjectId id: String) async -> Item? {
+        for attempt in 0..<20 {
+            if let item = snapshot.items.first(where: { $0.scanObjectId == id }) { return item }
+            if attempt < 19 { try? await Task.sleep(for: .milliseconds(250)) }
+        }
+        return nil
+    }
+
+    /// Offline demo only: plays the vision + pricing agents on an item that just got a photo
+    /// (sample results, labeled as such). A no-op on the live backend, where the worker runs.
+    func simulateIdentify(itemId: UInt64) {
+        guard let fixture = backend as? FixtureBackend else { return }
+        Task { try? await fixture.simulateIdentify(itemId: itemId) }
     }
 
     /// The scan just imported into room `roomName`, once it reaches the snapshot

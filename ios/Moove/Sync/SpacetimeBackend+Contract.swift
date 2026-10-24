@@ -140,6 +140,17 @@ extension SpacetimeBackend {
         try await call(AddItemPhotoReducer(itemid: itemId, url: url))
     }
 
+    /// `add_item` (Inventory's **+ Add item**). The module keeps only an http(s) `photo_url`.
+    func addItem(roomId: UInt64, name: String, object: ScanObject) async throws {
+        try await call(MooveBindings.AddItemReducer(roomid: roomId, object: MooveBindings.ScanObjectInput(
+            scanObjectId: object.scanObjectId, name: name, category: object.category,
+            widthM: object.widthM, heightM: object.heightM, depthM: object.depthM, photoUrl: object.photoUrl ?? "")))
+    }
+
+    func createRoom(name: String) async throws {
+        try await call(MooveBindings.CreateRoomReducer(nameArg: name, home: Home.old.rawValue))
+    }
+
     func addScanPhoto(scanId: UInt64, url: String) async throws {
         try await call(AddScanPhotoReducer(scanid: scanId, url: url))
     }

@@ -125,6 +125,12 @@ public protocol SyncBackend: AnyObject, Sendable {
     func registerUser(name: String, email: String?, auth0Sub: String?) async throws
     func importScan(_ scan: ScanImport) async throws
     func addItemPhoto(itemId: UInt64, url: String) async throws
+    /// `add_item(room_id, object)`: one item into a room you own or joined (Inventory's
+    /// **+ Add item**). `name` '' means the category. Reducers can't return ids, so find the
+    /// row by `object.scanObjectId`.
+    func addItem(roomId: UInt64, name: String, object: ScanObject) async throws
+    /// `create_room(name, "old")`: an empty old-home room (Add item's "New room…").
+    func createRoom(name: String) async throws
     /// `add_scan_photo` (#92): a wide room photo for the worker's photo sweep.
     func addScanPhoto(scanId: UInt64, url: String) async throws
     func setDisposition(itemId: UInt64, disposition: Disposition) async throws
