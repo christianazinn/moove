@@ -41,12 +41,20 @@ public struct Room: Codable, Sendable, Hashable, Identifiable {
     public var owner: IdentityHex
     public var name: String
     public var home: Home
+    /// 6-character code a second phone enters to join this room (#10).
+    public var joinCode: String?
 
-    public init(id: UInt64, owner: IdentityHex, name: String, home: Home = .old) {
+    public init(id: UInt64, owner: IdentityHex, name: String, home: Home = .old, joinCode: String? = nil) {
         self.id = id
         self.owner = owner
         self.name = name
         self.home = home
+        self.joinCode = joinCode
+    }
+
+    /// Join codes are matched trimmed and uppercased, as the `join_room` reducer does.
+    public static func normalizeJoinCode(_ code: String) -> String {
+        code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
     }
 }
 

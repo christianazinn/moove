@@ -161,4 +161,26 @@ extension DemoFixtures {
             }
         )
     }
+
+    /// Code for the roommate's room in the offline demo (#10): enter it in "Join a room".
+    public static let roommateJoinCode = "DEMO42"
+
+    /// A roommate's room the demo user can join by code, as if a second phone had scanned it.
+    public static func roommateRoom(owner: IdentityHex = "fixture-roommate") -> SyncSnapshot {
+        var s = SyncSnapshot()
+        s.users = [User(identity: owner, name: "Sam")]
+        s.rooms = [Room(id: 900, owner: owner, name: "Living room", joinCode: roommateJoinCode)]
+        s.scans = [Scan(id: 901, owner: owner, roomId: 900)]
+        s.items = [
+            Item(id: 910, owner: owner, roomId: 900, scanObjectId: "demo-910", name: "Sofa", category: "sofa",
+                 widthM: 2.1, heightM: 0.85, depthM: 0.9, material: "fabric", condition: 3, estValueCents: 25_000,
+                 disposition: .keep, dispositionReason: "Fits the new living room."),
+            Item(id: 911, owner: owner, roomId: 900, scanObjectId: "demo-911", name: "TV stand", category: "storage",
+                 widthM: 1.5, heightM: 0.5, depthM: 0.4, material: "laminate", condition: 3, estValueCents: 3_500,
+                 disposition: .sell, dispositionReason: "New place has a wall mount."),
+            Item(id: 912, owner: owner, roomId: 900, scanObjectId: "demo-912", name: "Rug", category: "decor",
+                 widthM: 2.0, heightM: 0.02, depthM: 1.4, condition: 2, estValueCents: 2_000, disposition: .undecided),
+        ]
+        return s
+    }
 }

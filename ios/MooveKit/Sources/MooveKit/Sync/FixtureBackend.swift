@@ -15,6 +15,7 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         case dealDoesNotMatchItem
         case invalidAttribute
         case invalidColors
+        case noSuchRoomCode
     }
 
     private let lock = NSLock()
@@ -23,22 +24,49 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
     private var snapshotContinuations: [UUID: AsyncStream<SyncSnapshot>.Continuation] = [:]
     private var statusContinuations: [UUID: AsyncStream<SyncStatus>.Continuation] = [:]
     private let identity: IdentityHex
+    /// Other people's rooms (with their scans, items and owners) that only
+    /// appear once the user joins them by code, like `room_member` rows live.
+    private var joinable: SyncSnapshot
+    /// Rooms the user has joined (the `room_member` table, for this one identity).
+    private var memberRoomIds: Set<UInt64> = []
 
-    public init(identity: IdentityHex = "fixture-user", seed: SyncSnapshot = SyncSnapshot()) {
+    public init(identity: IdentityHex = "fixture-user", seed: SyncSnapshot = SyncSnapshot(), joinable: SyncSnapshot = SyncSnapshot()) {
         self.identity = identity
         self.state = seed
+        self.joinable = joinable
+        for i in state.rooms.indices where state.rooms[i].joinCode == nil {
+            state.rooms[i].joinCode = Self.joinCode(forRoomId: state.rooms[i].id)
+        }
+        for i in self.joinable.rooms.indices where self.joinable.rooms[i].joinCode == nil {
+            self.joinable.rooms[i].joinCode = Self.joinCode(forRoomId: self.joinable.rooms[i].id)
+        }
         let ids: [[UInt64]] = [
             seed.rooms.map(\.id), seed.scans.map(\.id), seed.items.map(\.id), seed.comps.map(\.id),
             seed.newHomes.map(\.id), seed.layouts.map(\.id), seed.listings.map(\.id), seed.approvals.map(\.id),
             seed.payments.map(\.id), seed.agentEvents.map(\.id),
+            joinable.rooms.map(\.id), joinable.scans.map(\.id), joinable.items.map(\.id),
         ]
         let maxId = ids.joined().max() ?? 0
         self.nextId = maxId + 1
     }
 
-    /// The bundled demo inventory (already priced and sorted, as if the agents had run).
+    /// The bundled demo inventory (already priced and sorted, as if the agents had run),
+    /// plus a roommate's room the user can join with `DemoFixtures.roommateJoinCode`.
     public static func demo(identity: IdentityHex = "fixture-user") -> FixtureBackend {
-        FixtureBackend(identity: identity, seed: DemoFixtures.demo(owner: identity))
+        FixtureBackend(identity: identity, seed: DemoFixtures.demo(owner: identity), joinable: DemoFixtures.roommateRoom())
+    }
+
+    /// A stable 6-character code for a room id, from the module's alphabet (no I, O, 0, 1).
+    /// Multiplying by an odd constant mod 32^6 is a bijection, so ids below 32^6 never collide.
+    public static func joinCode(forRoomId id: UInt64) -> String {
+        let alphabet = Array("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
+        var n = (id &* 0x9E37_79B1) & ((1 << 30) - 1)
+        var code = ""
+        for _ in 0..<6 {
+            code.append(alphabet[Int(n & 31)])
+            n >>= 5
+        }
+        return code
     }
 
     // MARK: Connection
@@ -106,7 +134,7 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
                               uniquingKeysWith: { a, _ in a })
         try mutateAuthed { s, me in
             let roomId = takeId()
-            s.rooms.append(Room(id: roomId, owner: me, name: scan.roomName))
+            s.rooms.append(Room(id: roomId, owner: me, name: scan.roomName, joinCode: Self.joinCode(forRoomId: roomId)))
             s.scans.append(Scan(id: takeId(), owner: me, roomId: roomId, usdzUrl: scan.usdzUrl, capturedRoomJsonUrl: scan.capturedRoomJsonUrl))
             for (object, attributes) in zip(scan.objects, attributes) {
                 var item = Item(
@@ -163,6 +191,24 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
     public func setItemColors(itemId: UInt64, colorsJson: String) async throws {
         guard let json = ItemColors.normalizedJson(colorsJson) else { throw Failure.invalidColors }
         try updateOwnedItem(itemId) { $0.colors = ItemColors(json: json) }
+    }
+
+    public func joinRoom(code: String) async throws {
+        let code = Room.normalizeJoinCode(code)
+        try mutateAuthed { s, me in
+            if let room = s.rooms.first(where: { $0.joinCode == code }) {
+                // Already visible: your own room or one you joined is a no-op, as in the module.
+                if room.owner != me { memberRoomIds.insert(room.id) }
+                return
+            }
+            guard let room = joinable.rooms.first(where: { $0.joinCode == code }) else { throw Failure.noSuchRoomCode }
+            memberRoomIds.insert(room.id)
+            s.rooms.append(room)
+            s.scans += joinable.scans.filter { $0.roomId == room.id }
+            s.items += joinable.items.filter { $0.roomId == room.id }
+            s.users += joinable.users.filter { u in u.identity == room.owner && !s.users.contains { $0.identity == u.identity } }
+            joinable.rooms.removeAll { $0.id == room.id }
+        }
     }
 
     // MARK: Shopping (#15)
@@ -293,7 +339,8 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
     private func updateOwnedItem(_ itemId: UInt64, _ change: (inout Item) -> Void) throws {
         try mutateAuthed { s, me in
             guard let i = s.items.firstIndex(where: { $0.id == itemId }) else { throw Failure.noSuchItem }
-            guard s.items[i].owner == me else { throw Failure.unauthorized }
+            // Owners and room members can edit a room's items.
+            guard s.items[i].owner == me || memberRoomIds.contains(s.items[i].roomId) else { throw Failure.unauthorized }
             change(&s.items[i])
             s.items[i].updatedAt = .now
         }
