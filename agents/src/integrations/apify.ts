@@ -72,7 +72,8 @@ function normalize(source: string, rows: any[]): Comp[] {
     .filter(c => c.title && c.priceCents > 0);
 }
 
-const cacheFile = (q: string) =>
+// Cache path for a query, relative to agents/ (the worker's cwd).
+export const cacheFile = (q: string) =>
   path.join('fixtures', 'comps', `${q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)}.json`);
 
 async function runActor(src: Source, q: string): Promise<Comp[]> {
