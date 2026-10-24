@@ -106,7 +106,9 @@ struct JoinRoomView: View {
                 store.lastError = nil
                 error = detail.localizedCaseInsensitiveContains("no room") || detail.contains("noSuchRoomCode")
                     ? "No room has that code. Check it and try again."
-                    : "Couldn't join: \(detail)"
+                    : detail.hasPrefix("Not saved: ")
+                        ? "Couldn't join: " + detail.dropFirst("Not saved: ".count)  // offline (MooveStore.describe)
+                        : "Couldn't join: \(detail)"
             }
         }
     }
