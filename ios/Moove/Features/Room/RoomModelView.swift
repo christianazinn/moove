@@ -76,12 +76,9 @@ struct RoomModelView: View {
             block.model?.materials = [RoomScene.material(color, roughness: 0.5, glow: selected)]
             block.scale = selected ? SIMD3(repeating: 1.06) : .one
 
-            block.children.filter { $0.name == "label" }.forEach { $0.removeFromParent() }
-            if showLabels || selected {
-                var text = item?.name ?? object.category.capitalized
-                if item?.maybeSentimental == true { text += " ♥" }
-                block.addChild(RoomScene.label(text, above: object, fontSize: labelSize))
-            }
+            var text = item?.name ?? object.category.capitalized
+            if item?.maybeSentimental == true { text += " ♥" }
+            RoomScene.setLabel((showLabels || selected) ? text : nil, on: block, above: object, fontSize: labelSize)
         }
     }
 }

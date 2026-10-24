@@ -155,6 +155,20 @@ enum RoomScene {
         return block
     }
 
+    /// Shows `text` (nil hides it) as `entity`'s label. Text meshes are expensive,
+    /// so an existing label with the same text and size is kept as is: room
+    /// updates fire constantly while agents price and sort.
+    static func setLabel(_ text: String?, on entity: Entity, above object: RoomGeometry.Object, fontSize: Float) {
+        let key = text.map { "label:\(fontSize):\($0)" }
+        let existing = entity.children.filter { $0.name.hasPrefix("label") }
+        if let key, existing.count == 1, existing[0].name == key { return }
+        existing.forEach { $0.removeFromParent() }
+        guard let text, let key else { return }
+        let tag = label(text, above: object, fontSize: fontSize)
+        tag.name = key
+        entity.addChild(tag)
+    }
+
     /// Floating, camera-facing name tag above an object.
     /// `fontSize` is in room meters; pass something proportional to the room so
     /// labels stay readable however big the room is.

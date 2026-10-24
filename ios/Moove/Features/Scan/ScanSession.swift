@@ -104,6 +104,9 @@ final class ScanSession {
     /// Uploads the room files and photos, then creates the room, scan and
     /// items in one reducer call.
     func submit(to store: MooveStore, uploader: Uploader) async {
+        // A double tap on "Add N items" must not import the scan twice.
+        if case .uploading = phase { return }
+        if phase == .finished { return }
         let total = 2 + photos.count
         var done = 0
         phase = .uploading(done: 0, total: total)
@@ -129,7 +132,7 @@ final class ScanSession {
         var photoUrls: [UUID: String] = [:]
         for (id, file) in photos { photoUrls[id] = await send(file, "image/jpeg") }
 
-        await store.importScan(ScanImport(
+        let imported = await store.importScan(ScanImport(
             roomName: roomName,
             usdzUrl: usdzUrl,
             capturedRoomJsonUrl: jsonUrl,
@@ -139,10 +142,6 @@ final class ScanSession {
                            photoUrl: photoUrls[$0.id])
             }
         ))
-        if let error = store.lastError {
-            phase = .failed(error)
-        } else {
-            phase = .finished
-        }
+        phase = imported ? .finished : .failed(store.lastError ?? "Couldn't save the scan")
     }
 }
