@@ -172,6 +172,21 @@ final class MooveStore {
     }
 
     @discardableResult
+    /// After Object Capture: uploads the USDZ to the worker and records it on the
+    /// item so other phones get it too. Offline (or no upload server) it stays
+    /// on this device only, which the room view already shows.
+    func publishCapturedModel(scanObjectId: String, file: URL) async {
+        guard backendKind == .spacetime,
+              let item = items.first(where: { $0.scanObjectId == scanObjectId || "item-\($0.id)" == scanObjectId }),
+              let base = config.uploadBaseURL else { return }
+        do {
+            let url = try await HTTPUploader(baseURL: base).upload(file, contentType: "model/vnd.usdz+zip")
+            _ = await run { try await $0.setItemModel(itemId: item.id, url: url, source: .capture) }
+        } catch {
+            lastError = "3D model saved on this phone only (upload failed: \(error.localizedDescription))"
+        }
+    }
+
     private func run(_ op: (SyncBackend) async throws -> Void) async -> Bool {
         do {
             try await op(backend)

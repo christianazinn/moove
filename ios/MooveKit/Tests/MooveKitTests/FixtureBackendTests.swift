@@ -66,3 +66,17 @@ import Testing
         return await it.next()!
     }
 }
+
+@Suite struct ItemModelTests {
+    @Test func captureBeatsSam3d() async throws {
+        let backend = FixtureBackend.demo()
+        _ = try await backend.connect(token: nil)
+        try await backend.setItemModel(itemId: 11, url: "https://x/a.glb", source: .sam3d)
+        try await backend.setItemModel(itemId: 11, url: "https://x/a.usdz", source: .capture)
+        try await backend.setItemModel(itemId: 11, url: "https://x/b.glb", source: .sam3d)
+        var it = backend.snapshots().makeAsyncIterator()
+        let item = await it.next()!.items.first { $0.id == 11 }
+        #expect(item?.modelUrl == "https://x/a.usdz")
+        #expect(item?.modelSource == .capture)
+    }
+}
