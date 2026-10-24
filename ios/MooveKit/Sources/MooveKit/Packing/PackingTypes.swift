@@ -42,6 +42,19 @@ public enum BoxSize: String, Sendable, CaseIterable {
         }
     }
 
+    /// One letter for the label: S, M, L, D (dish pack), P (picture), W (wardrobe), T (tote).
+    public var glyph: String {
+        switch self {
+        case .small: return "S"
+        case .medium: return "M"
+        case .large: return "L"
+        case .dishPack: return "D"
+        case .picture: return "P"
+        case .wardrobe: return "W"
+        case .tote: return "T"
+        }
+    }
+
     public var volumeM3: Double {
         let d = dimsM
         return d.w * d.h * d.d
@@ -64,11 +77,23 @@ public struct BoxContent: Sendable, Hashable {
     /// The inventory item this came from; nil for typical contents Moove adds
     /// (the UI labels those "typical for a bedroom" and so on).
     public var itemId: UInt64?
+    /// Why it's in this box ("Kitchen → Box 7 · fragile, wrapped"); nil for typical contents.
+    public var reason: String?
+    /// A voxel builder category for a generic thumbnail ("books", "kitchenware", "clothes").
+    public var category: String
 
-    public init(name: String, quantity: Int, itemId: UInt64? = nil) {
+    public init(name: String, quantity: Int, itemId: UInt64? = nil, reason: String? = nil, category: String = "decor") {
         self.name = name
         self.quantity = quantity
         self.itemId = itemId
+        self.reason = reason
+        self.category = category
+    }
+
+    /// A generic voxel model for this line (books, a stack of plates, folded clothes), for lines
+    /// without a scanned item to draw.
+    public var voxelSpec: VoxelItemSpec {
+        VoxelItemSpec(category: category, name: name, widthM: 0, depthM: 0, heightM: 0, id: "box-line-\(name)")
     }
 }
 
@@ -86,9 +111,16 @@ public struct MovingBox: Sendable, Hashable, Identifiable {
     public var openFirst: Bool
     public var keepWithYou: Bool
     public var thisSideUp: Bool
+    /// What it holds, as kind keys ("books", "kitchen", "openFirst"), for an icon.
+    public var kinds: [String]
+    /// Why these things share this box ("Fragile: wrapped, under 8 kg").
+    public var reason: String
+    /// Where it goes and how Moove knows ("Goes to Bedroom 2 (from your saved layout)").
+    public var roomReason: String
 
     public init(id: Int, size: BoxSize, room: String, title: String, contents: [BoxContent], weightKg: Double,
-                fragile: Bool = false, openFirst: Bool = false, keepWithYou: Bool = false, thisSideUp: Bool = false) {
+                fragile: Bool = false, openFirst: Bool = false, keepWithYou: Bool = false, thisSideUp: Bool = false,
+                kinds: [String] = [], reason: String = "", roomReason: String = "") {
         self.id = id
         self.size = size
         self.room = room
@@ -99,6 +131,9 @@ public struct MovingBox: Sendable, Hashable, Identifiable {
         self.openFirst = openFirst
         self.keepWithYou = keepWithYou
         self.thisSideUp = thisSideUp
+        self.kinds = kinds
+        self.reason = reason
+        self.roomReason = roomReason
     }
 }
 
@@ -110,12 +145,58 @@ public struct FurnitureNote: Sendable, Hashable, Identifiable {
     /// Destination room, or "Keep with you" for sentimental pieces that ride in the car.
     public var room: String
     public var steps: [String]
+    /// Why it isn't boxed ("Too big for a box: legs off, wrap in blankets").
+    public var reason: String
+    /// Where it goes and how Moove knows.
+    public var roomReason: String
 
-    public init(id: UInt64, name: String, room: String, steps: [String]) {
+    public init(id: UInt64, name: String, room: String, steps: [String], reason: String = "", roomReason: String = "") {
         self.id = id
         self.name = name
         self.room = room
         self.steps = steps
+        self.reason = reason
+        self.roomReason = roomReason
+    }
+}
+
+/// Something bought for the new home (Sell & Buy): a purchased shopping item and its chosen deal.
+public struct BoughtPiece: Sendable, Hashable {
+    public var item: ShoppingItem
+    public var deal: Deal?
+
+    public init(item: ShoppingItem, deal: Deal? = nil) {
+        self.item = item
+        self.deal = deal
+    }
+}
+
+/// A bought piece that ships straight to the new home, so nothing to pack.
+public struct DeliveredItem: Sendable, Hashable, Identifiable {
+    /// The shopping item's id.
+    public var id: UInt64
+    /// The shopping item's name ("Mattress").
+    public var name: String
+    /// The chosen deal's title, or the name without one.
+    public var title: String
+    /// Who sells it ("ikea", "Facebook Marketplace · Dana"), or "" without a deal.
+    public var seller: String
+    public var room: String
+    public var reason: String
+    public var roomReason: String
+    /// The same voxel model the new-home layout draws for it.
+    public var voxelSpec: VoxelItemSpec
+
+    public init(id: UInt64, name: String, title: String, seller: String, room: String, reason: String, roomReason: String,
+                voxelSpec: VoxelItemSpec) {
+        self.id = id
+        self.name = name
+        self.title = title
+        self.seller = seller
+        self.room = room
+        self.reason = reason
+        self.roomReason = roomReason
+        self.voxelSpec = voxelSpec
     }
 }
 
@@ -200,14 +281,17 @@ public struct PackingPlan: Sendable, Hashable {
     public var supplies: [SupplyLine]
     public var truck: TruckEstimate
     public var schedule: [PackingStep]
+    /// Bought pieces delivered to the new home: not boxed, not on the truck.
+    public var delivered: [DeliveredItem]
 
     public init(boxes: [MovingBox], furniture: [FurnitureNote], supplies: [SupplyLine], truck: TruckEstimate,
-                schedule: [PackingStep]) {
+                schedule: [PackingStep], delivered: [DeliveredItem] = []) {
         self.boxes = boxes
         self.furniture = furniture
         self.supplies = supplies
         self.truck = truck
         self.schedule = schedule
+        self.delivered = delivered
     }
 
     public static let empty = PackingPlan(boxes: [], furniture: [], supplies: [], truck: .zero, schedule: [])
