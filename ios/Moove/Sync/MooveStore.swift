@@ -25,6 +25,27 @@ final class MooveStore {
     private let config: AppConfig
 
     static let backendKindKey = "moove.backendKind"
+    /// Optional database-name override (Settings → Database), e.g. "moove-demo".
+    static let databaseKey = "moove.database"
+
+    /// The database to connect to: the Settings override, else the build's.
+    static func databaseName(config: AppConfig) -> String {
+        let override = UserDefaults.standard.string(forKey: databaseKey)?.trimmingCharacters(in: .whitespaces) ?? ""
+        return override.isEmpty ? config.spacetimeDB : override
+    }
+
+    var databaseName: String { Self.databaseName(config: config) }
+
+    /// Where photos and scan files go: the URL the worker announces in
+    /// `service_config` (#122, it changes whenever the tunnel restarts), else the
+    /// build's `MOOVE_UPLOAD_BASE_URL`. Nil in offline demo mode (files stay local).
+    var uploadBaseURL: URL? {
+        guard backendKind == .spacetime else { return nil }
+        return snapshot.serviceConfig.uploadBaseURL(fallback: config.uploadBaseURL)
+    }
+
+    /// True when the upload URL came from the worker rather than the build.
+    var uploadURLIsLive: Bool { snapshot.serviceConfig.uploadBaseURL != nil }
 
     init(config: AppConfig = .current, kind: BackendKind? = nil) {
         self.config = config
@@ -43,7 +64,7 @@ final class MooveStore {
 
     private static func makeBackend(_ kind: BackendKind, config: AppConfig) -> SyncBackend {
         switch kind {
-        case .spacetime: SpacetimeBackend(host: config.spacetimeHost, db: config.spacetimeDB)
+        case .spacetime: SpacetimeBackend(host: config.spacetimeHost, db: databaseName(config: config))
         case .fixture: FixtureBackend.demo()
         }
     }
@@ -72,6 +93,7 @@ final class MooveStore {
         listeners.forEach { $0.cancel() }
         listeners = []
         snapshot = SyncSnapshot()
+        AppConfig.runtimeUploadBaseURL = nil
         status = .disconnected
     }
 
@@ -84,13 +106,29 @@ final class MooveStore {
         await connect(token: token)
     }
 
+    /// Switches the live backend to another database on the same host (nil = build default).
+    func switchDatabase(to name: String?, token: String?) async {
+        let current = databaseName
+        if let name, !name.isEmpty { UserDefaults.standard.set(name, forKey: Self.databaseKey) }
+        else { UserDefaults.standard.removeObject(forKey: Self.databaseKey) }
+        guard databaseName != current || backendKind != .spacetime else { return }
+        await disconnect()
+        UserDefaults.standard.set(BackendKind.spacetime.rawValue, forKey: Self.backendKindKey)
+        backendKind = .spacetime
+        backend = Self.makeBackend(.spacetime, config: config)
+        await connect(token: token)
+    }
+
     private func startListening() {
         listeners.forEach { $0.cancel() }
         let snapshots = backend.snapshots()
         let statuses = backend.statusUpdates()
         listeners = [
             Task { [weak self] in
-                for await snap in snapshots { self?.snapshot = snap }
+                for await snap in snapshots {
+                    self?.snapshot = snap
+                    AppConfig.runtimeUploadBaseURL = snap.serviceConfig.uploadBaseURL
+                }
             },
             Task { [weak self] in
                 for await status in statuses { self?.status = status }

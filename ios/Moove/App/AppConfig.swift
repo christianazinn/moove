@@ -25,3 +25,18 @@ struct AppConfig: Sendable {
         )
     }()
 }
+
+extension AppConfig {
+    private static let runtimeLock = NSLock()
+    nonisolated(unsafe) private static var _runtimeUploadBaseURL: URL?
+
+    /// The upload URL the worker announced in `service_config` (#122), kept current
+    /// by `MooveStore`. Nil until connected, and in offline demo mode.
+    static var runtimeUploadBaseURL: URL? {
+        get { runtimeLock.withLock { _runtimeUploadBaseURL } }
+        set { runtimeLock.withLock { _runtimeUploadBaseURL = newValue } }
+    }
+
+    /// The URL clients should use right now: the worker's announced one, else the build's.
+    static var effectiveUploadBaseURL: URL? { runtimeUploadBaseURL ?? current.uploadBaseURL }
+}
