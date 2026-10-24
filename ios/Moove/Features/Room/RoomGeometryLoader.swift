@@ -23,8 +23,7 @@ enum RoomGeometryLoader {
             cache[urlString] = geometry
             return geometry
         }
-        let isDemo = snapshot.items.contains { $0.roomId == room.id && ($0.scanObjectId?.hasPrefix("demo-") ?? false) }
-        return isDemo ? DemoFixtures.roomGeometry() : nil
+        return DemoFixtures.roomGeometry(forScanObjectIds: snapshot.items.filter { $0.roomId == room.id }.compactMap(\.scanObjectId))
     }
 
     /// Accepts either RoomPlan's JSON or an already-converted `RoomGeometry`.
