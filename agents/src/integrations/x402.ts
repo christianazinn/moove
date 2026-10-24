@@ -268,15 +268,37 @@ export class X402Rail {
     const amount = ctx.quotedUsdMicros ?? 0n;
     const url = new Request(input, init).url;
     await this.reserveOrRefuse(ctx, amount, "simulated", url);
-    const response = await this.fetchImpl(input, init);
-    const payment = this.record(ctx, { payee: "simulated", amount, txHash: "", status: "settled", simulated: true });
+    let response: Response;
+    try {
+      response = await this.fetchImpl(input, init);
+    } catch (err) {
+      this.ledger.release(ctx.agent, amount);
+      await this.event(ctx, "error", `[SIMULATED] x402 payment for ${ctx.purpose} failed: ${(err as Error).message}`, {
+        ...this.railData(ctx, "failed"),
+        url,
+        payee: "simulated",
+        amountUsdMicros: amount.toString(),
+      });
+      throw err;
+    }
+    // Like realFetch: a non-2xx endpoint means the payment didn't go through, so refund and record it as failed.
+    const ok = response.ok;
+    if (!ok) this.ledger.release(ctx.agent, amount);
+    const payment = this.record(ctx, { payee: "simulated", amount, txHash: "", status: ok ? "settled" : "failed", simulated: true });
     await this.sink.recordPayment(payment);
-    await this.event(ctx, "payment", `[SIMULATED] Paid ${formatUsd(amount)} USDC for ${ctx.purpose}`, {
-      ...this.railData(ctx, "settled"),
-      url,
-      payee: payment.payee,
-      amountUsdMicros: amount.toString(),
-    });
+    await this.event(
+      ctx,
+      ok ? "payment" : "error",
+      ok
+        ? `[SIMULATED] Paid ${formatUsd(amount)} USDC for ${ctx.purpose}`
+        : `[SIMULATED] x402 payment for ${ctx.purpose} failed (HTTP ${response.status})`,
+      {
+        ...this.railData(ctx, ok ? "settled" : "failed"),
+        url,
+        payee: payment.payee,
+        amountUsdMicros: amount.toString(),
+      },
+    );
     return { response, payment };
   }
 

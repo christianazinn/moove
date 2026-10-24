@@ -259,6 +259,40 @@ test("simulated rail labels every payment and event as simulated", async () => {
   assert.equal(d.url, "https://paid.example/comps");
 });
 
+test("simulated rail: a non-2xx endpoint records no settled payment and restores the budget", async () => {
+  const { sink, payments, events } = memorySink();
+  const fetch = (async () => new Response("bad gateway", { status: 502 })) as typeof globalThis.fetch;
+  const cap = usdToMicros(1);
+  const rail = new X402Rail({ sink, ledger: new SpendLedger(cap, usdToMicros(0.1)), fetch });
+  const { response, payment } = await rail.paidFetch({ ...ctx, quotedUsdMicros: 10_000n }, "https://paid.example/comps");
+  assert.equal(response.status, 502);
+  assert.equal(payment!.status, "failed");
+  assert.equal(payment!.simulated, true);
+  assert.equal(payments.filter((p) => p.status === "settled").length, 0);
+  assert.equal(rail.remaining("pricing"), cap);
+  assert.deepEqual(events.map((e) => e.kind), ["tool_call", "error"]);
+  assert.match(events[1].message, /^\[SIMULATED\].*HTTP 502/);
+  const d = assertRailData(events[1], { outcome: "failed", remaining: cap, cap, simulated: true });
+  assert.equal(d.amountUsdMicros, "10000");
+  assert.equal(d.payee, "simulated");
+});
+
+test("simulated rail: a thrown fetch restores the budget, logs an error event, and rethrows", async () => {
+  const { sink, payments, events } = memorySink();
+  const fetch = (async () => {
+    throw new Error("ECONNREFUSED");
+  }) as typeof globalThis.fetch;
+  const cap = usdToMicros(1);
+  const rail = new X402Rail({ sink, ledger: new SpendLedger(cap, usdToMicros(0.1)), fetch });
+  await assert.rejects(rail.paidFetch({ ...ctx, quotedUsdMicros: 10_000n }, "https://paid.example/comps"), /ECONNREFUSED/);
+  assert.equal(payments.length, 0);
+  assert.equal(rail.remaining("pricing"), cap);
+  assert.deepEqual(events.map((e) => e.kind), ["tool_call", "error"]);
+  const d = assertRailData(events[1], { outcome: "failed", remaining: cap, cap, simulated: true });
+  assert.equal(d.amountUsdMicros, "10000");
+  assert.equal(d.url, "https://paid.example/comps");
+});
+
 test("simulated rail still enforces budgets", async () => {
   const { sink, events } = memorySink();
   const fetch = (async () => new Response("{}")) as typeof globalThis.fetch;
