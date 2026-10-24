@@ -20,7 +20,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 
 ### 2. Fresh scan
 - **Taps:** Scan → **Scan a room** → sweep the room slowly → **Done** → **Looks right: check photos** → **Add N items**.
-- **Expected:** "01 — Scan · Done" and "N items added". The "Also found: …" chip lists detector finds. If something was impossible, "N objects looked wrong and were skipped" appears.
+- **Expected:** "Scan · Done" and "N items added". The "Also found: …" chip lists detector finds. If something was impossible, "N objects looked wrong and were skipped" appears.
 - **Report if wrong:** the step where it stuck, plus the on-screen message.
 
 ### 3. Scan finished dollhouse
