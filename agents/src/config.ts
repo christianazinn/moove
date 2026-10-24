@@ -35,6 +35,8 @@ export const config = {
     sources: env('APIFY_SOURCES', 'ebay,fb').split(',').map(s => s.trim()).filter(Boolean),
     maxUsdPerRun: Number(env('APIFY_MAX_USD_PER_RUN', '0.10')),
     city: { fb: env('MARKET_CITY_FB', 'sanfrancisco'), craigslist: env('MARKET_CITY_CRAIGSLIST', 'sfbay') },
+    // Opt-in Zillow scraper for POST /homes/import (#89, useScraper: true only). See homes/zillowApify.ts.
+    zillowActor: env('APIFY_ZILLOW_ACTOR', 'maxcopell~zillow-detail-scraper'),
   },
   // SAM 3D Objects on fal.ai (#65): 3D models of photographed items. Off without FAL_KEY.
   sam3d: {

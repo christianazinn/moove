@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { config } from './config.js';
 import { BadImageError, sanitizeUpload } from './imagemeta.js';
+import { importHome, ImportInputError } from './homes/listing.js';
 
 const EXT: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -27,6 +28,7 @@ const FILE_RE = /^\/files\/([A-Za-z0-9][\w-]*\.(\w+))$/;
 //   POST /upload[?name=...]  raw body, Content-Type header  -> 201 { "url": "<public url>" }
 //   GET  /files/<name>                                       -> the file
 //   GET  /healthz                                            -> 200 { "ok": true } (platform health checks)
+//   POST /homes/import  JSON {url?, address?, beds?, ...}     -> 200 new-home draft (#89, homes/listing.ts)
 // Hardening (#17): type allowlist + magic-byte check, size cap, EXIF/GPS stripped from JPEG/PNG,
 // random UUID names (the client's ?name is ignored), no directory listing, nosniff + CSP.
 // Not yet: auth on POST (needs Auth0 login from #1; the iOS uploader already sends a Bearer token
@@ -64,6 +66,7 @@ export function startUploadServer(port = config.uploadPort): Server {
         await writeFile(path.join(config.uploadDir, name), body, { flag: 'wx' });
         return send(res, 201, { url: `${config.publicUploadBaseUrl}/files/${name}` });
       }
+      if (req.method === 'POST' && pathname === '/homes/import') return await homesImport(req, res);
       const m = req.method === 'GET' && pathname.match(FILE_RE);
       if (m && TYPE[m[2]] && existsSync(path.join(config.uploadDir, m[1]))) {
         const headers: Record<string, string> = { 'content-type': TYPE[m[2]] };
@@ -78,6 +81,39 @@ export function startUploadServer(port = config.uploadPort): Server {
       send(res, 500, { error: 'internal error' }); // no paths or stack traces to clients
     }
   }).listen(port, () => console.log(`[upload] listening on :${port}`));
+}
+
+// Import a new home from a listing link / address / floor-plan images (#89). Small JSON body only.
+const HOMES_IMPORT_MAX_BYTES = 64 * 1024;
+async function homesImport(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) {
+  const type = (req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') return send(res, 415, { error: 'send Content-Type: application/json' });
+  if (Number(req.headers['content-length'] ?? '0') > HOMES_IMPORT_MAX_BYTES) return send(res, 413, { error: `over ${HOMES_IMPORT_MAX_BYTES} bytes` });
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const c of req) {
+    size += (c as Buffer).length;
+    if (size > HOMES_IMPORT_MAX_BYTES) {
+      res.setHeader('connection', 'close');
+      send(res, 413, { error: `over ${HOMES_IMPORT_MAX_BYTES} bytes` });
+      res.once('finish', () => req.destroy());
+      return;
+    }
+    chunks.push(c as Buffer);
+  }
+  let body: unknown;
+  try {
+    body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    return send(res, 400, { error: 'body is not valid JSON' });
+  }
+  try {
+    send(res, 200, await importHome(body));
+  } catch (err) {
+    if (err instanceof ImportInputError) return send(res, 400, { error: err.message });
+    console.error('[homes] import failed', err);
+    send(res, 500, { error: `home import failed: ${(err instanceof Error ? err.message : String(err)).slice(0, 200)}` });
+  }
 }
 
 function send(res: import('node:http').ServerResponse, status: number, body: unknown) {
