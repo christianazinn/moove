@@ -46,3 +46,40 @@ import Testing
         #expect(Review.wantingCloseups([a, b, c]).map(\.id) == [2, 1])
     }
 }
+
+/// Rio's hotel rooms (Oct 24): fixtures were priced and counted in sales, and some estimates
+/// came from a single listing.
+@Suite struct PriceTrustTests {
+    func item(_ name: String, _ category: String, value: Int64? = 4_800, disposition: Disposition = .sell) -> Item {
+        Item(id: 1, owner: "me", roomId: 1, name: name, category: category, widthM: 0.5, heightM: 0.8, depthM: 0.7,
+             estValueCents: value, disposition: disposition, pricingStatus: .done)
+    }
+
+    @Test func fixturesStayWithTheBuilding() {
+        for (n, c) in [("white two-piece elongated toilet", "appliance"), ("white alcove bathtub with apron front", "appliance"),
+                       ("gray cast iron column radiator", "other"), ("sink", "sink"), ("Bath tub", "other")] {
+            let it = item(n, c)
+            #expect(it.isBuiltInFixture, "\(n)")
+            #expect(it.priceState == .builtIn)
+            #expect(it.saleValueCents == nil)
+        }
+        for (n, c) in [("shower caddy", "decor"), ("toilet paper", "decor"), ("oil radiator heater", "appliance"), ("office chair", "chair")] {
+            #expect(!item(n, c).isBuiltInFixture, "\(n)")
+        }
+    }
+
+    @Test func salesTotalsSkipFixtures() {
+        let items = [item("white two-piece elongated toilet", "appliance", value: 4_800), item("office chair", "chair", value: 3_000)]
+        #expect(Review.totals(items).expectedSaleCents == 3_000)
+    }
+
+    @Test func oneOrTwoListingsIsRough() {
+        #expect(Item.isRoughEstimate(compCount: 1))
+        #expect(Item.isRoughEstimate(compCount: 2))
+        #expect(!Item.isRoughEstimate(compCount: 3))
+        #expect(!Item.isRoughEstimate(compCount: 0), "no recorded listings (seeded / demo) isn't flagged")
+        var s = SyncSnapshot()
+        s.comps = [Comp(id: 1, itemId: 9, source: "fb", title: "a", priceCents: 1, url: ""), Comp(id: 2, itemId: 9, source: "fb", title: "b", priceCents: 1, url: "")]
+        #expect(s.compCounts[9] == 2)
+    }
+}
