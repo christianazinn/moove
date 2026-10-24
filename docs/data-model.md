@@ -34,7 +34,7 @@
 | `new_home` | name, source: `demo`\|`zillow`\|`manual`, floor_plan_json |
 | `layout` | new_home_id, name, placements_json |
 | `agent_event` | agent, kind: `plan`\|`tool_call`\|`result`\|`payment`\|`approval`\|`error`, message, ref_table, ref_id, data_json |
-| `service_config` (pk `key`) | value: runtime settings the worker announces on every start: `upload_base_url` (where to POST `/upload`), `worker_version` (git sha), `worker_started_at` (ISO), and `spend_today`, JSON refreshed every minute when it changes: `{"day":"2026-10-24","claude":{"usd":0.42,"calls":7,"capUsd":3},"apify":{"usd":0.12,"runs":3,"capUsd":2}}`. That's the estimated live spend for the UTC day against the worker's daily caps (`capUsd` 0 = no cap). Read it instead of hard-coding the upload URL (#122). |
+| `service_config` (pk `key`) | value: runtime settings the worker announces on every start: `upload_base_url` (where to POST `/upload`), `worker_version` (git sha), `worker_started_at` (ISO), and `spend_today`, JSON refreshed every minute when it changes: `{"day":"2026-10-24","claude":{"usd":0.42,"calls":7,"capUsd":3},"apify":{"usd":0.12,"runs":3,"capUsd":2}}`. That's the estimated live spend for the UTC day against the worker's daily caps (`capUsd` 0 = no cap). Also `visa_checkout` (#191): `simulated`, `sandbox` or `sandbox+fallback`, how purchases are charged, so approvals can say SIMULATED. Read it instead of hard-coding the upload URL (#122). |
 
 Status values:
 - `details_status` / `pricing_status` / `model_status`: `pending`\|`running`\|`done`\|`failed`. The worker picks up `pending` rows. The SAM 3D agent only takes items that have a photo.
@@ -73,7 +73,7 @@ Enforced in the module, so they hold for every client:
 
 **Worker only:**
 - `register_worker(label)`
-- **Service config (worker):** `set_service_config(key, value)` (keys: `upload_base_url` (http(s) origin), `worker_version`, `worker_started_at`, `spend_today`)
+- **Service config (worker):** `set_service_config(key, value)` (keys: `upload_base_url` (http(s) origin), `worker_version`, `worker_started_at`, `spend_today`, `visa_checkout` (`simulated`\|`sandbox`\|`sandbox+fallback`, #191))
 - **Photo sweep (worker):** `set_sweep_status(scan_id, status)`, `apply_sweep_match(item_id, name, category, material, brand, condition, fragile, maybe_sentimental, photo_url)` (a changed name/brand re-queues pricing), `add_sweep_item(scan_id, name, category, width_m, height_m, depth_m, material, brand, condition, fragile, maybe_sentimental, photo_url)` (`details_status = done`, so no second vision call)
 - **Item enrichment:** `set_item_stage(item_id, stage, field: details|pricing|model)`, `set_item_details(...)`, `add_comps(item_id, comps[])`, `set_est_value(item_id, est_value_cents, est_low_cents, est_high_cents)`
 - **Sorting:** `set_auto_disposition(item_id, disposition, reason)`. It no-ops on user-set items and forces `undecided` on `maybe_sentimental` ones.
