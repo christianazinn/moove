@@ -193,7 +193,8 @@ private extension Room {
 private extension Scan {
     init(_ r: MooveBindings.ScanRow) {
         self.init(id: r.id, owner: r.owner.description, roomId: r.roomId, usdzUrl: optional(r.usdzUrl),
-                  capturedRoomJsonUrl: optional(r.capturedRoomJsonUrl), createdAt: r.createdAt.date)
+                  capturedRoomJsonUrl: optional(r.capturedRoomJsonUrl), createdAt: r.createdAt.date,
+                  sweepStatus: Scan.SweepStatus(rawValue: r.sweepStatus).flatMap { $0 == .none ? nil : $0 })
     }
 }
 
