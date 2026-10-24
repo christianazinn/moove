@@ -12,8 +12,9 @@ single-rectangle layout.
 - Real colors: `ScanFrameRecorder` keeps up to 40 camera keyframes during capture, `ScanColorAnalysis` + MooveKit `ColorSampler` turn them into `ScanColors`, and the furniture uses each object's measured color over its keyword palette.
 - RoomPlan attributes (chair/sofa/table/storage types) go to the backend with `import_scan_v2` and drive the voxel model's shape.
 
+- Items without a matching scanned object (added by the photo sweep, #92): small ones (lamps, books, art) go on the scanned furniture or walls via `PropPlacer` (#124). Larger ones get a floor spot from MooveKit `LayoutSolver.solve(_:style:around:fixedItems:)` (#184), which treats each scanned placement's footprint (rotation included) as an obstacle, keeps the scanned placements unchanged, and checks the whole box is inside the room polygon (so L-shaped rooms work). Ones that don't fit stay in the list only. The caption adds "N placed by estimate".
+
 **Still open:**
-- Large items without a matching scanned object (added by photo) are left out of the 3D view; they stay in the list. Small ones (lamps, books, art) are placed on the scanned furniture or walls by `PropPlacer` (#124).
 - The app doesn't write measured colors to the backend yet (`set_item_colors` exists in the bindings but has no caller), so the colors only show on the device that scanned, in that session.
 - The room screen (Inventory or Scan → a room, `RoomDetailView`) still draws the scan with `RoomVisualizationView`'s colored blocks, not the voxel dollhouse. "Load demo scan" goes to Inventory, so it doesn't show the dollhouse page.
 - `RoomGeometry+Dollhouse.swift` is still in the app target (`Features/Room/`), so it has no `swift test` coverage. The facing check below is still unverified on a device.
@@ -80,12 +81,12 @@ init(room: Room?, items: [Item], comps: [Comp],
 
 - Store an optional `scanned: (plan: FloorPlan, placements: [Placement])`. When it's set,
   skip `EstimatedRoom.build` and give `FloorPlan3DView` the scanned plan and placements.
-- Items without a placement still need spots. `LayoutSolver.solve` can't take pre-placed
-  obstacles today, so add something like
-  `solve(_ items:, style:, around fixed: [Placement]) -> LayoutOption`. The fixed items
-  become `OrientedRect` obstacles, sized from their `LayoutItem` dimensions.
-- Caption: show the plan's real `widthM × depthM`. Only show "Layout estimated…" when some
-  items were estimated, e.g. "3 of 12 placed by estimate".
+- Items without a placement still need spots. *Done (#184):*
+  `LayoutSolver.solve(_ items:, style:, around fixed: [Placement], fixedItems:) -> LayoutOption`.
+  The fixed items become `OrientedRect` obstacles, sized from their `LayoutItem` dimensions
+  (wall-mounted and stacked ones don't block the floor), and come back unchanged in `placements`.
+- Caption: show the plan's real `widthM × depthM`, plus "N placed by estimate" when the
+  solver placed any (#184).
 
 ## What Rio's side needs (one call site)
 
