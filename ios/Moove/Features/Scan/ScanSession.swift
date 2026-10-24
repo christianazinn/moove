@@ -5,13 +5,15 @@ import MooveKit
 
 /// One scan, from RoomPlan result to `importScan`. Everything is also written
 /// to Documents/scans/<id>/ in the #3 fixture layout (room.json, room.usdz,
-/// photos/<object uuid>.jpg) so a good scan can be copied off the device
+/// geometry.json, photos/<object uuid>.jpg) so a good scan can be copied off the device
 /// (Files app or `xcrun devicectl device copy from`) and committed as a fixture.
 @MainActor
 @Observable
 final class ScanSession {
     enum Phase: Equatable {
         case capturing
+        /// Showing the 3D result before photos.
+        case reviewing
         case photos
         case uploading(done: Int, total: Int)
         case finished
@@ -30,6 +32,7 @@ final class ScanSession {
     var roomName = "Bedroom"
     private(set) var objects: [DetectedObject] = []
     private(set) var photos: [UUID: URL] = [:]
+    private(set) var geometry: RoomGeometry?
     let folder: URL
 
     init() {
@@ -46,6 +49,9 @@ final class ScanSession {
         do {
             try JSONEncoder().encode(room).write(to: roomJSON)
             try room.export(to: roomUSDZ, exportOptions: .model)
+            let geometry = RoomGeometry(room)
+            self.geometry = geometry
+            try JSONEncoder().encode(geometry).write(to: folder.appending(path: "geometry.json"))
         } catch {
             phase = .failed("Couldn't save the scan: \(error.localizedDescription)")
             return
@@ -60,7 +66,7 @@ final class ScanSession {
                 depthM: Double(object.dimensions.z)
             )
         }
-        phase = .photos
+        phase = .reviewing
     }
 
     func setPhoto(_ jpeg: Data, for object: DetectedObject) {
