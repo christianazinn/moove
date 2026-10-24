@@ -109,7 +109,11 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
     }
 
     public func addItemPhoto(itemId: UInt64, url: String) async throws {
-        try updateOwnedItem(itemId) { $0.photoUrls.append(url) }
+        try updateOwnedItem(itemId) {
+            $0.photoUrls.append(url)
+            // Same as the module: a new photo re-queues SAM 3D unless the model is a capture.
+            if $0.modelSource != .capture { $0.modelStatus = .pending }
+        }
     }
 
     public func setDisposition(itemId: UInt64, disposition: Disposition) async throws {
@@ -234,9 +238,13 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
     public func setItemModel(itemId: UInt64, url: String, source: ModelSource) async throws {
         try updateOwnedItem(itemId) {
             // Same rule as the module: a SAM 3D result never replaces a captured model.
-            if source == .sam3d, $0.modelSource == .capture, $0.modelUrl != nil { return }
+            if source == .sam3d, $0.modelSource == .capture, $0.modelUrl != nil {
+                $0.modelStatus = .done
+                return
+            }
             $0.modelUrl = url.isEmpty ? nil : url
             $0.modelSource = url.isEmpty ? nil : source
+            $0.modelStatus = url.isEmpty ? .pending : .done
         }
     }
 

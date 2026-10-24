@@ -185,7 +185,8 @@ private extension Item {
             dispositionSource: DispositionSource(rawValue: r.dispositionSource) ?? .auto,
             dispositionReason: optional(r.dispositionReason),
             fragile: r.fragile, maybeSentimental: r.maybeSentimental, updatedAt: r.updatedAt.date,
-            modelUrl: optional(r.modelUrl), modelSource: ModelSource(rawValue: r.modelSource)
+            modelUrl: optional(r.modelUrl), modelSource: ModelSource(rawValue: r.modelSource),
+            modelStatus: ModelStatus(rawValue: r.modelStatus) ?? .pending
         )
     }
 
