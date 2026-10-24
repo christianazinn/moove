@@ -67,8 +67,8 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 
 ### 4. Sell & Buy > Spending: the agent pays over x402
 - **Source:** CI `03-spending`.
-- **State:** "Where the money went.", totals **Spent $0.01**, **Simulated $180.005** (orange), **Refused 1**, the row "$0.01", "Premium comps for "Herman Miller Aeron"", "Pricing agent · x402 · USDC", "Settled", **"Basescan 0xc794…136c"**, and below it rows with the filled **SIMULATED** pill and no Basescan link.
-- **Caption:** "The pricing agent pays for its own comps, $0.01 USDC per lookup over x402: the Basescan row is a real Base Sepolia transaction, and every SIMULATED row is simulated."
+- **State:** Spending as paper receipts in Courier, scrolled to the Pricing agent receipt ("MOOVE · AGENT SPENDING", "PRICING AGENT", "3 lookups"): the line "Premium comps for "Herman Miller Aeron"", `x402`, "$0.01", **"PAID ON BASE SEPOLIA"**, **"TX 0xc794…136c"**, and below it lines with the filled **SIMULATED** mark and no link. CI also saves `03a-spending-top` (the page top: "Where the money went." and the totals tape **SPENT $0.01**, **SIMULATED $180.005**, **REFUSED 1**).
+- **Caption:** "The pricing agent pays for its own comps, $0.01 USDC per lookup over x402: the Base Sepolia line is a real transaction, and every SIMULATED line is simulated."
 - **Track:** Coinbase x402 (the headline image), Apify (the comps come from Apify's eBay sold and Marketplace actors), Spacetime (each payment is a `payment` row).
 - Don't capture this on the Demo backend: its worker has no CDP keys, so there's no real row there.
 

@@ -39,6 +39,9 @@ final class DevpostShotsTests: XCTestCase {
         // 3. Sell & Buy > Spending: the x402 payments with the Basescan row.
         open(tab: "Sell & Buy", segment: "Spending")
         XCTAssertTrue(app.staticTexts["Where the money went."].waitForExistence(timeout: slow))
+        shot("03a-spending-top")
+        // The headline image: the pricing agent's receipt with the real Base Sepolia line.
+        _ = scrollTo(byId("payment.basescan.500"))
         shot("03-spending")
 
         // 5. Sell & Buy > Approvals: two requests wait for the user.
