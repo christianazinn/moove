@@ -23,12 +23,20 @@ export function connect(): Promise<{ conn: Conn; identity: Identity }> {
       .onConnect((conn, identity, token) => {
         writeFileSync(config.workerTokenFile, token);
         console.log(`[spacetime] connected as ${identity.toHexString()}`);
-        conn.reducers.registerWorker({ label: 'moove-agents' });
-        conn
-          .subscriptionBuilder()
-          .onApplied(() => resolve({ conn, identity }))
-          .onError(ctx => reject(ctx.event ?? new Error('subscription failed')))
-          .subscribe(Object.values(tables));
+        // Subscribe only once registration succeeds, so a non-worker identity rejects connect() cleanly.
+        conn.reducers
+          .registerWorker({ label: 'moove-agents' })
+          .then(() =>
+            conn
+              .subscriptionBuilder()
+              .onApplied(() => resolve({ conn, identity }))
+              .onError(ctx => reject(ctx.event ?? new Error('subscription failed')))
+              .subscribe(Object.values(tables))
+          )
+          .catch(err => {
+            console.error(`[spacetime] register_worker failed (${(err as Error)?.message ?? err}): this identity isn't the registered worker. Restore agents/${config.workerTokenFile} (or SPACETIME_WORKER_TOKEN), or reset the local DB with \`npm run publish:local:reset\` in spacetime/.`);
+            reject(err);
+          });
       })
       .onAutomaticReconnect((_conn, _identity, token) => writeFileSync(config.workerTokenFile, token))
       .onConnectError((_ctx, err) => reject(err))
