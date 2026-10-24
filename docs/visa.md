@@ -164,6 +164,8 @@ VISA_ACCEPTANCE_HOST=apitest.cybersource.com
 ```
 Run `npm run visa:demo -- 1.00` once to check it. With no `VISA_PROVIDER`, the backend is `acceptance` if all three keys are set, and simulated otherwise.
 
+**Demo setting:** we run the demo with `VISA_PROVIDER=simulated` and are not attempting live sandbox charges. The CyberSource integration is built and tested (HTTP Signature checked against `cybersource-rest-client`, a fake-server test suite, sandbox-host and test-card locks), but the live sandbox charge is blocked on our sandbox account setup (HTTP 502). Because the keys are configured, leaving `VISA_PROVIDER` empty would still call the sandbox on every purchase, so set it explicitly.
+
 Other settings in `.env.example`:
 - `VISA_FALLBACK_SIMULATED`, `VISA_SPEND_CAP_USD`, `VISA_MAX_PER_PURCHASE_USD`, `VISA_SEED_BUDGETS`, `VISA_SIM_DELAY_MS` (400)
 - `BUY_AUTO_CHOOSE` (0), `BUY_FRAUD_BLOCK` (0.7), `BUY_REQUIRE_FRAUD_SCORE` (0), `BUY_RETRY_DELAY_MS` (60000)
