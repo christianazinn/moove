@@ -15,7 +15,7 @@ Runs in the agent worker (`agents/`), which subscribes to `items` that have phot
 ## Scope
 - `agents/src/agents/vision.ts`: subscribe to items needing details, call Claude with the photo plus the RoomPlan category and dims, and get structured output (name, category, material, brand, condition 1-5, fragile, maybeSentimental, confidence).
 - `agents/src/integrations/anthropic.ts`: a shared client wrapper with model names from env.
-- Call the `updateItemDetails` reducer, and write an `agentEvents` row per call.
+- Call the `set_item_details` reducer (and `set_item_stage` to mark running/failed), and write an `agentEvents` row per call.
 
 ## Tables / reducers touched
 `items` (details fields), `agentEvents`.
@@ -30,7 +30,7 @@ Runs in the agent worker (`agents/`), which subscribes to `items` that have phot
 Cached vision results for the fixture items in `agents/fixtures/demo-room/vision.json`, used when the API fails (labeled as cached).
 
 ## Notes & gotchas
-- Models: `claude-sonnet-5-5` for vision (env `MOOVE_VISION_MODEL`). Use tool use or structured output for JSON. Verify against current Anthropic docs.
+- Models: `claude-sonnet-5-5` for vision (env `MODEL_VISION`). Use tool use or structured output for JSON. Verify against current Anthropic docs.
 - Send images as base64 or by URL. The worker can read local upload files directly.
 - Keep the prompt honest about uncertainty (brand "unknown" beats a hallucinated brand), since the Anthropic track judges care about where Claude can go wrong.
 

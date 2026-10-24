@@ -14,7 +14,7 @@ Sits in front of #11's eBay posting (and optionally #15's checkout). Uses Auth0 
 
 ## Scope
 - `agents/src/integrations/auth0.ts`: start a CIBA / async authorization request for the user with a binding message ("Post 'Herman Miller chair' for $420?"), then poll or wait for the result.
-- On approval, set `approvals.status=approved` and let #11 publish. On denial, mark the listing as rejected and log it.
+- On approval, set `approvals.status=approved` and let #11 publish. On denial, set the listing status to `rejected` (`update_listing`) and log it.
 - Threshold config (env and per-user setting).
 - iOS: an in-app approvals inbox as a backup to the push (Guardian or Auth0 push), subscribed to `approvals`.
 

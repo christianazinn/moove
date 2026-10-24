@@ -11,7 +11,5 @@ import {
 } from "spacetimedb";
 
 export default {
-  itemId: __t.u64(),
-  fragile: __t.bool(),
-  maybeSentimental: __t.bool(),
+  code: __t.string(),
 };

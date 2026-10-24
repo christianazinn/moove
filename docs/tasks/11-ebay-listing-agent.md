@@ -14,8 +14,8 @@ An agent in the worker (`agents/`). It subscribes to items with `disposition=sel
 
 ## Scope
 - `agents/src/agents/listing.ts`: Claude drafts the title, description, condition notes, category and price (from comps) and writes a `listings` row (status=draft).
-- If the price is over the approval threshold, set `needsApproval` and create an `approvals` row, which hands off to #12.
-- `agents/src/integrations/ebay.ts`: the Sell Inventory API sandbox flow (inventory item -> offer -> publish), saving `ebayId` and the URL.
+- If the price is over the approval threshold, set the listing status to `awaiting_approval` and call `request_approval`, which hands off to #12.
+- `agents/src/integrations/ebay.ts`: the Sell Inventory API sandbox flow (inventory item -> offer -> publish), saving `external_id` and the URL.
 - iOS `ios/Moove/Features/Listings/`: listing cards with status (draft / awaiting approval / live / sold) and an edit-before-post option.
 - Write an `agentEvents` row for every step.
 

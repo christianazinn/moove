@@ -46,6 +46,8 @@ import CreateRoomReducer from "./create_room_reducer";
 import CreateScanReducer from "./create_scan_reducer";
 import DecideApprovalReducer from "./decide_approval_reducer";
 import DeleteItemReducer from "./delete_item_reducer";
+import ImportScanReducer from "./import_scan_reducer";
+import JoinRoomReducer from "./join_room_reducer";
 import LogAgentEventReducer from "./log_agent_event_reducer";
 import RecordPaymentReducer from "./record_payment_reducer";
 import RegisterUserReducer from "./register_user_reducer";
@@ -59,9 +61,10 @@ import SetAutoDispositionReducer from "./set_auto_disposition_reducer";
 import SetDealFraudReducer from "./set_deal_fraud_reducer";
 import SetDispositionReducer from "./set_disposition_reducer";
 import SetEstValueReducer from "./set_est_value_reducer";
+import SetFragileReducer from "./set_fragile_reducer";
 import SetItemDetailsReducer from "./set_item_details_reducer";
-import SetItemFlagsReducer from "./set_item_flags_reducer";
 import SetItemStageReducer from "./set_item_stage_reducer";
+import SetSentimentalReducer from "./set_sentimental_reducer";
 import SetShoppingStatusReducer from "./set_shopping_status_reducer";
 import UpdateListingReducer from "./update_listing_reducer";
 import UpdatePaymentReducer from "./update_payment_reducer";
@@ -79,6 +82,7 @@ import ListingRow from "./listing_table";
 import NewHomeRow from "./new_home_table";
 import PaymentRow from "./payment_table";
 import RoomRow from "./room_table";
+import RoomMemberRow from "./room_member_table";
 import ScanRow from "./scan_table";
 import ShoppingItemRow from "./shopping_item_table";
 import UserRow from "./user_table";
@@ -232,14 +236,35 @@ const tablesSchema = __schema({
       { accessor: 'id', name: 'room_id_idx_btree', algorithm: 'btree', columns: [
         'id',
       ] },
+      { accessor: 'joinCode', name: 'room_join_code_idx_btree', algorithm: 'btree', columns: [
+        'joinCode',
+      ] },
       { accessor: 'owner', name: 'room_owner_idx_btree', algorithm: 'btree', columns: [
         'owner',
       ] },
     ],
     constraints: [
       { name: 'room_id_key', constraint: 'unique', columns: ['id'] },
+      { name: 'room_join_code_key', constraint: 'unique', columns: ['joinCode'] },
     ],
   }, RoomRow),
+  roomMember: __table({
+    name: 'room_member',
+    indexes: [
+      { accessor: 'id', name: 'room_member_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'member', name: 'room_member_member_idx_btree', algorithm: 'btree', columns: [
+        'member',
+      ] },
+      { accessor: 'roomId', name: 'room_member_room_id_idx_btree', algorithm: 'btree', columns: [
+        'roomId',
+      ] },
+    ],
+    constraints: [
+      { name: 'room_member_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, RoomMemberRow),
   scan: __table({
     name: 'scan',
     indexes: [
@@ -309,6 +334,8 @@ const reducersSchema = __reducers(
   __reducerSchema("create_scan", CreateScanReducer),
   __reducerSchema("decide_approval", DecideApprovalReducer),
   __reducerSchema("delete_item", DeleteItemReducer),
+  __reducerSchema("import_scan", ImportScanReducer),
+  __reducerSchema("join_room", JoinRoomReducer),
   __reducerSchema("log_agent_event", LogAgentEventReducer),
   __reducerSchema("record_payment", RecordPaymentReducer),
   __reducerSchema("register_user", RegisterUserReducer),
@@ -322,9 +349,10 @@ const reducersSchema = __reducers(
   __reducerSchema("set_deal_fraud", SetDealFraudReducer),
   __reducerSchema("set_disposition", SetDispositionReducer),
   __reducerSchema("set_est_value", SetEstValueReducer),
+  __reducerSchema("set_fragile", SetFragileReducer),
   __reducerSchema("set_item_details", SetItemDetailsReducer),
-  __reducerSchema("set_item_flags", SetItemFlagsReducer),
   __reducerSchema("set_item_stage", SetItemStageReducer),
+  __reducerSchema("set_sentimental", SetSentimentalReducer),
   __reducerSchema("set_shopping_status", SetShoppingStatusReducer),
   __reducerSchema("update_listing", UpdateListingReducer),
   __reducerSchema("update_payment", UpdatePaymentReducer),

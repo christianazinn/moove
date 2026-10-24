@@ -13,4 +13,6 @@ import {
 export default {
   itemId: __t.u64(),
   estValueCents: __t.i64(),
+  estLowCents: __t.i64(),
+  estHighCents: __t.i64(),
 };

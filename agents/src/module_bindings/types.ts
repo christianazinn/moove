@@ -88,6 +88,8 @@ export const Item = __t.object("Item", {
   condition: __t.string(),
   detailsStatus: __t.string(),
   estValueCents: __t.i64(),
+  estLowCents: __t.i64(),
+  estHighCents: __t.i64(),
   pricingStatus: __t.string(),
   disposition: __t.string(),
   dispositionSource: __t.string(),
@@ -159,9 +161,18 @@ export const Room = __t.object("Room", {
   owner: __t.identity(),
   name: __t.string(),
   home: __t.string(),
+  joinCode: __t.string(),
   createdAt: __t.timestamp(),
 });
 export type Room = __Infer<typeof Room>;
+
+export const RoomMember = __t.object("RoomMember", {
+  id: __t.u64(),
+  roomId: __t.u64(),
+  member: __t.identity(),
+  joinedAt: __t.timestamp(),
+});
+export type RoomMember = __Infer<typeof RoomMember>;
 
 export const Scan = __t.object("Scan", {
   id: __t.u64(),
@@ -180,6 +191,7 @@ export const ScanObjectInput = __t.object("ScanObjectInput", {
   widthM: __t.f64(),
   heightM: __t.f64(),
   depthM: __t.f64(),
+  photoUrl: __t.string(),
 });
 export type ScanObjectInput = __Infer<typeof ScanObjectInput>;
 

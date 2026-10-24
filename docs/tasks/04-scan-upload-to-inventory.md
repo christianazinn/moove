@@ -15,7 +15,7 @@ The iOS app captures the scan and uploads the USDZ and photos to the agent worke
 ## Scope
 - `ios/Moove/Features/Scan/`: polished scan flow, then a per-object photo capture prompt, then an upload progress view.
 - Upload files to `agents` `POST /upload`, which returns URLs. Coordinate the endpoint with the lane owner or implement a minimal version in `agents/src/upload.ts`.
-- Call reducers: `createRoom`, `createScan`, then `addItem` per object (category, dims, photoUrl, scanObjectId).
+- Call the `import_scan` reducer once (room name, home, usdz/json URLs, objects with scanObjectId, category, dims, photoUrl). It creates the room, scan and items atomically. Use `create_scan` to re-scan an existing room.
 - Inventory list screen in `ios/Moove/Features/Inventory/` subscribed to `items`.
 
 ## Tables / reducers touched

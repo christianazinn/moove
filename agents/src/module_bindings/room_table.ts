@@ -15,5 +15,6 @@ export default __t.row({
   owner: __t.identity(),
   name: __t.string(),
   home: __t.string(),
+  joinCode: __t.string().name("join_code"),
   createdAt: __t.timestamp().name("created_at"),
 });

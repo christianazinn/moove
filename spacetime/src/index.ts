@@ -14,7 +14,7 @@ const HOME = ['old', 'new'] as const;
 const DISPOSITION = ['undecided', 'keep', 'sell', 'donate', 'trash'] as const;
 const DISPOSITION_SOURCE = ['auto', 'user'] as const;
 const STAGE = ['pending', 'running', 'done', 'failed'] as const;
-const LISTING_STATUS = ['draft', 'awaiting_approval', 'posted', 'sold', 'failed'] as const;
+const LISTING_STATUS = ['draft', 'awaiting_approval', 'rejected', 'posted', 'sold', 'failed'] as const;
 const APPROVAL_KIND = ['listing', 'purchase'] as const;
 const APPROVAL_STATUS = ['pending', 'approved', 'denied', 'expired'] as const;
 const SHOPPING_STATUS = ['open', 'searching', 'found', 'bought'] as const;
@@ -61,7 +61,19 @@ const room = table(
     owner: t.identity().index('btree'),
     name: t.string(),
     home: t.string(), // HOME
+    joinCode: t.string().unique(), // share with a second phone/person (#10)
     createdAt: t.timestamp(),
+  }
+);
+
+// People other than the owner who can see and edit a room's items (#10).
+const roomMember = table(
+  { name: 'room_member', public: true },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    roomId: t.u64().index('btree'),
+    member: t.identity().index('btree'),
+    joinedAt: t.timestamp(),
   }
 );
 
@@ -98,6 +110,8 @@ const item = table(
     detailsStatus: t.string(), // STAGE
     // pricing (#6)
     estValueCents: t.i64(), // -1 = unknown
+    estLowCents: t.i64(), // -1 = unknown
+    estHighCents: t.i64(), // -1 = unknown
     pricingStatus: t.string(), // STAGE
     // sorting (#8, #9)
     disposition: t.string(), // DISPOSITION
@@ -253,6 +267,7 @@ const spacetimedb = schema({
   user,
   worker,
   room,
+  roomMember,
   scan,
   item,
   comp,
@@ -280,6 +295,21 @@ function requireWorker(ctx: Ctx): void {
 
 function requireOwnerOrWorker(ctx: Ctx, owner: Identity): void {
   if (!ctx.sender.isEqual(owner) && !isWorker(ctx)) throw new SenderError('not your row');
+}
+
+function canAccessRoom(ctx: Ctx, roomId: bigint): boolean {
+  const r = ctx.db.room.id.find(roomId);
+  if (!r) throw new SenderError(`no room ${roomId}`);
+  if (ctx.sender.isEqual(r.owner) || isWorker(ctx)) return true;
+  for (const m of ctx.db.roomMember.roomId.filter(roomId)) {
+    if (m.member.isEqual(ctx.sender)) return true;
+  }
+  return false;
+}
+
+function requireRoomAccess(ctx: Ctx, roomId: bigint) {
+  if (!canAccessRoom(ctx, roomId)) throw new SenderError('not your room');
+  return ctx.db.room.id.find(roomId)!;
 }
 
 function getItem(ctx: Ctx, id: bigint) {
@@ -337,10 +367,27 @@ export const createRoom = spacetimedb.reducer(
       owner: ctx.sender,
       name,
       home: oneOf('home', home, HOME),
+      joinCode: newJoinCode(ctx),
       createdAt: ctx.timestamp,
     });
   }
 );
+
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function newJoinCode(ctx: Ctx): string {
+  for (;;) {
+    let code = '';
+    for (let i = 0; i < 6; i++) code += CODE_ALPHABET[Math.floor(ctx.random() * CODE_ALPHABET.length)];
+    if (!ctx.db.room.joinCode.find(code)) return code;
+  }
+}
+
+export const joinRoom = spacetimedb.reducer({ code: t.string() }, (ctx, { code }) => {
+  const r = ctx.db.room.joinCode.find(code.trim().toUpperCase());
+  if (!r) throw new SenderError('no room with that code');
+  if (canAccessRoom(ctx, r.id)) return;
+  ctx.db.roomMember.insert({ id: 0n, roomId: r.id, member: ctx.sender, joinedAt: ctx.timestamp });
+});
 
 const ScanObjectInput = t.object('ScanObjectInput', {
   scanObjectId: t.string(),
@@ -349,9 +396,41 @@ const ScanObjectInput = t.object('ScanObjectInput', {
   widthM: t.f64(),
   heightM: t.f64(),
   depthM: t.f64(),
+  photoUrl: t.string(), // '' if none
 });
 
-// Creates the scan row and one item per RoomPlan object (re-running with the same
+// One-shot import for the app: creates room + scan + items atomically, since reducers
+// can't return new ids to the caller.
+export const importScan = spacetimedb.reducer(
+  {
+    roomName: t.string(),
+    home: t.string(),
+    usdzUrl: t.string(),
+    capturedRoomJsonUrl: t.string(),
+    objects: t.array(ScanObjectInput),
+  },
+  (ctx, { roomName, home, usdzUrl, capturedRoomJsonUrl, objects }) => {
+    const r = ctx.db.room.insert({
+      id: 0n,
+      owner: ctx.sender,
+      name: roomName,
+      home: oneOf('home', home, HOME),
+      joinCode: newJoinCode(ctx),
+      createdAt: ctx.timestamp,
+    });
+    const s = ctx.db.scan.insert({
+      id: 0n,
+      owner: ctx.sender,
+      roomId: r.id,
+      usdzUrl,
+      capturedRoomJsonUrl,
+      createdAt: ctx.timestamp,
+    });
+    for (const o of objects) insertItem(ctx, ctx.sender, r.id, s.id, o);
+  }
+);
+
+// Re-scan an existing room: creates the scan row and one item per RoomPlan object (re-running with the same
 // scanObjectIds updates dimensions instead of duplicating).
 export const createScan = spacetimedb.reducer(
   {
@@ -361,9 +440,7 @@ export const createScan = spacetimedb.reducer(
     objects: t.array(ScanObjectInput),
   },
   (ctx, { roomId, usdzUrl, capturedRoomJsonUrl, objects }) => {
-    const r = ctx.db.room.id.find(roomId);
-    if (!r) throw new SenderError(`no room ${roomId}`);
-    requireOwnerOrWorker(ctx, r.owner);
+    const r = requireRoomAccess(ctx, roomId);
     const s = ctx.db.scan.insert({
       id: 0n,
       owner: r.owner,
@@ -399,7 +476,15 @@ function insertItem(
   owner: Identity,
   roomId: bigint,
   scanId: bigint,
-  o: { scanObjectId: string; name: string; category: string; widthM: number; heightM: number; depthM: number }
+  o: {
+    scanObjectId: string;
+    name: string;
+    category: string;
+    widthM: number;
+    heightM: number;
+    depthM: number;
+    photoUrl: string;
+  }
 ) {
   return ctx.db.item.insert({
     id: 0n,
@@ -407,17 +492,19 @@ function insertItem(
     roomId,
     scanId,
     scanObjectId: o.scanObjectId,
-    name: o.name,
+    name: o.name || o.category,
     category: o.category,
     widthM: o.widthM,
     heightM: o.heightM,
     depthM: o.depthM,
-    photoUrls: [],
+    photoUrls: o.photoUrl ? [o.photoUrl] : [],
     material: '',
     brand: '',
     condition: '',
     detailsStatus: 'pending',
     estValueCents: -1n,
+    estLowCents: -1n,
+    estHighCents: -1n,
     pricingStatus: 'pending',
     disposition: 'undecided',
     dispositionSource: 'auto',
@@ -432,9 +519,7 @@ function insertItem(
 export const addItem = spacetimedb.reducer(
   { roomId: t.u64(), object: ScanObjectInput },
   (ctx, { roomId, object }) => {
-    const r = ctx.db.room.id.find(roomId);
-    if (!r) throw new SenderError(`no room ${roomId}`);
-    requireOwnerOrWorker(ctx, r.owner);
+    const r = requireRoomAccess(ctx, roomId);
     insertItem(ctx, r.owner, roomId, 0n, object);
   }
 );
@@ -444,7 +529,7 @@ export const addItemPhoto = spacetimedb.reducer(
   { itemId: t.u64(), url: t.string() },
   (ctx, { itemId, url }) => {
     const it = getItem(ctx, itemId);
-    requireOwnerOrWorker(ctx, it.owner);
+    requireRoomAccess(ctx, it.roomId);
     ctx.db.item.id.update({
       ...it,
       photoUrls: [...it.photoUrls, url],
@@ -456,7 +541,7 @@ export const addItemPhoto = spacetimedb.reducer(
 
 export const deleteItem = spacetimedb.reducer({ itemId: t.u64() }, (ctx, { itemId }) => {
   const it = getItem(ctx, itemId);
-  requireOwnerOrWorker(ctx, it.owner);
+  requireRoomAccess(ctx, it.roomId);
   ctx.db.item.id.delete(itemId);
 });
 
@@ -465,7 +550,7 @@ export const setDisposition = spacetimedb.reducer(
   { itemId: t.u64(), disposition: t.string() },
   (ctx, { itemId, disposition }) => {
     const it = getItem(ctx, itemId);
-    requireOwnerOrWorker(ctx, it.owner);
+    requireRoomAccess(ctx, it.roomId);
     ctx.db.item.id.update({
       ...it,
       disposition: oneOf('disposition', disposition, DISPOSITION),
@@ -476,12 +561,22 @@ export const setDisposition = spacetimedb.reducer(
   }
 );
 
-export const setItemFlags = spacetimedb.reducer(
-  { itemId: t.u64(), fragile: t.bool(), maybeSentimental: t.bool() },
-  (ctx, { itemId, fragile, maybeSentimental }) => {
+// Absolute setters (not toggles) so two phones editing at once converge.
+export const setSentimental = spacetimedb.reducer(
+  { itemId: t.u64(), value: t.bool() },
+  (ctx, { itemId, value }) => {
     const it = getItem(ctx, itemId);
-    requireOwnerOrWorker(ctx, it.owner);
-    ctx.db.item.id.update({ ...it, fragile, maybeSentimental, updatedAt: ctx.timestamp });
+    requireRoomAccess(ctx, it.roomId);
+    ctx.db.item.id.update({ ...it, maybeSentimental: value, updatedAt: ctx.timestamp });
+  }
+);
+
+export const setFragile = spacetimedb.reducer(
+  { itemId: t.u64(), value: t.bool() },
+  (ctx, { itemId, value }) => {
+    const it = getItem(ctx, itemId);
+    requireRoomAccess(ctx, it.roomId);
+    ctx.db.item.id.update({ ...it, fragile: value, updatedAt: ctx.timestamp });
   }
 );
 
@@ -489,7 +584,7 @@ export const renameItem = spacetimedb.reducer(
   { itemId: t.u64(), name: t.string() },
   (ctx, { itemId, name }) => {
     const it = getItem(ctx, itemId);
-    requireOwnerOrWorker(ctx, it.owner);
+    requireRoomAccess(ctx, it.roomId);
     ctx.db.item.id.update({ ...it, name, updatedAt: ctx.timestamp });
   }
 );
@@ -554,11 +649,18 @@ export const addComps = spacetimedb.reducer(
 );
 
 export const setEstValue = spacetimedb.reducer(
-  { itemId: t.u64(), estValueCents: t.i64() },
-  (ctx, { itemId, estValueCents }) => {
+  { itemId: t.u64(), estValueCents: t.i64(), estLowCents: t.i64(), estHighCents: t.i64() },
+  (ctx, { itemId, estValueCents, estLowCents, estHighCents }) => {
     requireWorker(ctx);
     const it = getItem(ctx, itemId);
-    ctx.db.item.id.update({ ...it, estValueCents, pricingStatus: 'done', updatedAt: ctx.timestamp });
+    ctx.db.item.id.update({
+      ...it,
+      estValueCents,
+      estLowCents,
+      estHighCents,
+      pricingStatus: 'done',
+      updatedAt: ctx.timestamp,
+    });
   }
 );
 

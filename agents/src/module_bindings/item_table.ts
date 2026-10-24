@@ -27,6 +27,8 @@ export default __t.row({
   condition: __t.string(),
   detailsStatus: __t.string().name("details_status"),
   estValueCents: __t.i64().name("est_value_cents"),
+  estLowCents: __t.i64().name("est_low_cents"),
+  estHighCents: __t.i64().name("est_high_cents"),
   pricingStatus: __t.string().name("pricing_status"),
   disposition: __t.string(),
   dispositionSource: __t.string().name("disposition_source"),
