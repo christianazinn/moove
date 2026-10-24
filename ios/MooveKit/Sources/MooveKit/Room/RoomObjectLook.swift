@@ -1,8 +1,8 @@
 import Foundation
 
 /// What the 3D room view last drew for one piece of furniture: its color,
-/// whether it is selected, and its label. The view keeps one per object and,
-/// on each update, only rebuilds the parts of the scene that changed.
+/// whether it is selected, its label, and which captured 3D model (if any)
+/// it shows. The view keeps one per object and, on each update, only rebuilds the parts of the scene that changed.
 public struct RoomObjectLook: Sendable, Equatable {
     /// RGBA, 0...1.
     public var color: SIMD4<Float>
@@ -11,12 +11,17 @@ public struct RoomObjectLook: Sendable, Equatable {
     public var label: String?
     /// Label font size in room meters.
     public var labelSize: Float
+    /// Identifies the captured model shown in place of the stand-in (its file
+    /// and rotation), or nil when there is none. Models load after the scene is
+    /// built, so a change here rebuilds the whole object.
+    public var model: String?
 
-    public init(color: SIMD4<Float>, selected: Bool, label: String?, labelSize: Float) {
+    public init(color: SIMD4<Float>, selected: Bool, label: String?, labelSize: Float, model: String? = nil) {
         self.color = color
         self.selected = selected
         self.label = label
         self.labelSize = labelSize
+        self.model = model
     }
 
     /// Which parts of an object's scene need redoing.
@@ -30,12 +35,16 @@ public struct RoomObjectLook: Sendable, Equatable {
         public static let selection = Changes(rawValue: 1 << 1)
         /// The floating name tag (added, removed or retyped).
         public static let label = Changes(rawValue: 1 << 2)
-        public static let all: Changes = [.color, .selection, .label]
+        /// The captured model (attached, swapped, rotated or removed).
+        public static let model = Changes(rawValue: 1 << 3)
+        public static let all: Changes = [.color, .selection, .label, .model]
     }
 
     /// What changed since `old`; everything when nothing was applied yet.
     public func changes(since old: RoomObjectLook?) -> Changes {
         guard let old else { return .all }
+        // A different body means its materials and selection state start over.
+        if model != old.model { return .all }
         var changes: Changes = []
         if color != old.color || selected != old.selected { changes.insert(.color) }
         if selected != old.selected { changes.insert(.selection) }

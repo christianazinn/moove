@@ -1,13 +1,16 @@
 import SwiftUI
 import RoomPlan
 import os
+@preconcurrency import ARKit
+import MooveKit
 
 extension Logger {
     static let scan = Logger(subsystem: "app.moove", category: "scan")
 }
 
-/// SwiftUI wrapper for Apple's RoomPlan capture UI. Calls `onFinished` with
-/// the processed room once the user taps Done and RoomPlan finishes processing.
+/// SwiftUI wrapper for Apple's RoomPlan capture UI. Calls `onFinished` with the
+/// processed room, plus any everyday objects RoomPlan doesn't recognize that the
+/// extra detector (#73) found and measured in the same scan.
 ///
 /// Each scan gets its own `RoomCaptureView` (made in `makeUIView`, never reused).
 /// While it runs, the screen stays awake and a banner warns when the phone is
@@ -17,9 +20,11 @@ struct RoomCaptureContainer: UIViewRepresentable {
     /// Where RoomPlan's raw capture data is saved before processing, so a room
     /// can be rebuilt (`ScanSession.rebuild`) if processing fails.
     var rawDataURL: URL?
-    var onFinished: (Result<CapturedRoom, Error>) -> Void
+    /// Live list of extra objects found so far (e.g. ["bicycle"]), for on-screen chips.
+    var onFound: ([String]) -> Void = { _ in }
+    var onFinished: (Result<CapturedRoom, Error>, [RoomGeometry.Object]) -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(onFinished: onFinished) }
+    func makeCoordinator() -> Coordinator { Coordinator(onFound: onFound, onFinished: onFinished) }
 
     func makeUIView(context: Context) -> RoomCaptureView {
         let view = RoomCaptureView(frame: .zero)
@@ -27,19 +32,23 @@ struct RoomCaptureContainer: UIViewRepresentable {
         context.coordinator.rawDataURL = rawDataURL
         context.coordinator.start(on: view)
         view.captureSession.run(configuration: RoomCaptureSession.Configuration())
+        context.coordinator.startDetecting(on: view.captureSession.arSession)
         return view
     }
 
     func updateUIView(_ view: RoomCaptureView, context: Context) {
         context.coordinator.onFinished = onFinished
+        context.coordinator.onFound = onFound
         context.coordinator.rawDataURL = rawDataURL
         if stopRequested && !context.coordinator.stopped {
             context.coordinator.stopped = true
+            context.coordinator.stopDetecting()
             view.captureSession.stop()
         }
     }
 
     static func dismantleUIView(_ view: RoomCaptureView, coordinator: Coordinator) {
+        coordinator.stopDetecting()
         if !coordinator.stopped { view.captureSession.stop() }
         coordinator.end()
     }
@@ -48,7 +57,8 @@ struct RoomCaptureContainer: UIViewRepresentable {
     @MainActor
     @objc(MooveRoomCaptureCoordinator)
     final class Coordinator: NSObject, RoomCaptureViewDelegate {
-        var onFinished: (Result<CapturedRoom, Error>) -> Void
+        var onFound: ([String]) -> Void
+        var onFinished: (Result<CapturedRoom, Error>, [RoomGeometry.Object]) -> Void
         var rawDataURL: URL?
         var stopped = false
         /// The data RoomPlan handed over for processing, kept to rebuild the room if processing fails.
@@ -58,8 +68,12 @@ struct RoomCaptureContainer: UIViewRepresentable {
         private var observers: [any NSObjectProtocol] = []
         private var idleTimerWasDisabled: Bool?
         private var interrupted = false
+        private let detector = ExtraObjectDetector()
+        private var timer: Timer?
+        private var lastFound: [String] = []
 
-        init(onFinished: @escaping (Result<CapturedRoom, Error>) -> Void) {
+        init(onFound: @escaping ([String]) -> Void, onFinished: @escaping (Result<CapturedRoom, Error>, [RoomGeometry.Object]) -> Void) {
+            self.onFound = onFound
             self.onFinished = onFinished
         }
 
@@ -101,6 +115,38 @@ struct RoomCaptureContainer: UIViewRepresentable {
             banner = nil
         }
 
+        // MARK: Extra objects (#73)
+
+        func startDetecting(on session: ARSession) {
+            guard let detector, timer == nil else { return }  // model not bundled: RoomPlan only
+            timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+                // Scheduled on the main run loop, so this runs on the main actor.
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    detector.offer(session)
+                    let found = detector.foundSoFar
+                    if found != self.lastFound {
+                        self.lastFound = found
+                        self.onFound(found)
+                    }
+                }
+            }
+        }
+
+        func stopDetecting() {
+            timer?.invalidate()
+            timer = nil
+        }
+
+        /// The extra detector's objects for this room, minus anything RoomPlan already outlined.
+        private func extras(for room: CapturedRoom) -> [RoomGeometry.Object] {
+            guard let detector else { return [] }
+            let roomPlan = RoomGeometry(room)
+            let extras = detector.results(floorY: roomPlan.floorY, excluding: roomPlan.objects)
+            Logger.scan.notice("Extra objects: \(extras.map(\.category), privacy: .public) (depth frames \(detector.usedDepth), raycast frames \(detector.usedRaycast))")
+            return extras
+        }
+
         // MARK: RoomCaptureViewDelegate
 
         nonisolated func captureView(shouldPresent roomDataForProcessing: CapturedRoomData, error: Error?) -> Bool {
@@ -118,7 +164,8 @@ struct RoomCaptureContainer: UIViewRepresentable {
             if let error {
                 Logger.scan.error("Scan ended with an error: \(Self.describe(error), privacy: .public)")
                 end()
-                onFinished(.failure(CaptureFailure(error)))
+                stopDetecting()
+                onFinished(.failure(CaptureFailure(error)), [])
                 return false
             }
             return true
@@ -126,18 +173,19 @@ struct RoomCaptureContainer: UIViewRepresentable {
 
         private func didPresent(_ room: CapturedRoom, error: Error?) {
             end()
-            guard let error else { return onFinished(.success(room)) }
+            stopDetecting()
+            guard let error else { return onFinished(.success(room), extras(for: room)) }
             Logger.scan.error("RoomPlan processing failed: \(Self.describe(error), privacy: .public)")
-            guard let roomData else { return onFinished(.failure(CaptureFailure(error))) }
+            guard let roomData else { return onFinished(.failure(CaptureFailure(error)), []) }
             // Processing failed; try once more from the raw data.
             Task {
                 do {
                     let rebuilt = try await ScanSession.rebuild(roomData)
                     Logger.scan.notice("Rebuilt the room from the raw capture data")
-                    onFinished(.success(rebuilt))
+                    onFinished(.success(rebuilt), extras(for: rebuilt))
                 } catch let rebuildError {
                     Logger.scan.error("Rebuilding the room failed: \(String(describing: rebuildError), privacy: .public)")
-                    onFinished(.failure(CaptureFailure(error)))
+                    onFinished(.failure(CaptureFailure(error)), [])
                 }
             }
         }

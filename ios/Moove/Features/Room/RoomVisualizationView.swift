@@ -1,4 +1,5 @@
 import SwiftUI
+import QuickLook
 import MooveKit
 
 /// 3D model / floor plan switcher with coloring and label controls, and a
@@ -22,6 +23,8 @@ struct RoomVisualizationView: View {
     @State private var showLabels = true
     @State private var fullWalls = false
     @State private var selection: String?
+    @State private var capturing: RoomGeometry.Object?
+    @State private var models = ObjectModelStore.shared
 
     var body: some View {
         let centered = display.centered(geometry)
@@ -40,7 +43,8 @@ struct RoomVisualizationView: View {
             }
             VStack(spacing: 10) {
                 if let id = selection, let object = geometry.objects.first(where: { $0.id == id }) {
-                    SelectedObjectCard(object: object, item: items[id]) { selection = nil }
+                    SelectedObjectCard(object: object, item: items[id], models: models,
+                                       capture: { capturing = object }, close: { selection = nil })
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 legend
@@ -67,6 +71,9 @@ struct RoomVisualizationView: View {
                     Label("Display", systemImage: "paintpalette")
                 }
             }
+        }
+        .fullScreenCover(item: $capturing) { object in
+            ObjectCaptureFlowView(objectId: object.id, title: items[object.id]?.name ?? object.category.capitalized)
         }
         .onAppear {
             mode = initialMode
@@ -101,38 +108,64 @@ struct RoomVisualizationView: View {
 private struct SelectedObjectCard: View {
     let object: RoomGeometry.Object
     let item: Item?
+    let models: ObjectModelStore
+    let capture: () -> Void
     let close: () -> Void
+    @State private var quickLook: URL?
 
     var body: some View {
-        HStack(spacing: 12) {
-            if let item {
-                ItemThumbnail(item: item, size: 52)
-            } else {
-                Image(systemName: ItemThumbnail.icon(for: object.category))
-                    .font(.title2).frame(width: 52, height: 52)
-                    .background(Color(RoomPalette.category(object.category)).opacity(0.25), in: .rect(cornerRadius: 9))
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item?.name ?? object.category.capitalized).font(.headline)
-                Text(size).font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
                 if let item {
-                    HStack(spacing: 6) {
-                        DispositionChip(disposition: item.disposition)
-                        if let value = item.estValueCents { Text(value.usd).font(.caption.monospacedDigit()) }
+                    ItemThumbnail(item: item, size: 52)
+                } else {
+                    Image(systemName: ItemThumbnail.icon(for: object.category))
+                        .font(.title2).frame(width: 52, height: 52)
+                        .background(Color(RoomPalette.category(object.category)).opacity(0.25), in: .rect(cornerRadius: 9))
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item?.name ?? object.category.capitalized).font(.headline)
+                    Text(size).font(.caption).foregroundStyle(.secondary)
+                    if let item {
+                        HStack(spacing: 6) {
+                            DispositionChip(disposition: item.disposition)
+                            if let value = item.estValueCents { Text(value.usd).font(.caption.monospacedDigit()) }
+                        }
                     }
                 }
-            }
-            Spacer()
-            if let item {
-                NavigationLink(value: item.id) {
-                    Image(systemName: "chevron.right.circle.fill").font(.title2)
+                Spacer()
+                if let item {
+                    NavigationLink(value: item.id) {
+                        Image(systemName: "chevron.right.circle.fill").font(.title2)
+                    }
                 }
+                Button("Close", systemImage: "xmark.circle.fill", action: close)
+                    .labelStyle(.iconOnly).font(.title2).foregroundStyle(.secondary)
             }
-            Button("Close", systemImage: "xmark.circle.fill", action: close)
-                .labelStyle(.iconOnly).font(.title2).foregroundStyle(.secondary)
+            modelButtons
         }
         .padding(12)
         .background(.regularMaterial, in: .rect(cornerRadius: 18))
+        .quickLookPreview($quickLook)
+    }
+
+    @ViewBuilder private var modelButtons: some View {
+        if let url = models.modelURL(for: object.id) {
+            HStack {
+                Button("View in AR", systemImage: "arkit") { quickLook = url }
+                Button("Rotate 90°", systemImage: "rotate.right") { models.rotate(object.id) }
+                Spacer()
+                Button("Recapture", systemImage: "camera.metering.center.weighted", action: capture)
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.bordered)
+            .font(.subheadline)
+        } else if ObjectCaptureFlowView.isSupported {
+            Button(action: capture) {
+                Label("Capture 3D model", systemImage: "cube.transparent").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+        }
     }
 
     private var size: String {

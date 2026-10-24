@@ -1,4 +1,5 @@
 import SwiftUI
+import QuickLook
 import MooveKit
 
 /// One item: photo, what the vision agent saw, why it was sorted this way,
@@ -6,6 +7,9 @@ import MooveKit
 struct ItemDetailView: View {
     @Environment(MooveStore.self) private var store
     let itemId: UInt64
+    @State private var models = ObjectModelStore.shared
+    @State private var capturing = false
+    @State private var quickLook: URL?
 
     var body: some View {
         if let item = store.items.first(where: { $0.id == itemId }) {
@@ -43,6 +47,7 @@ struct ItemDetailView: View {
                     set: { v in Task { await store.setSentimental(v, for: item) } }
                 ))
             }
+            modelSection(item)
             Section("Details") {
                 LabeledContent("Estimated value", value: item.estValueCents?.usd ?? "Pricing…")
                 LabeledContent("Category", value: item.category)
@@ -67,11 +72,37 @@ struct ItemDetailView: View {
             }
         }
         .navigationTitle(item.name)
+        .quickLookPreview($quickLook)
+        .fullScreenCover(isPresented: $capturing) {
+            ObjectCaptureFlowView(objectId: modelKey(item), title: item.name)
+        }
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private func dims(_ item: Item) -> String {
         let f = { (v: Double) in v.formatted(.number.precision(.fractionLength(2))) }
         return "\(f(item.widthM)) × \(f(item.depthM)) × \(f(item.heightM)) m"
+    }
+
+    /// Models are keyed by the RoomPlan object id so the room view can place them.
+    private func modelKey(_ item: Item) -> String { item.scanObjectId ?? "item-\(item.id)" }
+
+    @ViewBuilder private func modelSection(_ item: Item) -> some View {
+        let key = modelKey(item)
+        if let url = models.modelURL(for: key) {
+            Section("3D model") {
+                Button("View in 3D / AR", systemImage: "arkit") { quickLook = url }
+                Button("Rotate in room 90°", systemImage: "rotate.right") { models.rotate(key) }
+                Button("Recapture", systemImage: "camera.metering.center.weighted") { capturing = true }
+                    .disabled(!ObjectCaptureFlowView.isSupported)
+                Button("Remove model", systemImage: "trash", role: .destructive) { models.deleteModel(for: key) }
+            }
+        } else if ObjectCaptureFlowView.isSupported {
+            Section {
+                Button("Capture 3D model", systemImage: "cube.transparent") { capturing = true }
+            } footer: {
+                Text("Walk around the item with the camera. Moove builds a 3D model on this phone and places it in your room.")
+            }
+        }
     }
 }

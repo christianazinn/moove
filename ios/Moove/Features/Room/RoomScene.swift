@@ -143,8 +143,10 @@ enum RoomScene {
     // MARK: Objects
 
     /// One piece of furniture: a container (named "obj:<id>", the tap target)
-    /// holding the colored block and, when `FurnitureFactory` has one for the
-    /// category, a stand-in furniture model ("furniture") that hides the block.
+    /// holding the colored block, a thin colored base, and, when `FurnitureFactory`
+    /// has one for the category, a stand-in furniture model ("furniture") that
+    /// hides the block. Once captured, the item's real 3D model (`attachModel`)
+    /// takes over from both (see `showCapturedModel`).
     private static func objectEntity(_ object: RoomGeometry.Object) -> Entity {
         let d = object.dimensions
         let tint = RoomPalette.category(object.category)
@@ -162,6 +164,14 @@ enum RoomScene {
         container.addChild(block)
         if let shadow = contactShadow(for: d) { container.addChild(shadow) }
 
+        // Shown under captured models so color-by-category/decision still reads.
+        let base = ModelEntity(mesh: .generateBox(width: d.x, height: 0.025, depth: d.z, cornerRadius: 0.01),
+                               materials: [material(tint, roughness: 0.6)])
+        base.name = "base"
+        base.position = SIMD3(0, -d.y / 2 + 0.0125, 0)
+        base.isEnabled = false
+        container.addChild(base)
+
         if let furniture = FurnitureFactory.makeEntity(category: object.category, size: d, tint: tint) {
             furniture.name = "furniture"
             castShadows(furniture)
@@ -172,8 +182,22 @@ enum RoomScene {
     }
 
     /// The visible stand-in for an object: its furniture model if it has one, else its block.
+    /// (A captured "model" is never recolored, so it isn't a body.)
     static func body(of container: Entity) -> Entity? {
         container.findEntity(named: "furniture") ?? container.findEntity(named: "block")
+    }
+
+    /// Switches an object between its captured model (on a colored base, with the
+    /// block kept as a translucent highlight) and its stand-in (furniture, else block).
+    /// Priority: captured model > procedural furniture > block.
+    static func showCapturedModel(_ container: Entity, _ captured: Bool) {
+        let furniture = container.findEntity(named: "furniture")
+        container.findEntity(named: "base")?.isEnabled = captured
+        furniture?.isEnabled = !captured
+        if !captured {
+            container.children.filter { $0.name == "model" }.forEach { $0.removeFromParent() }
+            container.findEntity(named: "block")?.isEnabled = furniture == nil
+        }
     }
 
     /// Gives every model under `entity` the same tinted material (and glow when selected).
@@ -183,6 +207,27 @@ enum RoomScene {
             entity.components.set(model)
         }
         for child in entity.children where child.name != "label" { recolor(child, color, roughness: roughness, glow: glow) }
+    }
+
+    /// Places a captured model (Object Capture USDZ) in the object's box:
+    /// long sides aligned, uniformly scaled to fit, standing on the floor.
+    static func attachModel(_ prototype: Entity, to container: Entity, object: RoomGeometry.Object, extraQuarterTurns: Int) {
+        container.children.filter { $0.name == "model" }.forEach { $0.removeFromParent() }
+        let clone = prototype.clone(recursive: true)
+        let bounds = clone.visualBounds(relativeTo: nil)
+        guard bounds.extents.x > 0, bounds.extents.y > 0, bounds.extents.z > 0 else { return }
+        let box = object.dimensions
+        let fit = ModelFit.fit(model: bounds.extents, box: box, extraQuarterTurns: extraQuarterTurns)
+
+        clone.position = -bounds.center  // model centered on its own bounds
+        castShadows(clone)
+        let pivot = Entity()
+        pivot.name = "model"
+        pivot.addChild(clone)
+        pivot.scale = SIMD3(repeating: fit.scale)
+        pivot.orientation = simd_quatf(angle: fit.yaw, axis: SIMD3(0, 1, 0))
+        pivot.position = SIMD3(0, -box.y / 2 + bounds.extents.y * fit.scale / 2 + 0.025, 0)  // on top of the base
+        container.addChild(pivot)
     }
 
     private static func castShadows(_ entity: Entity) {

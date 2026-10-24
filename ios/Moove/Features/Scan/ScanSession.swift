@@ -54,20 +54,23 @@ final class ScanSession {
 
     var roomJSON: URL { folder.appending(path: "room.json") }
     var roomUSDZ: URL { folder.appending(path: "room.usdz") }
+    /// Moove's own geometry: RoomPlan's room plus the extra detected objects.
+    var geometryJSON: URL { folder.appending(path: "geometry.json") }
 
     /// RoomPlan's raw capture data, saved before processing so the room can be rebuilt.
     var capturedRoomDataJSON: URL { folder.appending(path: "captured-room-data.json") }
 
-    func captured(_ room: CapturedRoom) {
-        Task { await save(room) }
+    /// `extras` are objects RoomPlan doesn't recognize, found by the extra detector (#73).
+    func captured(_ room: CapturedRoom, extras: [RoomGeometry.Object] = []) {
+        Task { await save(room, extras: extras) }
     }
 
     /// Writes the room files off the main thread, then shows the review.
-    private func save(_ room: CapturedRoom) async {
-        let folder = folder, roomJSON = roomJSON, roomUSDZ = roomUSDZ
+    private func save(_ room: CapturedRoom, extras: [RoomGeometry.Object]) async {
+        let folder = folder, roomJSON = roomJSON, roomUSDZ = roomUSDZ, geometryJSON = geometryJSON
         do {
             geometry = try await Task.detached(priority: .userInitiated) {
-                try Self.write(room, folder: folder, roomJSON: roomJSON, roomUSDZ: roomUSDZ)
+                try Self.write(room, extras: extras, folder: folder, roomJSON: roomJSON, roomUSDZ: roomUSDZ, geometryJSON: geometryJSON)
             }.value
         } catch {
             Logger.scan.error("Couldn't save the scan: \(error.localizedDescription, privacy: .public)")
@@ -83,17 +86,24 @@ final class ScanSession {
                 heightM: Double(object.dimensions.y),
                 depthM: Double(object.dimensions.z)
             )
+        } + extras.compactMap { extra in
+            UUID(uuidString: extra.id).map {
+                DetectedObject(id: $0, category: extra.category, widthM: Double(extra.dimensions.x),
+                               heightM: Double(extra.dimensions.y), depthM: Double(extra.dimensions.z))
+            }
         }
         phase = .reviewing
     }
 
     /// JSON encoding and USDZ export are slow for big rooms, so they run off the main actor.
-    private nonisolated static func write(_ room: CapturedRoom, folder: URL, roomJSON: URL, roomUSDZ: URL) throws -> RoomGeometry {
+    private nonisolated static func write(_ room: CapturedRoom, extras: [RoomGeometry.Object], folder: URL,
+                                          roomJSON: URL, roomUSDZ: URL, geometryJSON: URL) throws -> RoomGeometry {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try JSONEncoder().encode(room).write(to: roomJSON)
         try room.export(to: roomUSDZ, exportOptions: .model)
-        let geometry = RoomGeometry(room)
-        try JSONEncoder().encode(geometry).write(to: folder.appending(path: "geometry.json"))
+        var geometry = RoomGeometry(room)
+        geometry.objects += extras
+        try JSONEncoder().encode(geometry).write(to: geometryJSON)
         return geometry
     }
 
@@ -183,7 +193,9 @@ final class ScanSession {
         // room files stay local-only in this device's scan folder, and photos are
         // left off so the vision agent never gets a URL it can't fetch.
         let usdzUrl = await send(roomUSDZ, "model/vnd.usdz+zip")
-        let jsonUrl = await send(roomJSON, "application/json")
+        // Upload Moove's geometry (it includes objects RoomPlan doesn't know); RoomPlan's
+        // raw room.json stays in the on-device scan folder.
+        let jsonUrl = await send(geometryJSON, "application/json")
         var photoUrls: [UUID: String] = [:]
         for (id, file) in photos { photoUrls[id] = await send(file, "image/jpeg") }
 
