@@ -94,7 +94,7 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 
 ### If merged: Pack additions (still open PRs as of Sat 12:35 PM PDT)
 Check `gh pr view <n> -R christianazinn/moove --json state` before recording. Use these only if merged and rebuilt; keep shot 10 at 6 s by swapping, not adding.
-- **#286, truck in 3D:** in shot 10, replace the labels beat with Pack > Truck and crew > **See it in 3D** > **Load the truck** (pieces arc into the voxel truck in load order). VO: "...boxes by room, loaded into the truck in order." On the offline demo the 3D legend may say "These shapes don't fit a cargo van, so this is a 10 ft truck" while the card says Cargo van; keep the legend out of frame or say "about a 10-foot truck".
+- **#286, truck in 3D:** in shot 10, replace the labels beat with Pack > the 3D truck on the Truck and crew card > **Load the truck** (pieces arc into the voxel truck in load order). VO: "...boxes by room, loaded into the truck in order." On the offline demo the 3D legend may say "These shapes don't fit a cargo van, so this is a 10 ft truck" while the card says Cargo van; keep the legend out of frame or say "about a 10-foot truck".
 - **#285, mover quotes:** Pack > Truck and crew > **Get mover quotes**: three cards, each tagged **Estimate**, with "Estimates from published rates. Call to book." Keep the Estimate tags in frame. VO, if used: "and estimated mover quotes, labeled as estimates". Never say "booked" or "quoted by movers".
 
 ## Before recording

@@ -24,7 +24,7 @@ struct TruckView: View {
                     .contentShape(Rectangle())
                     .allowsHitTesting(false)
                     .accessibilityElement()
-                    .accessibilityLabel(summary(load))
+                    .accessibilityLabel(Self.summary(load))
                     .accessibilityAddTraits(.isImage)
                 VStack(spacing: 0) {
                     legend(load)
@@ -144,7 +144,7 @@ struct TruckView: View {
         return parts.joined(separator: " · ")
     }
 
-    private func summary(_ load: TruckLoad) -> String {
+    static func summary(_ load: TruckLoad) -> String {
         var s = "3D view of a \(load.truck.label), \(Int((load.fill * 100).rounded())) percent full, with \(load.furnitureCount) pieces of furniture and \(load.boxCount) boxes loaded."
         if let first = load.placements.first { s += " \(first.item.name) goes on first, against the cab." }
         if !load.unloaded.isEmpty { s += " \(load.unloaded.count) pieces don't fit." }
@@ -160,6 +160,8 @@ struct TruckSceneView: UIViewRepresentable {
     let items: [Item]
     var flyInToken: Int
     @Binding var selected: TruckPlacement?
+    /// False on Pack's inline card: no gestures, so the page still scrolls over it.
+    var interactive = true
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -168,7 +170,7 @@ struct TruckSceneView: UIViewRepresentable {
         view.environment.background = .color(FloorPlan3DView.sceneBackground.resolvedColor(with: view.traitCollection))
         let c = context.coordinator
         c.onSelect = { selected = $0 }
-        c.attach(to: view)
+        c.attach(to: view, interactive: interactive)
         c.show(load, items: items)
         c.shownFlyIn = flyInToken
         return view
@@ -209,7 +211,7 @@ struct TruckSceneView: UIViewRepresentable {
         private var fitDistance: Float = 14
         private var target: SIMD3<Float> = .zero
 
-        func attach(to view: ARView) {
+        func attach(to view: ARView, interactive: Bool = true) {
             self.view = view
             camera.camera.fieldOfViewInDegrees = FloorPlan3DView.Coordinator.fieldOfView
             anchor.addChild(camera)
@@ -226,6 +228,7 @@ struct TruckSceneView: UIViewRepresentable {
             anchor.addChild(fill)
             view.scene.addAnchor(anchor)
 
+            guard interactive else { return }
             let orbit = UIPanGestureRecognizer(target: self, action: #selector(orbit(_:)))
             orbit.maximumNumberOfTouches = 1
             let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinch(_:)))

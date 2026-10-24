@@ -11,6 +11,8 @@ struct PackView: View {
     @Environment(MooveStore.self) private var store
     @State private var plan: PackingPlan?
     @State private var truckLoad: TruckLoad?
+    /// Bumped by the inline truck's "Load the truck" to replay its fly-in.
+    @State private var truckFlyIn = 0
     @State private var openBox: MovingBox?
     @State private var expandedFurniture: Set<UInt64> = []
     /// Box groups (rooms, "first") showing their cards.
@@ -139,6 +141,7 @@ struct PackView: View {
                 Spacer(minLength: 8)
                 if demo { MonoTag(text: "Demo items", tone: Theme.ochreInk) }
             }
+            if let load = truckLoad { inlineTruck(load, plan: plan) }
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 18) {
                 GridRow {
                     StatFigure(label: "Truck", value: t.trucks > 1 ? "\(t.trucks) × \(t.truck.label)" : t.truck.label)
@@ -170,13 +173,36 @@ struct PackView: View {
                 .monoMeta()
                 .fixedSize(horizontal: false, vertical: true)
             if let note = truckLoad?.sizeNote(planned: t.truck) { Text(note).monoMeta().foregroundStyle(Theme.ochreInk) }
-            NavigationLink { TruckView(plan: plan, items: inputs.items, load: truckLoad) } label: {
-                Label("See it in 3D", systemImage: "cube.transparent")
-            }
-            .buttonStyle(.pill(.outline, compact: true))
         }
         .padding(18)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+    }
+
+    /// The loaded truck right on the card (no gestures, so the page scrolls), with "Load the truck"
+    /// to replay the fly-in and a full-screen link to orbit it and tap pieces.
+    private func inlineTruck(_ load: TruckLoad, plan: PackingPlan) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TruckSceneView(load: load, items: inputs.items, flyInToken: truckFlyIn, selected: .constant(nil), interactive: false)
+                .frame(height: 240)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+                .accessibilityElement()
+                .accessibilityLabel(TruckView.summary(load))
+                .accessibilityAddTraits(.isImage)
+                .accessibilityIdentifier("pack.truck3D")
+            HStack(spacing: 10) {
+                Button {
+                    truckFlyIn += 1
+                } label: {
+                    Label("Load the truck", systemImage: "shippingbox")
+                }
+                .buttonStyle(.pill(.primary, compact: true))
+                NavigationLink { TruckView(plan: plan, items: inputs.items, load: truckLoad) } label: {
+                    Label("Full screen", systemImage: "arrow.up.left.and.arrow.down.right")
+                }
+                .buttonStyle(.pill(.outline, compact: true))
+                .accessibilityHint("Turn the truck and tap pieces to see what they are")
+            }
+        }
     }
 
     // MARK: Boxes
@@ -248,17 +274,17 @@ struct PackView: View {
         .padding(.top, 36)
     }
 
-    /// One compact row per room ("Bedroom · 3 boxes · 37 kg"); tap for its box cards. Boxes with
-    /// scanned things come first; estimate-only boxes fold under "Everyday stuff (estimate)".
+    /// A heading per room ("Bedroom · 3 boxes · 37 kg") over its box cards, which show by default
+    /// (tap the heading to fold them). Boxes with scanned things come first, then "Everyday stuff (estimate)".
     private func roomGroup(_ group: BoxGroup, checked set: Set<String>) -> some View {
-        let open = expandedRooms.contains(group.id)
+        let open = !expandedRooms.contains(group.id)  // cards show by default; the set holds folded rooms
         let fragile = group.boxes.filter(\.fragile).count
         let openFirst = group.boxes.filter(\.openFirst).count
         let sealed = group.boxes.filter { isSealed($0, in: set) }.count
         return VStack(alignment: .leading, spacing: 0) {
             Button {
                 withAnimation(.easeOut(duration: 0.2)) {
-                    if open { expandedRooms.remove(group.id) } else { expandedRooms.insert(group.id) }
+                    if open { expandedRooms.insert(group.id) } else { expandedRooms.remove(group.id) }
                 }
             } label: {
                 HStack(alignment: .center, spacing: 12) {
@@ -316,10 +342,9 @@ struct PackView: View {
         return parts.joined(separator: ", ")
     }
 
-    /// Estimate-only boxes (typical everyday contents, not scanned). Folded when the room also has
-    /// scanned boxes; open when they're all the room has.
+    /// Estimate-only boxes (typical everyday contents, not scanned), shown as cards under their label.
     private func estimates(_ group: BoxGroup, checked set: Set<String>) -> some View {
-        let open = group.scanned.isEmpty != flippedEstimates.contains(group.id)
+        let open = !flippedEstimates.contains(group.id)  // shown by default; tap folds them
         return VStack(alignment: .leading, spacing: 14) {
             Button {
                 withAnimation(.easeOut(duration: 0.2)) {
