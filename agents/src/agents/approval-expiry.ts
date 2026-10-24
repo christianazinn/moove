@@ -67,9 +67,11 @@ export function expireReducer(conn: Conn): ExpireFn | undefined {
   return typeof fn === 'function' ? fn.bind(conn.reducers) : undefined;
 }
 
+const errText = (err: unknown) => String(err instanceof Error ? err.message : err);
+
 // The bindings have the reducer but the running module doesn't (not republished yet).
 export function isMissingReducer(err: unknown): boolean {
-  return /no such reducer|reducer[^]*not found|unknown reducer|expire_approval[^]*(does not exist|not exist)/i.test(String(err instanceof Error ? err.message : err));
+  return /no such reducer|reducer[^]*not found|unknown reducer|expire_approval[^]*(does not exist|not exist)/i.test(errText(err));
 }
 
 export interface ExpirySweeper {
@@ -123,10 +125,12 @@ export function createExpirySweeper(o: {
         say('off: the running module has no expire_approval reducer yet (republish with #199); pending approvals wait until decided');
         return false;
       }
-      // Usually a decision that landed first, or clock skew against the module's 15-minute floor.
+      // The module refused (already decided, or under its 15-minute floor through clock skew). That's
+      // a no-op, not an error event: the row's own state says what happened. One console line per id;
+      // a still-pending row is retried quietly on the next sweep.
       if (!complained.has(a.id)) {
         complained.add(a.id);
-        logEvent(conn, { owner: a.owner, agent: 'approval', kind: 'error', message: `Could not expire the stale approval: ${String(err)}`, refTable: 'approval', refId: a.id });
+        say(`approval ${a.id} not expired (${errText(err)}), leaving it`);
       }
       return false;
     } finally {

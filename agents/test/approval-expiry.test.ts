@@ -116,22 +116,25 @@ test("expiry: a no-op with one log line when the bindings or the running module 
   assert.equal(lines.filter(l => /off: the running module/.test(l)).length, 1);
 });
 
-test("expiry: a refused expire (e.g. decided first) logs one error and is retried quietly", async () => {
+test("expiry: a refused expire (too young for the module, or decided first) is a quiet no-op, retried next sweep", async () => {
   const f = sweepConn([approvalRow(1n, "pending", T0 - 13 * HOUR)]);
   let fail = true;
+  const lines: string[] = [];
   const sweeper = createExpirySweeper({
     conn: f.conn,
     expireMs: 12 * HOUR,
     now: () => T0,
-    say: () => undefined,
+    say: l => lines.push(l),
     expire: async ({ approvalId }) => {
       if (fail) throw new Error("approval is less than 15 minutes old");
       f.approvals.set(approvalId, { ...f.approvals.get(approvalId)!, status: "expired" } as Approval);
     },
   });
-  await sweeper.sweep();
-  await sweeper.sweep();
-  assert.equal(f.events.filter(e => e.kind === "error").length, 1);
+  assert.equal(await sweeper.sweep(), 0);
+  assert.equal(await sweeper.sweep(), 0);
+  assert.equal(f.events.length, 0, "no agent_event for a refused expire");
+  assert.equal(lines.filter(l => /not expired/.test(l)).length, 1, "one console line per approval");
+  assert.equal(sweeper.enabled, true, "a refusal doesn't turn expiry off");
   fail = false;
   assert.equal(await sweeper.sweep(), 1);
 });
