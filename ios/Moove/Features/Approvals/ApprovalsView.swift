@@ -30,9 +30,13 @@ struct ApprovalsView: View {
                 }
                 if !pending.isEmpty {
                     ListHeader(title: "Needs you", count: "\(pending.count)").padding(.top, 36)
-                    ForEach(pending) { approval in
-                        PendingApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
-                                           deal: store.snapshot.deal(for: approval), item: item(for: approval))
+                    // Each list in its own VStack: an approval's id is in `pending`, then in `decided`, and
+                    // sharing one LazyVStack's id space left the stale pending card showing under History.
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(pending) { approval in
+                            PendingApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
+                                               deal: store.snapshot.deal(for: approval), item: item(for: approval))
+                        }
                     }
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Image(systemName: "iphone.radiowaves.left.and.right")
@@ -63,9 +67,11 @@ struct ApprovalsView: View {
                 }
                 if !decided.isEmpty {
                     ListHeader(title: "History", count: "\(decided.count)").padding(.top, 40)
-                    ForEach(decided) { approval in
-                        DecidedApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
-                                           deal: store.snapshot.deal(for: approval), item: item(for: approval))
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(decided) { approval in
+                            DecidedApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
+                                               deal: store.snapshot.deal(for: approval), item: item(for: approval))
+                        }
                     }
                 }
             }
@@ -131,6 +137,7 @@ struct PendingApprovalRow: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(spokenSummary)
+            .accessibilityIdentifier("approval.pending.\(approval.id)")
             // Re-asked after an expiry (#186): ties this card to the expired ask(s) in History.
             let asks = store.snapshot.asks(for: approval)
             if let caption = asks.pendingCaption {
@@ -170,6 +177,7 @@ struct PendingApprovalRow: View {
                 }
                 .buttonStyle(.pill(.primary))
                 .accessibilityLabel("Approve \(approval.formattedAmount)")
+                .accessibilityIdentifier("approval.approve.\(approval.id)")
             }
             .disabled(working)
         }
@@ -274,6 +282,7 @@ struct DecidedApprovalRow: View {
         .ruled()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(store.snapshot.historyAccessibilitySummary(for: approval))
+        .accessibilityIdentifier("approval.decided.\(approval.id)")
     }
 }
 
