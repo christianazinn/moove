@@ -26,6 +26,13 @@ final class ScanSession {
         let widthM: Double
         let heightM: Double
         let depthM: Double
+        /// Added by photo because RoomPlan didn't detect it: no size or position,
+        /// so it's in the inventory but not in the 3D room.
+        var manual = false
+
+        static func manual() -> DetectedObject {
+            DetectedObject(id: UUID(), category: "other", widthM: 0, heightM: 0, depthM: 0, manual: true)
+        }
     }
 
     var phase: Phase = .capturing
@@ -69,6 +76,19 @@ final class ScanSession {
             )
         }
         phase = .reviewing
+    }
+
+    /// An item RoomPlan missed, added by its photo. The vision agent names and
+    /// categorizes it from the photo.
+    func addManual(_ object: DetectedObject, photo jpeg: Data) {
+        guard object.manual, !objects.contains(where: { $0.id == object.id }) else { return }
+        objects.append(object)
+        setPhoto(jpeg, for: object)
+    }
+
+    func remove(_ object: DetectedObject) {
+        objects.removeAll { $0.id == object.id }
+        if let file = photos.removeValue(forKey: object.id) { try? FileManager.default.removeItem(at: file) }
     }
 
     func setPhoto(_ jpeg: Data, for object: DetectedObject) {
