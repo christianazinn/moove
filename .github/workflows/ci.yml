@@ -115,7 +115,7 @@ jobs:
 
   ios-ui:
     # Runs the app in an iOS Simulator on the offline demo backend: the `Moove` scheme's test action
-    # (ios/MooveUITests, CommerceUITests for now). Screenshots are in the `ios-ui-screenshots` artifact.
+    # (all of ios/MooveUITests). Screenshots are in the `ios-ui-screenshots` artifact.
     # About 15 min, so like `ios` it only runs on PRs touching ios/ (or CI) and on pushes to main.
     needs: changes
     if: needs.changes.outputs.ios == 'true'
@@ -151,13 +151,12 @@ jobs:
         working-directory: ios
         run: |
           xcrun simctl boot "$SIM_UDID" || true
-          # Only the commerce suite gates CI for now: MooveSmokeTests (#161) still has two tests that time
-          # out on the slower CI runner, and running both suites goes past ~15 min.
-          # DevpostShotsTests (#242, ~2 min) walks the Offline demo and saves the Devpost shots.
+          # The whole MooveUITests target: CommerceUITests, MooveSmokeTests (#161, 30 s waits since #241) and
+          # DevpostShotsTests (#242, saves the Devpost shots). One build, serial on one Simulator: parallel
+          # clones (-parallel-testing-enabled) were slower on this runner and the app lost its test connection.
           DARK=MooveUITests/CommerceUITests/testCommerceScreensInDarkMode
-          xcodebuild test -scheme Moove -destination "id=$SIM_UDID" -only-testing:MooveUITests/CommerceUITests \
-            -only-testing:MooveUITests/DevpostShotsTests -skip-testing:$DARK \
-            -resultBundlePath "$RUNNER_TEMP/MooveUITests.xcresult" CODE_SIGNING_ALLOWED=NO
+          xcodebuild test -scheme Moove -destination "id=$SIM_UDID" -skip-testing:$DARK \
+            -resultBundlePath "$RUNNER_TEMP/MooveUITests.xcresult" CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO
           # Dark mode (#15): `-AppleInterfaceStyle` and XCUIDevice.appearance don't take on the CI Simulator,
           # so switch the whole Simulator and rerun just that test on the same build (~2 min).
           xcrun simctl ui "$SIM_UDID" appearance dark
