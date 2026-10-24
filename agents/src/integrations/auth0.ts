@@ -9,8 +9,6 @@
 //   AUTH0_CIBA_CLIENT_ID       the confidential "moove-worker" Regular Web App with the CIBA grant
 //   AUTH0_CIBA_CLIENT_SECRET   its secret (never logged)
 //   AUTH0_AUDIENCE             optional API audience
-//   APPROVAL_SIM_AUTO_APPROVE_SEC  demo only: > 0 enables the labeled simulated approver when
-//                              Auth0 isn't configured. Off by default.
 // Note: AUTH0_CLIENT_ID / AUTH0_CLIENT_SECRET belong to the iOS native app and can't run CIBA.
 
 export type ApprovalStart = {
@@ -181,51 +179,21 @@ export function auth0CibaGateway(cfg: Auth0Config): ApprovalGateway {
   };
 }
 
-// ---------- labeled simulated approver (demo only, off by default) ----------
-
-// Stands in for the phone when Auth0 isn't configured AND APPROVAL_SIM_AUTO_APPROVE_SEC > 0:
-// it "approves" N seconds after the request. Nothing is sent anywhere. The approval agent
-// labels every event it causes "(simulated)" with simulated: true (CLAUDE.md hard rule).
-export function simulatedApprover(autoApproveSec: number): ApprovalGateway {
-  const startedAt = new Map<string, number>();
-  let n = 0;
-  return {
-    simulated: true,
-    name: 'simulated approver',
-    async start() {
-      const authReqId = `sim-${++n}`;
-      startedAt.set(authReqId, Date.now());
-      return {
-        authReqId,
-        expiresAt: Date.now() + Math.max(300, autoApproveSec * 2) * 1000,
-        intervalSec: Math.min(1, autoApproveSec),
-      };
-    },
-    async poll(authReqId) {
-      const t = startedAt.get(authReqId);
-      if (t === undefined) throw new Error('unknown simulated request');
-      if (Date.now() - t < autoApproveSec * 1000) return { status: 'pending' };
-      startedAt.delete(authReqId);
-      return { status: 'approved' };
-    },
-  };
-}
-
 // ---------- selection ----------
 
 export type GatewayChoice = { gateway: ApprovalGateway | null; mode: string };
 
-// Real CIBA when AUTH0_DOMAIN + AUTH0_CIBA_CLIENT_ID + AUTH0_CIBA_CLIENT_SECRET are set; else the
-// simulated approver if APPROVAL_SIM_AUTO_APPROVE_SEC > 0; else none (approvals wait for the
-// in-app inbox, which calls decide_approval itself). `mode` is for a startup log line.
+// Real CIBA when AUTH0_DOMAIN + AUTH0_CIBA_CLIENT_ID + AUTH0_CIBA_CLIENT_SECRET are set; else none
+// (approvals wait for the in-app inbox, which calls decide_approval itself). `mode` is for a startup
+// log line. There is no simulated approver any more: since #42 the worker can only record a decision
+// with record_ciba_decision, which needs the owner's real Auth0 subject.
 export function selectApprovalGateway(env: NodeJS.ProcessEnv = process.env): GatewayChoice {
   const cfg = auth0Config(env);
   if (cfg) {
     return { gateway: auth0CibaGateway(cfg), mode: `Auth0 CIBA via Guardian push (tenant ${cfg.domain})` };
   }
-  const sim = Number(env.APPROVAL_SIM_AUTO_APPROVE_SEC ?? '0');
-  if (Number.isFinite(sim) && sim > 0) {
-    return { gateway: simulatedApprover(sim), mode: `SIMULATED approver: auto-approves after ${sim}s (Auth0 not configured)` };
+  if (Number(env.APPROVAL_SIM_AUTO_APPROVE_SEC ?? '0') > 0) {
+    console.warn('[approval] APPROVAL_SIM_AUTO_APPROVE_SEC is ignored: the worker can no longer approve its own requests (#42)');
   }
   return { gateway: null, mode: 'Auth0 not configured: approvals wait for the in-app inbox' };
 }
