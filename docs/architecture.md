@@ -44,7 +44,7 @@
 2. **Pricing:** the worker sees items with no `estValue`. The pricing agent pays for comps over x402 (logged to `payments` + `agentEvents`), fetches comps through Apify, and sets the value. The sort agent then sets the disposition, skipping `maybeSentimental` items.
 3. **Sell:** a sell item with no listing gets a draft listing from the listing agent. If the price is above the threshold, the worker creates an `approvals` row and sends an Auth0 CIBA push. Once approved, the listing posts to the eBay sandbox.
 4. **Buy:** for each open shopping-list item, the buy agent searches deals through Apify, then the fraud screen runs (stretch), then Visa checkout (with approval if above the threshold).
-5. **New home:** the demo house comes from fixtures (Zillow later). The layout solver in MooveKit places kept and bought items, and RealityKit runs the fly-in.
+5. **New home:** the house is the demo house, manual room sizes, or a listing import (link parse, floor-plan screenshots read by Claude vision, opt-in Apify scrape, or a beds/baths/sqft estimate). The layout solver in MooveKit places kept and bought items, and RealityKit runs the fly-in from each piece's scanned spot (`FlyInStarts`). Every item is a procedural voxel model (decision 0108).
 
 ## Top risks and fallbacks
 | Risk | Mitigation / fallback |
