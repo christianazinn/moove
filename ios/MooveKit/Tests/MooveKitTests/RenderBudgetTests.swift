@@ -49,7 +49,7 @@ import Testing
         .art: ("art", "art"), .photos: ("photos", "photos"), .binder: ("trading_cards", "binder"),
         .kitchenware: ("kitchenware", "pots"), .plant: ("plant", "plant"), .rug: ("rug", "rug"),
         .clothes: ("clothes", "clothes"), .electronics: ("electronics", "laptop"), .decor: ("decor", "vase"),
-        .appliance: ("appliance", "microwave"), .fan: ("appliance", "box fan"), .beanBag: ("sofa", "bean bag"),
+        .appliance: ("appliance", "coffee maker"), .fan: ("appliance", "box fan"), .beanBag: ("sofa", "bean bag"),
         .mirror: ("decor", "mirror"), .quiltRack: ("decor", "quilt rack"), .framedPhotos: ("decor", "framed photos"),
         .box: ("storage", "storage bin"),
     ]

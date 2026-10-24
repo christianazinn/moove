@@ -13,7 +13,9 @@ import Foundation
 // VoxelModels+Furniture.swift (sofa, bed, mattress, desk, chairs, table, dresser, bookshelf,
 // TV, lamp), VoxelModels+Objects.swift (books, art, photos, binder, kitchenware, plant, rug,
 // clothes, electronics, decor, box) and VoxelModels+Moove.swift (Moove-only pieces: fridge and
-// other appliances, fans, bean bag, mirror, quilt rack, framed photos).
+// other appliances, fans, bean bag, mirror, quilt rack, framed photos), VoxelModels+Instruments.swift
+// (guitar, piano, keyboard, drums) and VoxelModels+Gear.swift (vacuum, monitor, scooter, bags,
+// fitness machines, boards) for the scan detector's extra categories (#183).
 
 /// A flat top where small props can sit, in a piece's voxel coords: the half-open rectangle
 /// [x0, x1) × [z0, z1), with `y` the first free voxel layer above the surface (so a prop's
@@ -53,7 +55,7 @@ public enum VoxelModels {
         let cat = trimmed(spec.category.lowercased())
         let nameV = VName(spec.name.lowercased())
         let attrs = Set(spec.attributes.map { trimmed($0.lowercased()) })
-        let kind = route(category: cat, name: nameV, attrs: attrs)
+        let kind = route(category: cat, name: nameV, attrs: attrs, size: (spec.widthM, spec.depthM, spec.heightM))
         // Builders read style keywords from the name first, then the vision agent's material and
         // brand ("Desk" + "laminate" + "IKEA" reads like a white flat-pack desk). Measured photo
         // colors, when present, override the keyword palette.
@@ -69,6 +71,8 @@ public enum VoxelModels {
         if kind == .rug { Y = 1; NY = 1 }
         // some builders need a minimum resolution to be recognizable
         if let m = kind.minDims { X = max(X, m.0); Y = max(Y, m.1); Z = max(Z, m.2); NY = Y }
+        // a robot vacuum is a low disc whatever height a loose scan box (or the default) says
+        if kind == .vacuum && Canvas.isRobotVacuum(name, Y) { Y = min(Y, 3); NY = Y }
         if kind == .bed {
             // h <= 0.7 m: h is the mattress-top height, the headboard rises above it
             if Y <= vox(0.7) { bedTop = max(3, Y); NY = max(bedTop + 3, vox(0.95)) } else { bedTop = clamp(vox(0.55), 3, Y - 3); NY = Y }
@@ -120,6 +124,23 @@ public enum VoxelModels {
         case .mirror: g.mirror(X, NY, Z, name)
         case .quiltRack: g.quiltRack(X, NY, Z, name)
         case .framedPhotos: g.framedPhotos(X, NY, Z, name)
+        case .stove: g.stove(X, NY, Z, name)
+        case .dishwasher: g.dishwasher(X, NY, Z, name)
+        case .microwave: g.microwave(X, NY, Z, name)
+        case .bench: g.bench(X, NY, Z, name)
+        case .ottoman: g.ottoman(X, NY, Z, name)
+        case .bike: g.bike(X, NY, Z, name)
+        case .suitcase: g.suitcase(X, NY, Z, name)
+        case .guitar: g.guitar(X, NY, Z, name)
+        case .piano: g.piano(X, NY, Z, name)
+        case .keyboard: g.keyboardInstrument(X, NY, Z, name)
+        case .drums: g.drums(X, NY, Z, name)
+        case .vacuum: g.vacuum(X, NY, Z, name)
+        case .monitor: g.monitor(X, NY, Z, name, wall: wallHung || name.has("wall mount", "wall-mount", "mounted"))
+        case .scooter: g.scooter(X, NY, Z, name)
+        case .bag: g.bag(X, NY, Z, name)
+        case .fitness: g.fitness(X, NY, Z, name)
+        case .board: g.board(X, NY, Z, name)
         case .box: g.kraftBox(X, NY, Z, name)
         }
         return (g.output(), g.surfaces)
@@ -153,13 +174,14 @@ public enum VoxelModels {
     /// Which builder a spec uses (exposed for tests and debugging).
     static func kind(_ spec: VoxelItemSpec) -> Kind {
         route(category: trimmed(spec.category.lowercased()), name: VName(spec.name.lowercased()),
-              attrs: Set(spec.attributes.map { trimmed($0.lowercased()) }))
+              attrs: Set(spec.attributes.map { trimmed($0.lowercased()) }), size: (spec.widthM, spec.depthM, spec.heightM))
     }
 
     enum Kind: String, Sendable, CaseIterable {
         case sofa, bed, mattress, desk, chair, table, dresser, bookshelf, tv, lamp, books, art, photos, binder
         case kitchenware, plant, rug, clothes, electronics, decor, appliance, fan, beanBag, mirror, quiltRack
-        case framedPhotos, box
+        case framedPhotos, stove, dishwasher, microwave, bench, ottoman, bike, suitcase
+        case guitar, piano, keyboard, drums, vacuum, monitor, scooter, bag, fitness, board, box
 
         /// Default size (w, d, h) in meters when a dimension is missing or invalid.
         var defaultSize: (Double, Double, Double) {
@@ -190,6 +212,23 @@ public enum VoxelModels {
             case .mirror: (0.6, 0.05, 0.9)
             case .quiltRack: (0.9, 0.3, 0.9)
             case .framedPhotos: (0.4, 0.05, 0.5)
+            case .stove: (0.76, 0.65, 0.92)
+            case .dishwasher: (0.6, 0.6, 0.86)
+            case .microwave: (0.5, 0.38, 0.3)
+            case .bench: (1.2, 0.4, 0.45)
+            case .ottoman: (0.6, 0.6, 0.42)
+            case .bike: (1.7, 0.6, 1.0)
+            case .suitcase: (0.45, 0.28, 0.7)
+            case .guitar: (0.4, 0.3, 1.05)
+            case .piano: (1.5, 0.6, 1.2)
+            case .keyboard: (1.3, 0.45, 0.85)
+            case .drums: (1.6, 1.3, 1.3)
+            case .vacuum: (0.35, 0.3, 1.1)
+            case .monitor: (0.6, 0.2, 0.45)
+            case .scooter: (1.05, 0.45, 1.1)
+            case .bag: (0.32, 0.22, 0.45)
+            case .fitness: (0.8, 1.8, 1.4)
+            case .board: (0.8, 0.22, 0.12)
             case .box: (0.5, 0.4, 0.4)
             }
         }
@@ -213,6 +252,22 @@ public enum VoxelModels {
             case .mirror: (4, 5, 1)
             case .quiltRack: (8, 8, 3)
             case .framedPhotos: (4, 5, 1)
+            case .stove, .dishwasher: (8, 10, 8)
+            case .microwave: (6, 4, 4)
+            case .bench: (8, 4, 4)
+            case .ottoman: (5, 4, 5)
+            case .bike: (16, 10, 3)
+            case .suitcase: (5, 8, 3)
+            case .guitar: (5, 12, 1)
+            case .piano: (10, 10, 4)
+            case .keyboard: (10, 2, 3)
+            case .drums: (14, 12, 10)
+            case .vacuum: (4, 2, 4)
+            case .monitor: (5, 4, 1)
+            case .scooter: (12, 10, 3)
+            case .bag: (4, 4, 3)
+            case .fitness: (8, 8, 8)
+            case .board: (3, 2, 2)
             default: nil
             }
         }
@@ -222,7 +277,7 @@ public enum VoxelModels {
 
     /// Picks a builder from category + name keywords (models.js `route`, extended for Moove's
     /// categories: bed, chair, table, storage, lamp, appliance, decor, sofa).
-    static func route(category cat: String, name n: VName, attrs: Set<String> = []) -> Kind {
+    static func route(category cat: String, name n: VName, attrs: Set<String> = [], size: (Double, Double, Double)? = nil) -> Kind {
         // RoomPlan attributes first: they come from the scan itself
         if attrs.contains("storagetype.shelf") { return .bookshelf }
         if attrs.contains("storagetype.cabinet") { return .dresser }
@@ -233,6 +288,19 @@ public enum VoxelModels {
         if n.has("bean bag", "beanbag", "bean-bag", "pouf", "floor cushion") { return .beanBag }
         if n.has("sectional", "sofa", "couch", "loveseat", "futon", "settee", "armchair") { return .sofa }
         if n.has("bookcase", "bookshelf", "book shelf", "shelving", "shelf unit", "étagère") { return .bookshelf }
+        // the vision agent's specific names ("black standing desk") beat a broad category ("furniture"),
+        // but not a small-object one: a "coffee table book" stays books, a "TV remote" electronics.
+        // Order matters: a "desk lamp" is a lamp, a "desk chair" a chair, a "desk with drawers" a desk
+        let small = smallCategories.contains(cat) || (cat == "electronics" && !isTV(n))
+        if !small {
+            if n.word("lamp", "lamps", "sconce", "lantern") { return .lamp }
+            if n.word("chair", "chairs", "stool", "stools", "recliner") { return .chair }
+            if n.has("tv stand", "tv console", "tv cabinet", "tv unit", "media console", "entertainment center") { return .dresser }
+            if n.has("desk", "workstation", "computer armoire", "roll top", "rolltop", "roll-top", "dressing table")
+                || n.word("vanity", "secretary") { return .desk }
+            // before the rug check: a "carpet cleaner" is a vacuum
+            if isVacuum(n) { return .vacuum }
+        }
         if n.has("dresser", "chest of drawers", "nightstand", "night stand", "bedside", "sideboard", "credenza", "armoire", "wardrobe")
             || n.word("drawers", "cabinet") { return .dresser }
         if n.word("rug") || n.has("carpet") { return .rug }
@@ -240,7 +308,30 @@ public enum VoxelModels {
         if n.has("mirror") { return .mirror }
         if n.has("frame") && n.has("photo", "picture", "portrait") { return .framedPhotos }
         if n.has("fridge", "refrigerator", "freezer") { return .appliance }
+        if !small {
+            if n.has("dishwasher") { return .dishwasher }
+            if n.has("washing machine") || (n.word("washer", "dryer") && !n.has("hair dryer", "pressure washer")) { return .appliance }
+            if n.has("microwave") { return .microwave }
+            if n.word("stove", "range", "oven", "cooktop") && !n.has("toaster oven", "dutch oven") { return .stove }
+        }
         if n.word("fan", "fans") { return .fan }
+        if !small {
+            if isFitness(n) { return .fitness } // an "exercise bike" isn't a bike
+            if n.word("bike", "bicycle", "e-bike", "ebike") { return .bike }
+            if n.has("suitcase", "luggage", "carry-on", "carry on") { return .suitcase }
+            if n.has("ottoman", "footstool", "foot stool", "pouf") { return .ottoman }
+            if n.word("bench", "settle") { return .bench }
+            if n.has("bed frame", "bunk bed", "daybed", "platform bed", "headboard") || n.word("bed") { return .bed }
+            if isTV(n) { return .tv }
+            if n.word("table", "tables") { return .table }
+            // #183: the detector's (#98) and vision's (#131) extra categories, after the furniture
+            // words so a "piano bench" stays a bench and a "drum table" a table
+            if let k = instrumentKind(n, loose: false, size: size) { return k }
+            if isMonitor(n) { return .monitor }
+            if n.word("scooter", "scooters", "e-scooter", "escooter", "moped", "vespa") { return .scooter }
+            if isBoard(n) { return .board }
+            if isBag(n) && cat != "luggage" && cat != "suitcase" { return .bag }
+        }
         switch cat {
         case "sofa", "couch": return .sofa
         case "bed": return .bed
@@ -248,7 +339,8 @@ public enum VoxelModels {
         case "desk": return .desk
         case "chair": return .chair
         case "table": return n.has("desk", "workstation") ? .desk : .table
-        case "dresser": return .dresser
+        case "dresser", "nightstand", "cabinet", "wardrobe": return .dresser
+        case "bookshelf", "bookcase", "shelf", "shelving": return .bookshelf
         case "lamp", "light", "lighting": return .lamp
         case "tv", "television": return .tv
         case "books", "book": return .books
@@ -259,16 +351,138 @@ public enum VoxelModels {
         case "rug": return .rug
         case "kitchenware", "kitchen": return .kitchenware
         case "clothes", "clothing": return .clothes
-        case "electronics": return n.word("tv", "television") ? .tv : .electronics
-        case "appliance", "appliances": return n.word("tv", "television") ? .tv : .appliance
+        case "electronics":
+            if isTV(n) { return .tv }
+            if isMonitor(n) { return .monitor }
+            if let k = instrumentKind(n, loose: false, size: size), k != .electronics { return k } // "Casio keyboard"
+            return .electronics
+        // #183: the detector's (#98, `ObjectVocabulary`) and vision's (#131) extra categories
+        case "instrument", "instruments", "musical instrument", "musical_instrument", "music":
+            return instrumentKind(n, loose: true, size: size) ?? .guitar
+        case "guitar", "guitars", "ukulele", "violin", "viola", "cello", "bass guitar", "banjo", "mandolin": return .guitar
+        case "piano": return instrumentKind(n, loose: true, size: size) == .keyboard ? .keyboard : .piano
+        case "keyboard instrument", "keyboard_instrument", "synthesizer", "synth", "digital piano": return .keyboard
+        case "keyboard":
+            // a computer keyboard is narrow; a musical one is most of a meter
+            if let w = size?.0, w.isFinite, w > 0, w < 0.6, instrumentKind(n, loose: false, size: size) != .keyboard { return .electronics }
+            return .keyboard
+        case "drums", "drum", "drum kit", "drum set": return .drums
+        case "amplifier", "amp": return .electronics
+        case "monitor", "monitors", "display", "screen", "computer monitor": return isTV(n) ? .tv : .monitor
+        case "vacuum", "vacuums", "vacuum cleaner", "hoover", "robot vacuum": return .vacuum
+        case "scooter", "scooters", "e-scooter", "kick scooter", "moped": return .scooter
+        case "bag", "bags", "backpack", "backpacks", "duffel", "duffel bag", "tote", "handbag", "purse",
+             "golf clubs", "golf bag", "punching bag":
+            return .bag
+        case "treadmill", "exercise bike", "rowing machine", "elliptical", "fitness", "exercise equipment", "gym equipment":
+            return .fitness
+        case "skateboard", "surfboard", "snowboard", "skis", "ski", "longboard", "paddleboard": return .board
+        case "computer", "laptop", "printer", "speaker", "speakers", "game console", "projector", "turntable",
+             "record player", "router", "camera":
+            return isTV(n) ? .tv : isMonitor(n) ? .monitor : .electronics
+        case "coffee machine", "coffee maker", "espresso machine", "toaster", "blender", "sewing machine", "air purifier",
+             "heater", "space heater", "humidifier", "dehumidifier", "air conditioner", "water dispenser":
+            return .appliance
+        case "vase", "sculpture": return .decor
+        case "plant stand": return .plant
+        case "appliance", "appliances", "refrigerator", "fridge", "washer", "dryer", "washerdryer", "washer_dryer": return .appliance
+        case "stove", "oven", "range": return .stove
+        case "dishwasher": return .dishwasher
+        case "microwave": return .microwave
+        case "fan": return .fan
+        case "mirror": return .mirror
+        case "bench": return .bench
+        case "ottoman": return .ottoman
+        case "bike", "bicycle": return .bike
+        case "suitcase", "luggage": return .suitcase
+        case "box", "boxes": return .box
         case "storage": return n.word("bin", "tote", "box", "crate", "basket", "container") ? .box : .bookshelf
         case "decor":
             if n.word("art", "artwork", "painting", "canvas", "poster", "print") { return .art }
             if n.word("plant", "plants", "succulent", "fern", "monstera") { return .plant }
             if n.word("photos") { return .photos }
             return .decor
-        default: return .box
+        default: return size.map(shapeKind) ?? .box
         }
+    }
+
+    /// A musical instrument named in `n`, or an amp (`.electronics`). `loose`: the category already
+    /// says "instrument", so a bare "keyboard" / "drum" counts.
+    static func instrumentKind(_ n: VName, loose: Bool, size: (Double, Double, Double)? = nil) -> Kind? {
+        if n.word("amp", "amps", "amplifier", "pedalboard") && (loose || n.has("guitar", "bass", "keyboard", "instrument", "marshall", "fender")) {
+            return .electronics
+        }
+        if n.word("drums", "drumset", "drumkit", "cajon") || n.has("drum kit", "drum set", "snare", "e-kit", "v-drums") || (loose && n.word("drum")) {
+            return .drums
+        }
+        if n.has("synth", "keytar", "digital piano", "stage piano", "midi keyboard", "electronic keyboard", "digital keyboard",
+                 "keyboard piano", "piano keyboard", "musical keyboard", "music keyboard", "keyboard stand") { return .keyboard }
+        if n.word("keyboard", "keyboards") {
+            let wide = size.map { $0.0.isFinite && $0.0 >= 0.75 } ?? false
+            if loose || wide || n.has("casio", "yamaha", "korg", "roland", "nord", "kawai", "alesis", "piano") { return .keyboard }
+        }
+        if n.word("piano", "pianos", "pianoforte", "pianola") || n.has("baby grand", "grand piano", "upright piano") { return .piano }
+        if n.has("guitar", "ukulele", "double bass", "upright bass")
+            || n.word("violin", "violins", "viola", "cello", "cellos", "fiddle", "uke", "banjo", "mandolin") { return .guitar }
+        return nil
+    }
+
+    /// A computer monitor / display (TV words are checked first by the callers).
+    static func isMonitor(_ n: VName) -> Bool {
+        if n.has("baby monitor", "heart rate", "blood pressure", "glucose", "monitor stand", "monitor riser", "monitor arm",
+                 "monitor mount", "monitor light") { return false }
+        return n.word("monitor", "monitors") || n.has("computer screen", "pc screen", "computer display", "studio display", "pro display",
+                                                       "lcd display", "led display", "gaming display", "imac", "all-in-one computer",
+                                                       "all in one computer", "ultrawide")
+    }
+
+    static func isVacuum(_ n: VName) -> Bool {
+        if n.has("sealer", "storage", "vacuum bag", "vacuum-sealed", "vacuum sealed", "insulated", "flask", "tube") { return false }
+        return n.word("vacuum", "vacuums", "hoover", "roomba", "roborock", "robovac", "shopvac", "shop-vac", "dustbuster")
+            || n.has("shop vac", "vacuum cleaner", "carpet cleaner", "carpet shampooer", "robot vacuum", "stick vac")
+    }
+
+    static func isFitness(_ n: VName) -> Bool {
+        n.word("treadmill", "treadmills", "elliptical", "rower")
+            || n.has("rowing machine", "exercise bike", "stationary bike", "spin bike", "indoor bike", "indoor cycle", "peloton",
+                     "recumbent bike", "air bike", "assault bike", "cross trainer", "cross-trainer", "walking pad")
+    }
+
+    static func isBoard(_ n: VName) -> Bool {
+        if n.word("skateboard", "skateboards", "longboard", "surfboard", "surfboards", "snowboard", "snowboards", "skis",
+                  "paddleboard", "bodyboard", "wakeboard", "skimboard") || n.has("paddle board") { return true }
+        return n.word("ski") && !n.has("boot", "jacket", "pants", "goggles", "helmet", "pole", "glove", "mask", "rack")
+    }
+
+    static func isBag(_ n: VName) -> Bool {
+        n.word("backpack", "backpacks", "rucksack", "knapsack", "duffel", "duffle", "holdall", "tote", "totes", "handbag", "purse",
+               "bag", "bags", "satchel", "briefcase", "daypack")
+    }
+
+    /// The name is a TV itself, not a TV accessory ("TV remote", "TV antenna").
+    static func isTV(_ n: VName) -> Bool {
+        n.word("tv", "television", "tvs") && !n.word("remote", "remotes", "antenna", "cable", "cables", "stick", "box")
+    }
+
+    /// Categories that already name a small object; furniture words in the name ("coffee table
+    /// book", "chair cushion") describe it rather than make it furniture.
+    static let smallCategories: Set<String> = [
+        "books", "book", "art", "photos", "kitchenware", "kitchen", "clothes", "clothing", "plant", "plants",
+        "binder", "trading_cards", "decor",
+    ]
+
+    /// Last resort for a broad category ("furniture", "other") whose name has no keyword: the
+    /// likeliest piece for the scanned (w, d, h) in meters. Small or odd shapes stay boxes.
+    static func shapeKind(_ s: (Double, Double, Double)) -> Kind {
+        let (w, d, h) = s
+        guard w.isFinite, d.isFinite, h.isFinite, w > 0, d > 0, h > 0 else { return .box }
+        let foot = max(w, d), slim = min(w, d)
+        if h < 0.35 && foot >= 1.2 { return .rug }
+        if h >= 1.2 && slim <= 0.5 { return .bookshelf }
+        if h >= 0.6 && h <= 0.85 && foot >= 0.9 { return slim <= 0.75 ? .desk : .table }
+        if h >= 0.4 && h <= 0.7 && foot >= 1.4 && slim >= 0.9 { return .bed }
+        if h >= 0.65 && h <= 1.2 && foot >= 0.6 && foot <= 1.6 && slim >= 0.4 { return .dresser }
+        return .box
     }
 
     // MARK: sizing
