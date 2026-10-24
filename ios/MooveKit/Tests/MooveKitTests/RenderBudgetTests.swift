@@ -11,8 +11,9 @@ import Testing
 
     // Today (Oct 24, Linux debug): biggest item the bed (~10.7k at default size; sofa 6.1k,
     // mattress 5.9k, bookshelf 5.6k, the rest under 5k); demo bedroom (the seeded Bedroom, #243)
-    // shell 3.3k + 12 items = 27.1k; demo house shell 15.0k + 8 laid-out items = 37.8k (shells
-    // include the full-height back walls); building + meshing all of it 0.4-1.1 s.
+    // shell 3.5k + 12 items = 27.6k; demo house shell 15.7k + 8 laid-out items = 38.4k (shells
+    // count the base plus the wall pieces shown at the worst yaw: tall back walls, low near
+    // walls); building + meshing all of it 0.4-1.1 s.
 
     /// Any one item mesh (demo item or a kind at its default size). Leaves room for new builders.
     static let perItemTriangleCap = 20_000
@@ -92,13 +93,16 @@ import Testing
     // MARK: (2) the demo bedroom dollhouse
 
     /// The shell as the app draws it: the cut-away base plus the full-height back walls
-    /// (`VoxelHouse.buildLayers`), worst case over the camera's turn (two adjacent facings up).
+    /// and the low near walls (`VoxelHouse.buildLayers`), worst case over the camera's turn.
     static func shellTriangles(_ plan: FloorPlan, wallColor: VoxelColor? = nil, floorColor: VoxelColor? = nil) -> Int {
         let layers = VoxelHouse.buildLayers(plan, wallColor: wallColor, floorColor: floorColor)
         let base = VoxelMesher.mesh(layers.base, centered: false).triangleCount
-        let upper = layers.upper.mapValues { VoxelMesher.mesh($0.grid, centered: false).triangleCount }
-        let x = max(upper[.plusX] ?? 0, upper[.minusX] ?? 0), z = max(upper[.plusZ] ?? 0, upper[.minusZ] ?? 0)
-        return base + x + z
+        let pieces = layers.layers.map { ($0, VoxelMesher.mesh($0.grid, centered: false).triangleCount) }
+        let worst = (0..<72).map { step in
+            let a = Double(step) * 5 * .pi / 180
+            return pieces.filter { $0.0.isShown(viewFromTarget: SIMD2(sin(a), cos(a))) }.map(\.1).reduce(0, +)
+        }.max() ?? 0
+        return base + worst
     }
 
     static func bedroomTriangles() -> (shell: Int, items: Int) {
