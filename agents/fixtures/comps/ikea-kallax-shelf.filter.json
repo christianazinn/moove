@@ -1,0 +1,19 @@
+{
+  "812d91edc79e5cb9": {
+    "item": "IKEA Kallax shelf; category shelf; 0.77 x 1.47 x 0.39 m (W x H x D)",
+    "n": 12,
+    "keep": [
+      1,
+      2,
+      5,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "reason": "Dropped 3, 4 and 6 as 4-cube units with different dimensions (about 76x76 cm or 147x146 cm versus the item's 77x147 cm 8-cube); kept the rest as the same Kallax shelf, including size-unspecified and configuration variants.",
+    "model": "claude-haiku-5-5"
+  }
+}

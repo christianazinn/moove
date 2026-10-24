@@ -72,9 +72,11 @@ function normalize(source: string, rows: any[]): Comp[] {
     .filter(c => c.title && c.priceCents > 0);
 }
 
+export const compsSlug = (q: string) => q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
 // Cache path for a query, relative to agents/ (the worker's cwd).
-export const cacheFile = (q: string) =>
-  path.join('fixtures', 'comps', `${q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)}.json`);
+export const cacheFile = (q: string) => path.join('fixtures', 'comps', `${compsSlug(q)}.json`);
+// The pricing agent's relevance-filter verdicts for this query's comps sit next to them.
+export const filterCacheFile = (q: string) => path.join('fixtures', 'comps', `${compsSlug(q)}.filter.json`);
 
 async function runActor(src: Source, q: string): Promise<Comp[]> {
   const url = new URL(`https://api.apify.com/v2/acts/${src.actor}/run-sync-get-dataset-items`);
