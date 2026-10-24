@@ -40,8 +40,20 @@ export const config = {
   sam3d: {
     enabled: Boolean(env('FAL_KEY')),
     usdPerRun: Number(env('SAM3D_USD_PER_RUN', '0.02')),
-    maxUsd: Number(env('SAM3D_MAX_USD', '1.00')), // per worker run, about 50 items
+    // Per worker run, covering fal + the Claude image pick + image searches (~$0.07 per item).
+    maxUsd: Number(env('SAM3D_MAX_USD', '2.00')),
     concurrency: Number(env('SAM3D_CONCURRENCY', '2')),
+    // SAM 3D tries on one item before giving up (next-best image on each retry).
+    maxAttempts: Math.max(1, Number(env('SAM3D_MAX_ATTEMPTS', '2'))),
+    // Estimated cost of one Claude image pick (MODEL_VISION, up to ~8 images), for the spend cap.
+    selectUsd: Number(env('SAM3D_SELECT_USD', '0.04')),
+    // Web product images for items vision identified as a specific product (#84). 0 = photos only.
+    webImages: env('SAM3D_WEB_IMAGES', '1') !== '0',
+    webImagesMax: Math.max(0, Number(env('SAM3D_WEB_IMAGES_MAX', '6'))),
+    // Cap on one Apify image search (maxTotalChargeUsd); cached searches are free.
+    imageSearchMaxUsd: Number(env('SAM3D_IMAGE_SEARCH_MAX_USD', '0.03')),
+    // Optional allowlist of hosts web images may come from (comma-separated). Empty = any public https host.
+    productImageHosts: parseAllowedHosts(env('PRODUCT_IMAGE_HOSTS')),
   },
   models: {
     vision: env('MODEL_VISION', 'claude-sonnet-5-5'),
