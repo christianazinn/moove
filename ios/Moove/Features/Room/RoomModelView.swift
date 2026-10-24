@@ -1,5 +1,6 @@
 import SwiftUI
 import RealityKit
+import GLTFKit2
 import MooveKit
 
 /// Orbitable 3D model of a scanned room (iOS 18+). Drag to orbit, pinch to
@@ -27,7 +28,7 @@ struct RoomModelView: View {
             apply(to: room)
         }
         .realityViewCameraControls(.orbit)
-        .task(id: models.revision) { await loadModels() }
+        .task(id: TaskKey(revision: models.revision, urls: items.values.compactMap(\.modelUrl).sorted())) { await loadModels() }
         .gesture(
             SpatialTapGesture().targetedToAnyEntity().onEnded { value in
                 var entity: Entity? = value.entity
@@ -70,18 +71,30 @@ struct RoomModelView: View {
         return max(b.max.x - b.min.x, b.max.z - b.min.z, 1) * 0.04
     }
 
-    /// Loads the USDZ for every object that has a captured model.
+    /// Loads every object's model: captured on this phone first, else the synced
+    /// `modelUrl` (another phone's capture, or SAM 3D from the worker).
     private func loadModels() async {
         for object in geometry.objects {
+            if models.modelURL(for: object.id) == nil, let remote = items[object.id]?.modelUrl.flatMap(URL.init(string:)) {
+                await models.fetchRemote(remote, for: object.id)  // bumps revision, which re-runs this task
+            }
             guard let url = models.modelURL(for: object.id) else {
                 prototypes[object.id] = nil
                 continue
             }
             if prototypes[object.id]?.name == url.absoluteString { continue }
-            guard let entity = try? await Entity(contentsOf: url) else { continue }
+            guard let entity = await Self.load(url) else { continue }
             entity.name = url.absoluteString  // remembers which file it came from
             prototypes[object.id] = entity
         }
+    }
+
+    /// RealityKit reads USDZ (Object Capture); SAM 3D models are GLB, loaded with GLTFKit2.
+    private static func load(_ url: URL) async -> Entity? {
+        if url.pathExtension.lowercased() == "glb" {
+            return try? await GLTFRealityKitLoader.load(from: url)
+        }
+        return try? await Entity(contentsOf: url)
     }
 
     /// Recolors furniture for the current mode and selection, swaps in captured
@@ -133,4 +146,9 @@ struct RoomModelView: View {
 private struct ModelSourceComponent: Component, Equatable {
     var source: String
     var turns: Int
+}
+
+private struct TaskKey: Equatable {
+    var revision: Int
+    var urls: [String]
 }

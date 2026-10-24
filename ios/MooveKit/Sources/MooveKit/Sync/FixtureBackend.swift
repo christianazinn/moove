@@ -231,6 +231,15 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         }
     }
 
+    public func setItemModel(itemId: UInt64, url: String, source: ModelSource) async throws {
+        try updateOwnedItem(itemId) {
+            // Same rule as the module: a SAM 3D result never replaces a captured model.
+            if source == .sam3d, $0.modelSource == .capture, $0.modelUrl != nil { return }
+            $0.modelUrl = url.isEmpty ? nil : url
+            $0.modelSource = url.isEmpty ? nil : source
+        }
+    }
+
     /// Worker-side reducer, exposed so tests can check user overrides survive an agent re-run.
     public func setAutoDisposition(itemId: UInt64, disposition: Disposition, reason: String) throws {
         try mutate { s in
