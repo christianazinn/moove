@@ -11,38 +11,61 @@ struct ApprovalsView: View {
     var body: some View {
         let pending = store.snapshot.pendingApprovals
         let decided = store.snapshot.decidedApprovals
-        List {
-            if !pending.isEmpty {
-                Section {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                PageHeader(
+                    eyebrow: "05 — Approvals",
+                    title: "Your go-ahead.",
+                    lede: "When an agent wants to sell or buy something over your limit, it asks here first."
+                )
+                if pending.isEmpty && decided.isEmpty {
+                    emptyState.padding(.top, 32)
+                }
+                if !pending.isEmpty {
+                    ListHeader(title: "Needs you", count: "\(pending.count)").padding(.top, 36)
                     ForEach(pending) { approval in
                         PendingApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
                                            item: item(for: approval))
                     }
-                } header: {
-                    Text("Needs you · \(pending.count)")
-                } footer: {
-                    Label("Also sent to your phone via Auth0 Guardian when set up. Approving here works too.",
-                          systemImage: "iphone.radiowaves.left.and.right")
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: "iphone.radiowaves.left.and.right")
+                            .font(.system(size: 12))
+                            .accessibilityHidden(true)
+                        Text("Also sent to your phone via Auth0 Guardian when set up. Approving here works too.")
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .monoMeta()
+                    .padding(.top, 12)
                 }
-            }
-            if !decided.isEmpty {
-                Section("History") {
+                if !decided.isEmpty {
+                    ListHeader(title: "History", count: "\(decided.count)").padding(.top, 40)
                     ForEach(decided) { approval in
                         DecidedApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
                                            item: item(for: approval))
                     }
                 }
             }
+            .padding(.horizontal, Theme.gutter)
+            .padding(.top, 16)
+            .padding(.bottom, 48)
         }
         .navigationTitle("Approvals")
-        .overlay {
-            if pending.isEmpty && decided.isEmpty {
-                ContentUnavailableView("Nothing to approve", systemImage: "checkmark.shield",
-                                       description: Text("When an agent wants to sell or buy something over your limit, it asks here first."))
-            }
-        }
+        .navigationBarTitleDisplayMode(.inline)
+        .mooveScreen()
         .animation(.default, value: pending)
         .animation(.default, value: decided)
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Nothing to approve").blockTitle()
+            Text("Requests over your limit show up here.").monoMeta()
+        }
+        .padding(.vertical, 28)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .ruled(.top)
+        .ruled()
+        .accessibilityElement(children: .combine)
     }
 
     private func item(for approval: Approval) -> Item? {
@@ -61,47 +84,52 @@ struct PendingApprovalRow: View {
     @State private var approvedCount = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 16) {
                 ApprovalThumbnail(approval: approval, item: item)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
                         ApprovalKindTag(kind: approval.kind)
-                        Spacer()
+                        Spacer(minLength: 8)
                         if listing?.simulated == true { SimulatedTag() }
                     }
                     Text(listing?.title ?? approval.summary)
-                        .font(.subheadline.weight(.semibold))
+                        .blockTitle()
                         .lineLimit(3)
-                    HStack {
-                        Text(approval.amountCents.usd).font(.title3.weight(.bold).monospacedDigit())
-                        Spacer()
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(approval.amountCents.usd)
+                            .monoText(22, weight: .bold, maxScale: 1.6)
+                            .foregroundStyle(Theme.text)
+                        Spacer(minLength: 8)
                         Text(approval.requestedAt, format: .relative(presentation: .named))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .monoMeta()
                     }
                 }
             }
             if let listing, listing.priceCents != approval.amountCents {
-                Label("Price changed to \(listing.priceCents.usd) since this was requested. Approving won't post it.",
-                      systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle").font(.system(size: 12)).accessibilityHidden(true)
+                    Text("Price changed to \(listing.priceCents.usd) since this was requested. Approving won't post it.")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .monoText(12.5)
+                .foregroundStyle(Theme.ochreInk)
+                .accessibilityElement(children: .combine)
             }
-            HStack {
+            HStack(spacing: 10) {
                 Button(role: .destructive) { confirmDeny = true } label: {
                     Label("Deny", systemImage: "xmark").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.pill(.danger))
                 Button { decide(approve: true) } label: {
                     Label("Approve", systemImage: "checkmark").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
+                .buttonStyle(.pill(.primary))
             }
             .disabled(working)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 18)
+        .ruled()
         .confirmationDialog("Deny this request?", isPresented: $confirmDeny, titleVisibility: .visible) {
             Button("Deny \(approval.amountCents.usd)", role: .destructive) { decide(approve: false) }
         } message: {
@@ -125,23 +153,25 @@ struct DecidedApprovalRow: View {
     let item: Item?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 16) {
             ApprovalThumbnail(approval: approval, item: item, size: 44)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(listing?.title ?? approval.summary)
-                    .font(.subheadline)
+                    .blockTitle()
                     .lineLimit(2)
-                HStack {
+                HStack(spacing: 8) {
                     ApprovalStatusChip(status: approval.status)
-                    Spacer()
-                    Text(approval.amountCents.usd).font(.subheadline.monospacedDigit())
+                    Text("·").monoText(12.5).foregroundStyle(Theme.faint).accessibilityHidden(true)
+                    Text(approval.updatedAt, format: .relative(presentation: .named)).monoMeta()
                 }
-                Text(approval.updatedAt, format: .relative(presentation: .named))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(approval.amountCents.usd).rowValue().layoutPriority(1)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 16)
+        .frame(minHeight: 44)
+        .ruled()
+        .accessibilityElement(children: .combine)
     }
 }
 

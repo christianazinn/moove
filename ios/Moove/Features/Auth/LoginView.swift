@@ -5,20 +5,26 @@ struct LoginView: View {
     @State private var busy = false
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(alignment: .leading, spacing: 0) {
             Spacer()
-            Image(systemName: "box.truck.fill")
-                .font(.system(size: 72))
-                .foregroundStyle(.tint)
-            VStack(spacing: 8) {
-                Text("Moove").font(.largeTitle.bold())
-                Text("Scan your room. Agents sort, sell, buy and pack. You stay in charge.")
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-            }
+            MooveWordmark(height: 44)
+                .padding(.bottom, 28)
+            Text("Welcome").eyebrow().padding(.bottom, 12)
+            Text("Your move, handled.")
+                .pageTitle()
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            Text("Scan your room. Agents sort, sell, buy and pack. You stay in charge.")
+                .lede()
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
             Spacer()
             if let error = auth.error {
-                Text(error).font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center)
+                Text(error)
+                    .monoText(12.5)
+                    .foregroundStyle(Theme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 16)
             }
             Button {
                 busy = true
@@ -28,21 +34,27 @@ struct LoginView: View {
                 }
             } label: {
                 Group {
-                    if busy { ProgressView() } else { Text("Sign in") }
+                    if busy { ProgressView().tint(Theme.accentInk) } else { Text("Sign in") }
                 }
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .buttonStyle(.pill(.primary))
             .disabled(busy || !auth.isConfigured)
 
-            Button("Continue without an account") { auth.continueAsGuest() }
-                .font(.subheadline)
+            Button { auth.continueAsGuest() } label: {
+                Text("Continue without an account").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.pill(.outline))
+            .padding(.top, 10)
             Text("Without an account, your data is tied to this device only.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .monoMeta()
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
+                .padding(.top, 14)
         }
-        .padding(24)
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, 24)
+        .mooveScreen()
     }
 }
 
