@@ -74,6 +74,9 @@ export const config = {
   },
   // Recorded Claude answers for LLM_REPLAY (see integrations/anthropic.ts).
   llmReplayDir: env('LLM_REPLAY_DIR', 'fixtures/llm'),
+  // Daily cap on estimated live Claude spend (0 = no cap); the running total lives in claudeSpendFile.
+  claudeMaxUsdPerDay: Number(env('CLAUDE_MAX_USD_PER_DAY', '3')),
+  claudeSpendFile: env('CLAUDE_SPEND_FILE', '.cache/claude-spend.json'),
   models: {
     vision: env('MODEL_VISION', 'claude-sonnet-5-5'),
     fast: env('MODEL_FAST', 'claude-haiku-5-5'),
