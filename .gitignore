@@ -5,6 +5,18 @@
 *.pem
 *.p8
 *.key
+# certs/keystores (Visa mTLS, Apple signing, etc.)
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+*.cer
+*.der
+# cloud/service credential files
+credentials.json
+service-account*.json
+*.secret
 
 # node
 node_modules/
