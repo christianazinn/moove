@@ -44,8 +44,8 @@ import Testing
         #expect(kinds["IKEA Kallax shelf"] == .bookshelf)
         #expect(kinds["Floor lamp"] == .lamp)
         #expect(kinds["TCL 32 inch TV"] == .tv)
-        #expect(kinds["Dell 27 inch monitor"] == .electronics)
-        #expect(kinds["Yamaha acoustic guitar"] == .box) // no instrument model yet
+        #expect(kinds["Dell 27 inch monitor"] == .monitor)
+        #expect(kinds["Yamaha acoustic guitar"] == .guitar)
         #expect(kinds["Nightstand"] == .dresser)
         #expect(kinds["Bean bag"] == .beanBag)
         #expect(kinds["Mini fridge"] == .appliance)
