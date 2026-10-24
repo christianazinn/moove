@@ -5,6 +5,8 @@ import RoomPlan
 /// the processed room once the user taps Done and RoomPlan finishes processing.
 struct RoomCaptureContainer: UIViewRepresentable {
     @Binding var stopRequested: Bool
+    /// Polls the capture's ARSession for color-sampling keyframes while it runs.
+    var recorder: ScanFrameRecorder? = nil
     var onFinished: (Result<CapturedRoom, Error>) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onFinished: onFinished) }
@@ -13,6 +15,7 @@ struct RoomCaptureContainer: UIViewRepresentable {
         let view = RoomCaptureView(frame: .zero)
         view.delegate = context.coordinator
         view.captureSession.run(configuration: RoomCaptureSession.Configuration())
+        recorder?.start(view.captureSession.arSession)
         return view
     }
 
