@@ -19,7 +19,7 @@ final class CommerceUITests: XCTestCase {
         // Sell & Buy tab and its four segments, in order.
         let sellBuy = app.tabBars.buttons["Sell & Buy"]
         XCTAssertTrue(sellBuy.waitForExistence(timeout: 10), "no Sell & Buy tab")
-        sellBuy.tap()
+        select(tab: sellBuy)
         let listingsTab = segment("Listings")
         let shoppingTab = segment("Shopping")
         let approvalsTab = segment("Approvals")
@@ -136,12 +136,12 @@ final class CommerceUITests: XCTestCase {
     // MARK: Helpers
 
     private func launchOfflineDemo(_ extra: [String] = []) {
-        continueAfterFailure = false
         app = XCUIApplication()
         // Same launch as MooveSmokeTests: UserDefaults argument domain + fresh-install reset.
         app.launchArguments += ["-moove.backendKind", "fixture", "-moove.auth.guest", "YES"] + extra
         app.launchEnvironment["MOOVE_UI_TEST_RESET"] = "1"
-        app.launch()
+        launchRetryingOnce()
+        continueAfterFailure = false
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 30), "tab bar")
     }
 
@@ -150,7 +150,7 @@ final class CommerceUITests: XCTestCase {
     private func tourCommerceScreens(prefix: String) {
         let sellBuy = app.tabBars.buttons["Sell & Buy"]
         XCTAssertTrue(sellBuy.waitForExistence(timeout: 10), "no Sell & Buy tab")
-        sellBuy.tap()
+        select(tab: sellBuy)
         let tabs = ["Listings", "Shopping", "Approvals", "Spending"].map(segment)
         for s in tabs { XCTAssertTrue(s.waitForExistence(timeout: 10), "missing segment \(s)") }
         let (listingsTab, shoppingTab, approvalsTab, spendingTab) = (tabs[0], tabs[1], tabs[2], tabs[3])
@@ -194,6 +194,35 @@ final class CommerceUITests: XCTestCase {
         shot("\(prefix)-4-spending-simulated")
         XCTAssertTrue(scrollTo(byId("payment.basescan.500")), "Basescan link not hittable")
         shot("\(prefix)-4-spending-basescan")
+    }
+
+    /// CI's simulator sometimes fails the first launch with "Application 'app.moove.Moove' does not
+    /// have a process ID" after a slow (~90 s) boot. Only that launch failure is tolerated, once; any
+    /// other issue during the first launch, or a second failed launch, still fails the test.
+    private func launchRetryingOnce() {
+        continueAfterFailure = true  // so an expected launch failure doesn't end the test; set false after
+        let options = XCTExpectedFailure.Options()
+        options.isStrict = false
+        options.issueMatcher = { $0.compactDescription.contains("does not have a process ID") }
+        XCTExpectFailure("CI simulator launch flake, retried once", options: options) {
+            app.launch()
+        }
+        if app.state != .runningForeground {
+            app.terminate()
+            app.launch()
+        }
+    }
+
+    /// On the iOS 26 Liquid Glass tab bar, a tap that lands while the app is still settling after
+    /// launch is sometimes dropped (CI showed the app still on Scan, the "Sell & Buy" tab unselected).
+    /// Tap, wait for the tab to report Selected, and tap again if it didn't take.
+    private func select(tab: XCUIElement) {
+        let selected = NSPredicate(format: "isSelected == true")
+        for _ in 0..<3 where !tab.isSelected {
+            tab.tap()
+            _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: selected, object: tab)], timeout: 5)
+        }
+        XCTAssertTrue(tab.isSelected, "\(tab.label) tab never got selected")
     }
 
     private func segment(_ title: String) -> XCUIElement {
