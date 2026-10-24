@@ -15,6 +15,7 @@
 
 import { x402HTTPClient } from "@x402/core/client";
 import type { PaymentPayload, PaymentRequired, PaymentRequirements } from "@x402/core/types";
+import { usdCapFromEnv } from "./caps.js";
 
 export const BASE_SEPOLIA = "eip155:84532";
 export const USDC_BASE_SEPOLIA = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
@@ -424,8 +425,9 @@ export const hasCdpKeys = (env: RailEnv): boolean =>
  * X402_SIMULATE isn't "1"; otherwise simulated.
  */
 export async function createX402Rail(sink: PaymentSink, env: RailEnv = process.env): Promise<X402Rail> {
-  const cap = usdToMicros(Number(env.AGENT_SPEND_CAP_USDC ?? "5"));
-  const perCall = usdToMicros(Number(env.X402_MAX_PER_CALL_USDC ?? "0.10"));
+  // A non-numeric or negative cap warns loudly and uses the default (caps.ts) instead of breaking the rail.
+  const cap = usdToMicros(usdCapFromEnv(env, "AGENT_SPEND_CAP_USDC"));
+  const perCall = usdToMicros(usdCapFromEnv(env, "X402_MAX_PER_CALL_USDC"));
   const ledger = new SpendLedger(cap, perCall);
   const allowedPayees = (env.X402_ALLOWED_PAYEES ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   if (env.X402_SIMULATE === "1" || !hasCdpKeys(env)) return new X402Rail({ sink, ledger, allowedPayees });
