@@ -338,11 +338,14 @@ extension Item {
         case roomPhotos
         /// Added by its photo during the scan review: no size at all.
         case photo
+        /// Added by hand in Inventory (`add_item`, no scan object): its kind's typical size.
+        case manual
     }
 
     public var origin: Origin {
         if scanObjectId?.hasPrefix("photo:") == true { return .roomPhotos }
         if widthM <= 0 && heightM <= 0 && depthM <= 0 { return .photo }
+        if scanObjectId == nil { return .manual }
         return .scan
     }
 }

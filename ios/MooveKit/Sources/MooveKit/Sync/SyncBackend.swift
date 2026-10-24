@@ -136,6 +136,9 @@ public protocol SyncBackend: AnyObject, Sendable {
     /// the change (`ItemFix`).
     func renameItem(itemId: UInt64, name: String) async throws
     func deleteItem(itemId: UInt64) async throws
+    /// Adds an item by hand (`add_item`, scan 0): something the scan missed or that wasn't in
+    /// the room. `photoUrl` is an uploaded photo for vision, or nil.
+    func addItem(roomId: UInt64, name: String, category: String, widthM: Double, heightM: Double, depthM: Double, photoUrl: String?) async throws
     func setItemAttributes(itemId: UInt64, attributes: [String]) async throws
 
     /// Joins someone else's room by its join code (#10). Its scans and items then

@@ -226,6 +226,23 @@ final class MooveSmokeTests: XCTestCase {
     /// slower per screen (#155). `waitForExistence` returns as soon as the element shows up.
     private let slow: TimeInterval = 30
 
+    func testAddItemByHand() {
+        launch()
+        open(tab: "Items", segment: "Inventory")
+        let add = app.buttons["inventory.addItem"]
+        XCTAssertTrue(add.waitForExistence(timeout: slow), "Add item button")
+        add.tap()
+        let name = app.textFields["addItem.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: slow), "Add item sheet")
+        name.tap()
+        name.typeText("Road bike")
+        snap("02-add-item")
+        app.buttons["addItem.save"].tap()
+        XCTAssertTrue(name.waitForNonExistence(timeout: slow), "sheet closes")
+        XCTAssertTrue(scrollTo(text(matching: "Road bike")), "new item in Inventory")
+        snap("02-add-item-added")
+    }
+
     private func launch(guest: Bool = true, environment: [String: String] = [:]) {
         continueAfterFailure = false
         app = XCUIApplication()
