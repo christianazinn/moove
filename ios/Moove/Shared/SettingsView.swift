@@ -38,10 +38,21 @@ struct SettingsView: View {
                         ForEach(MooveStore.BackendKind.allCases) { kind in
                             backendChoice(kind)
                         }
+                        if store.backendKind == .spacetime {
+                            Text("Database").monoMeta().padding(.top, 18)
+                            ForEach(DatabaseChoice.allCases) { databaseChoice($0) }
+                        }
                         row("Status", statusText)
-                        row("Server", "\(AppConfig.current.spacetimeHost) / \(AppConfig.current.spacetimeDB)")
+                        row("Server", "\(AppConfig.current.spacetimeHost) / \(store.databaseName)")
                         if let me = store.snapshot.me {
                             row("Identity", String(me.prefix(16)) + "…")
+                        }
+                    }
+
+                    if store.backendKind == .spacetime {
+                        section("Worker") {
+                            row("Agents", workerText)
+                            row("Uploads", uploadsText)
                         }
                     }
                 }
@@ -54,6 +65,58 @@ struct SettingsView: View {
             .toolbar { Button("Done") { dismiss() } }
             .mooveScreen()
         }
+    }
+
+    /// Where the live backend points. "Demo" is a separate, seeded database for a clean
+    /// stage run; the morning plan is to keep `moove` for real data (#122).
+    enum DatabaseChoice: String, CaseIterable, Identifiable {
+        case live = "moove", demo = "moove-demo"
+        var id: String { rawValue }
+        var label: String { self == .live ? "Live (moove)" : "Demo (moove-demo)" }
+    }
+
+    private func databaseChoice(_ choice: DatabaseChoice) -> some View {
+        let selected = store.databaseName == choice.rawValue
+        return Button {
+            guard !selected else { return }
+            Task { await store.switchDatabase(to: choice == .live ? nil : choice.rawValue, token: await auth.spacetimeToken()) }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(selected ? Theme.accentStrong : Theme.faint)
+                    .accessibilityHidden(true)
+                Text(choice.label)
+                    .monoText(13.5, weight: selected ? .bold : .regular)
+                    .foregroundStyle(Theme.text)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 12)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .ruled()
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// "online · started 12 min ago · 878eead", from the worker's announcement.
+    private var workerText: String {
+        let c = store.snapshot.serviceConfig
+        guard c.workerVersion != nil || c.workerStartedAt != nil else {
+            return store.status == .connected ? "No announcement yet" : "Unknown (not connected)"
+        }
+        var parts = ["online"]
+        if let started = c.workerStartedAt {
+            parts.append("started " + started.formatted(.relative(presentation: .named)))
+        }
+        if let v = c.workerVersion { parts.append(v) }
+        return parts.joined(separator: " · ")
+    }
+
+    private var uploadsText: String {
+        guard let url = store.uploadBaseURL else { return "Not configured (photos stay on this device)" }
+        return (url.host ?? url.absoluteString) + (store.uploadURLIsLive ? " (from worker)" : " (build default)")
     }
 
     private var statusText: String {

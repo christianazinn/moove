@@ -239,7 +239,7 @@ struct ScanFlowView: View {
 
     private var uploader: Uploader {
         if store.backendKind == .fixture { return LocalUploader() }
-        guard let base = AppConfig.current.uploadBaseURL else { return LocalUploader() }
+        guard let base = store.uploadBaseURL else { return LocalUploader() }
         return HTTPUploader(baseURL: base, token: nil)
     }
 
