@@ -100,6 +100,12 @@ public enum AgentStage: String, Codable, Sendable {
     case pending, running, done, failed
 }
 
+/// How exactly vision identified an item (`identify_confidence`, #276): the exact product,
+/// the brand or product line, or only the generic type.
+public enum IdentifyConfidence: String, Codable, Sendable {
+    case high, medium, low
+}
+
 public struct Item: Codable, Sendable, Hashable, Identifiable {
     public var id: UInt64
     public var owner: IdentityHex
@@ -131,6 +137,10 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
     /// `pricing_status`). nil when the backend doesn't say (fixtures, older encodings).
     public var detailsStatus: AgentStage?
     public var pricingStatus: AgentStage?
+    /// Vision's confidence in the exact product and the one close-up photo that would pin it
+    /// down, e.g. "model sticker on the back" (#276). nil until vision reports them.
+    public var identifyConfidence: IdentifyConfidence?
+    public var closeupHint: String?
 
     public init(
         id: UInt64, owner: IdentityHex, roomId: UInt64, scanObjectId: String? = nil,
@@ -139,7 +149,8 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
         estValueCents: Int64? = nil, disposition: Disposition = .undecided, dispositionSource: DispositionSource = .auto,
         dispositionReason: String? = nil, fragile: Bool = false, maybeSentimental: Bool = false, updatedAt: Date = .now,
         attributes: [String] = [], colors: ItemColors? = nil,
-        detailsStatus: AgentStage? = nil, pricingStatus: AgentStage? = nil
+        detailsStatus: AgentStage? = nil, pricingStatus: AgentStage? = nil,
+        identifyConfidence: IdentifyConfidence? = nil, closeupHint: String? = nil
     ) {
         self.id = id
         self.owner = owner
@@ -165,6 +176,8 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
         self.colors = colors
         self.detailsStatus = detailsStatus
         self.pricingStatus = pricingStatus
+        self.identifyConfidence = identifyConfidence
+        self.closeupHint = closeupHint
     }
 
     public var volumeM3: Double { widthM * heightM * depthM }

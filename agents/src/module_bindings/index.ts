@@ -73,6 +73,7 @@ import SetFragileReducer from "./set_fragile_reducer";
 import SetItemAttributesReducer from "./set_item_attributes_reducer";
 import SetItemColorsReducer from "./set_item_colors_reducer";
 import SetItemDetailsReducer from "./set_item_details_reducer";
+import SetItemIdentifyReducer from "./set_item_identify_reducer";
 import SetItemModelReducer from "./set_item_model_reducer";
 import SetItemStageReducer from "./set_item_stage_reducer";
 import SetSentimentalReducer from "./set_sentimental_reducer";
@@ -421,6 +422,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_item_attributes", SetItemAttributesReducer),
   __reducerSchema("set_item_colors", SetItemColorsReducer),
   __reducerSchema("set_item_details", SetItemDetailsReducer),
+  __reducerSchema("set_item_identify", SetItemIdentifyReducer),
   __reducerSchema("set_item_model", SetItemModelReducer),
   __reducerSchema("set_item_stage", SetItemStageReducer),
   __reducerSchema("set_sentimental", SetSentimentalReducer),

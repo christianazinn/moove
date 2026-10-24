@@ -105,6 +105,8 @@ export const Item = __t.object("Item", {
   modelStatus: __t.string(),
   attributesJson: __t.string(),
   colorsJson: __t.string(),
+  identifyConfidence: __t.string(),
+  closeupHint: __t.string(),
 });
 export type Item = __Infer<typeof Item>;
 
