@@ -35,7 +35,7 @@ struct ListingImportView: View {
                 PageHeader(
                     eyebrow: "08 — New home",
                     title: "Import a listing",
-                    lede: "Paste a Zillow, Redfin or Realtor.com link. Moove reads the address from the link without opening the page."
+                    lede: "Paste a Zillow, Redfin or Realtor.com link."
                 )
                 .padding(.top, 16)
                 .padding(.bottom, 32)
@@ -84,13 +84,13 @@ struct ListingImportView: View {
                 if let link {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         MonoTag(text: link.siteName ?? "Listing", tone: Theme.accentStrong)
-                        Text(link.address ?? "No address in this link — type it below")
+                        Text(link.address ?? "No address — type it below")
                             .monoMeta()
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .accessibilityElement(children: .combine)
                 } else {
-                    Text("Not a listing link Moove knows. Type the address below.")
+                    Text("Unknown link. Type the address below.")
                         .monoMeta()
                 }
             }
@@ -101,7 +101,7 @@ struct ListingImportView: View {
         VStack(alignment: .leading, spacing: 0) {
             ListHeader(title: "The home")
             VStack(alignment: .leading, spacing: 8) {
-                Text("Address").monoText(12.5).foregroundStyle(Theme.muted)
+                Text("Address").monoText(13.5).foregroundStyle(Theme.muted)
                 ThemedField(placeholder: "123 Main St, Berkeley, CA", text: $address)
                     .textContentType(.fullStreetAddress)
             }
@@ -144,7 +144,7 @@ struct ListingImportView: View {
                 }
                 .buttonStyle(.pill(.outline, compact: true))
             }
-            Text("Optional. Moove reads room sizes from them with Claude.")
+            Text("Optional. Claude reads the room sizes.")
                 .sansText(14)
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -173,12 +173,12 @@ struct ListingImportView: View {
         let zillow = link?.isZillow ?? false
         return VStack(alignment: .leading, spacing: 6) {
             Toggle(isOn: $useScraper) {
-                Text("Fetch listing details with Apify (Zillow scraper)")
+                Text("Fetch details with Apify")
                     .blockTitle()
                     .fixedSize(horizontal: false, vertical: true)
             }
             .disabled(!zillow)
-            Text(zillow ? "Scrapes the listing page; use only for the demo." : "Scrapes the listing page; use only for the demo. Zillow links only.")
+            Text(zillow ? "Demo only." : "Zillow links only. Demo only.")
                 .monoMeta()
                 .fixedSize(horizontal: false, vertical: true)
         }

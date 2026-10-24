@@ -84,12 +84,8 @@ struct NewHomePicker: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                MooveWordmark(height: 24).padding(.bottom, 28)
-                PageHeader(
-                    eyebrow: "06 — New home",
-                    title: "Where are you moving?",
-                    lede: "Pick the new place so Moove can lay out everything you keep."
-                )
+                MooveWordmark(height: 36).padding(.top, 8).padding(.bottom, 32)
+                PageHeader(eyebrow: "06 — New home", title: "Where are you moving?")
                 .padding(.bottom, 32)
 
                 demoHouse.padding(.bottom, 44)
@@ -98,7 +94,7 @@ struct NewHomePicker: View {
                 NavigationLink {
                     ManualRoomsEditor { name, plan in onPick(name, .manual, plan) }
                 } label: {
-                    LedgerRow(title: "Enter room sizes", meta: "Type each room as width × depth", chevron: true) {
+                    LedgerRow(title: "Enter room sizes", meta: "Width × depth", chevron: true) {
                         IconTile(systemName: "ruler")
                     }
                 }
@@ -107,7 +103,7 @@ struct NewHomePicker: View {
                 NavigationLink {
                     ListingImportView { name, source, plan in onPick(name, source, plan) }
                 } label: {
-                    LedgerRow(title: "Import from a listing", meta: "Zillow, Redfin or Realtor.com link", chevron: true) {
+                    LedgerRow(title: "Import from a listing", meta: "Zillow, Redfin, Realtor.com", chevron: true) {
                         IconTile(systemName: "link")
                     }
                 }
@@ -245,9 +241,9 @@ struct NewHomeDetail: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
-            MooveWordmark(height: 22).padding(.bottom, 24)
+            MooveWordmark(height: 32).padding(.bottom, 28)
             PageHeader(eyebrow: "06 — New home", title: name)
-            Text("\(plan.rooms.count) rooms · \(Int(plan.totalAreaM2.rounded())) m² · \(option?.placements.count ?? 0) pieces")
+            Text("\(plan.rooms.count) rooms · \(Int(plan.totalAreaM2.rounded())) m²")
                 .monoMeta()
                 .padding(.top, 10)
             HStack(spacing: 6) {
@@ -332,8 +328,8 @@ struct NewHomeDetail: View {
             }
             .padding(.top, 10)
             if let option, !option.unplaced.isEmpty {
-                Text("\(option.unplaced.count) didn't fit in this layout")
-                    .monoText(12.5)
+                Text("\(option.unplaced.count) didn't fit")
+                    .monoText(13.5)
                     .foregroundStyle(Theme.danger)
                     .padding(.top, 8)
             }
@@ -371,7 +367,7 @@ struct NewHomeDetail: View {
             if rows.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(furniture.items.isEmpty ? "Nothing to place yet" : "Arranging…").blockTitle()
-                    Text("Items you keep fly in here once they're scanned.").monoMeta()
+                    Text("Kept items land here.").monoMeta()
                 }
                 .padding(.vertical, 28)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -399,7 +395,7 @@ struct NewHomeDetail: View {
                 }
             }
             if furniture.isDemo {
-                Text("Nothing kept yet, so these are the demo inventory's keeps.")
+                Text("Nothing kept yet, so showing demo items.")
                     .monoMeta()
                     .padding(.top, 14)
             }
