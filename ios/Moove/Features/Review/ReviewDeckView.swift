@@ -122,7 +122,7 @@ struct ReviewDeckView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Self.spoken(item))
             .accessibilityIdentifier("review.card.\(item.id)")
-            .accessibilityHint("Swipe right to keep, left to sell, up to donate, down to trash.")
+            .accessibilityHint("Swipe right to keep, left to sell. Donate and Trash are buttons below.")
             .accessibilityActions {
                 ForEach(Disposition.choices, id: \.self) { d in
                     Button(d.label) { fly(item, d) }

@@ -102,14 +102,17 @@ public enum ReviewSwipe {
     /// y grows downward). nil while it's still at rest.
     public static func pointing(dx: Double, dy: Double) -> Disposition? {
         guard dx != 0 || dy != 0 else { return nil }
+        // Only sideways swipes decide (right keep, left sell): a mostly vertical drag is someone
+        // scrolling, so it never donates or trashes. Donate and Trash are the buttons.
         if abs(dx) >= abs(dy) / verticalBias { return dx > 0 ? .keep : .sell }
-        return dy < 0 ? .donate : .trash
+        return nil
     }
 
     /// How far along the drag is toward committing, 0...1 (1 = at the threshold).
     public static func progress(dx: Double, dy: Double, threshold: Double) -> Double {
         guard threshold > 0 else { return 0 }
-        return min(max(abs(dx), abs(dy) / verticalBias) / threshold, 1)
+        guard pointing(dx: dx, dy: dy) != nil else { return 0 }
+        return min(abs(dx) / threshold, 1)
     }
 
     /// The disposition a released drag commits to: past the threshold on its dominant axis,
@@ -117,7 +120,7 @@ public enum ReviewSwipe {
     public static func commit(dx: Double, dy: Double, predictedDx: Double? = nil, predictedDy: Double? = nil,
                               threshold: Double) -> Disposition? {
         if progress(dx: dx, dy: dy, threshold: threshold) >= 1 { return pointing(dx: dx, dy: dy) }
-        if let px = predictedDx, let py = predictedDy, max(abs(px), abs(py) / verticalBias) >= threshold * 2,
+        if let px = predictedDx, let py = predictedDy, abs(px) >= threshold * 2,
            pointing(dx: px, dy: py) == pointing(dx: dx, dy: dy) {
             return pointing(dx: dx, dy: dy)
         }

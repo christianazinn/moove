@@ -2,8 +2,8 @@ import SwiftUI
 import MooveKit
 
 /// Items > Review. On top, a deck of the items only you can decide (possibly sentimental or
-/// undecided; Moove never decides those): swipe right to keep, left to sell, up to donate,
-/// down to trash. Below, "Where it goes": the Keep / Sell / Donate / Trash board, where any
+/// undecided; Moove never decides those): swipe right to keep, left to sell (Donate and Trash are buttons,
+/// so a vertical scroll never decides). Below, "Where it goes": the Keep / Sell / Donate / Trash board, where any
 /// decision can be changed. User decisions are never overwritten by the agents.
 struct ReviewView: View {
     @Environment(MooveStore.self) private var store
