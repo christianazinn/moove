@@ -39,6 +39,10 @@ final class ScanSession {
     var roomName = "Bedroom"
     private(set) var objects: [DetectedObject] = []
     private(set) var photos: [UUID: URL] = [:]
+    /// Objects whose photo was cut from a scan keyframe (#82), not taken by the user.
+    private(set) var autoPhotos: Set<UUID> = []
+    /// True while auto photos are being cut after the scan.
+    private(set) var autoPhotosPending = false
     private(set) var geometry: RoomGeometry?
     /// Set when some files couldn't reach the worker's upload server.
     private(set) var uploadProblem: String?
@@ -57,7 +61,9 @@ final class ScanSession {
     var geometryJSON: URL { folder.appending(path: "geometry.json") }
 
     /// `extras` are objects RoomPlan doesn't recognize, found by the extra detector (#73).
-    func captured(_ room: CapturedRoom, extras: [RoomGeometry.Object] = []) {
+    /// `photographer` holds the scan's keyframes; every object gets its best view as a
+    /// photo, so the checklist starts mostly filled in (#82).
+    func captured(_ room: CapturedRoom, extras: [RoomGeometry.Object] = [], photographer: AutoPhotographer? = nil) {
         do {
             try JSONEncoder().encode(room).write(to: roomJSON)
             try room.export(to: roomUSDZ, exportOptions: .model)
@@ -85,6 +91,27 @@ final class ScanSession {
             }
         }
         phase = .reviewing
+        if let photographer, let geometry = self.geometry { takeAutoPhotos(of: geometry.objects, with: photographer) }
+    }
+
+    private func takeAutoPhotos(of objects: [RoomGeometry.Object], with photographer: AutoPhotographer) {
+        autoPhotosPending = true
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let started = Date()
+            let jpegs = photographer.photos(for: objects)
+            print("[auto-photos] \(jpegs.count) of \(objects.count) objects in \(Int(Date().timeIntervalSince(started) * 1000)) ms")
+            await self?.applyAutoPhotos(jpegs)
+        }
+    }
+
+    private func applyAutoPhotos(_ jpegs: [String: Data]) {
+        autoPhotosPending = false
+        for object in objects {
+            // Never replace a photo the user took meanwhile.
+            guard photos[object.id] == nil, let jpeg = jpegs[object.id.uuidString] else { continue }
+            setPhoto(jpeg, for: object)
+            autoPhotos.insert(object.id)
+        }
     }
 
     /// An item RoomPlan missed, added by its photo. The vision agent names and
@@ -98,6 +125,7 @@ final class ScanSession {
     func remove(_ object: DetectedObject) {
         objects.removeAll { $0.id == object.id }
         if let file = photos.removeValue(forKey: object.id) { try? FileManager.default.removeItem(at: file) }
+        autoPhotos.remove(object.id)
     }
 
     func setPhoto(_ jpeg: Data, for object: DetectedObject) {
@@ -105,6 +133,7 @@ final class ScanSession {
         do {
             try jpeg.write(to: url)
             photos[object.id] = url
+            autoPhotos.remove(object.id)  // a user photo replaces an auto one; applyAutoPhotos re-marks its own
         } catch {
             phase = .failed("Couldn't save the photo: \(error.localizedDescription)")
         }
