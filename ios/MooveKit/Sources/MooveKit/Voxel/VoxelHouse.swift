@@ -31,6 +31,10 @@ public enum VoxelHouse {
         public static let threshold: VoxelColor = 0xA57E58
         public static let sill: VoxelColor = 0xC9A273
         public static let windowFrame: VoxelColor = 0xF7F3EB
+        /// Doors stand open in their gaps: the leaf, its recessed panels and the knob.
+        public static let door: VoxelColor = 0xB9936A
+        public static let doorPanel: VoxelColor = 0xA9845E
+        public static let doorKnob: VoxelColor = 0x8C7442
         /// Renderers draw this color translucent.
         public static let glass: VoxelColor = 0xBFDCEA
         // Realism (lived-in) trim, from MoveWise's scene.js COLORS.
@@ -183,6 +187,9 @@ public enum VoxelHouse {
         return (base, layers)
     }
 
+    /// Widest gap that gets a door leaf; wider ones are open passages.
+    public static let maxDoorLeafM = 1.2
+
     /// Top of door gaps and window glass in the upper walls, above the floor.
     public static let openingTopM = 2.05
 
@@ -302,6 +309,46 @@ public enum VoxelHouse {
             }
         }
 
+        // 3b. Door leaves: each door stands open 90° into a room, hinged at its `from` jamb, one
+        // voxel thick against the wall face. The gap itself stays clear. `leafT` is the distance
+        // from the hinge (-1: no leaf), for the panels and the knob at the free edge.
+        var leafT = [Double](repeating: -1, count: nx * nz)
+        var leafLen = [Double](repeating: 0, count: nx * nz)
+        for door in plan.doors {
+            let d = door.to - door.from, len = d.length
+            // a wide gap is an open passage, not a door (and a scanned `opening` is one too)
+            guard len > 3 * V, len <= Self.maxDoorLeafM else { continue }
+            let dir = d * (1 / len), mid = door.from + d * 0.5
+            var n = PlanPoint(-dir.y, dir.x)
+            let inRoom = { (p: PlanPoint) in plan.rooms.contains { $0.polygon.count >= 3 && $0.contains(p) } }
+            if !inRoom(mid + n * 0.4), inRoom(mid - n * 0.4) { n = n * -1 }
+            let width = len - 2 * V
+            let hinge = door.from + dir * (1.5 * V) + n * (1.5 * V)
+            stamp(hinge, hinge + n * width, half: 0.5 * V) { i, k, t, l in
+                let c = k * nx + i
+                guard t >= 0, t <= l, wallAxis[c] == 0, roomAt[c] >= 0 else { return }
+                leafT[c] = t
+                leafLen[c] = l
+            }
+        }
+        /// Draws the leaves up to the cut (doors are cut away like the walls), after the trim.
+        func drawLeaves() {
+            let leafRows = min(wallRows - 1, VoxelGrid.count(Self.openingTopM))
+            for k in 0..<nz {
+                for i in 0..<nx {
+                    let c = k * nx + i, t = leafT[c]
+                    guard t >= 0 else { continue }
+                    let u = t / max(V, leafLen[c])
+                    for row in 0..<leafRows {
+                        let v = Double(row) * V / Self.openingTopM
+                        let panel = u > 0.2 && u < 0.8 && ((v > 0.08 && v < 0.42) || v > 0.52)
+                        let knob = u > 0.8 && abs(Double(row) * V - 0.95) < 0.75 * V
+                        g[i, baseVoxels + row, k] = knob ? Palette.doorKnob : panel ? Palette.doorPanel : Palette.door
+                    }
+                }
+            }
+        }
+
         // 4. Floor patterns. Planks run along x in rows `plankWidth` deep, with deterministic lengths.
         let plankRows = (nz + plankWidth - 1) / plankWidth
         var plankId = [Int32](repeating: 0, count: plankRows * nx) // plank index within the row
@@ -386,7 +433,7 @@ public enum VoxelHouse {
         }
 
         var curtainFacing = [UInt8](repeating: 0, count: nx * nz)
-        guard realism else { return (g, facing, curtainFacing) }
+        guard realism else { drawLeaves(); return (g, facing, curtainFacing) }
         func isDoor(_ c: Int) -> Bool { if case .door = opening[c] { return true } else { return false } }
 
         // 6. Protruding baseboards: two rows on every room column touching a (non-door) wall.
@@ -461,6 +508,7 @@ public enum VoxelHouse {
                 }
             }
         }
+        drawLeaves()
         return (g, facing, curtainFacing)
     }
 
