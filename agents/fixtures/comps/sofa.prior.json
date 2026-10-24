@@ -1,0 +1,9 @@
+{
+  "dc829325d25384c6": {
+    "item": "sofa",
+    "newRetailUsd": 900,
+    "usedUsd": 250,
+    "reason": "Assumed a common mid-range 3-seat fabric sofa (e.g., Article/West Elm/IKEA tier) in good condition; roughly 28% of new for bulky furniture.",
+    "model": "claude-sonnet-5-5"
+  }
+}

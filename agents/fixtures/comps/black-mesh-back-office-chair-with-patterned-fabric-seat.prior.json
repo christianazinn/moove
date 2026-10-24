@@ -1,0 +1,9 @@
+{
+  "584562516239d54c": {
+    "item": "black mesh back office chair with patterned fabric seat",
+    "newRetailUsd": 150,
+    "usedUsd": 40,
+    "reason": "Assumed a generic mid-range mesh-back task chair (non-Herman Miller/Steelcase) with fabric seat, ~$150 new, sold at roughly 25-30% of new.",
+    "model": "claude-sonnet-5-5"
+  }
+}

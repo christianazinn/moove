@@ -1,0 +1,9 @@
+{
+  "df979b0c2a8cdf89": {
+    "item": "backpack",
+    "newRetailUsd": 60,
+    "usedUsd": 20,
+    "reason": "Assumed a common mid-range brand daypack/laptop backpack (e.g., Jansport/North Face/Targus style); typical used soft goods sell for about 30-35% of new.",
+    "model": "claude-sonnet-5-5"
+  }
+}

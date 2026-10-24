@@ -1,0 +1,9 @@
+{
+  "40e8b473a9e1bcc3": {
+    "item": "mirror",
+    "newRetailUsd": 80,
+    "usedUsd": 25,
+    "reason": "Assumed a common mid-range framed wall or floor mirror (~$80 new); bulky and fragile, so roughly 30% of new.",
+    "model": "claude-sonnet-5-5"
+  }
+}

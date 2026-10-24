@@ -1,0 +1,9 @@
+{
+  "df02d0d1f3a3ba98": {
+    "item": "vacuum",
+    "newRetailUsd": 250,
+    "usedUsd": 75,
+    "reason": "Assumed a common mid-range upright or canister vacuum (e.g., Shark or Bissell-class) at about $250 new, with roughly a 70% used discount for typical Bay Area resale.",
+    "model": "claude-sonnet-5-5"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "72aa46e089f4dd7d": {
+    "item": "black floating wall shelf",
+    "newRetailUsd": 30,
+    "usedUsd": 10,
+    "reason": "Assumed a common mid-range 24-inch black floating wall shelf (IKEA/Amazon style) at about $30 new, sold used at roughly 33% of new.",
+    "model": "claude-sonnet-5-5"
+  }
+}

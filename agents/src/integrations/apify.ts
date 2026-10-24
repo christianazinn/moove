@@ -250,7 +250,7 @@ export function similarCachedComps(query: string, category = '', dir = path.join
   let best: { file: string; score: number } | null = null;
   let files: string[] = [];
   try {
-    files = readdirSync(dir).filter(f => f.endsWith('.json') && !f.endsWith('.filter.json'));
+    files = readdirSync(dir).filter(f => f.endsWith('.json') && !f.endsWith('.filter.json') && !f.endsWith('.prior.json'));
   } catch {
     return null;
   }

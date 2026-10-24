@@ -1,0 +1,9 @@
+{
+  "1b8688a0e0a26a12": {
+    "item": "white drum shade standing floor lamp with thin dark metal pole",
+    "newRetailUsd": 50,
+    "usedUsd": 15,
+    "reason": "Assumed a basic mid-range IKEA/Target-style drum shade floor lamp with a thin dark metal pole, about 30% of new since lamps are bulky, low-demand, and easily replaced.",
+    "model": "claude-sonnet-5-5"
+  }
+}

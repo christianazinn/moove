@@ -1,0 +1,16 @@
+{
+  "2e78cbdf26e8cc05": {
+    "item": "ikea micke desk",
+    "newRetailUsd": 119,
+    "usedUsd": 45,
+    "reason": "Assumed standard IKEA MICKE desk, white, 28 3/8 x 19 5/8 in, about $119 new; bulky flat-pack furniture sells for about 35-40% of new used locally.",
+    "model": "claude-sonnet-5-5"
+  },
+  "c4c6726d8765c52e": {
+    "item": "IKEA Micke desk; category table; 1.05 x 0.75 x 0.50 m (W x H x D)",
+    "newRetailUsd": 99,
+    "usedUsd": 35,
+    "reason": "Assumed standard IKEA Micke desk (105x50 cm, white/black-brown), around $99 new; bulky flat-pack furniture at roughly 35% of new in the Bay Area.",
+    "model": "claude-sonnet-5-5"
+  }
+}

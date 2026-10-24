@@ -1,0 +1,9 @@
+{
+  "6cc2f5d7ddbee9c4": {
+    "item": "bicycle",
+    "newRetailUsd": 600,
+    "usedUsd": 200,
+    "reason": "Assumed a mid-range adult hybrid/commuter bike (Trek/Specialized entry level, ~$600 new); typical used sale at about 33% of new in good condition.",
+    "model": "claude-sonnet-5-5"
+  }
+}

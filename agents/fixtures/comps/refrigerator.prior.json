@@ -1,0 +1,9 @@
+{
+  "71c659db845b1446": {
+    "item": "refrigerator",
+    "newRetailUsd": 1400,
+    "usedUsd": 350,
+    "reason": "Assumed a common mid-range 18-21 cu ft top-freezer or French-door refrigerator (~$1400 new); bulky appliance used in good condition sells for about 25% of new.",
+    "model": "claude-sonnet-5-5"
+  }
+}

@@ -5,6 +5,7 @@ import { logEvent } from '../events.js';
 import { isBuiltInFixture } from '../builtins.js';
 import { filterCacheFile, isApifyUnavailable, lookupComps, similarCachedComps, type Comp, type CompsResult } from '../integrations/apify.js';
 import { filterComps, type FilterResult } from './comp-filter.js';
+import { pricePrior, priorCacheFile, type PriorResult } from './price-prior.js';
 
 // Where comps come from. Defaults to calling Apify directly; once the x402 rail (#7) is wired,
 // swap in a source that buys them from the paywalled /x402/comps endpoint so every lookup is a
@@ -20,15 +21,40 @@ const CONDITION_FACTOR: Record<string, number> = { new: 1.15, like_new: 1.05, go
 
 const quantile = (sorted: number[], q: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(q * (sorted.length - 1))))];
 
-export function estimate(comps: Comp[], condition: string): { est: number; low: number; high: number } | null {
+// How many comps the prior counts as: with 1-2 comps it dominates, with 15 it barely moves the median.
+export const PRIOR_WEIGHT = Number(process.env.PRICING_PRIOR_WEIGHT ?? 3);
+
+export interface EstimateOpts {
+  /** Sold-equivalent price in cents for the item with no comps (Claude's guess, see price-prior.ts). */
+  priorCents?: number;
+  priorWeight?: number;
+}
+
+export type Estimate = { est: number; low: number; high: number; n: number; fromPrior: boolean };
+
+export function estimate(comps: Comp[], condition: string, opts: EstimateOpts = {}): Estimate | null {
+  const k = opts.priorWeight ?? PRIOR_WEIGHT;
+  const prior = opts.priorCents && opts.priorCents > 0 ? opts.priorCents : 0;
   const prices = comps.map(c => c.priceCents).sort((a, b) => a - b);
-  if (prices.length === 0) return null;
+  const f = CONDITION_FACTOR[condition] ?? 1;
+  const r = (x: number) => Math.round((x * f) / 100) * 100; // whole dollars
+  if (prices.length === 0) {
+    // No comps at all: the prior alone, with a wide range.
+    return prior ? { est: r(prior), low: r(prior * 0.6), high: r(prior * 1.4), n: 0, fromPrior: true } : null;
+  }
   // Drop outliers (bundles, parts-only, typos): anything beyond 3x either side of the median.
   const m = quantile(prices, 0.5);
   const trimmed = prices.filter(p => p >= m / 3 && p <= m * 3);
-  const f = CONDITION_FACTOR[condition] ?? 1;
-  const r = (x: number) => Math.round((x * f) / 100) * 100; // whole dollars
-  return { est: r(quantile(trimmed, 0.5)), low: r(quantile(trimmed, 0.25)), high: r(quantile(trimmed, 0.75)) };
+  const n = trimmed.length;
+  // Shrink toward the prior: n comps vs k pseudo-comps. The prior's own band is +-30%.
+  const blend = (x: number, p: number) => (prior ? (n * x + k * p) / (n + k) : x);
+  return {
+    est: r(blend(quantile(trimmed, 0.5), prior)),
+    low: r(blend(quantile(trimmed, 0.25), prior * 0.7)),
+    high: r(blend(quantile(trimmed, 0.75), prior * 1.3)),
+    n,
+    fromPrior: prior > 0,
+  };
 }
 
 export function queryFor(it: Item): string {
@@ -92,6 +118,8 @@ async function price(conn: Conn, it: Item, retry: (it: Item, delayMs: number) =>
   logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'tool_call', message: `Looking up comps for "${q}"`, refTable: 'item', refId: it.id });
   try {
     let similarTo = '';
+    // Claude's comps-free guess runs alongside the lookup; it never fails pricing.
+    const priorP = pricePrior(it, { cacheFile: priorCacheFile(q) }).catch((err: unknown): PriorResult => ({ status: 'failed', error: String(err) }));
     const { comps: raw, replayed } = await compsSource(q, it).catch((err: unknown) => {
       // Apify can't run (out of credit, daily cap, no token): reuse the real cached comps of the most
       // similar item we have, labeled as such. The relevance filter below still checks them against
@@ -166,7 +194,22 @@ async function price(conn: Conn, it: Item, retry: (it: Item, delayMs: number) =>
         comps: comps.slice(0, 20).map(c => ({ source: c.source, title: c.title, url: c.url, priceCents: BigInt(c.priceCents) })),
       });
     }
-    const e = estimate(comps, it.condition);
+    const prior = await priorP;
+    if (prior.status === 'ok' || prior.status === 'cached') {
+      logEvent(conn, {
+        owner: it.owner,
+        agent: 'pricing',
+        kind: 'tool_call',
+        message: `${prior.status === 'cached' ? '[REPLAYED] ' : ''}Claude's price guess without comps: ~$${Math.round(prior.cents / 100)} (${prior.reason})`,
+        refTable: 'item',
+        refId: it.id,
+        data: { query: q, priorCents: prior.cents, replayed: prior.status === 'cached' },
+      });
+    } else if (prior.status === 'failed') {
+      logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'error', message: `Claude price guess failed (${prior.error.slice(0, 160)}), estimating from comps alone`, refTable: 'item', refId: it.id, data: { query: q, fallback: true } });
+    }
+    const priorCents = prior.status === 'ok' || prior.status === 'cached' ? prior.cents : undefined;
+    const e = estimate(comps, it.condition, { priorCents });
     if (!e) {
       conn.reducers.setEstValue({ itemId: it.id, estValueCents: 0n, estLowCents: 0n, estHighCents: 0n });
       logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'result', message: `No comps for "${q}", valued at $0`, refTable: 'item', refId: it.id });
@@ -177,10 +220,10 @@ async function price(conn: Conn, it: Item, retry: (it: Item, delayMs: number) =>
       owner: it.owner,
       agent: 'pricing',
       kind: 'result',
-      message: `${similarTo ? `[REPLAYED, similar item "${similarTo}"] ` : replayed ? '[REPLAYED] ' : ''}${q}: ~$${e.est / 100} ($${e.low / 100}-$${e.high / 100}) from ${comps.length} comps${dropped ? ` (${dropped} irrelevant dropped)` : ''}`,
+      message: `${similarTo ? `[REPLAYED, similar item "${similarTo}"] ` : replayed ? '[REPLAYED] ' : ''}${q}: ~$${e.est / 100} ($${e.low / 100}-$${e.high / 100}) ${e.n === 0 ? "from Claude's guess alone (no comps)" : `from ${comps.length} comps${e.fromPrior ? " + Claude's guess" : ''}`}${dropped ? ` (${dropped} irrelevant dropped)` : ''}`,
       refTable: 'item',
       refId: it.id,
-      data: { query: q, replayed, ...(similarTo ? { similarTo } : {}), n: comps.length, dropped, filter: f.mode, filterClaude: f.claude, ...e },
+      data: { query: q, replayed, ...(similarTo ? { similarTo } : {}), ...e, n: comps.length, priorCents: priorCents ?? null, dropped, filter: f.mode, filterClaude: f.claude },
     });
   } catch (err) {
     const n = (attempts.get(it.id) ?? 0) + 1;

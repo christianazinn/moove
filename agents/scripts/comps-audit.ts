@@ -23,7 +23,7 @@ const pad = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" 
 
 let flagged = 0;
 console.log(`${pad("query", 30)} ${pad("comps", 11)} ${pad("raw", 6)} ${pad("estimate (range)", 22)} filter   flags`);
-for (const f of readdirSync(DIR).filter(f => f.endsWith(".json") && !f.endsWith(".filter.json")).sort()) {
+for (const f of readdirSync(DIR).filter(f => f.endsWith(".json") && !f.endsWith(".filter.json") && !f.endsWith(".prior.json")).sort()) {
   const raw = JSON.parse(readFileSync(path.join(DIR, f), "utf8")) as Comp[];
   const slug = f.replace(/\.json$/, "");
   const o = [...demo.entries()].find(([q]) => q.toLowerCase().replace(/[^a-z0-9]+/g, "-") === slug);

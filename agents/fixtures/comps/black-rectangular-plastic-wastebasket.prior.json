@@ -1,0 +1,9 @@
+{
+  "6fe8271ada135fff": {
+    "item": "black rectangular plastic wastebasket",
+    "newRetailUsd": 12,
+    "usedUsd": 3,
+    "reason": "Assumed a common mid-size plastic rectangular wastebasket (~7-13 gal, Rubbermaid/Sterilite style); low-value household item sells for about 25% of new.",
+    "model": "claude-sonnet-5-5"
+  }
+}

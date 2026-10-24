@@ -1,0 +1,16 @@
+{
+  "87baef4eb60d0dce": {
+    "item": "herman miller office chair",
+    "newRetailUsd": 1400,
+    "usedUsd": 450,
+    "reason": "Assumed a mid-range Herman Miller Aeron or Mirra 2 in good condition (new ~$1,400); brand-name task chairs hold value, so ~30% of new, typical Bay Area used sale price.",
+    "model": "claude-sonnet-5-5"
+  },
+  "8fc3a79967471c0d": {
+    "item": "Herman Miller office chair; category chair; 0.69 x 1.04 x 0.67 m (W x H x D)",
+    "newRetailUsd": 1400,
+    "usedUsd": 450,
+    "reason": "Assumed a Herman Miller Aeron (size B, mid-range) at about $1,400 new; used ones in good condition sell for roughly 30-35% of new in the Bay Area, since brand-name office chairs hold value.",
+    "model": "claude-sonnet-5-5"
+  }
+}

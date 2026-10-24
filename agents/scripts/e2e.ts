@@ -161,6 +161,8 @@ function startWorker(): { child: ChildProcess; log: string; ready: Promise<void>
     UPLOAD_DIR: path.join(LOG_DIR, "uploads"),
     X402_PORT: String(X402_PORT),
     LLM_REPLAY: LLM_MODE,
+    // The price prior has no recordings for e2e items; under replay it would only log a miss per item.
+    PRICING_PRIOR: LLM_MODE === "replay" ? "0" : "1",
     VISA_PROVIDER: "simulated",
     // Even if a dev's .env.local has CDP keys: no Base Sepolia payments unless explicitly asked for.
     X402_SIMULATE: REAL_X402 ? "0" : "1",

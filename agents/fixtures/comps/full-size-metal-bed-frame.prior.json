@@ -1,0 +1,16 @@
+{
+  "886ee82a838dc624": {
+    "item": "full size metal bed frame",
+    "newRetailUsd": 150,
+    "usedUsd": 45,
+    "reason": "Assumed a standard mid-range full size platform or Zinus-style metal bed frame, about $150 new; bulky furniture discounted to roughly 30% of new.",
+    "model": "claude-sonnet-5-5"
+  },
+  "1b87b295c9cc22d2": {
+    "item": "Full size metal bed frame; category bed; 1.40 x 0.36 x 1.95 m (W x H x D)",
+    "newRetailUsd": 150,
+    "usedUsd": 50,
+    "reason": "Assumed a common mid-range full-size metal platform bed frame (~$150 new) sold used at about 33% of new, since bulky furniture sells for 20-40% of new.",
+    "model": "claude-sonnet-5-5"
+  }
+}
