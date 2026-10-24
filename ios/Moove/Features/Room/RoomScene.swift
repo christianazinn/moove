@@ -194,8 +194,10 @@ enum RoomScene {
     /// `fontSize` is in room meters; pass something proportional to the room so
     /// labels stay readable however big the room is.
     static func label(_ text: String, above object: RoomGeometry.Object, fontSize: Float) -> Entity {
-        let mesh = MeshResource.generateText(text, extrusionDepth: 0.001, font: .systemFont(ofSize: CGFloat(fontSize), weight: .semibold),
-                                             containerFrame: .zero, alignment: .center, lineBreakMode: .byTruncatingTail)
+        let mesh = RoomSceneCache.labelMesh(text, fontSize: fontSize) {
+            MeshResource.generateText(text, extrusionDepth: 0.001, font: .systemFont(ofSize: CGFloat(fontSize), weight: .semibold),
+                                      containerFrame: .zero, alignment: .center, lineBreakMode: .byTruncatingTail)
+        }
         let textEntity = ModelEntity(mesh: mesh, materials: [UnlitMaterial(color: UIColor(white: 0.15, alpha: 1))])
         let bounds = mesh.bounds
         textEntity.position = SIMD3(-bounds.center.x, -bounds.center.y, 0)
