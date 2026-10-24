@@ -190,7 +190,6 @@ struct ScanFlowView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             if session.autoPhotos.contains(object.id) {
                                 Text("Auto").monoMeta()
-                                    .accessibilityLabel("Photo taken automatically from the scan")
                             }
                             Image(systemName: done ? "checkmark.circle.fill" : "camera")
                                 .font(.system(size: 17, weight: done ? .regular : .light))
@@ -202,6 +201,10 @@ struct ScanFlowView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(accessibilityLabel(object, done: done))
+                    .accessibilityHint(done ? "Retakes the photo" : "Takes a photo")
+                    .accessibilityAddTraits(.isButton)
                     .swipeActions {
                         if object.manual {
                             Button("Remove", systemImage: "trash", role: .destructive) { session.remove(object) }
@@ -245,6 +248,8 @@ struct ScanFlowView: View {
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 8)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Also found: " + counts.map { n, c in c > 1 ? "\(c) \(n)" : n }.joined(separator: ", "))
             .background(.ultraThinMaterial, in: .capsule)
             .padding(.bottom, 110)
             .transition(.opacity)
@@ -272,6 +277,14 @@ struct ScanFlowView: View {
         .frame(width: 56, height: 56)
         .clipShape(RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
         .accessibilityHidden(true)
+    }
+
+    /// "Chair, 0.5 by 0.5 by 0.9 meters, photographed automatically".
+    private func accessibilityLabel(_ o: ScanSession.DetectedObject, done: Bool) -> String {
+        let f = { (v: Double) in v.formatted(.number.precision(.fractionLength(1))) }
+        let name = o.manual ? "New item, added by photo" : "\(o.category.capitalized), \(f(o.widthM)) by \(f(o.depthM)) by \(f(o.heightM)) meters"
+        let state = !done ? "no photo yet" : session.autoPhotos.contains(o.id) ? "photographed automatically from the scan" : "photographed"
+        return "\(name), \(state)"
     }
 
     private func dims(_ o: ScanSession.DetectedObject) -> String {
