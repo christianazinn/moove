@@ -59,6 +59,20 @@ public struct VoxelGrid: Sendable, Hashable {
         }
     }
 
+    /// The box `x` × `y` × `z` (clamped to the grid) as its own grid.
+    func cropped(x: Range<Int>, y: Range<Int>, z: Range<Int>) -> VoxelGrid {
+        let x = x.clamped(to: 0..<nx), y = y.clamped(to: 0..<ny), z = z.clamped(to: 0..<nz)
+        var out = VoxelGrid(nx: x.count, ny: y.count, nz: z.count)
+        guard !x.isEmpty, !y.isEmpty, !z.isEmpty else { return out }
+        for (oy, yy) in y.enumerated() {
+            for (oz, zz) in z.enumerated() {
+                let src = index(x.lowerBound, yy, zz), dst = out.index(0, oy, oz)
+                out.cells.replaceSubrange(dst..<(dst + x.count), with: cells[src..<(src + x.count)])
+            }
+        }
+        return out
+    }
+
     public var filledCount: Int { cells.reduce(0) { $0 + ($1 == 0 ? 0 : 1) } }
 
     /// Size in meters (width, height, depth).
