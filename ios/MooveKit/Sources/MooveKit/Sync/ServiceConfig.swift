@@ -30,6 +30,12 @@ public struct ServiceConfig: Sendable, Equatable {
         return o[0] == 127 || o[0] == 10 || (o[0] == 192 && o[1] == 168) || (o[0] == 172 && (16...31).contains(o[1]))
     }
 
+    /// How the worker's Visa rail checks out (#191), or nil for a worker or module that doesn't
+    /// announce it (or an unknown value). Then the app shows nothing extra before payment.
+    public var visaCheckout: VisaCheckoutMode? {
+        values["visa_checkout"].flatMap { VisaCheckoutMode(rawValue: $0.trimmingCharacters(in: .whitespaces)) }
+    }
+
     public var workerVersion: String? { values["worker_version"].flatMap { $0.isEmpty ? nil : $0 } }
 
     public var workerStartedAt: Date? {
@@ -61,4 +67,15 @@ public struct ServiceConfig: Sendable, Equatable {
     static func isLoopback(_ host: String) -> Bool {
         host == "localhost" || host == "::1" || host == "[::1]" || host.hasPrefix("127.")
     }
+}
+
+/// service_config `visa_checkout` (#191): which Visa backend the buy agent pays through.
+public enum VisaCheckoutMode: String, Sendable, Equatable, CaseIterable {
+    /// No network: every purchase is simulated.
+    case simulated
+    /// The CyberSource sandbox on a test card, no fallback: a real sandbox call, no real money.
+    case sandbox
+    /// The sandbox, but a 5xx/network error falls back to simulated for that one purchase, so
+    /// before payment it isn't known which; the payment row is labeled after.
+    case sandboxFallback = "sandbox+fallback"
 }

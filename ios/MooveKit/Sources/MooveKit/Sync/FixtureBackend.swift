@@ -80,6 +80,8 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
             $0.me = identity
             // What a live worker announces about today's budget (#221), so Settings shows it offline too.
             if $0.serviceConfig.values["spend_today"] == nil { $0.serviceConfig.values["spend_today"] = Self.sampleSpendToday() }
+            // The offline demo never pays anyone, so it reports the simulated Visa rail (#191).
+            if $0.serviceConfig.values["visa_checkout"] == nil { $0.serviceConfig.values["visa_checkout"] = VisaCheckoutMode.simulated.rawValue }
         }
         broadcast(status: .connected)
         return (identity, token ?? "fixture-token")

@@ -107,6 +107,12 @@ struct PendingApprovalRow: View {
                         ApprovalKindTag(kind: approval.kind)
                         Spacer(minLength: 8)
                         if listing?.simulated == true { SimulatedTag() }
+                        // #191: the worker's announced Visa mode; nothing when it didn't announce one.
+                        switch railTag {
+                        case .simulated?: SimulatedBadge(spoken: PurchaseRailTag.simulated.spoken)
+                        case .sandbox?: MonoTag(text: PurchaseRailTag.sandbox.text, tone: Theme.muted)
+                        case nil: EmptyView()
+                        }
                     }
                     Text(listing?.title ?? deal?.title ?? approval.summary)
                         .blockTitle()
@@ -180,8 +186,11 @@ struct PendingApprovalRow: View {
     private var spokenSummary: String {
         var s = approval.accessibilitySummary
         if listing?.simulated == true { s += ". Simulated listing, not posted to eBay" }
+        if let railTag { s += ". \(railTag.spoken)" }
         return s
     }
+
+    private var railTag: PurchaseRailTag? { approval.purchaseRailTag(store.snapshot.serviceConfig.visaCheckout) }
 
     private func decide(approve: Bool) {
         working = true
