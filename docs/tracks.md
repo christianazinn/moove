@@ -30,7 +30,7 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 
 **Apify** ($5k pool for the top 5, plus $400 Best Actor)
 - Use Apify meaningfully. Best Actor means building and publishing an Actor during the event (stretch: a "moving comps" Actor).
-- [x] Name the Actors in the README (done: `caffein.dev~ebay-sold-listings`, `apify~facebook-marketplace-scraper`, optional `ivanvs~craigslist-scraper`; plus the buy agent's deal search in `agents/src/integrations/deals-apify.ts` (#40): `apify~facebook-marketplace-scraper`, `ivanvs~craigslist-scraper-pay-per-result`, `automation-lab~ebay-scraper`).
+- [x] Name the Actors in the README (done: `caffein.dev~ebay-sold-listings`, `apify~facebook-marketplace-scraper`, optional `ivanvs~craigslist-scraper`; plus the buy agent's deal search in `agents/src/integrations/deals-apify.ts` (#40): `apify~facebook-marketplace-scraper`, `ivanvs~craigslist-scraper-pay-per-result`, `automation-lab~ebay-scraper`; plus `zen-studio~google-lens-visual-search` for the vision agent's reverse image search on unsure items, `agents/src/integrations/lens.ts`, #294).
 - [ ] Show live scraping in the demo. The pricing agent runs live when `APIFY_TOKEN` is set and replays labeled caches otherwise. Real caches for the demo items are committed: comps in `agents/fixtures/comps/` (#61, #63) and live deal searches for every demo shopping item in `agents/fixtures/deals-live-*.json` (#74, #79). Still to do: a live scrape on stage.
 - Best Actor: not entering (no Actor published).
 
@@ -46,7 +46,7 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 
 ## Tier 2
 - **Auth0 (MLH)**: use any Auth0 API. We use login, plus Auth0 for AI Agents async authorization for approvals.
-  - [x] CIBA approvals built (#12, `agents/src/integrations/auth0.ts`), but tested only against stubbed HTTP, not a real tenant. Restart edge cases (no duplicate requests, no re-push of expired ones, a tap just before expiry still counts) are unit tested (#138).
+  - [x] CIBA approvals built (#12, `agents/src/integrations/auth0.ts`) and tested only against stubbed HTTP; not configured on the hosted worker, so demo approvals use the in-app inbox. Restart edge cases (no duplicate requests, no re-push of expired ones, a tap just before expiry still counts) are unit tested (#138).
   - [x] Login (#25): Auth0 Web Auth in the app, with the ID token as the SpacetimeDB connection token. `register_user` is wired on the live backend (#28), but login hasn't been demoed end to end on a phone yet. If `MOOVE_BUNDLE_ID` changes, the callback URL must be added in the Auth0 dashboard (`ios/CLAUDE.md`).
 - **CRS Credit**: the Identity/Fraud Innovation prize, if the fraud screening uses the CRS sandbox. Fraud screening is built (#64), but it's rule-based and doesn't call CRS, so we don't qualify as built.
 - **Best Planet-First Hack** (overall prize): the resell / donate-over-trash story. The Summary screen (#16) shows a rough kg-kept-out-of-landfill figure, labeled as an estimate.
