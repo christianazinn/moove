@@ -55,7 +55,7 @@ public enum Review {
     public static func totals(_ items: [Item]) -> ReviewTotals {
         let keep = items.filter { $0.disposition == .keep }
         return ReviewTotals(
-            expectedSaleCents: items.filter { $0.disposition == .sell }.compactMap(\.estValueCents).reduce(0, +),
+            expectedSaleCents: items.filter { $0.disposition == .sell }.compactMap(\.saleValueCents).reduce(0, +),
             itemsToMove: keep.count,
             volumeToMoveM3: keep.map(\.volumeM3).reduce(0, +),
             needsYou: items.filter { ReviewSection.of($0) == .needsYou }.count,

@@ -165,7 +165,7 @@ struct ReviewRow: View {
                             .accessibilityLabel("Possibly sentimental")
                     }
                     Spacer(minLength: 8)
-                    Text(item.estValueCents?.usd ?? "—").rowValue()
+                    Text(item.saleValueCents?.usd ?? "—").rowValue()
                 }
                 HStack(spacing: 8) {
                     HStack(spacing: 6) {
