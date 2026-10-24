@@ -116,6 +116,9 @@ jobs:
   ios-ui:
     # Runs the app in an iOS Simulator on the offline demo backend: the `Moove` scheme's test action
     # (ios/MooveUITests, CommerceUITests for now). Screenshots are in the `ios-ui-screenshots` artifact.
+    # About 15 min, so like `ios` it only runs on PRs touching ios/ (or CI) and on pushes to main.
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-15
     timeout-minutes: 20
     steps:
