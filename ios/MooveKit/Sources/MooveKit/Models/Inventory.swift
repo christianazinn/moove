@@ -281,3 +281,21 @@ extension Item {
         return .pricing
     }
 }
+
+extension Item {
+    /// How the item got into the inventory, which says how much to trust its size.
+    public enum Origin: Equatable, Sendable {
+        /// A box from the LiDAR scan (RoomPlan or the extra detector): measured.
+        case scan
+        /// Added by the room photo sweep (`scan_object_id = "photo:<scan id>"`, #92): size estimated.
+        case roomPhotos
+        /// Added by its photo during the scan review: no size at all.
+        case photo
+    }
+
+    public var origin: Origin {
+        if scanObjectId?.hasPrefix("photo:") == true { return .roomPhotos }
+        if widthM <= 0 && heightM <= 0 && depthM <= 0 { return .photo }
+        return .scan
+    }
+}
