@@ -1,0 +1,33 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p8
+*.key
+
+# node
+node_modules/
+dist/
+*.log
+
+# ios
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+.build/
+.swiftpm/
+xcuserdata/
+*.ipa
+
+# spacetime
+spacetime/target/
+
+# misc
+.DS_Store
+uploads/
+.claude/settings.local.json
+
+# large local reference files (summarized in docs/tracks.md)
+13.0 Hacker Guide.md
+prizes.txt
