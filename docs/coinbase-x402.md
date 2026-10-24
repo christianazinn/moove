@@ -28,7 +28,7 @@ Submission notes for the Coinbase **Best Use of x402 / Payment Agents** track (C
 
 We drive the 402 flow by hand instead of using `wrapFetchWithPayment`. That way every call carries its agent and purpose, and our budget check happens before signing. The client-wide SDK hooks can't do either per request.
 
-The comps endpoint (`GET /x402/comps?q=...`, $0.01) is hosted by our own worker code (`agents/src/paywall.ts`), so the payment flow is real end to end. No third-party x402 data service fit our use case. It pays from `0x3224220E5007e8F4c0440447bdfeb846c96f8A52` (the agents' wallet) to `0x6644b110FD0B1671599E36db749d09b1EAeEF952` (the receiver wallet).
+The comps endpoint (`GET /x402/comps?q=...`, $0.01) is hosted by our own worker code (`agents/src/paywall.ts`, served on `127.0.0.1:8402` by `agents/src/integrations/paid-comps.ts`) and backed by the Apify comps lookup, so the payment flow is real end to end. **The pricing agent buys every item's comps from it** (PRs #37, #46): each pricing run is one $0.01 x402 payment and one `payment` row. Payments never block pricing. If the rail refuses (over budget) or the paid call fails, pricing logs the fallback and calls Apify directly (unpaid). If the paywall can't start at all (port taken, CDP outage), the worker logs it and keeps pricing on direct lookups. `PRICING_PAY_X402=0` turns the paid path off. No third-party x402 data service fit our use case. It pays from `0x3224220E5007e8F4c0440447bdfeb846c96f8A52` (the agents' wallet) to `0x6644b110FD0B1671599E36db749d09b1EAeEF952` (the receiver wallet).
 
 ## Architecture diagram
 ```mermaid
@@ -80,7 +80,7 @@ Agent worker                                       |
 
 ## Controls
 - **Spend caps, enforced before signing.** There's a per-agent budget (`AGENT_SPEND_CAP_USDC`, default $5) and a per-call max (`X402_MAX_PER_CALL_USDC`, default $0.10). Amounts are reserved before signing and released on failure, so concurrent calls from one agent can't overspend (there's a test for this). Over-cap calls are refused and logged as `agent_event` rows that the app shows.
-- **Asset and network allowlist.** The rail only pays USDC on Base Sepolia. The SDK's `spendControls` (per-payment max, a 24h cumulative cap, allowed networks and assets) sit underneath as a backstop.
+- **Asset, network and payee allowlist.** The rail only pays USDC on Base Sepolia, and with `X402_ALLOWED_PAYEES` set (comma-separated) it refuses any `payTo` outside the list. The SDK's `spendControls` (per-payment max, a 24h cumulative cap, allowed networks and assets) sit underneath as a backstop.
 - **Human approval for big spends.** Purchases or listings above the user's `approvalThresholdCents` create an `approvals` row and need an Auth0 async authorization (CIBA) on the phone first (task #12). x402 data calls stay far below that threshold, and the per-call max keeps them there.
 - **Simulated labeling.** With no CDP keys, or with `X402_SIMULATE=1`, the rail signs nothing. Every `payment` row has `simulated: true`, every event message starts with `[SIMULATED]`, and the app shows a SIMULATED badge. Simulated payments are never shown as real.
 - **Keys in env only.** CDP keys live in the gitignored `.env.local` or in the worker's environment, never in git. CI runs gitleaks. The wallet is a CDP server wallet, so its private keys never touch our machines.
@@ -102,11 +102,15 @@ CDP_API_KEY_SECRET=...
 CDP_WALLET_SECRET=...
 AGENT_SPEND_CAP_USDC=5
 X402_MAX_PER_CALL_USDC=0.10
+X402_ALLOWED_PAYEES=           # optional payTo allowlist (empty = any address, still capped)
+X402_SEED_BUDGETS=1            # count the last 24h of payments against each budget at startup (0 = start at zero)
+PRICING_PAY_X402=1             # pricing buys comps over x402 (0 = direct Apify lookups)
 ```
 Then, from `agents/`:
 ```sh
 npm run x402:wallet -- --faucet    # creates/loads the moove-agents wallet, funds it with testnet USDC, prints balances
 npm run x402:demo                  # starts the paywalled comps endpoint, pays it over x402, prints the basescan link
+npm start                          # the worker: the pricing agent now pays $0.01 per item for comps over the same rail
 ```
 
 To reuse the rail in another project, copy `agents/src/integrations/x402.ts` and implement `PaymentSink` (two methods: `recordPayment` and `logAgentEvent`) for your own storage. `agents/src/payments.ts` is our SpacetimeDB version.
@@ -115,12 +119,14 @@ To reuse the rail in another project, copy `agents/src/integrations/x402.ts` and
 A real x402 payment of 0.01 USDC from the agents' CDP wallet to the comps paywall settled on Base Sepolia in block 49461682:
 https://sepolia.basescan.org/tx/0xc7942646380456c56dde204434aeb6115338b521b6e91a0901ec05dde1fe136c
 
+That payment was made by `npm run x402:demo`. The pricing agent's payments in the worker go through the same rail and paywall, and each one lands as a `payment` row with its tx hash, shown in the app's spending log.
+
 ## Known limitations
 - **Testnet only** (Base Sepolia, testnet USDC).
 - **One shared wallet for all agents.** Per-agent budgets are enforced in the worker process, not on-chain. A bug in the worker could bypass them. Only the SDK `spendControls` backstop would still apply.
-- **Budgets reset when the worker restarts.** The spend ledger lives in memory.
+- **Budgets are tracked in the worker.** The spend ledger lives in memory. On startup it is seeded from the last 24h of `payment` rows (`X402_SEED_BUDGETS=1`, the default), so a restart doesn't reset an agent's budget, but the window is rolling rather than a fixed period.
 - **The comps endpoint is our own paywall.** No third-party x402 data service fit, so we pay ourselves. The flow and settlement are real, but the money goes between two of our own wallets.
-- **The pricing agent integration is pending** (Apify, #6). Today the real payment above was made by `npm run x402:demo`, which uses the same rail and paywall with fixture comps.
+- **Only the pricing agent pays over x402 so far.** It buys its comps through the paywall (#46). If a payment fails it falls back to a direct (unpaid) Apify lookup, so not every pricing run is guaranteed to produce a payment. The buy agent doesn't use the rail yet.
 - **The live iOS backend glue is pending** (#10), so the in-app spending log currently runs in Offline demo mode.
 
 ## Builder feedback

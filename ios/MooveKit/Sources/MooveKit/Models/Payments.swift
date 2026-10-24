@@ -222,6 +222,10 @@ public struct AgentEvent: Codable, Sendable, Hashable, Identifiable {
 
     /// Any x402 rail event, which carries the worker ledger's live budget (#45).
     public var isX402: Bool { data.isX402 }
+
+    /// The step was simulated (`simulated: true` in `data_json`), so the UI must label it
+    /// SIMULATED even when the message text doesn't say so (Coinbase track rule).
+    public var isSimulated: Bool { data.simulated == true }
 }
 
 /// Per-agent spend against its cap.
@@ -309,12 +313,13 @@ public struct SpendingLog: Sendable, Equatable {
         let x402Events = events.filter(\.isX402)
         let failedPayments = payments.filter { $0.status == .failed }
         // A failed x402 step that also wrote a failed payment row (same agent and amount,
-        // within a minute) is already in the log as that payment.
+        // within a minute) is already in the log as that payment. An amountless failure
+        // (e.g. no USDC payment option) never wrote a row, so it always shows.
         let failedAttempts = x402Events.filter { e in
             guard e.isFailedX402Attempt else { return false }
-            let amount = e.data.amountUsdMicros
+            guard let amount = e.data.amountUsdMicros else { return true }
             return !failedPayments.contains { p in
-                p.agent == e.agent && (amount == nil || amount == p.amountUsdMicros)
+                p.agent == e.agent && amount == p.amountUsdMicros
                     && abs(p.createdAt.timeIntervalSince(e.createdAt)) <= 60
             }
         }

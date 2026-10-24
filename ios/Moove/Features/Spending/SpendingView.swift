@@ -163,6 +163,7 @@ struct RefusalRow: View {
                         Text(UsdMicros.format(amount)).font(.headline.monospacedDigit()).strikethrough()
                             .foregroundStyle(.secondary)
                     }
+                    if event.isSimulated { SimulatedPaymentBadge() }
                     Spacer()
                     Text(event.createdAt.ago).font(.caption).foregroundStyle(.secondary)
                 }
@@ -180,7 +181,7 @@ struct RefusalRow: View {
         .padding(.vertical, 2)
         .listRowBackground(Color.red.opacity(0.08))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Payment refused by spend cap. \(event.message)")
+        .accessibilityLabel("\(event.isSimulated ? "Simulated payment" : "Payment") refused by spend cap. \(event.message)")
     }
 }
 
@@ -196,6 +197,7 @@ struct FailedAttemptRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Failed attempt").font(.headline).foregroundStyle(.orange)
+                    if event.isSimulated { SimulatedPaymentBadge() }
                     Spacer()
                     Text(event.createdAt.ago).font(.caption).foregroundStyle(.secondary)
                 }
