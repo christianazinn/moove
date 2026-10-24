@@ -81,7 +81,7 @@ struct NewHomeView: View {
         func layoutItem(_ item: Item) -> LayoutItem {
             item.colors == nil && DemoFixtures.isDemoItem(item) ? LayoutItem(item, colors: DemoFixtures.scanColors()) : LayoutItem(item)
         }
-        let kept = store.items.filter { $0.disposition == .keep }
+        let kept = store.visibleItems.filter { $0.disposition == .keep }
         let bought = store.snapshot.boughtLayoutItems
         if !kept.isEmpty || !bought.isEmpty {
             return Furniture(items: kept.map(layoutItem) + bought, isDemo: false, sources: kept)
