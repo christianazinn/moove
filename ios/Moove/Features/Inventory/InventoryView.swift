@@ -1,39 +1,54 @@
 import SwiftUI
 import MooveKit
 
-/// Live list of the user's items, grouped by room. Polished in #4.
+/// The user's things as a small museum (Lisa, #inventory-museum): items hang in halls by
+/// what they're for (MooveKit `FunctionHall`), each a framed voxel exhibit with a placard
+/// (`MuseumLabel`). Room-level actions (share, 3D, hide, add) sit on the Rooms strip on top.
 struct InventoryView: View {
     @Environment(MooveStore.self) private var store
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var sharing: Room?
     @State private var showJoin = false
     @State private var showHidden = false
     /// Room id → (scan object id → the scanner's category), from each room's scan geometry,
     /// for the "was: storage" marker on items a later pass renamed (#267).
     @State private var scannedCategories: [UInt64: [String: String]] = [:]
-    /// Fix-it rename from a row's long-press menu.
+    /// Fix-it rename from an exhibit's long-press menu.
     @State private var renaming: Item?
     @State private var newName = ""
-    /// Row whose "Delete item" is waiting on the confirm.
+    /// Exhibit whose "Delete item" is waiting on the confirm.
     @State private var deleting: Item?
     /// Add item (by hand) sheet, opened on this room.
     @State private var addingTo: Room?
+    /// Item detail, pushed by tapping an exhibit.
+    @State private var opened: UInt64?
+    /// Placard story being edited.
+    @State private var editingStory: Item?
+    /// The user's own placard stories (item id → line), on this device only.
+    @AppStorage(ItemStories.defaultsKey) private var storiesJSON = ""
 
     var body: some View {
         let rooms = store.snapshot.roomsNewestFirst(store.visibleRooms)
+        let stories = ItemStories.decode(storiesJSON)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 PageHeader(
                     eyebrow: "02 — Inventory",
                     title: "Everything you own.",
-                    lede: "Every item Moove found, room by room. Prices fill in as the agents finish."
+                    lede: "Your things, hung by what they're for."
                 )
                 if store.visibleItems.isEmpty {
                     emptyState.padding(.top, 32)
                 } else {
-                    totals.padding(.top, 28)
+                    totals.padding(.top, 24)
                 }
-                ForEach(rooms) { room in
-                    roomSection(room)
+                if !rooms.isEmpty {
+                    roomsStrip(rooms).padding(.top, 24)
+                }
+                sweepNotes(rooms)
+                ForEach(FunctionHall.halls(store.visibleItems), id: \.hall) { entry in
+                    hallSection(entry.hall, entry.items, stories: stories)
                 }
                 hiddenRoomsFooter.padding(.top, 40)
             }
@@ -44,6 +59,7 @@ struct InventoryView: View {
         .navigationTitle("Inventory")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: Room.self) { RoomDetailView(room: $0) }
+        .navigationDestination(item: $opened) { ItemDetailView(itemId: $0) }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Join a room", systemImage: "person.2.badge.plus") { showJoin = true }
@@ -58,6 +74,11 @@ struct InventoryView: View {
         .sheet(item: $addingTo) { room in AddItemView(rooms: rooms, roomId: room.id) }
         .sheet(item: $sharing) { ShareRoomView(room: $0) }
         .sheet(isPresented: $showJoin) { JoinRoomView() }
+        .sheet(item: $editingStory) { item in
+            StoryEditor(item: item, current: stories[item.id]) { text in
+                storiesJSON = ItemStories.setting(text, for: item.id, in: storiesJSON)
+            }
+        }
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }), presenting: renaming) { item in
             TextField("Name", text: $newName)
             Button("Save") { Task { await store.renameItem(item, to: newName) } }
@@ -89,14 +110,26 @@ struct InventoryView: View {
         .animation(.default, value: store.hiddenRoomIds)
     }
 
-    // MARK: Room sections
+    // MARK: Rooms strip
 
-    @ViewBuilder
-    private func roomSection(_ room: Room) -> some View {
-        let items = store.items.filter { $0.roomId == room.id }
+    /// One chip per visible room, newest scan first, carrying the room's actions.
+    private func roomsStrip(_ rooms: [Room]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Rooms").eyebrow().accessibilityAddTraits(.isHeader)
+            // Wraps rather than scrolls sideways, so every room's actions stay on screen.
+            ChipFlow(spacing: 10) {
+                ForEach(rooms) { roomChip($0) }
+            }
+        }
+    }
+
+    private func roomChip(_ room: Room) -> some View {
         let shared = !isMine(room)
-        ListHeader(title: room.name, count: "\(items.count)") {
-            HStack(spacing: 8) {
+        let count = store.visibleItems.filter { $0.roomId == room.id }.count
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(room.name).blockTitle().lineLimit(2)
+            roomMeta(room, shared: shared, count: count)
+            HStack(spacing: 6) {
                 if !shared {
                     Button { sharing = room } label: {
                         Image(systemName: "person.badge.plus")
@@ -115,7 +148,7 @@ struct InventoryView: View {
                     hideButton(room)
                 } label: {
                     Image(systemName: "ellipsis")
-                        .frame(minWidth: 28, minHeight: 28)
+                        .frame(minWidth: 36, minHeight: 36)
                         .contentShape(Rectangle())
                 }
                 .foregroundStyle(Theme.muted)
@@ -123,49 +156,104 @@ struct InventoryView: View {
             }
             .fixedSize()
         }
-        .padding(.top, 40)
+        .padding(12)
+        .frame(minWidth: 180, alignment: .leading)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
         .contextMenu { hideButton(room) }
+        .accessibilityElement(children: .contain)
         .accessibilityAction(named: "Hide room") { store.setRoom(room.id, hidden: true) }
-        roomMeta(room, shared: shared).padding(.vertical, 8)
-        if let scan = store.snapshot.latestScan(ofRoom: room.id), scan.sweepStatus?.isActive == true,
-           scan.createdAt > .now.addingTimeInterval(-300) {
-            // Room photo sweep (#92): the worker is naming "other" boxes and adding missed items.
-            // Hidden after 5 min so a scan whose worker was down doesn't spin forever.
+    }
+
+    /// Room photo sweep (#92): the worker is naming "other" boxes and adding missed items.
+    /// Hidden after 5 min so a scan whose worker was down doesn't spin forever.
+    @ViewBuilder
+    private func sweepNotes(_ rooms: [Room]) -> some View {
+        let sweeping = rooms.filter { room in
+            guard let scan = store.snapshot.latestScan(ofRoom: room.id) else { return false }
+            return scan.sweepStatus?.isActive == true && scan.createdAt > .now.addingTimeInterval(-300)
+        }
+        if !sweeping.isEmpty {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.mini)
                 Text("Identifying items from room photos…").monoMeta()
             }
-            .padding(.vertical, 8)
+            .padding(.top, 12)
             .accessibilityElement(children: .combine)
         }
+    }
+
+    // MARK: Halls
+
+    private var columns: Int {
+        if dynamicTypeSize.isAccessibilitySize { return 1 }
+        return sizeClass == .regular ? 3 : 2
+    }
+
+    @ViewBuilder
+    private func hallSection(_ hall: FunctionHall, _ items: [Item], stories: [UInt64: String]) -> some View {
+        let top = MuseumLabel.topPiece(items)
         let compCounts = store.snapshot.compCounts
-        ForEach(items) { item in
-            let tag = item.originTag(inSharedRoom: shared)
-            // "≈" marks an estimate from only one or two comparable listings
-            let rough = item.saleValueCents != nil && Item.isRoughEstimate(compCount: compCounts[item.id] ?? 0)
-            LedgerRow(
-                title: item.name,
-                meta: meta(for: item),
-                value: rough ? "≈\(item.priceText)" : item.priceText,
-                valueTint: item.saleValueCents == nil ? Theme.muted : Theme.text,
-                tag: tag.label,
-                tagAccessibilityLabel: tag.accessibilityLabel
-            ) {
-                ItemThumbnail(item: item, size: 56)
-            }
-            .accessibilityElement(children: .combine)
+        let infos = items.map { exhibitInfo($0, story: stories[$0.id], isTop: $0.id == top && items.count > 1, compCounts: compCounts) }
+        VStack(alignment: .leading, spacing: 4) {
+            Text(hall.title)
+                .serifText(24, weight: .semibold)
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            Text(FunctionHall.subtitle(items)).monoMeta()
+        }
+        .padding(.top, 40)
+        .padding(.bottom, 14)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("inventory.hall.\(hall.rawValue)")
+        MasonryColumns(infos: infos, columns: columns) { info in
+            exhibit(info)
+        }
+    }
+
+    private func exhibitInfo(_ item: Item, story: String?, isTop: Bool, compCounts: [UInt64: Int]) -> ExhibitInfo {
+        // "≈" marks an estimate from only one or two comparable listings
+        let rough = item.saleValueCents != nil && Item.isRoughEstimate(compCount: compCounts[item.id] ?? 0)
+        let room = store.snapshot.rooms.first { $0.id == item.roomId }
+        var catalog = MuseumLabel.catalogLine(item)
+        if let was = wasCategory(item) { catalog += " · was: \(was)" }
+        let catalogued = store.snapshot.scanDate(ofRoom: item.roomId) ?? item.updatedAt
+        return ExhibitInfo(
+            item: item,
+            roomName: room?.name ?? "",
+            story: story,
+            autoStory: MuseumLabel.autoStory(item, isTopPiece: isTop),
+            catalog: catalog,
+            acquired: MuseumLabel.acquiredLine(cataloguedAt: catalogued, story: story),
+            price: rough ? "≈\(item.priceText)" : item.priceText,
+            priceTint: item.saleValueCents == nil ? Theme.muted : Theme.text,
+            tag: item.originTag(inSharedRoom: room.map { !isMine($0) } ?? false),
+            featured: isTop
+        )
+    }
+
+    private func exhibit(_ info: ExhibitInfo) -> some View {
+        let item = info.item
+        return ExhibitCard(info: info) { editingStory = item }
+            .onTapGesture { opened = item.id }
             // Fix-it (long press): rename, what is it, turn, remove a misread scan item. Delete asks first.
             .contextMenu {
+                Button("Open", systemImage: "info.circle") { opened = item.id }
+                Button(info.story == nil ? "Add a story" : "Edit story", systemImage: "text.quote") { editingStory = item }
+                Divider()
                 ItemFixMenu(item: item) { startRename(item) }
                 Divider()
                 Button("Delete item", systemImage: "trash", role: .destructive) { deleting = item }
                     .accessibilityIdentifier("inventory.delete.\(item.id)")
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityAction { opened = item.id }
+            .accessibilityAction(named: "Open details") { opened = item.id }
+            .accessibilityAction(named: "Edit story") { editingStory = item }
             .accessibilityAction(named: "Rename") { startRename(item) }
             .accessibilityAction(named: "Turn around") { Task { await store.turn(item) } }
             .accessibilityAction(named: "Delete") { deleting = item }
             .accessibilityIdentifier("inventory.item.\(item.id)")
-        }
     }
 
     private func startRename(_ item: Item) {
@@ -177,34 +265,33 @@ struct InventoryView: View {
         Button("Hide room", systemImage: "eye.slash") { store.setRoom(room.id, hidden: true) }
     }
 
-    /// "Demo · Today 10:42 · Shared by Sam": which scan this section is.
-    @ViewBuilder
-    private func roomMeta(_ room: Room, shared: Bool) -> some View {
+    /// "Demo · Today 10:42 · 12 items · Shared by Sam": which scan this room is.
+    private func roomMeta(_ room: Room, shared: Bool, count: Int) -> some View {
         let demo = store.snapshot.isDemoRoom(room.id)
         let date = store.snapshot.scanDate(ofRoom: room.id).map { ScanDateLabel.text($0) }
-        if demo || date != nil || shared {
-            HStack(spacing: 8) {
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
                 if demo {
                     MonoTag(text: "Demo", tone: Theme.ochreInk)
                         .accessibilityLabel("Demo scan")
                 }
-                if let date {
-                    Text(date).monoMeta().accessibilityLabel("Scanned \(date)")
-                }
-                if shared {
-                    Label("Shared by \(ownerName(of: room))", systemImage: "person.2").monoMeta()
-                }
+                Text(count == 1 ? "1 item" : "\(count) items").monoText(12, maxScale: 1.8).foregroundStyle(Theme.muted)
             }
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityElement(children: .combine)
+            if let date {
+                Text(date).monoText(12, maxScale: 1.8).foregroundStyle(Theme.muted).accessibilityLabel("Scanned \(date)")
+            }
+            if shared {
+                Label("Shared by \(ownerName(of: room))", systemImage: "person.2")
+                    .monoText(12, maxScale: 1.8).foregroundStyle(Theme.muted)
+            }
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func meta(for item: Item) -> String {
-        let category = item.category.capitalized
-        guard let scanned = item.scanObjectId.flatMap({ scannedCategories[item.roomId]?[$0] }),
-              let was = item.renamedFrom(scannedCategory: scanned) else { return category }
-        return "\(category) · was: \(was)"
+    /// The scanner's own category when a later pass renamed the item ("was: storage").
+    private func wasCategory(_ item: Item) -> String? {
+        guard let scanned = item.scanObjectId.flatMap({ scannedCategories[item.roomId]?[$0] }) else { return nil }
+        return item.renamedFrom(scannedCategory: scanned)
     }
 
     // MARK: Hidden rooms
