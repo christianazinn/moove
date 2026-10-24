@@ -49,6 +49,7 @@ import CreateRoomReducer from "./create_room_reducer";
 import CreateScanReducer from "./create_scan_reducer";
 import DecideApprovalReducer from "./decide_approval_reducer";
 import DeleteItemReducer from "./delete_item_reducer";
+import ExpireApprovalReducer from "./expire_approval_reducer";
 import ImportScanReducer from "./import_scan_reducer";
 import ImportScanV2Reducer from "./import_scan_v_2_reducer";
 import JoinRoomReducer from "./join_room_reducer";
@@ -395,6 +396,7 @@ const reducersSchema = __reducers(
   __reducerSchema("create_scan", CreateScanReducer),
   __reducerSchema("decide_approval", DecideApprovalReducer),
   __reducerSchema("delete_item", DeleteItemReducer),
+  __reducerSchema("expire_approval", ExpireApprovalReducer),
   __reducerSchema("import_scan", ImportScanReducer),
   __reducerSchema("import_scan_v2", ImportScanV2Reducer),
   __reducerSchema("join_room", JoinRoomReducer),

@@ -194,7 +194,7 @@ const approval = table(
     requestedAt: t.timestamp(),
     updatedAt: t.timestamp(),
     // #42, appended last with defaults so existing rows migrate
-    decidedVia: t.string().default(''), // '' while pending | 'app' (owner in the app) | 'ciba' (worker relayed Auth0)
+    decidedVia: t.string().default(''), // '' while pending | 'app' (owner in the app) | 'ciba' (worker relayed Auth0) | 'expired' (#186)
     cibaSubject: t.string().default(''), // Auth0 `sub` the worker reported from the CIBA id_token
   }
 );
@@ -1316,6 +1316,20 @@ export const recordCibaDecision = spacetimedb.reducer(
     });
   }
 );
+
+// #186: the worker gives up on an approval nobody answered. Only pending ones, and only after
+// APPROVAL_MIN_EXPIRE_MICROS, so a buggy worker can't expire one before the owner can see it.
+const APPROVAL_MIN_EXPIRE_MICROS = 15n * 60n * 1_000_000n;
+export const expireApproval = spacetimedb.reducer({ approvalId: t.u64() }, (ctx, { approvalId }) => {
+  requireWorker(ctx);
+  const a = ctx.db.approval.id.find(approvalId);
+  if (!a) throw new SenderError(`no approval ${approvalId}`);
+  if (a.status !== 'pending') throw new SenderError(`approval already ${a.status}`);
+  if (ctx.timestamp.microsSinceUnixEpoch - a.requestedAt.microsSinceUnixEpoch < APPROVAL_MIN_EXPIRE_MICROS) {
+    throw new SenderError('approval is less than 15 minutes old');
+  }
+  ctx.db.approval.id.update({ ...a, status: 'expired', decidedVia: 'expired', updatedAt: ctx.timestamp });
+});
 
 // ---------- shopping & deals (#15, #18) ----------
 export const addShoppingItem = spacetimedb.reducer(
