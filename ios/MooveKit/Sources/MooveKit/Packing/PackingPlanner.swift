@@ -10,7 +10,20 @@ import Foundation
 ///   `FurnitureNote` with take-apart and wrapping steps instead of a box.
 ///   A floor lamp is a note for the base, and its shade goes in a box.
 /// - Small things go in boxes grouped by destination room, then kind, then
-///   fragility. Each room also gets typical everyday contents (`itemId == nil`).
+///   fragility. Each room also gets typical everyday contents (`itemId == nil`,
+///   `BoxContent.estimated`): an estimate for the truck, not something scanned.
+///   Typical books are counted once per scanned room (living room first), so a
+///   one-room scan doesn't get a bedroom's and a living room's worth of books.
+/// - Then boxes are filled properly (`consolidate`): within a destination room,
+///   boxes merge when the combined volume fits one box (moving up a size, small →
+///   medium → large, rather than adding a box) under its weight limit, and the
+///   kinds go together: books with desk papers and games, electronics with desk
+///   cables and decor, soft with soft, kitchen with kitchen. Bedding, throws and
+///   clothes pad fragile decor, lamps, electronics and dishes ("Throws pad the
+///   vases"). Never books with fragile things, never kitchen or bathroom things
+///   with anything else (except padding around dishes), and only soft things go
+///   under the hangers in a wardrobe box. A box still under 40% full then joins
+///   another box of its room if the safety rules allow.
 /// - No box weighs over its size's `maxKg` (all are 20 kg or less). Fragile
 ///   boxes stay at or under 8 kg, so nothing heavy ever shares a box with them.
 /// - There's always an open-first tote and a keep-with-you box (sentimental
@@ -73,10 +86,13 @@ public enum PackingPlanner {
         }
 
         // Typical everyday contents per destination room, skipping kinds the scan already has there.
+        // Books are counted once per scanned room, not once per destination room (see `typicalBookRooms`).
         let destinations = Set(furniture.map(\.room) + units.map(\.room)).subtracting([keepWithYouRoom]).sorted()
+        let bookRooms = typicalBookRooms(destinations, units: units, scannedRooms: Set(moving.map(\.roomId)).count)
         for room in destinations {
             let scannedKinds = Set(units.filter { $0.room == room && $0.itemId != nil }.map(\.kind))
-            for line in PackingTemplates.typical(for: roomKind(named: room)) where !scannedKinds.contains(line.kind) {
+            for line in PackingTemplates.typical(for: roomKind(named: room))
+            where !scannedKinds.contains(line.kind) && (line.kind != .books || bookRooms.contains(room)) {
                 units.append(PackUnit(typical: line, room: room))
             }
         }
@@ -86,7 +102,7 @@ public enum PackingPlanner {
         let keepFragile = keepUnits.contains(where: \.fragile)
         units += keepUnits.map { var u = $0; u.fragile = keepFragile; return u }
 
-        var numbered = finalize(merge(pack(units)))
+        var numbered = finalize(consolidate(pack(units)))
         for i in numbered.indices {
             let box = numbered[i].box
             let mapped = box.contents.contains { $0.itemId.map(rooms.isMapped) ?? false } || rooms.mappedRooms.contains(box.room)
@@ -107,6 +123,26 @@ public enum PackingPlanner {
             schedule: schedule(numbered),
             delivered: delivered
         )
+    }
+
+    /// Destination rooms that get typical books. A household's books are estimated once per scanned
+    /// room, so a one-room scan headed for a bedroom and a living room doesn't get both rooms' books.
+    /// Scanned books use up a set first; the rest go to the living room, else the office, else a bedroom.
+    static func typicalBookRooms(_ destinations: [String], units: [PackUnit], scannedRooms: Int) -> Set<String> {
+        let scanned = Set(units.filter { $0.kind == .books && $0.itemId != nil }.map(\.room))
+        let sets = max(0, max(1, scannedRooms) - scanned.count)
+        func rank(_ room: String) -> Int {
+            switch roomKind(named: room) {
+            case .living: return 0
+            case .office: return 1
+            case .bedroom: return 2
+            default: return 3
+            }
+        }
+        let wanting = destinations.filter { room in
+            !scanned.contains(room) && PackingTemplates.typical(for: roomKind(named: room)).contains { $0.kind == .books }
+        }
+        return Set(wanting.sorted { (rank($0), $0) < (rank($1), $1) }.prefix(sets))
     }
 
     /// Bought pieces, with their destination room (the saved layout's, else a guess) and seller.
@@ -352,17 +388,63 @@ public enum PackingPlanner {
         return group
     }
 
-    /// Combines boxes that are mostly empty: same room, size and fragility, at most two kinds.
-    static func merge(_ boxes: [DraftBox]) -> [DraftBox] {
-        var out: [DraftBox] = []
-        let sorted = boxes.enumerated().sorted { a, b in
-            (a.element.room, a.element.kinds[0], a.offset) < (b.element.room, b.element.kinds[0], b.offset)
-        }.map(\.element)
-        for box in sorted {
-            if !box.special, let i = out.firstIndex(where: { $0.canMerge(box) }) {
-                out[i].absorb(box)
-            } else {
-                out.append(box)
+    /// Boxes under this share of their usable volume get one last try at joining another box.
+    static let sparseFill = 0.4
+
+    /// Fills boxes properly once the first pass has grouped them by room, kind and fragility.
+    /// Per destination room (never the open-first tote or the keep-with-you box):
+    /// 1. Biggest box first, each box takes in the largest other box that fits with it: compatible
+    ///    kinds (`DraftBox.combined`), the combined volume within one box's usable litres, the weight
+    ///    within its `maxKg` (8 kg if anything in it is fragile). The result can move up a size
+    ///    (small → medium → large), since one bigger box beats two half-empty ones.
+    /// 2. Any box still under `sparseFill` joins another box of its room with looser kind rules
+    ///    (the safety rules still hold: no books with fragile things, kitchen only with kitchen).
+    static func consolidate(_ boxes: [DraftBox]) -> [DraftBox] {
+        var out = boxes
+        func capacityOrder(_ ids: [Int]) -> [Int] {
+            ids.sorted { a, b in
+                let x = out[a], y = out[b]
+                if x.size.usableLitres != y.size.usableLitres { return x.size.usableLitres > y.size.usableLitres }
+                if abs(x.litres - y.litres) > 1e-9 { return x.litres > y.litres }
+                return a < b
+            }
+        }
+        // 1. Strict pass.
+        var changed = true
+        while changed {
+            changed = false
+            let open = out.indices.filter { !out[$0].special }
+            hosts: for h in capacityOrder(open) {
+                let guests = open.filter { $0 != h && out[$0].room == out[h].room }.sorted { a, b in
+                    abs(out[a].litres - out[b].litres) > 1e-9 ? out[a].litres > out[b].litres : a < b
+                }
+                for g in guests {
+                    if let merged = out[h].combined(with: out[g], relaxed: false) {
+                        out[h] = merged
+                        out.remove(at: g)
+                        changed = true
+                        break hosts
+                    }
+                }
+            }
+        }
+        // 2. Absorb sparse boxes.
+        changed = true
+        while changed {
+            changed = false
+            let open = out.indices.filter { !out[$0].special }
+            let sparse = open.filter { out[$0].fill < sparseFill }.sorted { a, b in
+                abs(out[a].fill - out[b].fill) > 1e-9 ? out[a].fill < out[b].fill : a < b
+            }
+            outer: for g in sparse {
+                for h in capacityOrder(open.filter { $0 != g && out[$0].room == out[g].room }) {
+                    if let merged = out[h].combined(with: out[g], relaxed: true) {
+                        out[h] = merged
+                        out.remove(at: g)
+                        changed = true
+                        break outer
+                    }
+                }
             }
         }
         return out
@@ -387,7 +469,7 @@ public enum PackingPlanner {
             } else if d.kinds == [.keepWithYou] {
                 title = "Keep with you · photos and valuables"
             } else {
-                title = "\(d.room) · \(d.kinds.map(\.label).joined(separator: " and "))"
+                title = "\(d.room) · \(Reasons.list(d.kinds.map(\.label)))"
             }
             return MovingBox(
                 id: i + 1, size: d.size, room: d.room, title: title,
@@ -539,6 +621,8 @@ struct DraftBox: Sendable {
     var fragile: Bool
     var lightOnly: Bool
     var lines: [DraftLine] = []
+    /// Set when soft things were packed around fragile ones.
+    var padding: Padding?
 
     init(size: BoxSize, room: String, kinds: [PackKind], fragile: Bool, lightOnly: Bool) {
         self.size = size
@@ -577,26 +661,120 @@ struct DraftBox: Sendable {
         }
     }
 
-    func canMerge(_ other: DraftBox) -> Bool {
-        guard !special, !other.special, room == other.room, size == other.size, fragile == other.fragile else { return false }
-        let merged = kinds + other.kinds.filter { !kinds.contains($0) }
-        guard merged.count <= 2, fill < 0.5 || other.fill < 0.5 else { return false }
-        guard litres + other.litres <= size.usableLitres * 0.95, kg + other.kg <= capKg + 1e-9 else { return false }
-        if lightOnly && other.lines.contains(where: { $0.kg > 1.0 }) { return false }
-        if other.lightOnly && lines.contains(where: { $0.kg > 1.0 }) { return false }
+    /// This box and `other` packed together, in the smallest box that holds both, or nil when they
+    /// shouldn't or can't share. `relaxed` (the sparse-box pass) lets any kinds share except the
+    /// safety rules: books never with fragile things, kitchen only with kitchen (or soft padding
+    /// around fragile dishes), bathroom only with bathroom, a wardrobe box only takes soft things.
+    func combined(with other: DraftBox, relaxed: Bool) -> DraftBox? {
+        guard !special, !other.special, room == other.room else { return nil }
+        let fragileResult = fragile || other.fragile
+        guard Self.kindsShare(self, other, fragileResult: fragileResult, relaxed: relaxed) else { return nil }
+        if lightOnly && other.lines.contains(where: { $0.kg > 1.0 }) { return nil }
+        if other.lightOnly && lines.contains(where: { $0.kg > 1.0 }) { return nil }
+        guard let rankA = size.nestRank, let rankB = other.size.nestRank else { return nil }
+        // Only up the nesting chain (each size holds the one before it), so whatever fit still fits.
+        // Dish packs and wardrobe boxes are only used when one side already is one.
+        let allowed: Set<BoxSize> = [.small, .medium, .large, size, other.size]
+        let totalLitres = litres + other.litres, totalKg = kg + other.kg
+        let target = BoxSize.allCases
+            .filter { allowed.contains($0) && ($0.nestRank ?? -1) >= max(rankA, rankB) }
+            .sorted { ($0.nestRank ?? 0) < ($1.nestRank ?? 0) }
+            .first { totalLitres <= $0.usableLitres + 1e-9 && totalKg <= Self.capKg($0, fragile: fragileResult) + 1e-9 }
+        guard let target else { return nil }
+
+        var out = self
+        out.size = target
+        out.fragile = fragileResult
+        out.lightOnly = lightOnly || other.lightOnly
+        for kind in other.kinds where !out.kinds.contains(kind) { out.kinds.append(kind) }
+        out.kinds.sort()
+        for line in other.lines {
+            if let i = out.lines.firstIndex(where: { $0.itemId == line.itemId && $0.name == line.name }) {
+                out.lines[i].quantity += line.quantity
+            } else {
+                out.lines.append(line)
+            }
+        }
+        out.padding = padding ?? other.padding ?? Self.paddingNote(self, other)
+        return out
+    }
+
+    /// Soft things that pad fragile ones: folded clothes, bedding, throws.
+    static let paddingKinds: Set<PackKind> = [.clothes, .bedding]
+    static let softKinds: Set<PackKind> = [.clothes, .shoes, .bedding, .hanging]
+
+    /// Kinds that pack well together (beyond the same kind): books with desk papers and games,
+    /// cables and electronics with desk things, decor with lamps and electronics, soft with soft.
+    static let sharingPairs: Set<Set<PackKind>> = [
+        [.books, .desk], [.books, .misc], [.desk, .electronics], [.desk, .misc],
+        [.electronics, .decor], [.electronics, .lamps], [.electronics, .misc],
+        [.decor, .lamps], [.decor, .misc], [.lamps, .misc],
+    ]
+
+    static func kindsShare(_ a: DraftBox, _ b: DraftBox, fragileResult: Bool, relaxed: Bool) -> Bool {
+        let ka = Set(a.kinds), kb = Set(b.kinds), all = ka.union(kb)
+        // Never heavy books with fragile things.
+        if fragileResult && all.contains(.books) { return false }
+        // A wardrobe box keeps its hangers; only soft things go in under them.
+        if (a.size == .wardrobe || b.size == .wardrobe) && !all.isSubset(of: softKinds) { return false }
+        // Kitchen only with kitchen, or soft padding around fragile dishes.
+        if all.contains(.kitchen) && !all.isSubset(of: [.kitchen]) {
+            let (kitchenSide, otherSide, kitchenFragile) = ka.contains(.kitchen) ? (ka, kb, a.fragile) : (kb, ka, b.fragile)
+            return kitchenSide == [.kitchen] && kitchenFragile && otherSide.isSubset(of: paddingKinds)
+        }
+        if all.contains(.bathroom) && all != [.bathroom] { return false }
+        if relaxed { return true }
+        for x in ka {
+            for y in kb where x != y {
+                if softKinds.contains(x) && softKinds.contains(y) { continue }
+                let pair: Set<PackKind> = [x, y]
+                if sharingPairs.contains(pair) { continue }
+                // Soft things pad decor, lamps and electronics.
+                if !pair.isDisjoint(with: paddingKinds) && !pair.isDisjoint(with: [.decor, .lamps, .electronics]) { continue }
+                return false
+            }
+        }
         return true
     }
 
-    mutating func absorb(_ other: DraftBox) {
-        for kind in other.kinds where !kinds.contains(kind) { kinds.append(kind) }
-        kinds.sort()
-        lightOnly = lightOnly || other.lightOnly
-        for line in other.lines {
-            if let i = lines.firstIndex(where: { $0.itemId == line.itemId && $0.name == line.name }) {
-                lines[i].quantity += line.quantity
-            } else {
-                lines.append(line)
+    /// "Throws" and "vases" when one side is all padding and the other holds the fragile things.
+    static func paddingNote(_ a: DraftBox, _ b: DraftBox) -> Padding? {
+        func soft(_ d: DraftBox) -> Bool { Set(d.kinds).isSubset(of: paddingKinds) }
+        let pair: (DraftBox, DraftBox)? = soft(a) && b.fragile && !soft(b) ? (a, b) : soft(b) && a.fragile && !soft(a) ? (b, a) : nil
+        guard let (pad, held) = pair else { return nil }
+        func biggest(_ lines: [DraftLine]) -> DraftLine? {
+            lines.enumerated().max { x, y in
+                let lx = x.element.litres * Double(x.element.quantity), ly = y.element.litres * Double(y.element.quantity)
+                return abs(lx - ly) > 1e-9 ? lx < ly : x.offset > y.offset
+            }?.element
+        }
+        guard let p = biggest(pad.lines), let f = biggest(held.lines.filter { $0.itemId != nil }) ?? biggest(held.lines) else { return nil }
+        return Padding(soft: Padding.short(p.name), fragile: Padding.short(f.name))
+    }
+
+    /// Soft things padding fragile ones in the same box, for the box's reason.
+    struct Padding: Sendable, Hashable {
+        var soft: String
+        var fragile: String
+
+        /// "Throws and cushions" -> "throws"; "Floor lamp shade" -> "floor lamp shade".
+        static func short(_ name: String) -> String {
+            var head = name
+            for sep in [" and ", ",", " (", " ·"] {
+                if let r = head.range(of: sep) { head = String(head[..<r.lowerBound]) }
             }
+            head = head.trimmingCharacters(in: .whitespaces)
+            guard let first = head.first else { return name }
+            // Keep "IKEA" or "TV" as is; lowercase ordinary words.
+            if head.dropFirst().first?.isUppercase == true { return head }
+            return first.lowercased() + head.dropFirst()
+        }
+
+        /// "Throws pad the vases, under 8 kg"
+        func reason(kg: Int) -> String {
+            let verb = soft.hasSuffix("s") ? "pad" : "pads"
+            let text = "\(soft.prefix(1).uppercased())\(soft.dropFirst()) \(verb) the \(fragile), under \(kg) kg"
+            return text.count <= 60 ? text : "Soft things pad the fragile ones, under \(kg) kg"
         }
     }
 }
@@ -657,16 +835,31 @@ enum Reasons {
         room == PackingPlanner.keepWithYouRoom ? "Box \(box) · \(why)" : "\(room) → Box \(box) · \(why)"
     }
 
+    /// "books", "books and desk supplies", "decor, lamps and electronics"
+    static func list(_ words: [String]) -> String {
+        guard words.count > 2 else { return words.joined(separator: " and ") }
+        return words.dropLast().joined(separator: ", ") + " and " + words.last!
+    }
+
     /// Why these things share a box.
     static func box(_ d: DraftBox) -> String {
         let kg = Int(d.capKg.rounded())
         if d.kinds == [.openFirst] { return "First-night things, all in one place" }
         if d.kinds == [.keepWithYou] { return "Valuables and keepsakes: never on the truck" }
+        if let padding = d.padding { return padding.reason(kg: kg) }
         if d.lightOnly { return "Lamp shade: light things only, under \(kg) kg" }
         if d.fragile { return "Fragile: wrapped, nothing heavy, under \(kg) kg" }
-        if d.size == .wardrobe { return "Hanging clothes stay on their hangers" }
-        if d.kinds.contains(.books) || d.kinds.contains(.desk) { return "Heavy: small box, under \(kg) kg" }
+        if d.size == .wardrobe {
+            return d.kinds == [.hanging] ? "Hanging clothes stay on their hangers" : "On hangers, soft things packed below"
+        }
+        let heavy = d.kinds.contains(.books) || d.kinds.contains(.desk)
+        if heavy && d.size == .small { return "Heavy: small box, under \(kg) kg" }
         if d.kinds.allSatisfy({ [.clothes, .shoes, .bedding].contains($0) }) { return "Light and soft: big box, under \(kg) kg" }
+        if d.kinds.count > 1 {
+            let text = "Shared: \(list(d.kinds.map(\.label))), under \(kg) kg"
+            return text.count <= 60 ? text : "Shared to fill the box, under \(kg) kg"
+        }
+        if heavy { return "Heavy: packed tight, under \(kg) kg" }
         if d.kinds == [.kitchen] { return "Pots and pans: sturdy, under \(kg) kg" }
         return "Same room, same kind, under \(kg) kg"
     }
