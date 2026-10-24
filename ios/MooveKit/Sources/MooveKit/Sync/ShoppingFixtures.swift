@@ -2,7 +2,7 @@ import Foundation
 
 /// Offline demo for the Shopping screen (#15): what the new home still needs, the buy agent's
 /// replayed deals (labeled "sample data", like the worker's fixture deal source), one purchase
-/// waiting on approval, and one simulated Visa checkout that already settled.
+/// waiting on approval, one simulated Visa checkout that already settled, and one that was declined.
 ///
 /// Ids stay below the inventory fixture's max so `FixtureBackend` never reuses them for new rows.
 extension DemoFixtures {

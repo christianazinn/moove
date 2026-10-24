@@ -164,6 +164,12 @@ import Testing
         let failed = states.compactMap { if case .payment(let p) = $0, p.status == .failed { p } else { nil } }
         #expect(failed.count == 1)
         #expect(s.checkoutProblem(dealId: failed[0].refId) != nil)
+
+        // Every failed payment, Visa or x402, says why.
+        for p in s.payments where p.status == .failed {
+            #expect(s.failureReason(for: p) != nil, "payment \(p.id) has no reason")
+        }
+        #expect(s.payments.filter { $0.status != .failed }.allSatisfy { s.failureReason(for: $0) == nil })
     }
 
     @Test func failedCheckoutUnlocksChoosingAnotherDeal() async throws {

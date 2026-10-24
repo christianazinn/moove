@@ -200,6 +200,17 @@ extension SyncSnapshot {
         latestProblem(refTable: "shopping_item", refId: item.id)?.message
     }
 
+    /// Why a failed payment failed, if an agent said: the buy agent's note on the deal for Visa,
+    /// or the x402 rail's failed step (same agent and amount, within a minute) for x402.
+    public func failureReason(for payment: Payment) -> String? {
+        guard payment.status == .failed else { return nil }
+        if payment.rail == .visa, payment.refTable == "deal" { return checkoutProblem(dealId: payment.refId) }
+        return agentEvents.first { e in
+            e.isFailedX402Attempt && e.agent == payment.agent && e.data.amountUsdMicros == payment.amountUsdMicros
+                && abs(e.createdAt.timeIntervalSince(payment.createdAt)) <= 60
+        }?.message
+    }
+
     /// The deal a purchase approval is for, if synced.
     public func deal(for approval: Approval) -> Deal? {
         guard approval.kind == .purchase else { return nil }
