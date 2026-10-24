@@ -18,7 +18,7 @@ export function saveToken(file: string, token: string): boolean {
     writeFileSync(file, token);
     return true;
   } catch (err) {
-    console.warn(`[spacetime] couldn't save the worker token to ${file} (${(err as Error)?.message ?? err})); only SPACETIME_WORKER_TOKEN keeps this identity across restarts`);
+    console.warn(`[spacetime] couldn't save the worker token to ${file} (${(err as Error)?.message ?? err}); only SPACETIME_WORKER_TOKEN keeps this identity across restarts`);
     return false;
   }
 }

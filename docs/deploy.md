@@ -28,6 +28,7 @@ env file on a Droplet), never in `fly.toml`, an app spec in git, or the image.
 | `PUBLIC_UPLOAD_BASE_URL` | no | The public https URL of the deployment, no trailing slash, e.g. `https://moove-agents.fly.dev`. Upload URLs written into the DB start with this, and eBay needs https photos. |
 | `UPLOAD_PORT` | no | `8787` (set in the image; the platform routes its public port to it) |
 | `UPLOAD_DIR` | no | `/app/uploads` (set in the image; mount the volume here) |
+| `UPLOAD_MAX_BYTES` | no | `52428800` (50 MB, sized for USDZ scans). |
 | `ANTHROPIC_API_KEY` | **yes** | Vision + listing agents. |
 | `MODEL_VISION`, `MODEL_FAST`, `MODEL_AGENT` | no | Defaults `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`. |
 | `APIFY_TOKEN` | **yes** | Pricing comps. Without it pricing uses only cached `fixtures/comps/` (baked into the image). |
@@ -51,7 +52,8 @@ machine, don't paste it anywhere shared), then override `SPACETIME_URI`, `SPACET
 cd agents
 docker build -t moove-agents .
 # Against your own local DB (never maincloud from a test):
-docker run --rm --network host --read-only --tmpfs /tmp -v "$PWD/uploads-test:/app/uploads" \
+# Test uploads go in a temp dir, not under agents/ (it would be baked into the next image build).
+docker run --rm --network host --read-only --tmpfs /tmp -v "$(mktemp -d):/app/uploads" \
   -e SPACETIME_URI=ws://localhost:3000 -e SPACETIME_DB_NAME=<your-db> \
   -e UPLOAD_PORT=8796 -e PUBLIC_UPLOAD_BASE_URL=http://localhost:8796 -e PRICING_PAY_X402=0 moove-agents
 curl -s localhost:8796/healthz   # {"ok":true}
@@ -111,6 +113,10 @@ the Droplet.
    marked secret, including `SPACETIME_WORKER_TOKEN` (paste the file contents on Christian's machine).
 4. Deploy, note the `https://<app>.ondigitalocean.app` URL, set `PUBLIC_UPLOAD_BASE_URL` to it, and
    redeploy (the first deploy doesn't know its URL yet; stop the laptop worker before this one).
+
+App Platform redeploys are rolling: the new container starts and passes its health check before the old
+one gets SIGTERM, so for a few seconds two workers run against the DB (the worker exits as soon as it gets
+SIGTERM, which keeps the overlap short). Don't redeploy while an item is mid-pipeline, or prefer the Droplet.
 
 ## Option B: Fly.io
 

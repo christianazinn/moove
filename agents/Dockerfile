@@ -13,5 +13,5 @@ COPY . .
 RUN mkdir -p /app/uploads
 EXPOSE 8787
 # Runs as root so a freshly mounted (root-owned) platform volume is writable.
-# node directly (not npm start) so SIGTERM from the platform reaches the worker.
+# node directly (not npm start) so SIGTERM from the platform reaches the worker (src/index.ts exits on it).
 CMD ["node", "--import", "tsx", "src/index.ts"]
