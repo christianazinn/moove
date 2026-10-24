@@ -2,15 +2,22 @@
 //   scan (import_scan_v2) -> room photo sweep -> pricing (x402, simulated rail) -> auto-sort ->
 //   listing (+ approval) -> new home -> shopping list -> deals -> fraud -> purchase (+ approval,
 //   simulated Visa) -> payments,
+// plus the commerce guarantees the demo relies on: x402 calls past the pricing budget are refused
+// before paying, the card budget and the fraud block stop a purchase before any approval or charge,
+// and every spending-log row is complete and labeled simulated.
 // driven through the same reducers the iOS app calls, against a real worker process.
 //
-// Needs `spacetime start` (local server on :3000). Publishes the current module to a fresh database
+// Needs `spacetime start` (local server on :3000, or wherever E2E_URI points). Publishes the current module to a fresh database
 // (E2E_DB, default moove-e2e, wiped each run), starts its own worker on spare ports, runs the stages,
 // prints a PASS/FAIL table and exits non-zero on any failure.
 //
-// Claude calls go through LLM_REPLAY (default auto: recorded answers in fixtures/llm are replayed;
-// a miss calls the API once and records it). --replay forbids live calls (CI-style); --live always calls.
-// Apify is never called: the demo items have committed comps caches, deals come from fixtures.
+// Safe by default, even with a dev's .env.local loaded (it has real keys on some laptops):
+//   - Claude: LLM_REPLAY=replay (recorded answers in fixtures/llm; a miss fails, never calls the API).
+//     Opt in with E2E_LLM=auto (a miss calls the API once and records it) or E2E_LLM=record / --live.
+//   - x402: X402_SIMULATE=1 for the worker, so CDP keys never sign Base Sepolia payments. Opt in with
+//     E2E_REAL_X402=1 (the commerce stages then fail, since they assert simulated rows).
+//   - Visa is always the simulated provider; Apify and fal are never called (APIFY_TOKEN/FAL_KEY blanked).
+// The worker stage and the table header say which modes ran.
 //
 // Usage (from agents/): npm run e2e [-- --replay | --live] [-- --keep]   (--keep leaves the worker running)
 import "./env.js";
@@ -25,12 +32,27 @@ import { DEMO_OBJECTS } from "./demo-room.js";
 
 const args = process.argv.slice(2);
 const KEEP = args.includes("--keep");
-const LLM_MODE = args.includes("--replay") ? "replay" : args.includes("--live") ? "record" : "auto";
+const LLM_OPT_IN = args.includes("--live") ? "record" : (process.env.E2E_LLM ?? "").trim();
+if (LLM_OPT_IN && !["replay", "auto", "record"].includes(LLM_OPT_IN)) {
+  console.error(`E2E_LLM must be replay, auto or record (got ${LLM_OPT_IN})`);
+  process.exit(2);
+}
+const LLM_MODE = args.includes("--replay") ? "replay" : LLM_OPT_IN || "replay";
+const REAL_X402 = process.env.E2E_REAL_X402 === "1";
+const MODES = `LLM_REPLAY=${LLM_MODE}, x402=${REAL_X402 ? "REAL (Base Sepolia, E2E_REAL_X402=1)" : "simulated"}, visa=simulated`;
 const DB = process.env.E2E_DB || "moove-e2e";
 const URI = process.env.E2E_URI || "ws://localhost:3000";
 const PORT = Number(process.env.E2E_UPLOAD_PORT || 8790);
 const X402_PORT = Number(process.env.E2E_X402_PORT || 8412);
 const LOG_DIR = path.join(".cache", "e2e");
+// Commerce limits the worker runs with, tight enough that the guardrail stages below trip them.
+// Pricing buys one $0.01 comps report per item over x402 (COMPS_QUOTE_USD_MICROS), so a $0.05 budget
+// pays for 5 of the 9 demo items and the rest must be refused (pricing falls back to the direct lookup).
+const X402_CAP_USDC = "0.05";
+const X402_QUOTE_MICROS = 10_000n;
+// The purchase stage's cheapest card deal (~$60) fits in $200; the most expensive card deal doesn't fit in what's left.
+const VISA_CAP_USD = "200";
+const FRAUD_BLOCK = 0.7; // the buy agent's default BUY_FRAUD_BLOCK, pinned so a dev's env can't change it
 if (!/localhost|127\.0\.0\.1/.test(URI)) {
   console.error(`e2e only runs against a local SpacetimeDB (got ${URI})`);
   process.exit(2);
@@ -120,6 +142,15 @@ function startWorker(): { child: ChildProcess; log: string; ready: Promise<void>
     X402_PORT: String(X402_PORT),
     LLM_REPLAY: LLM_MODE,
     VISA_PROVIDER: "simulated",
+    // Even if a dev's .env.local has CDP keys: no Base Sepolia payments unless explicitly asked for.
+    X402_SIMULATE: REAL_X402 ? "0" : "1",
+    AGENT_SPEND_CAP_USDC: X402_CAP_USDC,
+    X402_MAX_PER_CALL_USDC: "0.10",
+    VISA_SPEND_CAP_USD: VISA_CAP_USD,
+    VISA_MAX_PER_PURCHASE_USD: "750",
+    BUY_FRAUD_BLOCK: String(FRAUD_BLOCK),
+    BUY_AUTO_CHOOSE: "0",
+    PANGRAM_URL: "", // no AI-text detector call: fraud scores stay rule-based and deterministic
     X402_SEED_BUDGETS: "0",
     VISA_SEED_BUDGETS: "0",
     FAL_KEY: "",
@@ -152,9 +183,36 @@ function stopWorker(child: ChildProcess): void {
   }
 }
 
+// Connects to the test database, optionally with a saved token (the worker's, to plant test data).
+function connectAs(token?: string, subscribe = true): Promise<{ conn: DbConnection; identity: Identity }> {
+  return new Promise((resolve, reject) => {
+    let b = DbConnection.builder().withUri(URI).withDatabaseName(DB);
+    if (token) b = b.withToken(token);
+    b.onConnect((conn, identity) => {
+      if (!subscribe) return resolve({ conn, identity });
+      conn.subscriptionBuilder()
+        .onApplied(() => resolve({ conn, identity }))
+        .onError(ctx => reject(ctx.event ?? new Error("subscription failed")))
+        .subscribe(Object.values(tables));
+    })
+      .onConnectError((_ctx, err) => reject(err))
+      .build();
+  });
+}
+
+const parseData = (json: string): Record<string, unknown> => {
+  try {
+    return json ? (JSON.parse(json) as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+};
+
 let worker: ReturnType<typeof startWorker> | undefined;
 let conn: DbConnection | undefined;
 let me: Identity | undefined;
+// Error events the guardrail stages triggered on purpose; the final agent-log check ignores exactly these.
+const expectedErrors = new Set<bigint>();
 
 // ---------- stages ----------
 await stage("preflight: local SpacetimeDB", async () => {
@@ -164,7 +222,9 @@ await stage("preflight: local SpacetimeDB", async () => {
 });
 
 await stage(`publish module to ${DB} (fresh)`, async () => {
-  const r = spawnSync("spacetime", ["publish", "-s", "local", "-p", "../spacetime", "--delete-data", "--yes=all", DB], { encoding: "utf8" });
+  // Publish to the server E2E_URI points at (not the "local" nickname, which is always :3000).
+  const server = URI.replace(/^ws/, "http");
+  const r = spawnSync("spacetime", ["publish", "-s", server, "-p", "../spacetime", "--delete-data", "--yes=all", DB], { encoding: "utf8" });
   if (r.status !== 0) throw new Error((r.stderr || r.stdout).split("\n").filter(Boolean).slice(-3).join(" | "));
   return { detail: (r.stdout.match(/(Created|Updated)[^\n]*/) ?? ["published"])[0] };
 });
@@ -172,23 +232,11 @@ await stage(`publish module to ${DB} (fresh)`, async () => {
 await stage("worker starts against it", async () => {
   worker = startWorker();
   await worker.ready;
-  return { detail: `LLM_REPLAY=${LLM_MODE}, uploads on :${PORT}, log ${worker.log}` };
+  return { detail: `${MODES}, uploads on :${PORT}, log ${worker.log}` };
 });
 
 await stage("app user connects + register_user", async () => {
-  const c = await new Promise<{ conn: DbConnection; identity: Identity }>((resolve, reject) => {
-    DbConnection.builder()
-      .withUri(URI)
-      .withDatabaseName(DB)
-      .onConnect((conn, identity) => {
-        conn.subscriptionBuilder()
-          .onApplied(() => resolve({ conn, identity }))
-          .onError(ctx => reject(ctx.event ?? new Error("subscription failed")))
-          .subscribe(Object.values(tables));
-      })
-      .onConnectError((_ctx, err) => reject(err))
-      .build();
-  });
+  const c = await connectAs();
   conn = c.conn;
   me = c.identity;
   await conn.reducers.registerUser({ auth0Sub: "", name: "E2E Tester", email: "e2e@example.invalid" });
@@ -242,6 +290,32 @@ await stage("pricing: every item priced from cached comps (x402 simulated)", asy
   const pays = [...conn!.db.payment.iter()].filter(p => p.rail === "x402");
   const est = done.map(i => `${i.name.split(" ").slice(-1)[0]} $${Number(i.estValueCents) / 100}`).join(", ");
   return { detail: `${done.length} priced; ${pays.length} x402 payment rows (simulated: ${pays.every(p => p.simulated)}); ${est}` };
+});
+
+await stage(`x402 budget: calls past the $${X402_CAP_USDC} pricing cap refused before paying`, async () => {
+  const cap = BigInt(Math.round(Number(X402_CAP_USDC) * 1e6));
+  const affordable = Number(cap / X402_QUOTE_MICROS);
+  const pricingEvents = () =>
+    [...conn!.db.agentEvent.iter()].filter(e => me && e.owner.isEqual(me) && e.agent === "pricing").map(e => ({ e, d: parseData(e.dataJson) }));
+  const refused = await until(`${DEMO_OBJECTS.length - affordable} x402 refusals`, () => {
+    const r = pricingEvents().filter(({ e, d }) => e.kind === "error" && d.rail === "x402" && d.outcome === "refused");
+    return r.length >= DEMO_OBJECTS.length - affordable ? r : undefined;
+  }, 15_000);
+  const pays = [...conn!.db.payment.iter()].filter(p => me && p.owner.isEqual(me) && p.rail === "x402");
+  const settled = pays.filter(p => p.status === "settled");
+  const total = settled.reduce((a, p) => a + p.amountUsdMicros, 0n);
+  if (settled.length !== affordable || total > cap) throw new Error(`${settled.length} settled x402 payments totalling ${total} micros, want ${affordable} within the ${cap}-micro cap`);
+  const evs = pricingEvents();
+  for (const { e, d } of refused) {
+    if (!/^Refused x402 payment for .*would exceed the pricing budget/.test(e.message)) throw new Error(`unexpected refusal message: ${e.message}`);
+    if (d.refused !== true || BigInt(String(d.remainingUsdMicros)) >= X402_QUOTE_MICROS) throw new Error(`refusal data wrong: ${e.dataJson}`);
+    // Refused before paying: no "Paying ..." step and no payment row for that item, and it was still priced.
+    if (evs.some(x => x.e.refId === e.refId && x.d.outcome === "paying")) throw new Error(`item ${e.refId}: refused, but a "paying" step was logged for it`);
+    if (pays.some(p => p.refTable === "item" && p.refId === e.refId)) throw new Error(`item ${e.refId}: refused, but has an x402 payment row`);
+    if (!evs.some(x => x.e.refId === e.refId && x.e.kind === "tool_call" && x.d.fallback === true && x.d.refused === true)) throw new Error(`item ${e.refId}: no direct-lookup fallback after the refusal`);
+    expectedErrors.add(e.id);
+  }
+  return { detail: `${settled.length} paid (${total} of ${cap} micros), ${refused.length} refused with no "paying" step or payment row, priced via direct lookup` };
 });
 
 await stage("sort: keep/sell/donate/trash, sentimental left to the user", async () => {
@@ -330,11 +404,92 @@ await stage("purchase: choose card deal -> approve -> simulated Visa payment", a
   return { detail: `"${card.title}" (${card.source}) $${Number(card.priceCents) / 100}: payment ${pay.status}, simulated: ${pay.simulated}` };
 });
 
+// Shared by the two Visa guardrail stages: a refused purchase gets no approval request and no charge.
+const myDeals = () => [...conn!.db.deal.iter()].filter(d => me && d.owner.isEqual(me));
+const openItems = () => [...conn!.db.shoppingItem.iter()].filter(s => me && s.owner.isEqual(me) && s.status === "found" && s.chosenDealId === 0n);
+const cardRemainingCents = () => {
+  const spent = [...conn!.db.payment.iter()]
+    .filter(p => p.rail === "visa" && p.agent === "buy" && (p.status === "pending" || p.status === "settled"))
+    .reduce((a, p) => a + p.amountUsdMicros / 10_000n, 0n);
+  return BigInt(Math.round(Number(VISA_CAP_USD) * 100)) - spent;
+};
+async function expectBlocked(dealId: bigint, why: RegExp): Promise<string> {
+  const ev = await until(`buy agent refusing deal ${dealId}`, () =>
+    [...conn!.db.agentEvent.iter()].find(e => e.agent === "buy" && e.refTable === "deal" && e.refId === dealId && e.kind === "error" && e.message.startsWith("Not buying")), 30_000);
+  if (!why.test(ev.message)) throw new Error(`refused for the wrong reason: ${ev.message}`);
+  const ap = [...conn!.db.approval.iter()].find(a => a.kind === "purchase" && a.refId === dealId);
+  if (ap) throw new Error(`a purchase approval (${ap.status}) was requested for the refused deal`);
+  const pay = [...conn!.db.payment.iter()].find(p => p.rail === "visa" && p.refId === dealId);
+  if (pay) throw new Error(`a Visa payment row (${pay.status}) exists for the refused deal`);
+  expectedErrors.add(ev.id);
+  return ev.message;
+}
+
+const capItem = await stage(`visa guardrail: over the $${VISA_CAP_USD} buy card budget -> refused, no approval/charge`, async () => {
+  const left = cardRemainingCents();
+  const open = new Set(openItems().map(s => s.id));
+  const deal = myDeals()
+    .filter(d => open.has(d.shoppingItemId) && CARD_CHECKOUT_SOURCES.has(d.source) && d.fraudScore >= 0 && d.fraudScore < FRAUD_BLOCK && d.priceCents > left)
+    .sort((a, b) => Number(b.priceCents - a.priceCents))[0];
+  if (!deal) throw new Error(`no screened card deal over the remaining $${Number(left) / 100} to test with`);
+  await conn!.reducers.chooseDeal({ shoppingItemId: deal.shoppingItemId, dealId: deal.id });
+  const msg = await expectBlocked(deal.id, /would exceed the buy card budget/);
+  if (cardRemainingCents() !== left) throw new Error(`card budget moved from ${left} to ${cardRemainingCents()} cents`);
+  return { detail: `$${Number(left) / 100} left: ${msg.replace(/^Not buying /, "")}`, value: deal.shoppingItemId };
+});
+
+await stage(`visa guardrail: fraud-flagged card deal (>= ${FRAUD_BLOCK}) -> refused, no approval/charge`, async () => {
+  // No fixture deal scores that high, so plant one with the classic scam script through the worker
+  // identity (add_deal is worker-only) and let the real fraud screen score it.
+  const token = readFileSync(`.worker-token.${DB}`, "utf8").trim();
+  const w = await connectAs(token, false);
+  const item = openItems().find(s => s.id !== capItem);
+  if (!item) throw new Error("no open shopping item left to plant a deal on");
+  const left = cardRemainingCents();
+  const priceCents = 4999n;
+  if (priceCents > left) throw new Error(`only $${Number(left) / 100} of card budget left, the planted deal would trip the cap instead`);
+  const url = `https://example.invalid/e2e-planted-scam/${item.id}`;
+  try {
+    await w.conn.reducers.addDeal({
+      shoppingItemId: item.id, source: "target", title: `${item.name}, brand new in box, Zelle only`,
+      priceCents, url, sellerInfo: "Target · new · ships · Visa checkout",
+    });
+  } finally {
+    w.conn.disconnect();
+  }
+  const deal = await until("planted deal fraud-screened", () => myDeals().find(d => d.url === url && d.fraudScore >= 0), 30_000);
+  if (deal.fraudScore < FRAUD_BLOCK) throw new Error(`fraud screen scored the planted scam ${deal.fraudScore.toFixed(2)} (${deal.fraudReasons.join("; ")}), want >= ${FRAUD_BLOCK}`);
+  await conn!.reducers.chooseDeal({ shoppingItemId: item.id, dealId: deal.id });
+  const msg = await expectBlocked(deal.id, /fraud screen scored it/);
+  return { detail: msg.replace(/^Not buying /, "").slice(0, 160) };
+});
+
+await stage("spending log: payment rows complete + simulated, [SIMULATED] events", async () => {
+  const pays = [...conn!.db.payment.iter()].filter(p => me && p.owner.isEqual(me));
+  const rails = new Set(pays.map(p => p.rail));
+  if (!rails.has("x402") || !rails.has("visa")) throw new Error(`want both rails in the log, got ${[...rails].join(", ") || "none"}`);
+  const bad = pays.filter(p =>
+    !p.agent || !p.purpose || !["x402", "visa"].includes(p.rail) || p.amountUsdMicros <= 0n ||
+    !["pending", "settled", "failed"].includes(p.status) || p.simulated !== true ||
+    (p.rail === "visa" ? !p.txHash.startsWith("sim_") : p.payee !== "simulated"));
+  if (bad.length) throw new Error(`${bad.length} bad payment row(s): ${bad.slice(0, 3).map(p => JSON.stringify({ agent: p.agent, rail: p.rail, amount: String(p.amountUsdMicros), status: p.status, simulated: p.simulated, payee: p.payee, txHash: p.txHash })).join(" ")}`);
+  if (pays.some(p => p.status === "pending")) throw new Error("a payment is still pending after checkout finished");
+  const payEvents = [...conn!.db.agentEvent.iter()]
+    .filter(e => me && e.owner.isEqual(me) && e.kind === "payment")
+    .map(e => ({ e, d: parseData(e.dataJson) }))
+    .filter(({ d }) => d.rail === "x402" || d.rail === "visa");
+  const unlabeled = payEvents.filter(({ e, d }) => d.simulated !== true || !e.message.startsWith("[SIMULATED] "));
+  if (unlabeled.length) throw new Error(`${unlabeled.length} payment event(s) not labeled simulated: ${unlabeled.slice(0, 3).map(x => x.e.message).join(" | ")}`);
+  const by = (r: string) => pays.filter(p => p.rail === r).map(p => p.status).join("/");
+  return { detail: `${pays.length} rows (x402 ${by("x402")}; visa ${by("visa")}), all simulated; ${payEvents.length} payment events, all "[SIMULATED] ..."` };
+});
+
 await stage("agent log: no unexpected errors", async () => {
   const evs = [...conn!.db.agentEvent.iter()].filter(e => me && e.owner.isEqual(me));
   // Expected noise: spend-cap refusals are designed behavior; transient retries recover.
   // No APIFY_TOKEN in a test run, so items the sweep adds or renames have no cached comps: expected.
-  const errs = evs.filter(e => e.kind === "error" && !/retrying in|Spend cap|APIFY_TOKEN not set and no cached comps/.test(e.message));
+  // The guardrail stages' refusals are expected too (exactly the events they asserted).
+  const errs = evs.filter(e => e.kind === "error" && !expectedErrors.has(e.id) && !/retrying in|Spend cap|APIFY_TOKEN not set and no cached comps/.test(e.message));
   if (errs.length) throw new Error(`${errs.length} error event(s): ${errs.slice(0, 3).map(e => `[${e.agent}] ${e.message.slice(0, 100)}`).join(" | ")}`);
   const agents = [...new Set(evs.map(e => e.agent))].sort();
   return { detail: `${evs.length} events from ${agents.join(", ")}` };
@@ -344,7 +499,7 @@ await stage("agent log: no unexpected errors", async () => {
 conn?.disconnect();
 if (worker && !KEEP) stopWorker(worker.child);
 const pad = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s.padEnd(n));
-console.log(`\nMoove E2E on ${URI}/${DB} (LLM_REPLAY=${LLM_MODE}) — ${Math.round((Date.now() - t0) / 1000)}s`);
+console.log(`\nMoove E2E on ${URI}/${DB} (${MODES}) — ${Math.round((Date.now() - t0) / 1000)}s`);
 console.log(`${pad("stage", 62)} ${pad("result", 6)} ${pad("time", 6)} detail`);
 for (const r of rows) console.log(`${pad(r.stage, 62)} ${pad(r.ok ? "PASS" : "FAIL", 6)} ${pad(`${(r.ms / 1000).toFixed(1)}s`, 6)} ${r.detail}`);
 const failed = rows.filter(r => !r.ok).length;
