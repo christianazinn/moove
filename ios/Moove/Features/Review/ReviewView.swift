@@ -1,137 +1,112 @@
 import SwiftUI
 import MooveKit
 
-/// Every item grouped by disposition. "Needs you" (possibly sentimental or
-/// undecided) is first. Any decision can be changed with a swipe or menu;
-/// user decisions are never overwritten by the agents.
+/// Items > Review. On top, a deck of the items only you can decide (possibly sentimental or
+/// undecided; Moove never decides those): swipe right to keep, left to sell, up to donate,
+/// down to trash. Below, "Where it goes": the Keep / Sell / Donate / Trash board, where any
+/// decision can be changed. User decisions are never overwritten by the agents.
 struct ReviewView: View {
     @Environment(MooveStore.self) private var store
+    /// Swiped cards waiting for the store to catch up, so the next card shows at once.
+    @State private var pending: Set<UInt64> = []
+    /// This visit's swipes, newest last, for Undo and "2 of 5".
+    @State private var history: [UInt64] = []
+    /// The board tile opened on iPhone.
+    @State private var selected: Disposition?
+    @State private var committed = 0
 
     var body: some View {
-        let sections = Review.sections(store.visibleItems)
-        // A plain List (not a ScrollView) so rows keep their swipe actions; the theme comes from
-        // clear row backgrounds, gutter insets and rule-colored separators.
-        List {
-            Section {
-                PageHeader(
-                    eyebrow: "03 — Review",
-                    title: "Decide what goes.",
-                    lede: "Keep, sell, donate or trash. Swipe a row to change it. Your calls always win over the agents'."
-                )
-                .padding(.top, 16)
-                .padding(.bottom, store.visibleItems.isEmpty ? 28 : 24)
-                .chromeRow()
-                if store.visibleItems.isEmpty {
-                    ReviewEmptyState().chromeRow()
+        let items = store.visibleItems
+        let deck = Review.deck(items).filter { !pending.contains($0.id) }
+        let piles = Review.piles(items.filter { !pending.contains($0.id) })
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                PageHeader(eyebrow: "03 — Review", title: deck.isEmpty ? "Where it goes." : "Your call.")
+                if items.isEmpty {
+                    ReviewEmptyState().padding(.top, 28)
                 } else {
-                    ReviewTotalsHeader(totals: Review.totals(store.visibleItems)).chromeRow()
-                    if !sections.contains(where: { $0.section == .needsYou }) {
-                        Label("All caught up: nothing needs you. Swipe any row to change it.", systemImage: "checkmark.circle")
-                            .monoMeta()
-                            .foregroundStyle(Theme.accentStrong)
-                            .padding(.top, 16)
-                            .chromeRow()
+                    if !deck.isEmpty {
+                        ReviewDeckView(cards: deck, comps: store.snapshot.comps, decidedCount: history.count,
+                                       canUndo: !history.isEmpty, onDecide: decide, onUndo: undo)
+                            .padding(.top, 24)
+                    } else if !history.isEmpty {
+                        ReviewAllDecided(totals: Review.totals(items), canUndo: true, onUndo: undo)
+                            .padding(.top, 24)
                     }
+                    ListHeader(title: "Where it goes") {
+                        if deck.isEmpty && history.isEmpty {
+                            Label("Nothing needs you", systemImage: "checkmark.circle")
+                                .monoText(12.5)
+                                .foregroundStyle(Theme.accentStrong)
+                                .accessibilityIdentifier("review.caughtUp")
+                        }
+                    }
+                    .padding(.top, 36)
+                    .padding(.bottom, 16)
+                    ReviewBoardView(
+                        piles: piles,
+                        keepGroups: Review.keepByRoom(piles[0].items, layout: Review.savedLayout(in: store.snapshot)),
+                        selected: $selected,
+                        onMove: move
+                    )
+                    closeups(items)
                 }
             }
-            .listSectionSeparator(.hidden)
-            let closeups = Review.wantingCloseups(store.visibleItems)
-            if !closeups.isEmpty {
-                // #276: one more photo would pin down these items' exact model, and so their price
-                Section {
-                    ListHeader(title: "A photo would help", count: "\(closeups.count)")
-                        .padding(.top, 40)
-                        .chromeRow()
-                    ForEach(closeups) { item in
-                        NavigationLink(value: item.id) { ReviewRow(item: item) }
-                            .ledgerListRow()
-                    }
-                    Text("Open one and tap Add another photo. Moove identifies and prices it again.")
-                        .monoMeta()
-                        .padding(.top, 12)
-                        .chromeRow()
-                }
-                .listSectionSeparator(.hidden)
-            }
-            ForEach(sections, id: \.section) { group in
-                Section {
-                    ListHeader(title: group.section.title, count: "\(group.items.count)")
-                        .padding(.top, 40)
-                        .chromeRow()
-                    ForEach(group.items) { item in
-                        NavigationLink(value: item.id) { ReviewRow(item: item) }
-                            .swipeActions(edge: .leading) { swipe(item, .keep); swipe(item, .sell) }
-                            .swipeActions(edge: .trailing) { swipe(item, .trash); swipe(item, .donate) }
-                            .contextMenu { DispositionMenu(item: item) }
-                            .ledgerListRow()
-                    }
-                    if group.section == .needsYou {
-                        Text("Moove never decides possibly sentimental items for you.")
-                            .monoMeta()
-                            .padding(.top, 12)
-                            .chromeRow()
-                    }
-                }
-                .listSectionSeparator(.hidden)
-            }
-            Color.clear.frame(height: 32).chromeRow()
+            .padding(.horizontal, Theme.gutter)
+            .padding(.top, 16)
+            .padding(.bottom, 48)
         }
-        .listStyle(.plain)
-        .environment(\.defaultMinListRowHeight, 0)
         .navigationTitle("Review")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: UInt64.self) { ItemDetailView(itemId: $0) }
         .mooveScreen()
+        .sensoryFeedback(.success, trigger: committed)
         .animation(.default, value: store.visibleItems)
-    }
-
-    private func swipe(_ item: Item, _ disposition: Disposition) -> some View {
-        Button(disposition.label, systemImage: disposition.systemImage) {
-            Task { await store.setDisposition(disposition, for: item) }
-        }
-        .tint(ReviewPalette.swipe(disposition))
-    }
-}
-
-/// Theme colors for dispositions on this screen (the shared `Disposition.tint` lives in ItemViews).
-enum ReviewPalette {
-    /// Swatch for the small dot beside a disposition, as in the summary's breakdown.
-    static func dot(_ d: Disposition) -> Color {
-        switch d {
-        case .keep: Theme.accent
-        case .sell: Theme.ochre
-        case .donate: Theme.slate
-        case .trash: Theme.stone
-        case .undecided: Theme.danger
+        .animation(.snappy, value: selected)
+        .onChange(of: store.visibleItems) { _, items in
+            // The store has the decision: stop hiding those cards (an undecided one comes back).
+            let stillWaiting = Set(Review.deck(items).map(\.id))
+            pending = pending.filter { stillWaiting.contains($0) }
+            history = history.filter { id in items.contains { $0.id == id } }
         }
     }
 
-    /// Swipe buttons draw white labels in both modes, so these stay dark and fixed.
-    static func swipe(_ d: Disposition) -> Color {
-        switch d {
-        case .keep: Theme.color(0x5E6D50)
-        case .sell: Theme.color(0x86621F)
-        case .donate: Theme.color(0x55657A)
-        case .trash: Theme.color(0x665E52)
-        case .undecided: Theme.color(0xA24D35)
+    // MARK: Decisions
+
+    private func decide(_ item: Item, _ disposition: Disposition) {
+        pending.insert(item.id)
+        history.append(item.id)
+        committed += 1
+        Task {
+            if !(await store.setDisposition(disposition, for: item)) {
+                pending.remove(item.id)
+                history.removeAll { $0 == item.id }
+            }
         }
     }
-}
 
-private extension View {
-    /// A non-interactive row (heading, note, stats): no separator, page background, gutter insets.
-    func chromeRow() -> some View {
-        listRowInsets(EdgeInsets(top: 0, leading: Theme.gutter, bottom: 0, trailing: Theme.gutter))
-            .listRowSeparator(.hidden)
-            .listRowBackground(Theme.bg)
+    /// Puts the last swiped card back on top of the deck (undecided, for you to decide again).
+    private func undo() {
+        guard let id = history.popLast(), let item = store.items.first(where: { $0.id == id }) else { return }
+        pending.remove(id)
+        Task { await store.setDisposition(.undecided, for: item) }
     }
 
-    /// An item row: page background and a full-width rule-colored separator.
-    func ledgerListRow() -> some View {
-        listRowInsets(EdgeInsets(top: 0, leading: Theme.gutter, bottom: 0, trailing: Theme.gutter))
-            .listRowBackground(Theme.bg)
-            .listRowSeparatorTint(Theme.line)
-            .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+    private func move(_ id: UInt64, _ disposition: Disposition) {
+        guard let item = store.items.first(where: { $0.id == id }), item.disposition != disposition || item.dispositionSource != .user else { return }
+        Task { await store.setDisposition(disposition, for: item) }
+    }
+
+    // MARK: Close-ups (#276)
+
+    @ViewBuilder
+    private func closeups(_ items: [Item]) -> some View {
+        let closeups = Review.wantingCloseups(items)
+        if !closeups.isEmpty {
+            ListHeader(title: "A photo would help", count: "\(closeups.count)")
+                .padding(.top, 40)
+            ForEach(closeups) { ReviewBoardRow(item: $0) }
+        }
     }
 }
 
@@ -146,94 +121,6 @@ private struct ReviewEmptyState: View {
         .ruled(.top)
         .ruled()
         .accessibilityElement(children: .combine)
-    }
-}
-
-struct ReviewRow: View {
-    let item: Item
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            ItemThumbnail(item: item, size: 56)
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(item.name).blockTitle().lineLimit(2)
-                    if item.maybeSentimental {
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.danger)
-                            .accessibilityLabel("Possibly sentimental")
-                    }
-                    Spacer(minLength: 8)
-                    Text(item.saleValueCents?.usd ?? "—").rowValue()
-                }
-                HStack(spacing: 8) {
-                    HStack(spacing: 6) {
-                        Circle().fill(ReviewPalette.dot(item.disposition)).frame(width: 7, height: 7)
-                            .accessibilityHidden(true)
-                        Text(item.disposition.label).monoText(12.5).foregroundStyle(Theme.text)
-                    }
-                    if item.dispositionSource == .user || item.disposition != .undecided {
-                        Text("·").monoText(12.5).foregroundStyle(Theme.faint).accessibilityHidden(true)
-                        Text(item.dispositionSource == .user ? "You decided" : "Auto").monoMeta()
-                    }
-                }
-                if let reason = item.dispositionReason, item.dispositionSource == .auto {
-                    Text(reason)
-                        .sansText(14)
-                        .foregroundStyle(Theme.muted)
-                        .lineLimit(2)
-                }
-            }
-        }
-        .padding(.vertical, 16)
-        .frame(minHeight: 44)
-    }
-}
-
-struct DispositionMenu: View {
-    @Environment(MooveStore.self) private var store
-    let item: Item
-
-    var body: some View {
-        ForEach(Disposition.choices, id: \.self) { d in
-            Button(d.label, systemImage: d.systemImage) { Task { await store.setDisposition(d, for: item) } }
-                .disabled(item.disposition == d && item.dispositionSource == .user)
-        }
-        Divider()
-        Button(item.maybeSentimental ? "Not sentimental" : "Mark sentimental", systemImage: item.maybeSentimental ? "heart.slash" : "heart") {
-            Task { await store.setSentimental(!item.maybeSentimental, for: item) }
-        }
-    }
-}
-
-struct ReviewTotalsHeader: View {
-    let totals: ReviewTotals
-
-    var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 0) {
-            GridRow {
-                StatFigure(label: "Expected sales", value: totals.expectedSaleCents.usd, tint: Theme.accentStrong)
-                    .padding(.vertical, 18)
-                StatFigure(label: "Items to move", value: "\(totals.itemsToMove)")
-                    .padding(.vertical, 18)
-            }
-            Rectangle().fill(Theme.line).frame(height: 1).gridCellUnsizedAxes(.horizontal)
-            GridRow {
-                StatFigure(label: "Volume to move",
-                           value: totals.volumeToMoveM3.formatted(.number.precision(.fractionLength(1))) + " m³")
-                    .padding(.vertical, 18)
-                if totals.needsYou > 0 {
-                    StatFigure(label: "Need you", value: "\(totals.needsYou)", tint: Theme.danger)
-                        .padding(.vertical, 18)
-                } else {
-                    StatFigure(label: "Need you", value: "0")
-                        .padding(.vertical, 18)
-                }
-            }
-        }
-        .ruled(.top)
-        .ruled()
     }
 }
 

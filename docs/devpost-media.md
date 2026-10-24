@@ -61,7 +61,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 
 ### 3. Items > Review: keep, sell, donate, trash
 - **Source:** CI `04-review`.
-- **State:** "03 — Review", "Decide what goes.", the totals **Expected sales $500**, **Items to move 7**, **Need you 1** (red), the **"Needs you"** section with the **Yamaha acoustic guitar** ("Possibly sentimental") and "Moove never decides possibly sentimental items for you.", then the Keep rows with their reasons (for example, Full size metal bed frame: "Beds rarely resell (~$77); ~$59 to move: keep").
+- **State:** "03 — Review", "Your call.", the **Needs you** deck ("1 of 1") with the **Yamaha acoustic guitar** card ("Sentimental" tag, $109, "Possibly sentimental - your call") and the Sell / Trash / Donate / Keep buttons under it, then the top of the **Where it goes** board: Keep (7 items, → new home), Sell ($500 expected sales), Donate and Trash tiles with the items' voxel models fanned on them.
 - **Caption:** "Moove suggests keep, sell, donate or trash with a reason for each, and leaves possibly sentimental items like the guitar to you (fixture data)."
 - **Track:** Anthropic (knowing where the model shouldn't decide), Best Planet-First Hack (donate and resell over trash).
 

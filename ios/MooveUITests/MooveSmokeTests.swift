@@ -27,41 +27,51 @@ final class MooveSmokeTests: XCTestCase {
         snap("01-tabs")
     }
 
-    func testReviewNeedsYouFirstAndSwipeToKeep() {
+    func testReviewDeckSwipeToKeepAndUndo() {
         launch()
         open(tab: "Items", segment: "Review")
-        let needsYou = text(matching: "Needs you")
-        let keep = text(matching: "Keep")
-        XCTAssertTrue(needsYou.waitForExistence(timeout: slow), "Needs you section")
-        XCTAssertTrue(keep.exists, "Keep section")
-        XCTAssertLessThan(needsYou.frame.minY, keep.frame.minY, "Needs you comes first")
+        // The seeded Bedroom's one sentimental item (#243) is the only card in the deck.
+        let deck = byId("review.deck")
+        XCTAssertTrue(deck.waitForExistence(timeout: slow), "Needs you deck")
+        XCTAssertTrue(text(matching: "Needs you").exists, "deck header")
+        XCTAssertTrue(byId("review.deck.progress").label.contains("1 of 1"), byId("review.deck.progress").label)
+        let card = byId("review.card.18")
+        XCTAssertTrue(card.exists, "guitar card")
+        XCTAssertTrue(card.label.hasPrefix("Yamaha acoustic guitar"), card.label)
+        let keepPile = byId("review.pile.keep")
+        XCTAssertTrue(keepPile.exists, "Keep pile on the board")
+        XCTAssertLessThan(deck.frame.minY, keepPile.frame.minY, "the deck leads when something needs you")
+        for d in ["keep", "sell", "donate", "trash"] {
+            XCTAssertTrue(byId("review.deck.\(d)").exists, "\(d) button under the card")
+        }
         snap("02-review")
 
-        // The seeded Bedroom's one sentimental item (#243).
-        let guitar = row(startingWith: "Yamaha acoustic guitar")
-        XCTAssertTrue(guitar.exists)
-        XCTAssertLessThan(guitar.frame.minY, keep.frame.minY, "guitar starts in Needs you")
-        guitar.swipeRight()
-        let keepAction = app.buttons["Keep"].firstMatch
-        XCTAssertTrue(keepAction.waitForExistence(timeout: slow), "Keep swipe action")
-        snap("02-swipe")
-        keepAction.tap()
+        // Swipe right = Keep.
+        card.swipeRight()
+        let done = byId("review.allDecided")
+        XCTAssertTrue(done.waitForExistence(timeout: slow), "All decided once the deck is empty")
+        XCTAssertFalse(card.exists, "card gone")
+        snap("02-swiped")
 
-        // Moved: now below the Keep header, and marked as the user's call.
-        sleep(1)  // list animation
-        XCTAssertTrue(text(containing: "Need you, 0").exists, "nothing needs you any more")
-        let moved = row(startingWith: "Yamaha acoustic guitar")
-        XCTAssertTrue(scrollTo(moved), "guitar still listed")
-        XCTAssertTrue(moved.label.contains("Keep") && moved.label.contains("You decided"), moved.label)
-        let keepHeader = text(matching: "Keep")
-        if keepHeader.exists {
-            XCTAssertGreaterThan(moved.frame.minY, keepHeader.frame.minY, "guitar moved under Keep")
-        }
+        // Undo puts it back on top; the Keep button decides it again.
+        byId("review.undo").firstMatch.tap()
+        XCTAssertTrue(byId("review.card.18").waitForExistence(timeout: slow), "Undo brings the card back")
+        byId("review.deck.keep").tap()
+        XCTAssertTrue(done.waitForExistence(timeout: slow), "All decided again")
+
+        // On the board: under Keep, marked as the user's call.
+        let keep = byId("review.pile.keep")
+        XCTAssertTrue(scrollTo(keep), "Keep tile")
+        XCTAssertTrue(keep.label.contains("8 items"), keep.label)
+        keep.tap()
+        let moved = byId("review.item.18")
+        XCTAssertTrue(scrollTo(moved), "guitar listed under Keep")
+        XCTAssertTrue(moved.label.contains("You decided"), moved.label)
         snap("02-kept")
-        // Back to the top for the next row.
-        for _ in 0..<4 { app.swipeDown() }
 
-        row(startingWith: "Floor lamp").tap()
+        let lamp = byId("review.item.14")
+        XCTAssertTrue(scrollTo(lamp), "Floor lamp under Keep")
+        lamp.tap()
         let picker = app.descendants(matching: .any)["item.disposition"].firstMatch
         XCTAssertTrue(picker.waitForExistence(timeout: slow), "disposition picker on item detail")
         XCTAssertTrue(app.navigationBars["Floor lamp"].exists)
@@ -283,8 +293,8 @@ final class MooveSmokeTests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", s)).firstMatch
     }
 
-    private func row(startingWith prefix: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).firstMatch
+    private func byId(_ id: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: id).firstMatch
     }
 
     private func snap(_ name: String) {

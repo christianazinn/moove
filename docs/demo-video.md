@@ -31,14 +31,14 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 
 ### 3. 0:27–0:39 Real comps from Apify
 - **VO:** "Then the pricing agent pulls what similar things actually sold for, eBay sold listings and Facebook Marketplace, scraped with Apify, and prices each item from the median."
-- **ON SCREEN:** Items > Review > tap **Mesh office chair** (or **IKEA Micke desk**): the estimate and "Comparable listings" with their sources.
+- **ON SCREEN:** Items > Review > tap the **Sell** tile > **Mesh office chair** (or the **Keep** tile > **IKEA Micke desk**): the estimate and "Comparable listings" with their sources.
 - **STATE:** Demo `4RZ9G8` (the seeded items price from committed real Apify scrapes, replayed and labeled `[REPLAYED]` in the event log).
 - **TRACK:** Apify.
-- **FALLBACK:** Offline demo, Items > Review > **Office chair** ($420, three comps). These are fixture comps: change the VO to "comps like these come from Apify's eBay-sold and Marketplace actors".
+- **FALLBACK:** Offline demo, Items > Review > **Sell** tile > **Office chair** ($420, three comps). These are fixture comps: change the VO to "comps like these come from Apify's eBay-sold and Marketplace actors".
 
 ### 4. 0:39–0:51 Sort, and two phones in sync
 - **VO:** "It suggests keep, sell, donate or trash, with a reason. It never decides sentimental things, like this guitar. Your roommate joins with a code, and SpacetimeDB keeps both phones in sync live."
-- **ON SCREEN:** Items > Review: the Needs you section with the Yamaha acoustic guitar and "Moove never decides possibly sentimental items for you." On phone A, swipe a row (e.g. Floor lamp) to **Sell**; phone B's Review moves it at the same moment. Split screen in the edit.
+- **ON SCREEN:** Items > Review: the **Needs you** card for the Yamaha acoustic guitar ("Sentimental" tag). Swipe it right: the KEEP stamp, then "All decided" with the totals. Then the **Where it goes** board: on phone A, open the **Keep** tile and use a row's ⇄ menu to move **Floor lamp** to **Sell**; phone B's Sell tile count and total change at the same moment. Split screen in the edit.
 - **STATE:** Demo `4RZ9G8`, **two devices** both joined to the room.
 - **TRACK:** Spacetime (two-phone sync, live shared state). Anthropic (knowing where the model shouldn't decide).
 - **FALLBACK:** Two-phone sync is **not yet tested on real devices**. If it lags or fails: one device only. Show the guitar, then Items > Inventory > **Join a room** with `4RZ9G8` typed in (the share icon on a room header only shows for rooms you own, not the joined seeded Bedroom). VO: "a roommate joins with a code like this". Don't claim the live sync you didn't show.
