@@ -32,6 +32,26 @@ enum RoomPalette {
         case "fireplace": hex(0xE07A5F)
         case "stairs": hex(0xC9B79C)
         case "decor": hex(0xFF7EB6)
+        // Extra objects (#73, #82), by group; see MooveKit ObjectVocabulary.
+        case "scooter", "bicycle", "motorcycle", "skateboard", "surfboard", "skis", "snowboard", "stroller", "wheelchair":
+            hex(0xFF6B4A)  // rides
+        case "golf clubs", "racket", "treadmill", "exercise bike", "rowing machine", "weight bench", "weights",
+             "yoga mat", "punching bag", "helmet", "ball":
+            hex(0xF4845F)  // sports & fitness
+        case "guitar", "piano", "keyboard instrument", "drums", "violin", "cello", "amplifier", "saxophone", "trumpet":
+            hex(0xE76F51)  // instruments
+        case "monitor", "computer", "laptop", "printer", "speaker", "game console", "projector", "turntable":
+            hex(0x6C7A9C)  // electronics
+        case "microwave", "coffee machine", "toaster", "blender", "vacuum", "air purifier", "fan", "heater",
+             "humidifier", "air conditioner", "sewing machine", "ironing board", "water dispenser":
+            hex(0x5CCBF2)  // appliances
+        case "stool", "ottoman", "bean bag", "mattress", "crib", "bench", "shoe rack", "coat rack", "clothes rack",
+             "shelf", "cart", "ladder", "room divider", "trunk", "workbench":
+            hex(0x4FC9A4)  // furniture
+        case "plant", "plant stand", "lawn mower": hex(0x6BCB77)
+        case "mirror", "rug", "art", "clock", "vase", "teddy bear", "toy": hex(0xFF7EB6)  // decor
+        case "box", "bin", "suitcase", "backpack", "bag", "basket", "trash can", "toolbox": hex(0xC08552)  // boxes & bags
+        case "grill", "pet crate", "pet bed", "cat tree": hex(0xD4A373)
         default: hex(0xA0AEC0)
         }
     }
