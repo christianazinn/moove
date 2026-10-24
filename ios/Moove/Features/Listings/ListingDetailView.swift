@@ -57,8 +57,8 @@ struct ListingDetailView: View {
                 .accessibilityAddTraits(.isHeader)
                 switch listing.status {
                 case .awaitingApproval where store.snapshot.isShared(listing):
-                    // Shared-room item someone else owns (#195): only they can approve it for now.
-                    notice("Over the owner's approval limit. Waiting for \(store.snapshot.approverName(owner: listing.owner)) to approve it.",
+                    // Shared-room item someone else owns (#195): any room member may decide it (#200).
+                    notice("Over \(store.snapshot.ownerName(listing.owner))'s approval limit. Anyone in the room can approve it in Approvals to post it.",
                            systemImage: "hourglass", tint: Theme.ochre)
                         .padding(.top, 20)
                 case .awaitingApproval:
