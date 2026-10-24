@@ -5,6 +5,7 @@ import MooveKit
 /// found (chosen one marked), each with its Visa payment rows.
 struct ShoppingItemDetailView: View {
     @Environment(MooveStore.self) private var store
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let itemId: UInt64
 
     var body: some View {
@@ -24,13 +25,18 @@ struct ShoppingItemDetailView: View {
         return ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Text("07 — Shopping").eyebrow().padding(.bottom, 12)
-                HStack(alignment: .center, spacing: 16) {
-                    ShoppingThumbnail(spec: ShoppingThumbnails.spec(for: item), bought: item.status == .bought, size: 72)
-                    Text(item.name)
-                        .pageTitle()
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityAddTraits(.isHeader)
-                }
+                StorefrontImage(spec: ShoppingThumbnails.spec(for: item), tint: StorefrontTint.color(for: item.id),
+                                height: dynamicTypeSize.isAccessibilitySize ? 200 : 240, bought: item.status == .bought)
+                    .overlay(alignment: .bottomLeading) {
+                        if let price = (snapshot.chosenDeal(for: item) ?? snapshot.topPick(for: item))?.formattedPrice {
+                            PriceChip(text: price, large: true).padding(12)
+                        }
+                    }
+                    .padding(.bottom, 18)
+                Text(item.name)
+                    .pageTitle()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
                 ShoppingStatusChip(status: item.status).padding(.top, 10)
                 if !item.reason.isEmpty {
                     Text(item.reason)
@@ -48,9 +54,13 @@ struct ShoppingItemDetailView: View {
 
                 if !deals.isEmpty {
                     ListHeader(title: "Deals", count: "\(deals.count)").padding(.top, 40)
-                    ForEach(deals) { deal in
-                        DealRow(item: item, deal: deal, isChosen: deal.id == item.chosenDealId)
+                    let ribbons = snapshot.dealRibbons(for: item)
+                    VStack(spacing: 12) {
+                        ForEach(deals) { deal in
+                            DealRow(item: item, deal: deal, isChosen: deal.id == item.chosenDealId, ribbon: ribbons[deal.id])
+                        }
                     }
+                    .padding(.top, 14)
                     Group {
                         if deals.contains(where: \.isSample) {
                             Text("SAMPLE deals are hand-made demo data, not live listings.")
@@ -163,6 +173,7 @@ struct DealRow: View {
     let item: ShoppingItem
     let deal: Deal
     let isChosen: Bool
+    var ribbon: StorefrontRibbon? = nil
     @State private var working = false
     @State private var failed = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -172,8 +183,16 @@ struct DealRow: View {
         let large = dynamicTypeSize.isAccessibilitySize
         let locked = store.snapshot.isCheckoutLocked(item)
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 14) {
-                ShoppingThumbnail(spec: ShoppingThumbnails.spec(for: deal, item: item), size: 56)
+            let imageLayout = large ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+                                    : AnyLayout(HStackLayout(alignment: .top, spacing: 14))
+            imageLayout {
+                StorefrontImage(spec: ShoppingThumbnails.spec(for: deal, item: item),
+                                tint: deal.isChoosable ? StorefrontTint.color(for: deal.id) : Theme.dangerSoft,
+                                height: large ? 160 : 108)
+                    .frame(width: large ? nil : 108)
+                    .overlay(alignment: .topLeading) {
+                        if let ribbon { RibbonTag(ribbon: ribbon).scaleEffect(0.85, anchor: .topLeading).padding(4) }
+                    }
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         if isChosen {
@@ -186,7 +205,11 @@ struct DealRow: View {
                         if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
                     }
                     AdaptiveLine {
-                        Text(deal.formattedPrice).monoText(16, weight: .bold).foregroundStyle(Theme.text).amountText()
+                        Text(deal.formattedPrice)
+                            .monoText(20, weight: .bold, maxScale: 1.6)
+                            .foregroundStyle(deal.isChoosable ? Theme.text : Theme.muted)
+                            .strikethrough(!deal.isChoosable)
+                            .amountText()
                         Text(deal.source).monoMeta()
                         Spacer(minLength: 8)
                         Label(deal.supportsCardCheckout ? "Visa checkout" : "Message seller",
@@ -210,7 +233,7 @@ struct DealRow: View {
                 }
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel((isChosen ? "Chosen deal. " : "") + deal.accessibilitySummary
+            .accessibilityLabel((isChosen ? "Chosen deal. " : "") + (ribbon.map { "\($0.label). " } ?? "") + deal.accessibilitySummary
                                 + (deal.fraudReasons.isEmpty || deal.fraudLevel == .low ? "" : ". " + deal.fraudReasons.joined(separator: ". ")))
             .accessibilityIdentifier("deal.\(deal.id)")
             ForEach(payments) { VisaPaymentRow(payment: $0) }
@@ -243,7 +266,7 @@ struct DealRow: View {
                         Button { choose() } label: {
                             if working { ProgressView() } else { Text("Choose") }
                         }
-                        .buttonStyle(.pill(.outline, compact: true))
+                        .buttonStyle(.pill(.primary, compact: true))
                         .disabled(working || locked)
                         .accessibilityLabel("Choose this deal, \(deal.formattedPrice) from \(deal.source)")
                         .accessibilityHint(locked ? "Locked while a hold or an approval is pending for this item" : "")
@@ -252,8 +275,12 @@ struct DealRow: View {
                 }
             }
         }
-        .padding(.vertical, 16)
-        .ruled()
+        .padding(12)
+        .background(deal.isChoosable ? Theme.surface.opacity(0.55) : Theme.dangerSoft.opacity(0.5),
+                    in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
+            .strokeBorder(isChosen ? Theme.accentStrong : (deal.isChoosable ? Theme.line : Theme.danger),
+                          lineWidth: isChosen || !deal.isChoosable ? 1.5 : 1))
     }
 
     private func choose() {
