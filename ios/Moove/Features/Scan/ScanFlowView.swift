@@ -98,6 +98,8 @@ struct ScanFlowView: View {
             } actions: {
                 if session.submission.canSubmit, !session.objects.isEmpty || session.geometry != nil {
                     Button("Try upload again") { session.phase = .photos }
+                } else if session.geometry == nil, FileManager.default.fileExists(atPath: session.capturedRoomDataJSON.path) {
+                    Button("Rebuild room") { Task { await session.rebuildFromSavedData() } }
                 }
                 Button("Close") { dismiss() }
             }
