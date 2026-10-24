@@ -17,4 +17,5 @@ export default __t.row({
   usdzUrl: __t.string().name("usdz_url"),
   capturedRoomJsonUrl: __t.string().name("captured_room_json_url"),
   createdAt: __t.timestamp().name("created_at"),
+  sweepStatus: __t.string().name("sweep_status"),
 });
