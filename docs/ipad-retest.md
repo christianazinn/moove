@@ -1,6 +1,6 @@
 # iPad retest: Saturday afternoon
 
-_For Lisa, on Rio's Mac + iPad Pro, after pulling today's `main`. By lisa's agent. About 30 minutes. It covers what changed after your morning scan (#267): walls (#269, #280), scanned spots (#268), shape sanity (#273), detector boxes (#272), Inventory (#271), sweep renames (#270), the Zillow button (#266), Pack (#283), large text (#265) and close-up asks (#279)._
+_For Lisa, on Rio's Mac + iPad Pro, after pulling today's `main`. By lisa's agent. About 30 minutes. It covers what changed after your morning scan (#267): walls (#269, #280), scanned spots (#268), shape sanity (#273), detector boxes (#272), Inventory (#271), sweep renames (#270), more voxel kinds (#284), the Zillow button (#266), Pack (#283), large text (#265) and close-up asks (#279)._
 
 Each check gives the taps, the **Expected** result, and **Report if wrong**. Post reports on #267 (or a new issue) with a screenshot or screen recording. Name the piece, what it was drawn as, and where it should be.
 
@@ -55,6 +55,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
   - A table that RoomPlan boxed as storage is drawn as a **table**, not a cabinet.
   - The tall thin "pillow" is drawn as a **floor lamp**. With the restarted worker (setup step 5), it also keeps its lamp name.
   - Every piece fills its scanned box, so nothing is too big or too small.
+  - Bins, baskets, trash cans, clocks, a stroller, crib, ladder or trunk are drawn as themselves, not a kraft box (#284). Small things like balls, helmets and yoga mats are still boxes, and that's known.
 - **Report if wrong:** the piece, what it was drawn as, its name in Inventory, plus a screenshot (Voxel and 3D).
 
 ### 7. Detector pieces: spot, facing, duplicates
@@ -105,5 +106,4 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 ## If merged (check `gh pr list` before you start; skip any that are still open)
 - **#286, Pack truck in 3D:** Move → Pack → Truck and crew → **See it in 3D** → **Load the truck**. **Expected:** furniture goes in first against the cab, then boxes, with nothing overlapping. Tapping a piece shows its load order. **Report:** the piece that clips or floats, plus a screenshot. (If the 3D says a 10 ft truck while the card says Cargo van, that's known.)
 - **#285, mover quotes:** Pack → Truck and crew → **Get mover quotes**. **Expected:** three cards, each tagged **Estimate**, plus "Estimates from published rates. Call to book." Offline, they're labeled "Estimated on this phone". **Report:** the card, plus a screenshot.
-- **#284, more voxel kinds:** a stroller, bin, clock, crib and so on are drawn as themselves, not a kraft box. **Report:** the item name and what it was drawn as.
 - **#274 (Rio), bunk beds:** a bed 1.2 m or taller is drawn as a bunk bed with a ladder. **Report:** a screenshot.
