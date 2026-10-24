@@ -103,6 +103,15 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Expected:** the item's detail says "Moove isn't sure which model this is…", and **Add another photo** re-identifies it.
 - **Report if wrong:** the item, plus a screenshot.
 
+### 15. Review: deck and board (Lisa's redesign)
+- **Taps:** Items → Review. If any item needs you (undecided or sentimental), drag its card right, left, up and down slowly without letting go, then swipe it for real; tap **Undo**; then decide it with a button under the card. Below, look at **Where it goes**, then drag a row from one column onto another column's tile.
+- **Expected:**
+  - The card tilts and glows in the direction's color with a KEEP / SELL / DONATE / TRASH stamp; letting go early springs it back. A real swipe flies it off with a tap of haptics, and "2 of 3" counts up. With Reduce Motion on (Settings → Accessibility → Motion) there's no tilt.
+  - On iPad, the four columns (Keep, Sell, Donate, Trash) sit side by side, each with its items, the agent's reason and a ⇄ change menu. Dropping a row on another tile moves it there.
+  - With a saved New Home layout, Keep's rows are grouped by the room they go to ("→ Bedroom").
+  - When nothing needs you, the board is at the top with "Nothing needs you".
+- **Report if wrong:** the card or column, plus a screen recording (the swipe feel is what we can't check in CI).
+
 ## If merged (check `gh pr list` before you start; skip any that are still open)
 - **#286, Pack truck in 3D:** Move → Pack → Truck and crew → **See it in 3D** → **Load the truck**. **Expected:** furniture goes in first against the cab, then boxes, with nothing overlapping. Tapping a piece shows its load order. **Report:** the piece that clips or floats, plus a screenshot. (If the 3D says a 10 ft truck while the card says Cargo van, that's known.)
 - **#285, mover quotes:** Pack → Truck and crew → **Get mover quotes**. **Expected:** three cards, each tagged **Estimate**, plus "Estimates from published rates. Call to book." Offline, they're labeled "Estimated on this phone". **Report:** the card, plus a screenshot.
