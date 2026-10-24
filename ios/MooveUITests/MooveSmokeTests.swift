@@ -15,15 +15,15 @@ final class MooveSmokeTests: XCTestCase {
     func testLoginThenContinueAsGuest() {
         launch(guest: false)
         let guest = app.buttons["login.guest"]
-        XCTAssertTrue(guest.waitForExistence(timeout: 10), "login screen")
+        XCTAssertTrue(guest.waitForExistence(timeout: slow), "login screen")
         snap("01-login")
         guest.tap()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10), "tab bar after guest login")
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: slow), "tab bar after guest login")
         for tab in ["Scan", "Items", "Sell & Buy", "Move", "Summary"] {
             XCTAssertTrue(app.tabBars.buttons[tab].exists, "\(tab) tab")
         }
         // A fresh install opens on the Scan tab.
-        XCTAssertTrue(app.navigationBars["Scan"].waitForExistence(timeout: 5), "starts on Scan")
+        XCTAssertTrue(app.navigationBars["Scan"].waitForExistence(timeout: slow), "starts on Scan")
         snap("01-tabs")
     }
 
@@ -32,7 +32,7 @@ final class MooveSmokeTests: XCTestCase {
         open(tab: "Items", segment: "Review")
         let needsYou = text(matching: "Needs you")
         let keep = text(matching: "Keep")
-        XCTAssertTrue(needsYou.waitForExistence(timeout: 10), "Needs you section")
+        XCTAssertTrue(needsYou.waitForExistence(timeout: slow), "Needs you section")
         XCTAssertTrue(keep.exists, "Keep section")
         XCTAssertLessThan(needsYou.frame.minY, keep.frame.minY, "Needs you comes first")
         snap("02-review")
@@ -42,7 +42,7 @@ final class MooveSmokeTests: XCTestCase {
         XCTAssertLessThan(quilt.frame.minY, keep.frame.minY, "quilt rack starts in Needs you")
         quilt.swipeRight()
         let keepAction = app.buttons["Keep"].firstMatch
-        XCTAssertTrue(keepAction.waitForExistence(timeout: 5), "Keep swipe action")
+        XCTAssertTrue(keepAction.waitForExistence(timeout: slow), "Keep swipe action")
         snap("02-swipe")
         keepAction.tap()
 
@@ -62,7 +62,7 @@ final class MooveSmokeTests: XCTestCase {
 
         row(startingWith: "Framed photos").tap()
         let picker = app.descendants(matching: .any)["item.disposition"].firstMatch
-        XCTAssertTrue(picker.waitForExistence(timeout: 5), "disposition picker on item detail")
+        XCTAssertTrue(picker.waitForExistence(timeout: slow), "disposition picker on item detail")
         XCTAssertTrue(app.navigationBars["Framed photos"].exists)
         for choice in ["Keep", "Sell", "Donate", "Trash"] {
             XCTAssertTrue(picker.buttons[choice].exists, "\(choice) choice")
@@ -79,11 +79,11 @@ final class MooveSmokeTests: XCTestCase {
         let load = app.buttons["Load demo scan"]
         XCTAssertTrue(scrollTo(load), "Load demo scan button")
         load.tap()
-        XCTAssertTrue(app.buttons["See inventory"].waitForExistence(timeout: 15), "scan finished screen")
+        XCTAssertTrue(app.buttons["See inventory"].waitForExistence(timeout: slow), "scan finished screen")
         let notice = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", "2 objects looked wrong")).firstMatch
-        XCTAssertTrue(notice.waitForExistence(timeout: 5), "skipped-objects notice")
+        XCTAssertTrue(notice.waitForExistence(timeout: slow), "skipped-objects notice")
         notice.tap()
-        XCTAssertTrue(text(containing: "width 40 m").waitForExistence(timeout: 5), "skip reasons listed")
+        XCTAssertTrue(text(containing: "width 40 m").waitForExistence(timeout: slow), "skip reasons listed")
         snap("03-scan-skipped")
     }
 
@@ -96,15 +96,15 @@ final class MooveSmokeTests: XCTestCase {
         load.tap()
         // Same finished screen as a real scan, then on to Inventory.
         let done = app.buttons["See inventory"]
-        XCTAssertTrue(done.waitForExistence(timeout: 15), "scan finished screen")
+        XCTAssertTrue(done.waitForExistence(timeout: slow), "scan finished screen")
         snap("03-scan-finished")
         done.tap()
-        XCTAssertTrue(app.navigationBars["Inventory"].waitForExistence(timeout: 10), "jumped to Inventory")
+        XCTAssertTrue(app.navigationBars["Inventory"].waitForExistence(timeout: slow), "jumped to Inventory")
         XCTAssertTrue(scrollTo(text(matching: "Demo bedroom")), "new room in Inventory")
         snap("03-inventory")
         // Offline photo sweep (#181): the room photos "find" a guitar RoomPlan missed.
         let guitar = text(matching: "Acoustic guitar")
-        XCTAssertTrue(guitar.waitForExistence(timeout: 15) || scrollTo(guitar), "item added by the photo sweep")
+        XCTAssertTrue(guitar.waitForExistence(timeout: slow) || scrollTo(guitar), "item added by the photo sweep")
         snap("03-inventory-sweep")
     }
 
@@ -112,17 +112,17 @@ final class MooveSmokeTests: XCTestCase {
         launch()
         open(tab: "Items", segment: "Inventory")
         let view3D = app.buttons["View room in 3D"].firstMatch
-        XCTAssertTrue(view3D.waitForExistence(timeout: 10))
+        XCTAssertTrue(view3D.waitForExistence(timeout: slow))
         view3D.tap()
 
         let model = app.descendants(matching: .any)["room.model"].firstMatch
-        XCTAssertTrue(model.waitForExistence(timeout: 15), "3D model view")
+        XCTAssertTrue(model.waitForExistence(timeout: slow), "3D model view")
         sleep(2)  // let RealityKit draw a frame
         snap("04-room-3d")
 
         app.buttons["Plan"].firstMatch.tap()
         let plan = app.descendants(matching: .any)["room.plan"].firstMatch
-        XCTAssertTrue(plan.waitForExistence(timeout: 5), "floor plan view")
+        XCTAssertTrue(plan.waitForExistence(timeout: slow), "floor plan view")
         snap("04-room-plan")
 
         // Tap around the plan until a piece of furniture is selected.
@@ -138,10 +138,10 @@ final class MooveSmokeTests: XCTestCase {
 
         app.descendants(matching: .any)["room.display"].firstMatch.tap()
         let labels = app.buttons["Labels"].firstMatch
-        XCTAssertTrue(labels.waitForExistence(timeout: 5), "display menu")
+        XCTAssertTrue(labels.waitForExistence(timeout: slow), "display menu")
         snap("04-display-menu")
         labels.tap()
-        XCTAssertTrue(plan.waitForExistence(timeout: 5))
+        XCTAssertTrue(plan.waitForExistence(timeout: slow))
         snap("04-room-plan-no-labels")
     }
 
@@ -149,10 +149,10 @@ final class MooveSmokeTests: XCTestCase {
         launch()
         open(tab: "Items", segment: "Inventory")
         let share = app.buttons["Share Bedroom"].firstMatch
-        XCTAssertTrue(share.waitForExistence(timeout: 10))
+        XCTAssertTrue(share.waitForExistence(timeout: slow))
         share.tap()
         let code = app.staticTexts["share.code"]
-        XCTAssertTrue(code.waitForExistence(timeout: 5), "join code shown")
+        XCTAssertTrue(code.waitForExistence(timeout: slow), "join code shown")
         let shown = code.label.replacingOccurrences(of: "Join code", with: "").replacingOccurrences(of: " ", with: "")
         XCTAssertEqual(shown.count, 6, "6-character code, got \(code.label)")
         snap("05-share")
@@ -165,7 +165,7 @@ final class MooveSmokeTests: XCTestCase {
 
         join("WRONG9", expectDismiss: false)
         let error = app.descendants(matching: .any)["join.error"].firstMatch
-        XCTAssertTrue(error.waitForExistence(timeout: 5), "wrong code shows an error")
+        XCTAssertTrue(error.waitForExistence(timeout: slow), "wrong code shows an error")
         XCTAssertTrue(error.label.contains("No room has that code"), error.label)
         snap("05-join-error")
     }
@@ -173,9 +173,9 @@ final class MooveSmokeTests: XCTestCase {
     func testSettingsShowsDataSourceAndSignsOut() {
         launch()
         let settings = app.navigationBars.buttons["Settings"].firstMatch
-        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        XCTAssertTrue(settings.waitForExistence(timeout: slow))
         settings.tap()
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: slow))
         let fixture = app.buttons["settings.dataSource.fixture"]
         XCTAssertTrue(scrollTo(fixture), "data source shown")
         XCTAssertTrue(fixture.label.contains("Offline demo"), fixture.label)
@@ -185,11 +185,15 @@ final class MooveSmokeTests: XCTestCase {
         XCTAssertTrue(scrollTo(signOut, down: false), "Sign out button")
         XCTAssertTrue(text(containing: "Guest").exists)
         signOut.tap()
-        XCTAssertTrue(app.buttons["login.guest"].waitForExistence(timeout: 10), "back to login")
+        XCTAssertTrue(app.buttons["login.guest"].waitForExistence(timeout: slow), "back to login")
         snap("06-signed-out")
     }
 
     // MARK: Helpers
+
+    /// Generous waits: the CI Simulator runner takes ~12 s to go idle after launch and is
+    /// slower per screen (#155). `waitForExistence` returns as soon as the element shows up.
+    private let slow: TimeInterval = 30
 
     private func launch(guest: Bool = true, environment: [String: String] = [:]) {
         continueAfterFailure = false
@@ -201,7 +205,7 @@ final class MooveSmokeTests: XCTestCase {
         app.launchEnvironment.merge(environment) { _, new in new }
         app.launch()
         if guest {
-            XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15), "tab bar")
+            XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: slow), "tab bar")
         }
     }
 
@@ -210,24 +214,24 @@ final class MooveSmokeTests: XCTestCase {
         app.tabBars.buttons[tab].tap()
         if let segment {
             let pill = app.buttons[segment].firstMatch
-            XCTAssertTrue(pill.waitForExistence(timeout: 5), "\(segment) segment")
+            XCTAssertTrue(pill.waitForExistence(timeout: slow), "\(segment) segment")
             pill.tap()
         }
         let title = segment ?? tab
-        XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5), "\(title) screen")
+        XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: slow), "\(title) screen")
     }
 
     private func join(_ code: String, expectDismiss: Bool = true) {
         app.buttons["Join a room"].firstMatch.tap()
         let field = app.textFields["join.code"]
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertTrue(field.waitForExistence(timeout: slow))
         field.tap()
         field.typeText(code)
         XCTAssertTrue(app.buttons["join.submit"].isEnabled, "Join enabled for a 6-character code")
         snap("05-join-\(code)")
         field.typeText("\n")  // submits, same as the Join button
         if expectDismiss {
-            XCTAssertTrue(field.waitForNonExistence(timeout: 5), "join sheet closes")
+            XCTAssertTrue(field.waitForNonExistence(timeout: slow), "join sheet closes")
         }
     }
 
