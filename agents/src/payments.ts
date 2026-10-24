@@ -52,7 +52,17 @@ let rail: Promise<X402Rail> | undefined;
 // One shared rail per worker process, so per-agent budgets span every agent run.
 export function paymentRail(conn: Conn): Promise<X402Rail> {
   rail ??= createX402Rail(spacetimeSink(conn)).then((r) => {
-    console.log(`[x402] rail ready (${r.simulated ? 'SIMULATED' : 'Base Sepolia'})`);
+    // Budgets survive restarts: count the last 24h of x402 spend already in the payment table (#17),
+    // matching the CDP client's 24h spendControls window.
+    const since = BigInt(Date.now() - 24 * 3600 * 1000);
+    const spent = new Map<string, bigint>();
+    for (const p of conn.db.payment.iter()) {
+      if (p.rail === 'x402' && p.status !== 'failed' && p.simulated === r.simulated && p.createdAt.toMillis() >= since) {
+        spent.set(p.agent, (spent.get(p.agent) ?? 0n) + p.amountUsdMicros);
+      }
+    }
+    for (const [agent, micros] of spent) r.seedSpent(agent, micros);
+    console.log(`[x402] rail ready (${r.simulated ? 'SIMULATED' : 'Base Sepolia'}), prior spend counted for ${spent.size} agent(s)`);
     return r;
   });
   return rail;

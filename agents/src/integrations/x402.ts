@@ -143,6 +143,14 @@ export class SpendLedger {
     this.spent.set(agent, this.spentBy(agent) + amount);
   }
 
+  /**
+   * Counts spend that already happened (e.g. `payment` rows from before a worker restart), so a
+   * restart can't reset an agent's budget. Never throws: an over-cap agent just gets refused.
+   */
+  seed(agent: string, amount: bigint): void {
+    if (amount > 0n) this.spent.set(agent, this.spentBy(agent) + amount);
+  }
+
   release(agent: string, amount: bigint): void {
     const next = this.spentBy(agent) - amount;
     this.spent.set(agent, next > 0n ? next : 0n);
@@ -155,6 +163,8 @@ export interface X402RailOptions {
   /** Omit for a simulated rail. */
   signer?: PaymentSigner;
   fetch?: typeof globalThis.fetch;
+  /** If non-empty, only these payTo addresses are paid (case-insensitive). */
+  allowedPayees?: string[];
 }
 
 export class X402Rail {
@@ -164,8 +174,10 @@ export class X402Rail {
   private readonly signer?: PaymentSigner;
   private readonly http?: x402HTTPClient;
   private readonly fetchImpl: typeof globalThis.fetch;
+  private readonly allowedPayees: Set<string>;
 
   constructor(opts: X402RailOptions) {
+    this.allowedPayees = new Set((opts.allowedPayees ?? []).map((a) => a.toLowerCase()));
     this.sink = opts.sink;
     this.ledger = opts.ledger;
     this.signer = opts.signer;
@@ -177,6 +189,11 @@ export class X402Rail {
 
   remaining(agent: string): bigint {
     return this.ledger.remaining(agent);
+  }
+
+  /** Counts earlier spend (from `payment` rows) against an agent's budget. */
+  seedSpent(agent: string, micros: bigint): void {
+    this.ledger.seed(agent, micros);
   }
 
   async paidFetch(ctx: PaidCallContext, input: string | URL, init?: RequestInit): Promise<PaidFetchResult> {
@@ -207,6 +224,15 @@ export class X402Rail {
       throw new SpendRefusedError("server does not accept Base Sepolia USDC", ctx.agent, 0n);
     }
     const amount = BigInt(requirements.amount);
+    if (!/^0x[0-9a-fA-F]{40}$/.test(requirements.payTo) || (this.allowedPayees.size > 0 && !this.allowedPayees.has(requirements.payTo.toLowerCase()))) {
+      await this.event(ctx, "error", `Refused x402 payment for ${ctx.purpose}: payee ${requirements.payTo} is not on the allowlist`, {
+        url: request.url,
+        payee: requirements.payTo,
+        amountUsdMicros: amount.toString(),
+        refused: true,
+      });
+      throw new SpendRefusedError(`payee ${requirements.payTo} is not allowed`, ctx.agent, amount);
+    }
     await this.reserveOrRefuse(ctx, amount, requirements.payTo, request.url);
 
     let settled: PaymentRecord;
@@ -385,6 +411,8 @@ export interface RailEnv {
   X402_SIMULATE?: string;
   AGENT_SPEND_CAP_USDC?: string;
   X402_MAX_PER_CALL_USDC?: string;
+  /** Comma-separated payTo addresses the rail may pay. Empty = any valid address (still capped). */
+  X402_ALLOWED_PAYEES?: string;
 }
 
 export const hasCdpKeys = (env: RailEnv): boolean =>
@@ -398,7 +426,8 @@ export async function createX402Rail(sink: PaymentSink, env: RailEnv = process.e
   const cap = usdToMicros(Number(env.AGENT_SPEND_CAP_USDC ?? "5"));
   const perCall = usdToMicros(Number(env.X402_MAX_PER_CALL_USDC ?? "0.10"));
   const ledger = new SpendLedger(cap, perCall);
-  if (env.X402_SIMULATE === "1" || !hasCdpKeys(env)) return new X402Rail({ sink, ledger });
+  const allowedPayees = (env.X402_ALLOWED_PAYEES ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (env.X402_SIMULATE === "1" || !hasCdpKeys(env)) return new X402Rail({ sink, ledger, allowedPayees });
 
   const { CdpX402Client } = await import("@coinbase/cdp-sdk/x402");
   const signer = new CdpX402Client({
@@ -413,5 +442,5 @@ export async function createX402Rail(sink: PaymentSink, env: RailEnv = process.e
       allowedAssets: [USDC_BASE_SEPOLIA],
     },
   });
-  return new X402Rail({ sink, ledger, signer });
+  return new X402Rail({ sink, ledger, signer, allowedPayees });
 }
