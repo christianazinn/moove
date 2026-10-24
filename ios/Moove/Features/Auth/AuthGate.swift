@@ -23,6 +23,11 @@ struct AuthGate: View {
         // banner retry, since a write before that would only fail.
         .onChange(of: store.status) { _, status in
             if status == .connected { Task { await registerUser() } }
+            // The SDK retries with the token it started with; an expired ID token is
+            // rejected every time, so start over with a renewed one.
+            if case .reconnecting = status, case .signedIn = auth.state, auth.connectedTokenExpired {
+                Task { await store.connect(token: await auth.spacetimeToken()) }
+            }
         }
     }
 
