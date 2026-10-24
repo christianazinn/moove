@@ -150,7 +150,7 @@ async function search(conn: Conn, s: ShoppingItem): Promise<void> {
     await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'searching' });
     logEvent(conn, { ...ref, kind: 'plan', message: `Looking for deals on "${s.name}"` });
     logEvent(conn, { ...ref, kind: 'tool_call', message: `Searching ${dealSource.name}${dealSource.replay ? ' (not live)' : ''} for "${s.name}"`, data: { source: dealSource.name, replay: dealSource.replay, query: { name: s.name, category: s.category } } });
-    const ranked = pickDealsToWrite(rankDeals(await withSearchSlot(() => dealSource.search({ name: s.name, category: s.category }))), MAX_DEALS);
+    const ranked = pickDealsToWrite(rankDeals(await withSearchSlot(() => dealSource.search({ name: s.name, category: s.category }, { onNotice: n => logEvent(conn, { ...ref, kind: 'result', message: n.message, data: n.data }) }))), MAX_DEALS);
     if (!ranked.length) {
       await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'open' });
       logEvent(conn, { ...ref, kind: 'result', message: `No deals found for "${s.name}"` });
