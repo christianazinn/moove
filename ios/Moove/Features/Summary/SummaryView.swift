@@ -24,21 +24,27 @@ struct SummaryView: View {
     var body: some View {
         let s = summary
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 0) {
                 hero(s)
                 dispositions(s)
                 money(s)
                 impact(s)
                 agents(s)
             }
-            .padding()
+            .padding(.horizontal, 20)
+            .padding(.bottom, 32)
         }
-        .background(Color(.systemGroupedBackground))
         .navigationTitle("Summary")
+        .navigationBarTitleDisplayMode(.inline)
+        .mooveScreen()
         .overlay {
             if store.items.isEmpty {
-                ContentUnavailableView("Nothing to sum up yet", systemImage: "chart.bar.doc.horizontal",
-                                       description: Text("Scan a room and Moove will tally your move here."))
+                VStack(spacing: 8) {
+                    Text("Nothing to sum up yet").blockTitle()
+                    Text("Scan a room and Moove will tally your move here.").monoMeta()
+                }
+                .multilineTextAlignment(.center)
+                .padding()
             }
         }
     }
@@ -46,19 +52,24 @@ struct SummaryView: View {
     // MARK: Sections
 
     private func hero(_ s: MoveSummary) -> some View {
-        VStack(spacing: 6) {
-            Text("Your move, handled").font(.title2.bold())
-            Text("\(s.itemCount) items sorted · \(s.netCents.signedUSD) net · \(Int(s.divertedKg.rounded())) kg kept out of landfill")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Summary · \(s.itemCount) items").eyebrow()
+            Text("Your move, handled.")
+                .font(.system(size: 28, weight: .semibold))
+            HStack(alignment: .firstTextBaseline, spacing: 18) {
+                figure(s.netCents.signedUSD, "net", tint: s.netCents >= 0 ? Theme.accentStrong : Theme.danger)
+                figure("\(Int(s.divertedKg.rounded())) kg", "kept from landfill", tint: Theme.text)
+            }
+            .padding(.top, 6)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.top, 20)
+        .padding(.bottom, 24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .ruled()
     }
 
     private func dispositions(_ s: MoveSummary) -> some View {
-        card("Where everything went") {
+        section("Where everything went") {
             let order: [Disposition] = [.keep, .sell, .donate, .trash, .undecided]
             let total = max(s.itemCount, 1)
             GeometryReader { geo in
@@ -69,105 +80,106 @@ struct SummaryView: View {
                             .frame(width: max(4, geo.size.width * CGFloat(s.counts[d] ?? 0) / CGFloat(total) - 2))
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(Capsule())
             }
-            .frame(height: 14)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), alignment: .leading)], alignment: .leading, spacing: 10) {
-                ForEach(order, id: \.self) { d in
-                    HStack(spacing: 6) {
-                        Circle().fill(Self.color(d)).frame(width: 8, height: 8)
-                        Text("\(s.counts[d] ?? 0)").font(.headline.monospacedDigit())
-                        Text(Self.label(d)).font(.subheadline).foregroundStyle(.secondary)
-                    }
+            .frame(height: 8)
+            .padding(.bottom, 4)
+            ForEach(order, id: \.self) { d in
+                HStack(spacing: 10) {
+                    Circle().fill(Self.color(d)).frame(width: 7, height: 7)
+                    Text(Self.label(d)).font(.mono(13.5))
+                    Spacer()
+                    Text("\(s.counts[d] ?? 0)").font(.mono(13.5, weight: .bold))
                 }
+                .padding(.vertical, 9)
+                .ruled()
             }
             if s.needsYou > 0 {
-                Label("\(s.needsYou) still need you (sentimental or undecided)", systemImage: "heart")
-                    .font(.footnote)
-                    .foregroundStyle(.pink)
+                Text("\(s.needsYou) still need you · sentimental or undecided")
+                    .font(.mono(12))
+                    .foregroundStyle(Theme.danger)
+                    .padding(.top, 4)
             }
         }
     }
 
     private func money(_ s: MoveSummary) -> some View {
-        card("Money", badge: s.hasSimulatedMoney || usingDemoActivity ? "SIMULATED" : nil) {
-            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+        section("Money", tag: s.hasSimulatedMoney || usingDemoActivity ? "Simulated" : nil) {
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 14) {
                 GridRow {
-                    stat("Sold", s.soldCents.usd, tint: .green)
-                    stat("Still selling", s.pendingSalesCents.usd, tint: .teal)
+                    figure(s.soldCents.usd, "sold", tint: Theme.accentStrong)
+                    figure(s.pendingSalesCents.usd, "still selling", tint: Theme.text)
                 }
                 GridRow {
-                    stat("Spent", s.spentCents.usd, tint: .orange)
-                    stat("Net", s.netCents.signedUSD, tint: s.netCents >= 0 ? .green : .red)
+                    figure(s.spentCents.usd, "spent", tint: Theme.ochre)
+                    figure(s.netCents.signedUSD, "net", tint: s.netCents >= 0 ? Theme.accentStrong : Theme.danger)
                 }
             }
-            if !s.rails.isEmpty {
-                Divider()
-                ForEach(s.rails) { rail in
-                    HStack {
-                        Text(rail.rail == "x402" ? "x402 data payments" : rail.rail == "visa" ? "Visa purchases" : rail.rail)
-                        if rail.simulatedCents > 0 {
-                            Text(rail.simulatedCents == rail.cents ? "simulated" : "\(rail.simulatedCents.usd) simulated")
-                                .font(.caption2.weight(.semibold))
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(.orange.opacity(0.15), in: Capsule())
-                                .foregroundStyle(.orange)
-                        }
-                        Spacer()
-                        Text(rail.cents.usd).monospacedDigit()
+            .padding(.bottom, 6)
+            ForEach(s.rails) { rail in
+                HStack(spacing: 8) {
+                    Text(rail.rail == "x402" ? "x402 data payments" : rail.rail == "visa" ? "Visa purchases" : rail.rail)
+                        .font(.mono(13.5))
+                    if rail.simulatedCents > 0 {
+                        MonoTag(text: rail.simulatedCents == rail.cents ? "Simulated" : "\(rail.simulatedCents.usd) sim", tone: Theme.ochre)
                     }
-                    .font(.subheadline)
+                    Spacer()
+                    Text(rail.cents.usd).font(.mono(13.5, weight: .bold))
                 }
+                .padding(.vertical, 9)
+                .ruled(.top)
             }
-            Text("Sales not yet sold are counted at their listing price or estimate.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Text("Unsold items count at their listing price or estimate.").monoMeta().padding(.top, 4)
         }
     }
 
     private func impact(_ s: MoveSummary) -> some View {
-        card("Impact") {
+        section("Impact") {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: "leaf.fill").foregroundStyle(.green)
-                Text("~\(Int(s.divertedKg.rounded())) kg").font(.title.bold())
-                Text("kept out of landfill").foregroundStyle(.secondary)
+                Text("~\(Int(s.divertedKg.rounded())) kg").font(.mono(30, weight: .bold)).foregroundStyle(Theme.accentStrong)
+                Text("kept out of landfill").font(.mono(13)).foregroundStyle(Theme.muted)
             }
             Text("\(s.divertedItems) items sold or donated instead of trashed. You're moving \(s.keptVolumeM3, format: .number.precision(.fractionLength(1))) m³ of things you kept.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Text("Weights are rough estimates by item type and size.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.text)
+            Text("Weights are rough estimates by item type and size.").monoMeta()
         }
     }
 
     private func agents(_ s: MoveSummary) -> some View {
-        card("What the agents did", badge: usingDemoActivity ? "DEMO" : nil) {
+        section("What the agents did", tag: usingDemoActivity ? "Demo" : nil) {
             if s.agents.isEmpty {
-                Text("No agent activity yet.").foregroundStyle(.secondary)
+                Text("No agent activity yet.").monoMeta()
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         ForEach(s.agents) { a in
-                            VStack(spacing: 2) {
-                                Text("\(a.steps)").font(.headline.monospacedDigit())
-                                Text(a.agent.capitalized).font(.caption).foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                Text(a.agent).font(.mono(12.5))
+                                Text("\(a.steps)").font(.mono(12.5, weight: .bold))
                             }
-                            .padding(.horizontal, 12).padding(.vertical, 8)
-                            .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 10))
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 30)
+                            .background(Capsule().fill(Theme.surface))
                         }
                     }
                 }
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(s.timeline.enumerated()), id: \.offset) { _, e in
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: Self.icon(e.kind)).foregroundStyle(.tint).frame(width: 18)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(e.message).font(.subheadline)
-                                Text("\(e.agent) · \(e.createdAt, style: .relative) ago").font(.caption2).foregroundStyle(.secondary)
-                            }
+                .padding(.bottom, 4)
+                ForEach(Array(s.timeline.enumerated()), id: \.offset) { _, e in
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: Self.icon(e.kind))
+                            .font(.system(size: 14, weight: .light))
+                            .foregroundStyle(Theme.accentStrong)
+                            .frame(width: 18)
+                            .padding(.top, 2)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(e.message).font(.system(size: 15))
+                            Text("\(e.agent) · \(e.createdAt, style: .relative) ago").monoMeta()
                         }
+                        Spacer(minLength: 0)
                     }
+                    .padding(.vertical, 10)
+                    .ruled()
                 }
             }
         }
@@ -175,50 +187,45 @@ struct SummaryView: View {
 
     // MARK: Pieces
 
-    private func card<Content: View>(_ title: String, badge: String? = nil, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func section<Content: View>(_ title: String, tag: String? = nil, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(title).font(.headline)
+                Text(title).eyebrow()
                 Spacer()
-                if let badge {
-                    Text(badge).font(.caption2.weight(.bold))
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(.orange.opacity(0.15), in: Capsule())
-                        .foregroundStyle(.orange)
-                }
+                if let tag { MonoTag(text: tag, tone: Theme.ochre) }
             }
             content()
         }
+        .padding(.vertical, 22)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+        .ruled()
     }
 
-    private func stat(_ label: String, _ value: String, tint: Color) -> some View {
+    private func figure(_ value: String, _ label: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.title3.bold().monospacedDigit()).foregroundStyle(tint)
+            Text(value).font(.mono(22, weight: .bold)).foregroundStyle(tint)
+            Text(label).font(.mono(11.5)).foregroundStyle(Theme.faint)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     static func color(_ d: Disposition) -> Color {
         switch d {
-        case .keep: .blue
-        case .sell: .green
-        case .donate: .teal
-        case .trash: .gray
-        case .undecided: .pink
+        case .keep: Theme.accent
+        case .sell: Theme.ochre
+        case .donate: Theme.slate
+        case .trash: Theme.stone
+        case .undecided: Theme.danger
         }
     }
 
     static func label(_ d: Disposition) -> String {
         switch d {
-        case .keep: "kept"
-        case .sell: "selling"
-        case .donate: "donated"
-        case .trash: "trashed"
-        case .undecided: "undecided"
+        case .keep: "Kept"
+        case .sell: "Selling"
+        case .donate: "Donated"
+        case .trash: "Trashed"
+        case .undecided: "Undecided"
         }
     }
 
