@@ -2,6 +2,8 @@
 
 Draft for the Cal Hacks 13.0 submission (due **Sun 9:00 AM**). Written from what's on `main`; anything that's still an open PR or simulated is marked. **Before submitting, re-check every "(open PR)" and "not verified" note against `main`**, and delete the ones that have landed.
 
+**Gallery images:** the 8 screenshots/GIFs, with taps, state and captions, are in [`docs/devpost-media.md`](devpost-media.md).
+
 Tagline (pick one):
 - *Scan your room. Agents handle the rest of your move.*
 - *Your move, run by agents that ask before they spend.*

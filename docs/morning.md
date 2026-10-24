@@ -68,6 +68,7 @@ See "Needs a human" below, then the Devpost draft (`docs/devpost.md`) and the de
 1. **Keys (or keep simulated):** real CDP keys on the worker would make the x402 payments real Base Sepolia testnet transactions (Coinbase track). The same goes for eBay sandbox keys and Auth0 CIBA config. Everything is labeled simulated today. Put keys in the repo-root `.env.local`; the workers restart themselves when it changes.
 2. **Anthropic pitch community:** still a TODO in `docs/devpost.md` (suggestions are there).
 3. **Devpost text + demo video:** `docs/devpost.md` is a draft checked against `main`. Record the demo on the **Demo** backend.
+   - Devpost gallery: capture the 8 screenshots/GIFs in [`docs/devpost-media.md`](devpost-media.md) (about 10 minutes on the Offline demo).
 4. **Budget:** the Anthropic key was low last night. Overnight runs used recorded answers (`LLM_REPLAY`), but live scans call vision (up to 3 at a time), the sweep, listings and the shopping list. Check the balance before demo rehearsals.
 5. **#41 part B step 2:** room/user tables go private once the app reads `my_room` / `my_user` (asked on #41). Until then, join codes and emails are readable by any client.
 
