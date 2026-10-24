@@ -10,6 +10,8 @@ struct ScanFlowView: View {
     @State private var session = ScanSession()
     @State private var stopRequested = false
     @State private var photographing: ScanSession.DetectedObject?
+    /// Bumped on every photo taken, so thumbnails of retaken photos reload.
+    @State private var photoVersion = 0
 
     var body: some View {
         NavigationStack {
@@ -24,6 +26,8 @@ struct ScanFlowView: View {
             CameraPicker { jpeg in
                 if let jpeg {
                     if object.manual { session.addManual(object, photo: jpeg) } else { session.setPhoto(jpeg, for: object) }
+                    session.photoChanged(for: object)
+                    photoVersion += 1
                 }
                 photographing = nil
             }
@@ -76,8 +80,10 @@ struct ScanFlowView: View {
             ContentUnavailableView {
                 Label("\(session.objects.count) items added", systemImage: "checkmark.circle.fill")
             } description: {
-                if let problem = session.uploadProblem {
-                    Text("Photos couldn't be uploaded (\(problem)), so agents can't identify items yet. The room is saved, and the 3D view works on this device.")
+                if let problem = session.uploadProblem, session.roomFilesLocalOnly {
+                    Text("Files couldn't be uploaded (\(problem)), so agents can't identify items yet. The items are saved; the 3D room files stay on this device only, in Files > Moove > scans.")
+                } else if let problem = session.uploadProblem {
+                    Text("Photos couldn't be uploaded (\(problem)), so agents can't identify items yet. The room is saved.")
                 } else {
                     Text("Agents are identifying and pricing them now.")
                 }
@@ -90,7 +96,7 @@ struct ScanFlowView: View {
             } description: {
                 Text(why)
             } actions: {
-                if !session.objects.isEmpty {
+                if session.submission.canSubmit, !session.objects.isEmpty || session.geometry != nil {
                     Button("Try upload again") { session.phase = .photos }
                 }
                 Button("Close") { dismiss() }
@@ -153,6 +159,7 @@ struct ScanFlowView: View {
                 Text(session.objects.isEmpty ? "Save room" : "Add \(session.objects.count) item\(session.objects.count == 1 ? "" : "s")")
                     .frame(maxWidth: .infinity)
             }
+            .disabled(!session.submission.canSubmit)
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .padding()
@@ -161,14 +168,14 @@ struct ScanFlowView: View {
 
     private var uploader: Uploader {
         if store.backendKind == .fixture { return LocalUploader() }
-        guard let base = AppConfig.current.uploadBaseURL else { return LocalUploader() }
+        guard let base = AppConfig.current.uploadBaseURL else { return UnavailableUploader() }
         return HTTPUploader(baseURL: base, token: nil)
     }
 
     private func photoThumb(_ object: ScanSession.DetectedObject) -> some View {
         Group {
-            if let url = session.photos[object.id], let image = UIImage(contentsOfFile: url.path) {
-                Image(uiImage: image).resizable().scaledToFill()
+            if let url = session.photos[object.id] {
+                ScanPhotoThumbnail(url: url, version: photoVersion)
             } else {
                 Image(systemName: ItemThumbnail.icon(for: object.category))
                     .foregroundStyle(.secondary)
