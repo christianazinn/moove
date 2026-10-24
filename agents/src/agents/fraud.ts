@@ -220,6 +220,24 @@ async function aiScore(conn: Conn, d: Deal): Promise<number> {
   }
 }
 
+// A failed set_deal_fraud would leave the deal at -1 (and its purchase waiting) until a restart, so
+// retry a few times with backoff (FRAUD_RETRY_DELAY_MS, then 2x, 4x...). The last error is rethrown
+// and logged by screen() as an `error` event.
+export const SET_FRAUD_TRIES = 3;
+const RETRY_DELAY_MS = Number(process.env.FRAUD_RETRY_DELAY_MS ?? '500');
+
+async function setDealFraudWithRetry(conn: Conn, args: Parameters<Conn['reducers']['setDealFraud']>[0]): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await conn.reducers.setDealFraud(args);
+    } catch (err) {
+      if (attempt >= SET_FRAUD_TRIES) throw new Error(`set_deal_fraud failed after ${attempt} tries: ${String(err)}`);
+      console.warn(`[fraud] set_deal_fraud for deal ${args.dealId} failed (try ${attempt}/${SET_FRAUD_TRIES}), retrying: ${String(err)}`);
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS * 2 ** (attempt - 1)));
+    }
+  }
+}
+
 async function screen(conn: Conn, d: Deal): Promise<void> {
   inFlight.add(d.id);
   try {
@@ -227,7 +245,7 @@ async function screen(conn: Conn, d: Deal): Promise<void> {
     const compPrices = item ? cachedCompPrices(item.name) : [];
     const aiTextScore = await aiScore(conn, d);
     const s = screenDeal(d, { allDeals: [...conn.db.deal.iter()], compPrices, aiTextScore });
-    await conn.reducers.setDealFraud({ dealId: d.id, fraudScore: s.fraudScore, aiTextScore: s.aiTextScore, reasons: s.reasons });
+    await setDealFraudWithRetry(conn, { dealId: d.id, fraudScore: s.fraudScore, aiTextScore: s.aiTextScore, reasons: s.reasons });
     logEvent(conn, {
       owner: d.owner,
       agent: 'fraud',

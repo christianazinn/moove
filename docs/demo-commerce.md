@@ -48,7 +48,7 @@ Required env vars (names only; values live in the repo-root `.env.local`, which 
 - [ ] Visa and buy agent (merged, #40):
   - **Set `VISA_PROVIDER=simulated` for the demo** (on the worker's command line or in the worker's env). The demo checkout is the labeled simulation; we are not attempting live sandbox charges. Don't leave it empty: with the CyberSource keys present in `.env.local`, an empty `VISA_PROVIDER` picks the `acceptance` backend from the keys, so every purchase would still call the sandbox (and only fall back to simulated after its 502). Don't set `VISA_PROVIDER=acceptance` either: every checkout would fail (retried 3 times, then given up).
   - With no provider and no `VISA_ACCEPTANCE_*` keys, checkout is simulated and labeled.
-  - Defaults: `VISA_SPEND_CAP_USD` 1500, `VISA_MAX_PER_PURCHASE_USD` 750, `VISA_SIM_DELAY_MS` 400, `BUY_AUTO_CHOOSE` 0 (the user chooses), `BUY_FRAUD_BLOCK` 0.7, `BUY_REQUIRE_FRAUD_SCORE` 0, `BUY_RETRY_DELAY_MS` 60000.
+  - Defaults: `VISA_SPEND_CAP_USD` 1500, `VISA_MAX_PER_PURCHASE_USD` 750, `VISA_SIM_DELAY_MS` 400, `BUY_AUTO_CHOOSE` 0 (the user chooses), `BUY_FRAUD_BLOCK` 0.7, `BUY_RETRY_DELAY_MS` 60000. A non-numeric or negative cap logs a `[caps] WARNING` at startup and uses the default.
   - Deals: `DEALS_SOURCE` (default `apify`), `DEALS_APIFY_SOURCES` (default `fb,ebay`), `DEALS_SEARCH_CONCURRENCY` (2), `DEALS_PER_SOURCE` (6), optional `DEALS_HOME_LAT` / `DEALS_HOME_LNG`. Deal search reuses `APIFY_TOKEN` (about $0.10 of Apify per item searched live, per the note in `deals-apify.ts`).
   - Fraud (#64): `FRAUD_SETTLE_MS` (1500). Optional `PANGRAM_URL` / `PANGRAM_TOKEN` turn on the AI-text signal; without them it is off and deals keep `ai_text_score = -1`.
 
