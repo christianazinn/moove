@@ -93,7 +93,7 @@ See "Needs a human" below, then the Devpost draft (`docs/devpost.md`) and the de
 1. **Keys (or keep simulated):** real CDP keys on the worker make the x402 payments real Base Sepolia testnet transactions (Coinbase track). The same goes for eBay sandbox keys and the Auth0 CIBA config. Everything is labeled simulated today. Put keys in the repo-root `.env.local`; the workers restart themselves when it changes.
 2. **Anthropic pitch community:** still a TODO in `docs/devpost.md` (suggestions are there).
 3. **Devpost text, gallery and demo video:**
-   - `docs/devpost.md` is a draft checked against `main`.
+   - [`docs/devpost.md`](devpost.md) is ready to paste (checked against `main` Sat ~12:30 PM, through #284); its "How to submit" checklist covers screenshots, fields, video, team and tracks.
    - Gallery shots: [`docs/devpost-media.md`](devpost-media.md), about 10 minutes on the Offline demo.
    - Record the demo on the **Demo** backend.
    - Demo video: record from the timed script and shot list in [`docs/demo-video.md`](demo-video.md).
