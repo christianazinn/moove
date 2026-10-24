@@ -24,7 +24,6 @@ struct ShoppingItemDetailView: View {
         let snapshot = store.snapshot
         return ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("07 — Shopping").eyebrow().padding(.bottom, 12)
                 StorefrontImage(spec: ShoppingThumbnails.spec(for: item), tint: StorefrontTint.color(for: item.id),
                                 height: dynamicTypeSize.isAccessibilitySize ? 200 : 240, bought: item.status == .bought)
                     .overlay(alignment: .bottomLeading) {

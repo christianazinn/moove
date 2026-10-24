@@ -23,9 +23,9 @@ struct MovingRoomsPicker: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                PageHeader(eyebrow: "Moving from", title: "Which rooms are moving?")
+                PageHeader(title: "Which rooms are moving?")
                     .padding(.bottom, 12)
-                Text("Only kept items from the rooms you pick go into the new home. Older scans of a room are left out by default.")
+                Text("Only kept items from these rooms move in.")
                     .monoMeta()
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.bottom, 20)

@@ -18,10 +18,6 @@ struct ShoppingView: View {
         let front = store.snapshot.storefront()
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                PageHeader(eyebrow: "07 — Shopping", title: "What the new place needs.")
-                    .padding(.horizontal, Theme.gutter)
-                    .padding(.top, 16)
-                    .padding(.bottom, 20)
                 if state != .content {
                     CommercePlaceholder(
                         state: state,
@@ -96,11 +92,6 @@ struct ShoppingView: View {
             StorefrontShelfView(shelf: shelf).padding(.top, 36)
         }
 
-        Text("Long-press a card to remove it. Agents only buy what's on this list.")
-            .monoMeta()
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, 28)
-            .padding(.horizontal, Theme.gutter)
     }
 
     private func remove(_ doomed: [ShoppingItem]) {

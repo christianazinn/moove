@@ -35,7 +35,6 @@ struct ListingImportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 PageHeader(
-                    eyebrow: "08 — New home",
                     title: "Import a listing",
                     lede: "Paste a Zillow, Redfin or Realtor.com link."
                 )

@@ -13,7 +13,6 @@ struct ShareRoomView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     PageHeader(
-                        eyebrow: "02 — Inventory · Share",
                         title: "Share \(room.name).",
                         lede: "On the other phone, open Inventory → Join a room and enter this code. You'll both see and edit the same items, live."
                     )

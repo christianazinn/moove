@@ -19,11 +19,6 @@ struct ListingsView: View {
         let state = store.commerceState(hasRows: !listings.isEmpty)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                PageHeader(
-                    eyebrow: "04 — Sell",
-                    title: "Your listings.",
-                    lede: "What the listing agent is selling for you: drafting, waiting on your OK, live and sold."
-                )
                 if state != .content {
                     CommercePlaceholder(
                         state: state,
