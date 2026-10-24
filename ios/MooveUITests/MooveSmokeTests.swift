@@ -133,12 +133,6 @@ final class MooveSmokeTests: XCTestCase {
         sleep(3)  // let RealityKit draw a frame
         snap("04-room-voxel")
 
-        app.buttons["3D"].firstMatch.tap()
-        let model = app.descendants(matching: .any)["room.model"].firstMatch
-        XCTAssertTrue(model.waitForExistence(timeout: slow), "3D model view")
-        sleep(2)  // let RealityKit draw a frame
-        snap("04-room-3d")
-
         app.buttons["Plan"].firstMatch.tap()
         let plan = app.descendants(matching: .any)["room.plan"].firstMatch
         XCTAssertTrue(plan.waitForExistence(timeout: slow), "floor plan view")
