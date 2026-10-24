@@ -11,9 +11,13 @@
 // (E2E_DB, default moove-e2e, wiped each run), starts its own worker on spare ports, runs the stages,
 // prints a PASS/FAIL table and exits non-zero on any failure.
 //
-// Claude calls go through LLM_REPLAY (default auto: recorded answers in fixtures/llm are replayed;
-// a miss calls the API once and records it). --replay forbids live calls (CI-style); --live always calls.
-// Apify is never called: the demo items have committed comps caches, deals come from fixtures.
+// Safe by default, even with a dev's .env.local loaded (it has real keys on some laptops):
+//   - Claude: LLM_REPLAY=replay (recorded answers in fixtures/llm; a miss fails, never calls the API).
+//     Opt in with E2E_LLM=auto (a miss calls the API once and records it) or E2E_LLM=record / --live.
+//   - x402: X402_SIMULATE=1 for the worker, so CDP keys never sign Base Sepolia payments. Opt in with
+//     E2E_REAL_X402=1 (the commerce stages then fail, since they assert simulated rows).
+//   - Visa is always the simulated provider; Apify and fal are never called (APIFY_TOKEN/FAL_KEY blanked).
+// The worker stage and the table header say which modes ran.
 //
 // Usage (from agents/): npm run e2e [-- --replay | --live] [-- --keep]   (--keep leaves the worker running)
 import "./env.js";
@@ -28,7 +32,14 @@ import { DEMO_OBJECTS } from "./demo-room.js";
 
 const args = process.argv.slice(2);
 const KEEP = args.includes("--keep");
-const LLM_MODE = args.includes("--replay") ? "replay" : args.includes("--live") ? "record" : "auto";
+const LLM_OPT_IN = args.includes("--live") ? "record" : (process.env.E2E_LLM ?? "").trim();
+if (LLM_OPT_IN && !["replay", "auto", "record"].includes(LLM_OPT_IN)) {
+  console.error(`E2E_LLM must be replay, auto or record (got ${LLM_OPT_IN})`);
+  process.exit(2);
+}
+const LLM_MODE = args.includes("--replay") ? "replay" : LLM_OPT_IN || "replay";
+const REAL_X402 = process.env.E2E_REAL_X402 === "1";
+const MODES = `LLM_REPLAY=${LLM_MODE}, x402=${REAL_X402 ? "REAL (Base Sepolia, E2E_REAL_X402=1)" : "simulated"}, visa=simulated`;
 const DB = process.env.E2E_DB || "moove-e2e";
 const URI = process.env.E2E_URI || "ws://localhost:3000";
 const PORT = Number(process.env.E2E_UPLOAD_PORT || 8790);
@@ -131,7 +142,8 @@ function startWorker(): { child: ChildProcess; log: string; ready: Promise<void>
     X402_PORT: String(X402_PORT),
     LLM_REPLAY: LLM_MODE,
     VISA_PROVIDER: "simulated",
-    X402_SIMULATE: "1", // even if a dev's .env.local has CDP keys: no testnet payments from a test run
+    // Even if a dev's .env.local has CDP keys: no Base Sepolia payments unless explicitly asked for.
+    X402_SIMULATE: REAL_X402 ? "0" : "1",
     AGENT_SPEND_CAP_USDC: X402_CAP_USDC,
     X402_MAX_PER_CALL_USDC: "0.10",
     VISA_SPEND_CAP_USD: VISA_CAP_USD,
@@ -220,7 +232,7 @@ await stage(`publish module to ${DB} (fresh)`, async () => {
 await stage("worker starts against it", async () => {
   worker = startWorker();
   await worker.ready;
-  return { detail: `LLM_REPLAY=${LLM_MODE}, uploads on :${PORT}, log ${worker.log}` };
+  return { detail: `${MODES}, uploads on :${PORT}, log ${worker.log}` };
 });
 
 await stage("app user connects + register_user", async () => {
@@ -487,7 +499,7 @@ await stage("agent log: no unexpected errors", async () => {
 conn?.disconnect();
 if (worker && !KEEP) stopWorker(worker.child);
 const pad = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s.padEnd(n));
-console.log(`\nMoove E2E on ${URI}/${DB} (LLM_REPLAY=${LLM_MODE}) — ${Math.round((Date.now() - t0) / 1000)}s`);
+console.log(`\nMoove E2E on ${URI}/${DB} (${MODES}) — ${Math.round((Date.now() - t0) / 1000)}s`);
 console.log(`${pad("stage", 62)} ${pad("result", 6)} ${pad("time", 6)} detail`);
 for (const r of rows) console.log(`${pad(r.stage, 62)} ${pad(r.ok ? "PASS" : "FAIL", 6)} ${pad(`${(r.ms / 1000).toFixed(1)}s`, 6)} ${r.detail}`);
 const failed = rows.filter(r => !r.ok).length;
