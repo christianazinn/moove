@@ -332,12 +332,15 @@ const AUTH0_IOS_CLIENT_ID = 'B674uRd1BKSPe11boeGRMXd2UlJIuDur'; // ID token `aud
 // to an anonymous SpacetimeDB token ("Guest"). Setting it back to false is the demo escape hatch if
 // login breaks on stage.
 const REQUIRE_AUTH0 = false;
-// On maincloud only the pinned worker identity may hold the worker role (#44). Every other database
-// (local dev) keeps first-caller-wins so teammates can run their own worker.
-const MAINCLOUD_DATABASE_IDENTITY = 'c200b33aa2dc4fda37db755875072992ffdf560c733f43b9faec5c1b116793aa';
-const MAINCLOUD_WORKER_IDENTITIES: readonly string[] = [
-  'c2002442bb9baf2130801c9162964a627e601a60fde9d30f0da5d4a9b8fa09f7', // printed by agents on connect
-];
+// On the maincloud databases only the pinned worker identity may hold the worker role (#44, #146).
+// Every other database (local dev, e2e) keeps first-caller-wins so teammates can run their own worker.
+// Identities are printed by agents on connect ("[spacetime] connected as ...") and by `spacetime publish`.
+const PINNED_WORKERS: Readonly<Record<string, readonly string[]>> = {
+  // maincloud `moove` (live)
+  c200b33aa2dc4fda37db755875072992ffdf560c733f43b9faec5c1b116793aa: ['c2002442bb9baf2130801c9162964a627e601a60fde9d30f0da5d4a9b8fa09f7'],
+  // maincloud `moove-demo` (judge demo)
+  c200a698247a9d064e4859b938b91368fc645168a10fcbee61b4d69b98589bce: ['c2003a5e307957d4450fce019c76d55f3112aedd1d5cfdc14861c95173c4724c'],
+};
 
 function hex(id: Identity): string {
   return id.toHexString().replace(/^0x/i, '').toLowerCase();
@@ -345,7 +348,7 @@ function hex(id: Identity): string {
 
 // The pinned worker list for this database, or null when any first caller may become the worker.
 function pinnedWorkers(ctx: Ctx): readonly string[] | null {
-  return hex(ctx.databaseIdentity) === MAINCLOUD_DATABASE_IDENTITY ? MAINCLOUD_WORKER_IDENTITIES : null;
+  return PINNED_WORKERS[hex(ctx.databaseIdentity)] ?? null;
 }
 
 // The caller's Auth0 token claims (SpacetimeDB has verified the signature), or null for
@@ -456,14 +459,21 @@ export const setApprovalThreshold = spacetimedb.reducer(
 // worker_version: git sha the worker runs; worker_started_at: ISO time it (re)started
 const SERVICE_KEYS = ['upload_base_url', 'worker_version', 'worker_started_at'] as const;
 
+// A bare origin: no userinfo, path, query or fragment. Plain http only for local/private hosts (#146).
+const HTTPS_ORIGIN_RE = /^https:\/\/[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?\/?$/i;
+const LOCAL_HTTP_ORIGIN_RE = /^http:\/\/(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d{1,5})?\/?$/i;
+function isUploadOrigin(v: string): boolean {
+  return HTTPS_ORIGIN_RE.test(v) || LOCAL_HTTP_ORIGIN_RE.test(v);
+}
+
 export const setServiceConfig = spacetimedb.reducer(
   { key: t.string(), value: t.string() },
   (ctx, { key, value }) => {
     requireWorker(ctx);
     oneOf('key', key, SERVICE_KEYS);
     if (value.length > 512) throw new SenderError('value too long');
-    if (key === 'upload_base_url' && value !== '' && !/^https?:\/\/[^\s/]+(?::\d+)?\/?$/i.test(value)) {
-      throw new SenderError('upload_base_url must be an http(s) origin');
+    if (key === 'upload_base_url' && value !== '' && !isUploadOrigin(value)) {
+      throw new SenderError('upload_base_url must be https://host[:port], or http:// only for a local/private host');
     }
     const row = { key, value, updatedAt: ctx.timestamp };
     if (ctx.db.serviceConfig.key.find(key)) ctx.db.serviceConfig.key.update(row);
@@ -487,6 +497,7 @@ export const registerWorker = spacetimedb.reducer({ label: t.string() }, (ctx, {
 export const createRoom = spacetimedb.reducer(
   { name: t.string(), home: t.string() },
   (ctx, { name, home }) => {
+    capLen('name', name, MAX_ROOM_NAME);
     ctx.db.room.insert({
       id: 0n,
       owner: ctx.sender,
@@ -577,6 +588,9 @@ export const importScan = spacetimedb.reducer(
     objects: t.array(ScanObjectInput),
   },
   (ctx, { roomName, home, usdzUrl, capturedRoomJsonUrl, objects }) => {
+    checkObjects(objects);
+    capLen('room_name', roomName, MAX_ROOM_NAME);
+    checkScanUrls(usdzUrl, capturedRoomJsonUrl);
     const r = ctx.db.room.insert({
       id: 0n,
       owner: ctx.sender,
@@ -650,6 +664,9 @@ export const importScanV2 = spacetimedb.reducer(
     objects: t.array(ScanObjectInputV2),
   },
   (ctx, { roomName, home, usdzUrl, capturedRoomJsonUrl, objects }) => {
+    checkObjects(objects);
+    capLen('room_name', roomName, MAX_ROOM_NAME);
+    checkScanUrls(usdzUrl, capturedRoomJsonUrl);
     const attrs = objects.map(o => attributesJsonOf(o.attributes)); // validate everything before writing
     const r = ctx.db.room.insert({
       id: 0n,
@@ -701,6 +718,8 @@ export const createScan = spacetimedb.reducer(
     objects: t.array(ScanObjectInput),
   },
   (ctx, { roomId, usdzUrl, capturedRoomJsonUrl, objects }) => {
+    checkObjects(objects);
+    checkScanUrls(usdzUrl, capturedRoomJsonUrl);
     const r = requireRoomAccess(ctx, roomId);
     const s = ctx.db.scan.insert({
       id: 0n,
@@ -721,9 +740,9 @@ export const createScan = spacetimedb.reducer(
         ctx.db.item.id.update({
           ...prev,
           scanId: s.id,
-          widthM: o.widthM,
-          heightM: o.heightM,
-          depthM: o.depthM,
+          widthM: dim('width_m', o.widthM),
+          heightM: dim('height_m', o.heightM),
+          depthM: dim('depth_m', o.depthM),
           updatedAt: ctx.timestamp,
         });
       } else {
@@ -737,6 +756,31 @@ export const createScan = spacetimedb.reducer(
 // worker has its own allowlist (agents/src/integrations/anthropic.ts); this is only a first filter.
 function isHttpUrl(url: string): boolean {
   return /^https?:\/\/\S+$/i.test(url);
+}
+
+// Input limits (#146): sizes must be real numbers in a room's range (a 1e300 box crashed the app's
+// volume math for everyone in the room), and imports are bounded so one call can't create thousands
+// of items that all queue for vision and pricing.
+const MAX_DIM_M = 30;
+const MAX_SCAN_OBJECTS = 200;
+const MAX_NAME = 120;
+const MAX_SCAN_OBJECT_ID = 64;
+const MAX_URL = 2048;
+const MAX_ROOM_NAME = 80;
+function dim(name: string, v: number): number {
+  if (!Number.isFinite(v) || v < 0 || v > MAX_DIM_M) throw new SenderError(`${name} must be 0-${MAX_DIM_M} m, got ${v}`);
+  return v;
+}
+function capLen(name: string, v: string, max: number): string {
+  if (v.length > max) throw new SenderError(`${name} is longer than ${max} characters`);
+  return v;
+}
+function checkObjects(objects: readonly unknown[]): void {
+  if (objects.length > MAX_SCAN_OBJECTS) throw new SenderError(`at most ${MAX_SCAN_OBJECTS} objects per import`);
+}
+function checkScanUrls(usdzUrl: string, capturedRoomJsonUrl: string): void {
+  capLen('usdz_url', usdzUrl, MAX_URL);
+  capLen('captured_room_json_url', capturedRoomJsonUrl, MAX_URL);
 }
 
 function insertItem(
@@ -760,13 +804,13 @@ function insertItem(
     owner,
     roomId,
     scanId,
-    scanObjectId: o.scanObjectId,
-    name: o.name || o.category,
-    category: o.category,
-    widthM: o.widthM,
-    heightM: o.heightM,
-    depthM: o.depthM,
-    photoUrls: isHttpUrl(o.photoUrl) ? [o.photoUrl] : [], // a bad URL drops the photo, not the import
+    scanObjectId: capLen('scan_object_id', o.scanObjectId, MAX_SCAN_OBJECT_ID),
+    name: capLen('name', o.name || o.category, MAX_NAME),
+    category: capLen('category', o.category, MAX_NAME),
+    widthM: dim('width_m', o.widthM),
+    heightM: dim('height_m', o.heightM),
+    depthM: dim('depth_m', o.depthM),
+    photoUrls: isHttpUrl(o.photoUrl) && o.photoUrl.length <= MAX_URL ? [o.photoUrl] : [], // a bad URL drops the photo, not the import
     material: '',
     brand: '',
     condition: '',
@@ -861,7 +905,7 @@ export const renameItem = spacetimedb.reducer(
   (ctx, { itemId, name }) => {
     const it = getItem(ctx, itemId);
     requireRoomAccess(ctx, it.roomId);
-    ctx.db.item.id.update({ ...it, name, updatedAt: ctx.timestamp });
+    ctx.db.item.id.update({ ...it, name: capLen('name', name, MAX_NAME), updatedAt: ctx.timestamp });
   }
 );
 
@@ -880,9 +924,6 @@ export const setItemStage = spacetimedb.reducer(
 );
 
 // ---------- 3D models (#65) ----------
-function isHttpOrEmpty(url: string): boolean {
-  return url === '' || /^https?:\/\//i.test(url);
-}
 
 // Sets (or clears, with url '') an item's 3D model. The app calls it after Object Capture
 // ('capture'); the SAM 3D agent calls it with a model built from a photo ('sam3d'). A captured
@@ -893,7 +934,7 @@ export const setItemModel = spacetimedb.reducer(
     const it = getItem(ctx, itemId);
     if (!isWorker(ctx)) requireRoomAccess(ctx, it.roomId);
     oneOf('source', source, MODEL_SOURCE);
-    if (!isHttpOrEmpty(url)) throw new SenderError('model URL must be http(s)');
+    if (url !== '' && (!isHttpUrl(url) || url.length > MAX_URL)) throw new SenderError('model URL must be http(s), at most 2048 characters');
     if (source === 'sam3d' && it.modelSource === 'capture' && it.modelUrl !== '') {
       ctx.db.item.id.update({ ...it, modelStatus: 'done', updatedAt: ctx.timestamp });
       return;
