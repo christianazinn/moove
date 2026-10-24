@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { decide, moveCostCents, needsSort, SENTIMENTAL_REASON, type SortGate, type SortInput } from "../src/agents/sort.js";
+import { decide, moveCostCents, nextSort, SENTIMENTAL_REASON, type SortGate, type SortInput } from "../src/agents/sort.js";
 
 /** A 0.5 x 0.5 x 0.4 m (0.1 m^3, ~$6 to move) item in good shape, unpriced. */
 function item(over: Partial<Omit<SortInput, "estValueCents">> & { est?: number } = {}): SortInput {
@@ -8,10 +8,17 @@ function item(over: Partial<Omit<SortInput, "estValueCents">> & { est?: number }
   return { name: "Side table", category: "furniture", condition: "good", widthM: 0.5, heightM: 0.5, depthM: 0.4, fragile: false, estValueCents: BigInt(est), ...rest };
 }
 
-/** Ready to sort: priced, no photos, untouched. */
+/** Ready to sort: priced at $150, no photos, untouched. */
 function gate(over: Partial<SortGate> = {}): SortGate {
-  return { disposition: "undecided", dispositionSource: "auto", dispositionReason: "", maybeSentimental: false, pricingStatus: "done", detailsStatus: "pending", photoUrls: [], ...over };
+  return { ...item({ est: 15000 }), disposition: "undecided", dispositionSource: "auto", dispositionReason: "", maybeSentimental: false, pricingStatus: "done", detailsStatus: "pending", photoUrls: [], ...over };
 }
+/** gate(), already holding whatever decide() says for it. */
+function sorted(over: Partial<SortGate> = {}): SortGate {
+  const g = gate(over);
+  const d = decide(g);
+  return { ...g, disposition: d.disposition, dispositionReason: d.reason };
+}
+const KEEP_150 = { disposition: "keep", reason: "Worth ~$150, ~$6 to move: keep" };
 
 // A 2 x 0.9 x 0.9 m sofa is 1.62 m^3, ~$97 to move at $60/m^3.
 const sofa = (est: number, over: Partial<SortInput> = {}) =>
@@ -53,7 +60,8 @@ test("fragile packing cost can tip a sofa from keep to sell", () => {
 
 test("poor condition: trash when cheap or unpriced, sell when still worth something", () => {
   assert.deepEqual(decide(item({ condition: "poor", est: 800 })), { disposition: "trash", reason: "Poor shape and worth only ~$8: trash" });
-  assert.deepEqual(decide(item({ condition: "poor" })), { disposition: "trash", reason: "Poor shape and no resale value: trash" });
+  assert.deepEqual(decide(item({ condition: "poor" })), { disposition: "trash", reason: "Poor shape and no resale data: trash" });
+  assert.deepEqual(decide(item({ condition: "poor", est: 0 })), { disposition: "trash", reason: "Poor shape and no resale value: trash" });
   assert.deepEqual(decide(item({ condition: "poor", est: 6000 })), { disposition: "sell", reason: "Poor shape but worth ~$60: sell as-is" });
 });
 
@@ -71,6 +79,8 @@ test("beds and mattresses: keep (they rarely resell) unless in poor shape", () =
   assert.deepEqual(decide(item({ ...bed, condition: "poor", est: 5000 })), { disposition: "trash", reason: "Worn bed (~$50): won't resell or be accepted as a donation, trash" });
   // whole words only: a bedside table is ordinary furniture
   assert.equal(decide(item({ name: "Bedside table", est: 1000 })).disposition, "keep");
+  // bed linen is linen
+  assert.equal(decide(item({ name: "Bed sheets", category: "linen" })).disposition, "donate");
 });
 
 test("clothing and books that are cheap or unpriced: donate", () => {
@@ -87,32 +97,53 @@ test("unknown value (pricing failed, or no comps): keep for now", () => {
 
 test("built-in fixtures are left undecided with a reason", () => {
   assert.deepEqual(decide(item({ name: "toilet", category: "toilet" })), { disposition: "undecided", reason: "Built-in fixture: stays with the house" });
+  assert.equal(decide(item({ name: "Stairs", category: "stairs" })).disposition, "undecided");
+  assert.equal(decide(item({ name: "Spiral stair", category: "" })).disposition, "undecided");
 });
 
-test("needsSort: priced (or failed) items nobody decided yet", () => {
-  assert.equal(needsSort(gate()), true);
-  assert.equal(needsSort(gate({ pricingStatus: "failed" })), true);
-  assert.equal(needsSort(gate({ pricingStatus: "pending" })), false);
-  assert.equal(needsSort(gate({ pricingStatus: "running" })), false);
+test("nextSort: priced (or failed) items nobody decided yet", () => {
+  assert.deepEqual(nextSort(gate()), KEEP_150);
+  assert.deepEqual(nextSort(gate({ pricingStatus: "failed", estValueCents: -1n })), { disposition: "keep", reason: "No resale data; ~$6 to move: keep for now" });
+  assert.equal(nextSort(gate({ pricingStatus: "pending" })), null);
+  assert.equal(nextSort(gate({ pricingStatus: "running" })), null);
 });
 
-test("needsSort: waits for vision when there are photos", () => {
-  assert.equal(needsSort(gate({ photoUrls: ["http://x/a.jpg"], detailsStatus: "pending" })), false);
-  assert.equal(needsSort(gate({ photoUrls: ["http://x/a.jpg"], detailsStatus: "running" })), false);
-  assert.equal(needsSort(gate({ photoUrls: ["http://x/a.jpg"], detailsStatus: "done" })), true);
-  assert.equal(needsSort(gate({ photoUrls: ["http://x/a.jpg"], detailsStatus: "failed" })), true);
+test("nextSort: waits for vision when there are photos", () => {
+  assert.equal(nextSort(gate({ photoUrls: ["http://x/a.jpg"], detailsStatus: "pending" })), null);
+  assert.equal(nextSort(gate({ photoUrls: ["http://x/a.jpg"], detailsStatus: "running" })), null);
+  assert.deepEqual(nextSort(gate({ photoUrls: ["http://x/a.jpg"], detailsStatus: "done" })), KEEP_150);
+  assert.deepEqual(nextSort(gate({ photoUrls: ["http://x/a.jpg"], detailsStatus: "failed" })), KEEP_150);
 });
 
-test("needsSort: never user-set, sentimental or already-sorted items", () => {
-  assert.equal(needsSort(gate({ dispositionSource: "user" })), false);
-  assert.equal(needsSort(gate({ dispositionSource: "user", disposition: "keep" })), false);
-  assert.equal(needsSort(gate({ maybeSentimental: true })), false);
-  assert.equal(needsSort(gate({ maybeSentimental: true, dispositionReason: SENTIMENTAL_REASON })), false);
-  assert.equal(needsSort(gate({ disposition: "sell", dispositionReason: "Worth ~$50 but ~$97 to move: sell" })), false);
+test("nextSort: never user-set items; nothing to do once the stored decision matches", () => {
+  assert.equal(nextSort(gate({ dispositionSource: "user" })), null);
+  assert.equal(nextSort(gate({ dispositionSource: "user", disposition: "keep", maybeSentimental: true })), null);
+  assert.equal(nextSort(sorted()), null);
   // parked built-ins don't loop
-  assert.equal(needsSort(gate({ dispositionReason: "Built-in fixture: stays with the house" })), false);
+  assert.equal(nextSort(sorted({ name: "Toilet", category: "toilet" })), null);
 });
 
-test("needsSort: re-sorts once the user clears the sentimental flag", () => {
-  assert.equal(needsSort(gate({ dispositionReason: SENTIMENTAL_REASON })), true);
+test("nextSort: sentimental items are parked, including ones already auto-sorted", () => {
+  const park = { disposition: "undecided", reason: SENTIMENTAL_REASON };
+  assert.deepEqual(nextSort(gate({ maybeSentimental: true })), park);
+  assert.deepEqual(nextSort(gate({ maybeSentimental: true, pricingStatus: "pending" })), park);
+  assert.deepEqual(nextSort({ ...sorted(), maybeSentimental: true }), park);
+  assert.equal(nextSort(gate({ maybeSentimental: true, dispositionReason: SENTIMENTAL_REASON })), null);
+});
+
+test("nextSort: re-sorts once the user clears the sentimental flag", () => {
+  assert.deepEqual(nextSort(gate({ dispositionReason: SENTIMENTAL_REASON })), KEEP_150);
+});
+
+test("nextSort: re-sorts an auto decision when vision, pricing or flags change it", () => {
+  const before = sorted(); // a $150 keep, sorted before any photo
+  // vision later finds it's in poor shape, and re-pricing says it's cheap
+  assert.deepEqual(nextSort({ ...before, condition: "poor", estValueCents: 800n, photoUrls: ["u"], detailsStatus: "done" }), { disposition: "trash", reason: "Poor shape and worth only ~$8: trash" });
+  // vision or re-pricing still running: wait
+  assert.equal(nextSort({ ...before, photoUrls: ["u"], detailsStatus: "running", condition: "poor" }), null);
+  assert.equal(nextSort({ ...before, pricingStatus: "running" }), null);
+  // marking a big item fragile can tip keep to sell
+  const sofa = sorted({ name: "Sofa", category: "sofa", widthM: 2, heightM: 0.9, depthM: 0.9, estValueCents: 12500n });
+  assert.equal(sofa.disposition, "keep");
+  assert.equal(nextSort({ ...sofa, fragile: true })?.disposition, "sell");
 });
