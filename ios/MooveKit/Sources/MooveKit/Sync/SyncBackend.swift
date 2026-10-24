@@ -17,6 +17,8 @@ public struct SyncSnapshot: Sendable, Equatable {
     public var agentEvents: [AgentEvent] = []
     public var shoppingItems: [ShoppingItem] = []
     public var deals: [Deal] = []
+    /// Worker announcements (#122): upload URL, worker version and start time.
+    public var serviceConfig = ServiceConfig()
 
     public init(me: IdentityHex? = nil) { self.me = me }
 

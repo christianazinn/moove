@@ -221,6 +221,11 @@ public struct Reducers: Sendable {
     }
 
     @discardableResult
+    public func setServiceConfig(key: String, value: String) async throws -> ReducerSuccess {
+        try await client.callReducer(SetServiceConfigReducer(key: key, value: value))
+    }
+
+    @discardableResult
     public func setShoppingStatus(shoppingitemid: UInt64, status: String) async throws -> ReducerSuccess {
         try await client.callReducer(SetShoppingStatusReducer(shoppingitemid: shoppingitemid, status: status))
     }
@@ -267,11 +272,12 @@ public struct Db: Sendable {
     public let roomMember: Table<RoomMemberRow>
     public let scan: Table<ScanRow>
     public let scanPhoto: Table<ScanPhotoRow>
+    public let serviceConfig: Table<ServiceConfigRow>
     public let shoppingItem: Table<ShoppingItemRow>
     public let user: Table<UserRow>
     public let worker: Table<WorkerRow>
 
-    public init(client: SpacetimeDBClient, reducers: Reducers, agentEvent: Table<AgentEventRow>, approval: Table<ApprovalRow>, comp: Table<CompRow>, deal: Table<DealRow>, item: Table<ItemRow>, layout: Table<LayoutRow>, listing: Table<ListingRow>, newHome: Table<NewHomeRow>, payment: Table<PaymentRow>, room: Table<RoomRow>, roomMember: Table<RoomMemberRow>, scan: Table<ScanRow>, scanPhoto: Table<ScanPhotoRow>, shoppingItem: Table<ShoppingItemRow>, user: Table<UserRow>, worker: Table<WorkerRow>) {
+    public init(client: SpacetimeDBClient, reducers: Reducers, agentEvent: Table<AgentEventRow>, approval: Table<ApprovalRow>, comp: Table<CompRow>, deal: Table<DealRow>, item: Table<ItemRow>, layout: Table<LayoutRow>, listing: Table<ListingRow>, newHome: Table<NewHomeRow>, payment: Table<PaymentRow>, room: Table<RoomRow>, roomMember: Table<RoomMemberRow>, scan: Table<ScanRow>, scanPhoto: Table<ScanPhotoRow>, serviceConfig: Table<ServiceConfigRow>, shoppingItem: Table<ShoppingItemRow>, user: Table<UserRow>, worker: Table<WorkerRow>) {
         self.client = client
         self.reducers = reducers
         self.agentEvent = agentEvent
@@ -287,6 +293,7 @@ public struct Db: Sendable {
         self.roomMember = roomMember
         self.scan = scan
         self.scanPhoto = scanPhoto
+        self.serviceConfig = serviceConfig
         self.shoppingItem = shoppingItem
         self.user = user
         self.worker = worker
@@ -314,6 +321,7 @@ public struct Db: Sendable {
         await client.registerTableRowDecoder(RoomMemberRow.self)
         await client.registerTableRowDecoder(ScanRow.self)
         await client.registerTableRowDecoder(ScanPhotoRow.self)
+        await client.registerTableRowDecoder(ServiceConfigRow.self)
         await client.registerTableRowDecoder(ShoppingItemRow.self)
         await client.registerTableRowDecoder(UserRow.self)
         await client.registerTableRowDecoder(WorkerRow.self)
@@ -333,6 +341,7 @@ public struct Db: Sendable {
             roomMember: Table<RoomMemberRow>(client: client),
             scan: Table<ScanRow>(client: client),
             scanPhoto: Table<ScanPhotoRow>(client: client),
+            serviceConfig: Table<ServiceConfigRow>(client: client),
             shoppingItem: Table<ShoppingItemRow>(client: client),
             user: Table<UserRow>(client: client),
             worker: Table<WorkerRow>(client: client)

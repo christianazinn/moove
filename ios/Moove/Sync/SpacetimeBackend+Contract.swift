@@ -16,6 +16,7 @@ extension SpacetimeBackend {
         "user", "room", "room_member", "scan", "item", "comp",
         "new_home", "layout", "listing", "approval",
         "payment", "agent_event", "shopping_item", "deal",
+        "service_config",
     ]
 
     /// Everything the signed-in identity can see: its own rows, plus rooms,
@@ -42,6 +43,8 @@ extension SpacetimeBackend {
             "SELECT * FROM agent_event WHERE owner = \(id)",
             "SELECT * FROM shopping_item WHERE owner = \(id)",
             "SELECT * FROM deal WHERE owner = \(id)",
+            // Public worker announcements (#122): upload URL, worker version.
+            "SELECT * FROM service_config",
         ]
     }
 
@@ -60,6 +63,7 @@ extension SpacetimeBackend {
         { await $0.registerTableRowDecoder(MooveBindings.AgentEventRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.ShoppingItemRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.DealRow.self) },
+        { await $0.registerTableRowDecoder(MooveBindings.ServiceConfigRow.self) },
     ]
 
     static func primaryKey(of row: Any) -> AnyHashable? {
@@ -83,6 +87,9 @@ extension SpacetimeBackend {
         s.agentEvents = rows("agent_event", MooveBindings.AgentEventRow.self).map(AgentEvent.init).sorted { $0.id < $1.id }
         s.shoppingItems = rows("shopping_item", MooveBindings.ShoppingItemRow.self).map(ShoppingItem.init).sorted { $0.id < $1.id }
         s.deals = rows("deal", MooveBindings.DealRow.self).map(Deal.init).sorted { $0.id < $1.id }
+        s.serviceConfig = ServiceConfig(values: Dictionary(
+            rows("service_config", MooveBindings.ServiceConfigRow.self).map { ($0.key, $0.value) },
+            uniquingKeysWith: { a, _ in a }))
         return s
     }
 

@@ -54,7 +54,7 @@ struct ListingImportClient: Sendable {
     var timeout: TimeInterval = 30
     var session: URLSession = .shared
 
-    init(baseURL: URL? = AppConfig.current.uploadBaseURL, timeout: TimeInterval = 30, session: URLSession = .shared) {
+    init(baseURL: URL? = AppConfig.effectiveUploadBaseURL, timeout: TimeInterval = 30, session: URLSession = .shared) {
         self.baseURL = baseURL
         self.timeout = timeout
         self.session = session
