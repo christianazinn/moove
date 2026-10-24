@@ -76,6 +76,7 @@ Everything simulated says so, in the data (`simulated: true`) and in the UI.
 |---|---|
 | Wifi or the backend | Settings, then backend "Offline demo (fixtures)". The banner says "Offline demo: fixture data, nothing is synced". The whole flow runs on `MooveKit/DemoFixtures`. |
 | The live scan | Join the seeded Bedroom with its code, tap **Load demo scan** on the Scan tab, or use the offline demo. |
+| The scan misread something (a table drawn as a cabinet, a lamp called "pillow", a piece facing the wall, a ghost item) | Items > Review, open the item, **Fix it**: type a name (**Coffee table** re-routes the 3D model), tap a **What is it?** chip (Table, Lamp, ...), **Turn around** / **90°**, or **Not a real item** then **Remove**. Or long-press its row in Inventory for the same menu. Every 3D view updates live; works offline too. |
 | Listing import | With no worker reachable it builds an estimate from beds, baths and square feet (labeled Estimated). Or skip it and use the demo house. |
 | Apify (slow, down, out of credit) | Comps replay from `agents/fixtures/comps/` and are labeled `[REPLAYED]`. Seeded items always replay. |
 | x402 / CDP | Without CDP keys, or with `X402_SIMULATE=1`, payments are recorded `simulated: true` and badged in the spending log. If a paid call fails, pricing falls back to Apify directly. `PRICING_PAY_X402=0` skips paying. |
