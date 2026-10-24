@@ -153,8 +153,9 @@ public struct MoveSummary: Sendable, Equatable {
 
     /// The Summary screen's figures straight from synced rows (items, listings, payments, agent events).
     /// The screen uses this whenever there are payment or event rows (the offline demo always has them).
+    /// Spend is the user's own; the timeline also shows agent steps on shared-room items (#254).
     public init(snapshot: SyncSnapshot, timelineLimit: Int = 8) {
-        self.init(items: snapshot.items, sales: Self.sales(from: snapshot), spend: Self.spend(from: snapshot.payments),
+        self.init(items: snapshot.items, sales: Self.sales(from: snapshot), spend: Self.spend(from: snapshot.myPayments),
                   events: Self.events(from: snapshot.agentEvents), timelineLimit: timelineLimit)
     }
 

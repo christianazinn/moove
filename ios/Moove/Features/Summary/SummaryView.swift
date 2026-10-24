@@ -355,6 +355,7 @@ struct SummaryView: View {
         case .approvals: "hand.raised"
         case .sentimental: "heart"
         case .x402: "dollarsign.circle"
+        case .roomX402: "person.2"
         case .card: "creditcard"
         case .ai: "gauge"
         }
