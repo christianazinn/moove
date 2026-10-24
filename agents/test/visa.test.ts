@@ -537,3 +537,73 @@ test("createVisaCheckout budgets: defaults, and an explicit 0 cap means no spend
   assert.equal(zero.remaining("buy"), 0n);
   assert.equal((await zero.purchase(ctx({ amountCents: 100n }))).status, "refused");
 });
+
+// ---------- review fixes ----------
+
+test("a denied approval blocks the purchase even after the threshold is raised above the price", async () => {
+  const { sink } = memorySink();
+  const s = spy(createSimulatedBackend());
+  const visa = new VisaCheckout({ sink, backend: s.backend, ledger: ledger() });
+  const r = await visa.purchase(ctx({ thresholdCents: 50_000n, currentApproval: () => approved(12_345n, "denied") }));
+  assert.equal(r.status, "refused");
+  assert.equal(s.calls.authorize, 0);
+  assert.deepEqual(approvalGate(100n, 1_000n, approved(100n, "expired")), { ok: false, needsApproval: false, reason: "approval expired" });
+});
+
+test("the threshold is read fresh at the pre-capture re-check", async () => {
+  const { sink, payments } = memorySink();
+  const s = spy(createSimulatedBackend());
+  const visa = new VisaCheckout({ sink, backend: s.backend, ledger: ledger() });
+  let threshold = 20_000n; // under it at first, then the user switches to "always ask" mid-flight
+  const r = await visa.purchase(
+    ctx({
+      thresholdCents: () => {
+        const t = threshold;
+        threshold = -1n;
+        return t;
+      },
+    }),
+  );
+  assert.equal(r.status, "voided");
+  assert.equal(s.calls.capture, 0);
+  assert.equal(payments[0].status, "failed");
+});
+
+test("a capture that fails in transit stays pending, keeps the budget and is not voided", async () => {
+  const { sink, payments } = memorySink();
+  const inner = createSimulatedBackend();
+  const s = spy({
+    ...inner,
+    capture: async () => {
+      throw new VisaApiError("socket hang up", 0, {});
+    },
+  });
+  const l = ledger(20_000n);
+  const visa = new VisaCheckout({ sink, backend: s.backend, ledger: l });
+  const r = await visa.purchase(ctx());
+  assert.equal(r.status, "unknown");
+  assert.equal(s.calls.void, 0);
+  assert.equal(payments[0].status, "pending");
+  assert.equal(l.spentBy("buy"), 12_345n);
+});
+
+test("a reversal that fails keeps the hold counted against the budget", async () => {
+  const { sink } = memorySink();
+  const inner = createSimulatedBackend();
+  const backend: CheckoutBackend = { ...inner, void: async () => ({ id: "", status: "declined", processorStatus: "DECLINED", reason: "nope" }) };
+  const l = ledger();
+  const visa = new VisaCheckout({ sink, backend, ledger: l });
+  const r = await visa.purchase(ctx({ stillValid: () => "user picked another deal" }));
+  assert.equal(r.status, "voided");
+  assert.equal(l.spentBy("buy"), 12_345n);
+});
+
+test("seeded spend from earlier runs counts toward the cap", async () => {
+  const { sink } = memorySink();
+  const s = spy(createSimulatedBackend());
+  const visa = new VisaCheckout({ sink, backend: s.backend, ledger: ledger(20_000n) });
+  visa.seedSpent("buy", 10_000n);
+  const r = await visa.purchase(ctx());
+  assert.equal(r.status, "refused");
+  assert.equal(s.calls.authorize, 0);
+});
