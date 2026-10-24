@@ -14,13 +14,7 @@ final class CommerceUITests: XCTestCase {
     private var app: XCUIApplication!
 
     func testSellAndBuyFlowOnOfflineDemo() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        // Same launch as MooveSmokeTests: UserDefaults argument domain + fresh-install reset.
-        app.launchArguments += ["-moove.backendKind", "fixture", "-moove.auth.guest", "YES"]
-        app.launchEnvironment["MOOVE_UI_TEST_RESET"] = "1"
-        app.launch()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 30), "tab bar")
+        launchOfflineDemo()
 
         // Sell & Buy tab and its four segments, in order.
         let sellBuy = app.tabBars.buttons["Sell & Buy"]
@@ -123,7 +117,80 @@ final class CommerceUITests: XCTestCase {
         shot("7-spending-new-payment")
     }
 
+    /// #140 claimed Dynamic Type support: the largest accessibility text size, one read-only pass.
+    func testCommerceScreensAtLargestAccessibilityText() {
+        launchOfflineDemo(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        tourCommerceScreens(prefix: "a11y-xxxl")
+    }
+
+    /// #140 claimed dark-mode contrast: the same read-only pass in dark mode.
+    func testCommerceScreensInDarkMode() {
+        launchOfflineDemo(["-AppleInterfaceStyle", "Dark"])
+        tourCommerceScreens(prefix: "dark")
+    }
+
     // MARK: Helpers
+
+    private func launchOfflineDemo(_ extra: [String] = []) {
+        continueAfterFailure = false
+        app = XCUIApplication()
+        // Same launch as MooveSmokeTests: UserDefaults argument domain + fresh-install reset.
+        app.launchArguments += ["-moove.backendKind", "fixture", "-moove.auth.guest", "YES"] + extra
+        app.launchEnvironment["MOOVE_UI_TEST_RESET"] = "1"
+        app.launch()
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 30), "tab bar")
+    }
+
+    /// Screenshots every commerce screen ("<prefix>-<screen>") and checks the key controls exist and
+    /// are hittable. Read-only: nothing is approved or bought, so it stays short.
+    private func tourCommerceScreens(prefix: String) {
+        let sellBuy = app.tabBars.buttons["Sell & Buy"]
+        XCTAssertTrue(sellBuy.waitForExistence(timeout: 10), "no Sell & Buy tab")
+        sellBuy.tap()
+        let tabs = ["Listings", "Shopping", "Approvals", "Spending"].map(segment)
+        for s in tabs { XCTAssertTrue(s.waitForExistence(timeout: 10) && s.isHittable, "segment \(s) not hittable") }
+        let (listingsTab, shoppingTab, approvalsTab, spendingTab) = (tabs[0], tabs[1], tabs[2], tabs[3])
+        shot("\(prefix)-0-sell-and-buy")
+
+        listingsTab.tap()
+        XCTAssertTrue(app.staticTexts["Your listings."].waitForExistence(timeout: 10))
+        shot("\(prefix)-1-listings")
+        let posted = byId("listing.201")
+        XCTAssertTrue(scrollTo(posted), "listing row not hittable")
+        XCTAssertTrue(posted.label.localizedCaseInsensitiveContains("simulated"), posted.label)
+        shot("\(prefix)-1-listings-simulated")
+
+        shoppingTab.tap()
+        XCTAssertTrue(app.staticTexts["What the new place needs."].waitForExistence(timeout: 10))
+        shot("\(prefix)-2-shopping")
+        let deskChair = byId("shopping.item.52")
+        XCTAssertTrue(scrollTo(deskChair), "Desk chair not hittable")
+        deskChair.tap()
+        XCTAssertTrue(scrollTo(byId("deal.blocked.76")), "Blocked: likely fraud not hittable")
+        shot("\(prefix)-2-desk-chair-blocked")
+        XCTAssertTrue(scrollTo(byId("deal.choose.74")), "Choose not hittable")
+        shot("\(prefix)-2-desk-chair-choose")
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(back.waitForExistence(timeout: 5))
+        back.tap()
+
+        XCTAssertTrue(approvalsTab.waitForExistence(timeout: 10))
+        approvalsTab.tap()
+        XCTAssertTrue(app.staticTexts["Your go-ahead."].waitForExistence(timeout: 10))
+        shot("\(prefix)-3-approvals")
+        XCTAssertTrue(scrollTo(byId("approval.approve.300")), "Approve not hittable")
+        shot("\(prefix)-3-approvals-approve")
+
+        spendingTab.tap()
+        XCTAssertTrue(app.staticTexts["Where the money went."].waitForExistence(timeout: 10))
+        shot("\(prefix)-4-spending")
+        let simulated = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'payment.' AND label CONTAINS ', simulated,'")).firstMatch
+        XCTAssertTrue(scrollTo(simulated), "SIMULATED payment row not hittable")
+        shot("\(prefix)-4-spending-simulated")
+        XCTAssertTrue(scrollTo(byId("payment.basescan.500")), "Basescan link not hittable")
+        shot("\(prefix)-4-spending-basescan")
+    }
 
     private func segment(_ title: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", title, "\(title) ·")).firstMatch
