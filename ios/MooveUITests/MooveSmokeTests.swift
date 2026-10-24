@@ -70,6 +70,21 @@ final class MooveSmokeTests: XCTestCase {
         snap("02-item-detail")
     }
 
+    /// #180: objects the import skipped are reported on the finished screen.
+    func testFinishedScreenReportsSkippedObjects() {
+        launch(environment: ["MOOVE_DEMO_BAD_OBJECTS": "1"])
+        open(tab: "Scan")
+        let load = app.buttons["Load demo scan"]
+        XCTAssertTrue(scrollTo(load), "Load demo scan button")
+        load.tap()
+        XCTAssertTrue(app.buttons["See inventory"].waitForExistence(timeout: 15), "scan finished screen")
+        let notice = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", "2 objects looked wrong")).firstMatch
+        XCTAssertTrue(notice.waitForExistence(timeout: 5), "skipped-objects notice")
+        notice.tap()
+        XCTAssertTrue(text(containing: "width 40 m").waitForExistence(timeout: 5), "skip reasons listed")
+        snap("03-scan-skipped")
+    }
+
     func testLoadDemoScanShowsRoomInInventory() {
         launch()
         open(tab: "Scan")
@@ -170,13 +185,14 @@ final class MooveSmokeTests: XCTestCase {
 
     // MARK: Helpers
 
-    private func launch(guest: Bool = true) {
+    private func launch(guest: Bool = true, environment: [String: String] = [:]) {
         continueAfterFailure = false
         app = XCUIApplication()
         // UserDefaults argument domain: overrides what the app has stored.
         app.launchArguments += ["-moove.backendKind", "fixture"]
         if guest { app.launchArguments += ["-moove.auth.guest", "YES"] }
         app.launchEnvironment["MOOVE_UI_TEST_RESET"] = "1"
+        app.launchEnvironment.merge(environment) { _, new in new }
         app.launch()
         if guest {
             XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15), "tab bar")

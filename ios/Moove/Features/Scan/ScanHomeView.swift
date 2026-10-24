@@ -77,7 +77,19 @@ struct ScanHomeView: View {
         }
     }
 
-    private var demo: ScanImport { DemoFixtures.scanImport() }
+    private var demo: ScanImport {
+        var scan = DemoFixtures.scanImport()
+        #if DEBUG
+        // UI test hook (#180): two impossible objects, which the import skips and reports.
+        if ProcessInfo.processInfo.environment["MOOVE_DEMO_BAD_OBJECTS"] != nil {
+            scan.objects += [
+                ScanObject(scanObjectId: "bad-nan", category: "table", widthM: .nan, heightM: 0.7, depthM: 0.6),
+                ScanObject(scanObjectId: "bad-huge", category: "storage", widthM: 40, heightM: 2.4, depthM: 0.4),
+            ]
+        }
+        #endif
+        return scan
+    }
 
     private var demoScan: some View {
         VStack(alignment: .leading, spacing: 6) {
