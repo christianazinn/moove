@@ -125,6 +125,15 @@ struct PendingApprovalRow: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(spokenSummary)
+            // Re-asked after an expiry (#186): ties this card to the expired ask(s) in History.
+            let asks = store.snapshot.asks(for: approval)
+            if let caption = asks.pendingCaption {
+                Label(caption, systemImage: "arrow.clockwise")
+                    .monoMeta()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(asks.spokenPendingCaption ?? caption)
+            }
             if let listing, listing.priceCents != approval.amountCents {
                 CommerceProblem(text: "Price changed to \(listing.formattedPrice) since this was requested. Approving won't post it.",
                                 tint: Theme.ochreInk)
@@ -222,6 +231,7 @@ struct SharedApprovalRow: View {
 }
 
 struct DecidedApprovalRow: View {
+    @Environment(MooveStore.self) private var store
     let approval: Approval
     let listing: Listing?
     var deal: Deal? = nil
@@ -235,11 +245,15 @@ struct DecidedApprovalRow: View {
                     .blockTitle()
                     .lineLimit(3)
                 HStack(spacing: 8) {
-                    ApprovalStatusChip(status: approval.status)
+                    if approval.status == .expired {
+                        ExpiredBadge()
+                    } else {
+                        ApprovalStatusChip(status: approval.status)
+                    }
                     Text("·").monoText(12.5).foregroundStyle(Theme.faint).accessibilityHidden(true)
                     Text(approval.updatedAt, format: .relative(presentation: .named)).monoMeta()
                 }
-                if let outcome = approval.outcomeText {
+                if let outcome = store.snapshot.historyOutcome(for: approval) {
                     Text(outcome).monoMeta().fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -250,7 +264,7 @@ struct DecidedApprovalRow: View {
         .frame(minHeight: 44)
         .ruled()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(approval.accessibilitySummary + (approval.outcomeText.map { ". \($0)" } ?? ""))
+        .accessibilityLabel(store.snapshot.historyAccessibilitySummary(for: approval))
     }
 }
 

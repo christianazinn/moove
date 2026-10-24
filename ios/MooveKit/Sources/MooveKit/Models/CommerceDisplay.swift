@@ -136,6 +136,41 @@ extension Approval {
     }
 }
 
+extension ApprovalAsks {
+    /// Caption for a pending re-ask: "Asked again (2 of 3). The earlier request got no answer in 12 h."
+    /// nil for a first ask.
+    public var pendingCaption: String? { caption(spoken: false) }
+
+    /// VoiceOver version: "Asked again, 2 of 3. The earlier request got no answer in 12 hours."
+    public var spokenPendingCaption: String? { caption(spoken: true) }
+
+    private func caption(spoken: Bool) -> String? {
+        guard isReask else { return nil }
+        let of = askNumber <= ApprovalExpiry.maxAsks ? "\(askNumber) of \(ApprovalExpiry.maxAsks)" : "ask \(askNumber)"
+        let earlier = expiredBefore.count == 1 ? "The earlier request got" : "The \(expiredBefore.count) earlier requests got"
+        let hours = "\(ApprovalExpiry.hours) \(spoken ? "hours" : "h")"
+        return (spoken ? "Asked again, \(of)." : "Asked again (\(of)).") + " \(earlier) no answer in \(hours)."
+    }
+}
+
+extension SyncSnapshot {
+    /// The History line under a decided approval. Expired ones say whether the agent asked again
+    /// ("No answer in 12 h. The agent asked again."); the rest use `outcomeText`.
+    public func historyOutcome(for approval: Approval) -> String? { historyOutcome(for: approval, spoken: false) }
+
+    /// VoiceOver for a History row: the summary, then the History line with "h" spoken as "hours".
+    public func historyAccessibilitySummary(for approval: Approval) -> String {
+        approval.accessibilitySummary + (historyOutcome(for: approval, spoken: true).map { ". \($0)" } ?? "")
+    }
+
+    private func historyOutcome(for approval: Approval, spoken: Bool) -> String? {
+        guard approval.status == .expired else { return approval.outcomeText }
+        let noAnswer = "No answer in \(ApprovalExpiry.hours) \(spoken ? "hours" : "h")."
+        if asks(for: approval).askedAgain { return noAnswer + " The agent asked again." }
+        return approval.kind == .purchase ? noAnswer + " Nothing was bought." : noAnswer
+    }
+}
+
 extension Deal {
     /// The user can pick it. The worker refuses fraud-blocked deals, so the app doesn't offer them.
     public var isChoosable: Bool { !isFraudBlocked }
