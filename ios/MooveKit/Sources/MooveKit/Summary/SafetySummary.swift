@@ -39,7 +39,7 @@ public struct SafetySummary: Sendable, Equatable {
         public var allSimulated: Bool { spentUsdMicros > 0 && simulatedUsdMicros == spentUsdMicros }
     }
 
-    public enum LineKind: String, Sendable, Hashable { case fraud, approvals, sentimental, x402, card, ai }
+    public enum LineKind: String, Sendable, Hashable { case fraud, approvals, sentimental, x402, roomX402, card, ai }
 
     /// One short line on the card.
     public struct Line: Sendable, Hashable, Identifiable {
@@ -59,6 +59,9 @@ public struct SafetySummary: Sendable, Equatable {
     public var sentimentalLeftToYou: Int
     /// x402 data payments against the per-agent caps; nil when no x402 activity.
     public var x402: Budget?
+    /// x402 payments agents made for items in a room the user joined (#254): another member's
+    /// spend, so it's never added into `x402`. nil when there are none. `capUsdMicros` is nil.
+    public var roomX402: Budget?
     /// Visa purchases against the card cap; nil when no card payments.
     public var card: Budget?
     /// Today's Claude + Apify spend against the worker's daily caps (`spend_today`, #220).
@@ -68,6 +71,9 @@ public struct SafetySummary: Sendable, Equatable {
     public var isEmpty: Bool
 
     public static let emptyText = "No purchases yet, so nothing to guard."
+
+    /// Detail under the shared-room x402 line (#254).
+    public static let roomDetail = "For items in a room you joined. Not counted in your spend."
 
     /// The worker's card cap default (`VISA_SPEND_CAP_USD`, agents/src/integrations/caps.ts). Visa
     /// events don't report the live cap, so this is what the app compares against.
@@ -104,6 +110,12 @@ public struct SafetySummary: Sendable, Equatable {
                 refusals: log.budgets.map(\.refusals).reduce(0, +))
         }
 
+        let roomCounted = s.roomPayments.filter { $0.rail == .x402 && $0.countsTowardBudget }
+        roomX402 = roomCounted.isEmpty ? nil : Budget(
+            spentUsdMicros: roomCounted.map(\.amountUsdMicros).reduce(0, +),
+            simulatedUsdMicros: roomCounted.filter(\.simulated).map(\.amountUsdMicros).reduce(0, +),
+            capUsdMicros: nil, agents: Set(roomCounted.map(\.agent)).count, refusals: 0)
+
         let cardPayments = payments.filter { $0.rail == .visa }
         if cardPayments.isEmpty {
             card = nil
@@ -122,7 +134,7 @@ public struct SafetySummary: Sendable, Equatable {
                           agents: 0, refusals: 0)
         }
 
-        isEmpty = deals.isEmpty && asked.isEmpty && payments.isEmpty && !events.contains(where: \.isX402)
+        isEmpty = deals.isEmpty && asked.isEmpty && payments.isEmpty && !events.contains(where: \.isX402) && roomX402 == nil
     }
 
     // MARK: Text
@@ -165,6 +177,16 @@ public struct SafetySummary: Sendable, Equatable {
                 .compactMap { $0 }.joined(separator: " · ")
             out.append(Line(kind: .x402, text: text, detail: detail.isEmpty ? nil : detail,
                             spoken: Self.spokenSpend(b, budget: "data budget") + (detail.isEmpty ? "" : ", " + Self.spoken(detail)),
+                            simulated: b.simulatedUsdMicros > 0))
+        }
+
+        if let b = roomX402 {
+            let text = "Shared room: agents paid \(UsdMicros.format(b.spentUsdMicros)) over x402\(Self.simulatedSuffix(b, format: UsdMicros.format))"
+            let spokenSim = Self.simulatedSuffix(b, format: Self.spokenUsd)
+                .replacingOccurrences(of: " (", with: ", ").replacingOccurrences(of: ")", with: "")
+            let detail = Self.roomDetail
+            out.append(Line(kind: .roomX402, text: text, detail: detail,
+                            spoken: "Shared room, agents paid \(Self.spokenUsd(b.spentUsdMicros)) over x402\(spokenSim), \(detail)",
                             simulated: b.simulatedUsdMicros > 0))
         }
 

@@ -16,7 +16,15 @@ extension SpacetimeBackend {
         "my_user", "my_room", "room_member", "scan", "item", "comp",
         "new_home", "layout", "my_listing", "my_approval",
         "payment", "agent_event", "shopping_item", "deal",
-        "service_config",
+        "service_config", "my_payment", "my_agent_event",
+    ]
+
+    /// Views that may not be published yet (#254: own rows plus x402 comps payments and agent
+    /// steps for items in joined rooms). Subscribed separately so a module without them only
+    /// fails this subscription. Rows merge by id with the owner-only `payment` / `agent_event`.
+    static let optionalSubscriptionQueries = [
+        "SELECT * FROM my_payment",
+        "SELECT * FROM my_agent_event",
     ]
 
     /// Everything the signed-in identity can see: its own rows, plus rooms,
@@ -69,6 +77,8 @@ extension SpacetimeBackend {
         { await $0.registerTableRowDecoder(MooveBindings.ShoppingItemRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.DealRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.ServiceConfigRow.self) },
+        { await $0.registerTableRowDecoder(table: "my_payment", decoder: MooveBindings.PaymentRow.decoder()) },
+        { await $0.registerTableRowDecoder(table: "my_agent_event", decoder: MooveBindings.AgentEventRow.decoder()) },
     ]
 
     static func primaryKey(of row: Any) -> AnyHashable? {
@@ -88,8 +98,14 @@ extension SpacetimeBackend {
         s.layouts = rows("layout", MooveBindings.LayoutRow.self).map(Layout.init).sorted { $0.id < $1.id }
         s.listings = rows("my_listing", MooveBindings.ListingRow.self).compactMap(Listing.init).sorted { $0.id < $1.id }
         s.approvals = rows("my_approval", MooveBindings.ApprovalRow.self).compactMap(Approval.init).sorted { $0.id < $1.id }
-        s.payments = rows("payment", MooveBindings.PaymentRow.self).map(Payment.init).sorted { $0.id < $1.id }
-        s.agentEvents = rows("agent_event", MooveBindings.AgentEventRow.self).map(AgentEvent.init).sorted { $0.id < $1.id }
+        // Owner-only tables plus the optional views (#254); the views repeat the user's own rows.
+        func byId<M: Identifiable>(_ models: [M]) -> [M] where M.ID == UInt64 {
+            Array(Dictionary(models.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }).values).sorted { $0.id < $1.id }
+        }
+        let paymentRows = rows("payment", MooveBindings.PaymentRow.self) + rows("my_payment", MooveBindings.PaymentRow.self)
+        s.payments = byId(paymentRows.map { Payment($0) })
+        let eventRows = rows("agent_event", MooveBindings.AgentEventRow.self) + rows("my_agent_event", MooveBindings.AgentEventRow.self)
+        s.agentEvents = byId(eventRows.map { AgentEvent($0) })
         s.shoppingItems = rows("shopping_item", MooveBindings.ShoppingItemRow.self).map(ShoppingItem.init).sorted { $0.id < $1.id }
         s.deals = rows("deal", MooveBindings.DealRow.self).map(Deal.init).sorted { $0.id < $1.id }
         s.serviceConfig = ServiceConfig(values: Dictionary(
