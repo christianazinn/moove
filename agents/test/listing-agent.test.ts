@@ -152,7 +152,10 @@ test("listing agent: exactly at the threshold posts right away (no user row: def
   await sleep(6000); // simulated eBay walks three steps with latency
   assert.equal(f.named("requestApproval").length, 0);
   assert.equal(f.listings.get(7n)!.status, "posted");
-  assert.ok(f.listings.get(7n)!.url.endsWith("/files/listing-7.html"));
+  // Stored absolute on the worker's upload host, not relative: installed app builds, `spacetime sql`
+  // readers and the result event's data all open it as-is. The app moves a dead tunnel host onto
+  // the current upload base itself (MooveKit ListingURL).
+  assert.match(f.listings.get(7n)!.url, /^https?:\/\/[^/]+\/files\/listing-7\.html$/);
 });
 
 test("listing agent: denied, or approved for a different amount, is rejected, never posted", async () => {
