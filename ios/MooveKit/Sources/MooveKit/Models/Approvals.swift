@@ -7,13 +7,14 @@ public enum ApprovalKind: String, Codable, Sendable, CaseIterable {
 public enum ApprovalStatus: String, Codable, Sendable, CaseIterable {
     case pending, approved, denied, expired
 
-    /// Statuses the owner can pick in `decide_approval`. `expired` is set by the worker.
+    /// Statuses `decide_approval` accepts (owner only, #42). Nothing sets `expired` any more.
     public static let decisions: [ApprovalStatus] = [.approved, .denied]
 }
 
 /// Mirror of the `approval` table (#12). The worker writes a `pending` row when
 /// a listing or purchase is over the user's threshold; the owner decides it in
-/// the app or on their phone via Auth0 Guardian (CIBA), both through `decide_approval`.
+/// the app (`decide_approval`, `decided_via = "app"`) or on their phone via Auth0 Guardian (CIBA, relayed
+/// by the worker through `record_ciba_decision`, `decided_via = "ciba"`).
 public struct Approval: Codable, Sendable, Hashable, Identifiable {
     public var id: UInt64
     public var owner: IdentityHex

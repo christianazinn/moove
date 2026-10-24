@@ -33,6 +33,8 @@ export const Approval = __t.object("Approval", {
   status: __t.string(),
   requestedAt: __t.timestamp(),
   updatedAt: __t.timestamp(),
+  decidedVia: __t.string(),
+  cibaSubject: __t.string(),
 });
 export type Approval = __Infer<typeof Approval>;
 
