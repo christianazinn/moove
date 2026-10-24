@@ -17,6 +17,7 @@
     "comps:prefetch": "tsx scripts/prefetch-comps.ts",
     "e2e": "tsx scripts/e2e.ts",
     "status": "tsx scripts/status.ts",
+    "smoke": "tsx scripts/smoke.ts",
     "comps:audit": "tsx scripts/comps-audit.ts"
   },
   "dependencies": {
