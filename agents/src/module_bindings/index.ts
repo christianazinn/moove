@@ -63,6 +63,7 @@ import SetDispositionReducer from "./set_disposition_reducer";
 import SetEstValueReducer from "./set_est_value_reducer";
 import SetFragileReducer from "./set_fragile_reducer";
 import SetItemDetailsReducer from "./set_item_details_reducer";
+import SetItemModelReducer from "./set_item_model_reducer";
 import SetItemStageReducer from "./set_item_stage_reducer";
 import SetSentimentalReducer from "./set_sentimental_reducer";
 import SetShoppingStatusReducer from "./set_shopping_status_reducer";
@@ -351,6 +352,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_est_value", SetEstValueReducer),
   __reducerSchema("set_fragile", SetFragileReducer),
   __reducerSchema("set_item_details", SetItemDetailsReducer),
+  __reducerSchema("set_item_model", SetItemModelReducer),
   __reducerSchema("set_item_stage", SetItemStageReducer),
   __reducerSchema("set_sentimental", SetSentimentalReducer),
   __reducerSchema("set_shopping_status", SetShoppingStatusReducer),

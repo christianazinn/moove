@@ -14,6 +14,7 @@ const HOME = ['old', 'new'] as const;
 const DISPOSITION = ['undecided', 'keep', 'sell', 'donate', 'trash'] as const;
 const DISPOSITION_SOURCE = ['auto', 'user'] as const;
 const STAGE = ['pending', 'running', 'done', 'failed'] as const;
+const MODEL_SOURCE = ['capture', 'sam3d'] as const; // Object Capture on the phone, or SAM 3D from a photo (#65)
 const LISTING_STATUS = ['draft', 'awaiting_approval', 'rejected', 'posted', 'sold', 'failed'] as const;
 const APPROVAL_KIND = ['listing', 'purchase'] as const;
 const APPROVAL_STATUS = ['pending', 'approved', 'denied', 'expired'] as const;
@@ -121,6 +122,10 @@ const item = table(
     maybeSentimental: t.bool(),
     createdAt: t.timestamp(),
     updatedAt: t.timestamp(),
+    // 3D model (#65). Appended with defaults so existing rows migrate.
+    modelUrl: t.string().default(''), // USDZ (capture) or GLB (sam3d), '' if none
+    modelSource: t.string().default(''), // MODEL_SOURCE or ''
+    modelStatus: t.string().default('pending'), // STAGE: the SAM 3D agent picks up pending items with a photo
   }
 );
 
@@ -513,6 +518,9 @@ function insertItem(
     maybeSentimental: false,
     createdAt: ctx.timestamp,
     updatedAt: ctx.timestamp,
+    modelUrl: '',
+    modelSource: '',
+    modelStatus: 'pending',
   });
 }
 
@@ -534,6 +542,7 @@ export const addItemPhoto = spacetimedb.reducer(
       ...it,
       photoUrls: [...it.photoUrls, url],
       detailsStatus: 'pending',
+      modelStatus: it.modelSource === 'capture' ? it.modelStatus : 'pending',
       updatedAt: ctx.timestamp,
     });
   }
@@ -598,7 +607,37 @@ export const setItemStage = spacetimedb.reducer(
     oneOf('stage', stage, STAGE);
     if (field === 'details') ctx.db.item.id.update({ ...it, detailsStatus: stage, updatedAt: ctx.timestamp });
     else if (field === 'pricing') ctx.db.item.id.update({ ...it, pricingStatus: stage, updatedAt: ctx.timestamp });
-    else throw new SenderError("field must be 'details' or 'pricing'");
+    else if (field === 'model') ctx.db.item.id.update({ ...it, modelStatus: stage, updatedAt: ctx.timestamp });
+    else throw new SenderError("field must be 'details', 'pricing' or 'model'");
+  }
+);
+
+// ---------- 3D models (#65) ----------
+function isHttpOrEmpty(url: string): boolean {
+  return url === '' || /^https?:\/\//i.test(url);
+}
+
+// Sets (or clears, with url '') an item's 3D model. The app calls it after Object Capture
+// ('capture'); the SAM 3D agent calls it with a model built from a photo ('sam3d'). A captured
+// model is a real walk-around scan, so a later 'sam3d' result never replaces it.
+export const setItemModel = spacetimedb.reducer(
+  { itemId: t.u64(), url: t.string(), source: t.string() },
+  (ctx, { itemId, url, source }) => {
+    const it = getItem(ctx, itemId);
+    if (!isWorker(ctx)) requireRoomAccess(ctx, it.roomId);
+    oneOf('source', source, MODEL_SOURCE);
+    if (!isHttpOrEmpty(url)) throw new SenderError('model URL must be http(s)');
+    if (source === 'sam3d' && it.modelSource === 'capture' && it.modelUrl !== '') {
+      ctx.db.item.id.update({ ...it, modelStatus: 'done', updatedAt: ctx.timestamp });
+      return;
+    }
+    ctx.db.item.id.update({
+      ...it,
+      modelUrl: url,
+      modelSource: url === '' ? '' : source,
+      modelStatus: url === '' ? 'pending' : 'done',
+      updatedAt: ctx.timestamp,
+    });
   }
 );
 
