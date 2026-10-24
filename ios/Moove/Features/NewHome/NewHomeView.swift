@@ -9,8 +9,6 @@ struct NewHomeView: View {
     @State private var showImport = false
     /// Shown when the save to `newHome` failed (e.g. live backend not ready), so the demo still works.
     @State private var unsaved: Unsaved?
-    /// Which old rooms move (MooveKit `MovingRooms`): the user's picks, saved on this device.
-    @State private var roomPicks: [UInt64: Bool] = MovingRooms.decode(UserDefaults.standard.stringArray(forKey: MovingRooms.defaultsKey))
     @State private var showRooms = false
 
     struct Unsaved: Equatable {
@@ -64,18 +62,7 @@ struct NewHomeView: View {
                 }
             }
         }
-        .sheet(isPresented: $showRooms) {
-            NavigationStack {
-                MovingRoomsPicker(choices: movingChoices, snapshot: store.visibleSnapshot,
-                                  onToggle: { setPicks(MovingRooms.toggle($0, in: movingChoices, overrides: roomPicks)) },
-                                  onAll: { setPicks(MovingRooms.setAll($0, in: movingChoices)) })
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") { showRooms = false }.monoText(13, weight: .bold, maxScale: 1.4)
-                        }
-                    }
-            }
-        }
+        .sheet(isPresented: $showRooms) { MovingRoomsSheet { showRooms = false } }
         .sheet(isPresented: $showPicker) {
             NavigationStack {
                 NewHomePicker { name, source, plan in
@@ -91,17 +78,8 @@ struct NewHomeView: View {
         }
     }
 
-    private var keptItems: [Item] { store.visibleItems.filter { $0.disposition == .keep } }
-
-    /// Every visible scanned room, newest first, with whether its kept items move.
-    private var movingChoices: [MovingRooms.Choice] {
-        MovingRooms.choices(store.visibleSnapshot, keptItems: keptItems, overrides: roomPicks)
-    }
-
-    private func setPicks(_ picks: [UInt64: Bool]) {
-        roomPicks = MovingRooms.pruned(picks, rooms: store.snapshot.rooms)
-        UserDefaults.standard.set(MovingRooms.encode(roomPicks), forKey: MovingRooms.defaultsKey)
-    }
+    /// Every visible scanned room, newest first, with whether its kept items move (shared with Pack).
+    private var movingChoices: [MovingRooms.Choice] { store.movingChoices }
 
     /// Kept items from the rooms picked in "Moving from" (by default the newest scan of each
     /// room name, so re-scans don't bring a second bed) plus bought ones (#15); the demo's if
@@ -111,10 +89,9 @@ struct NewHomeView: View {
         func layoutItem(_ item: Item) -> LayoutItem {
             item.colors == nil && DemoFixtures.isDemoItem(item) ? LayoutItem(item, colors: DemoFixtures.scanColors()) : LayoutItem(item)
         }
-        let kept = keptItems
         let bought = store.snapshot.boughtLayoutItems
-        if !kept.isEmpty || !bought.isEmpty {
-            let moving = MovingRooms.items(kept, choices: movingChoices)
+        if !store.keptItems.isEmpty || !bought.isEmpty {
+            let moving = store.movingItems
             return Furniture(items: moving.map(layoutItem) + bought, isDemo: false, sources: moving)
         }
         let demo = DemoFixtures.demo(owner: "demo")
@@ -214,73 +191,6 @@ struct NewHomePicker: View {
     }
 }
 
-/// The "Moving from" summary: the room picks and how many kept items they bring.
-struct MovingFrom: Equatable {
-    var choices: [MovingRooms.Choice]
-    var itemCount: Int
-
-    var noneSelected: Bool { !choices.contains { $0.included } }
-}
-
-/// Multi-select list of the scanned rooms whose kept items move to the new home.
-struct MovingRoomsPicker: View {
-    var choices: [MovingRooms.Choice]
-    var snapshot: SyncSnapshot
-    var onToggle: (UInt64) -> Void
-    var onAll: (Bool) -> Void
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                PageHeader(eyebrow: "Moving from", title: "Which rooms are moving?")
-                    .padding(.bottom, 12)
-                Text("Only kept items from the rooms you pick go into the new home. Older scans of a room are left out by default.")
-                    .monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 20)
-                HStack(spacing: 10) {
-                    Button("Select all") { onAll(true) }
-                        .buttonStyle(.pill(.outline, compact: true))
-                        .disabled(choices.allSatisfy { $0.included })
-                    Button("None") { onAll(false) }
-                        .buttonStyle(.pill(.outline, compact: true))
-                        .disabled(!choices.contains { $0.included })
-                    Spacer(minLength: 0)
-                }
-                .padding(.bottom, 12)
-                ForEach(choices) { c in
-                    Button { onToggle(c.id) } label: {
-                        LedgerRow(title: c.room.name, meta: meta(c), tag: snapshot.isDemoRoom(c.id) ? "Demo" : nil) {
-                            Image(systemName: c.included ? "checkmark.square.fill" : "square")
-                                .font(.system(size: 24))
-                                .foregroundStyle(c.included ? Theme.accent : Theme.faint)
-                                .frame(width: 44, height: 44)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(c.room.name), \(meta(c))")
-                    .accessibilityAddTraits(c.included ? [.isButton, .isSelected] : .isButton)
-                    .accessibilityHint(c.included ? "Leaves this room's items behind" : "Moves this room's kept items")
-                    .accessibilityIdentifier("movingRoom.\(c.id)")
-                }
-            }
-            .padding(.horizontal, Theme.gutter)
-            .padding(.top, 16)
-            .padding(.bottom, 40)
-        }
-        .mooveScreen()
-        .navigationTitle("Moving from")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func meta(_ c: MovingRooms.Choice) -> String {
-        let items = "\(c.itemCount) kept item\(c.itemCount == 1 ? "" : "s")"
-        return [c.meta(), items].compactMap { $0 }.joined(separator: " · ")
-    }
-}
-
 struct Furniture: Equatable {
     var items: [LayoutItem]
     /// True when these are fixture items, not the user's.
@@ -315,8 +225,11 @@ struct NewHomeDetail: View {
     @State private var savedStyle: LayoutSolver.Style?
     /// Each piece's scanned spot in its old room, where the fly-in starts it (nil: the pile).
     @State private var starts: FlyInStarts?
-    /// False until the starts are looked up, so the first fly-in starts from the right place.
+    /// False until the layouts are solved and the starts looked up, so the first fly-in starts
+    /// from the right place.
     @State private var ready = false
+    /// True while the layouts are being solved off the main thread.
+    @State private var arranging = false
 
     private static let stageID = "stage"
 
@@ -332,7 +245,7 @@ struct NewHomeDetail: View {
                         .padding(.top, 16)
                         .padding(.bottom, 28)
                     if let movingFrom {
-                        movingFromRow(movingFrom)
+                        MovingFromRow(movingFrom: movingFrom, idPrefix: "newHome", onChoose: onChooseRooms)
                             .padding(.horizontal, Theme.gutter)
                             .padding(.bottom, 16)
                     }
@@ -356,34 +269,39 @@ struct NewHomeDetail: View {
         }
         .background(Theme.bg)
         .onChange(of: plan) { focusRoom = nil }
+        // Re-runs (and cancels the previous run) whenever the plan or the items change.
         .task(id: SolveKey(plan: plan, items: furniture.items)) {
+            let key = SolveKey(plan: plan, items: furniture.items)
             ready = false
-            solve()
-            starts = await OldRoomStarts.load(furniture.sources, snapshot: store.snapshot, beside: plan.bounds)
+            // Solve off the main thread (cached per plan + items) while the old-room starts load.
+            let cached = LayoutCache.options(for: key)
+            arranging = cached == nil
+            let solving = cached == nil ? Task { await LayoutSolver.arrange(plan: key.plan, items: key.items) } : nil
+            let loaded = await OldRoomStarts.load(furniture.sources, snapshot: store.snapshot, beside: plan.bounds)
+            let solved: [LayoutOption]
+            if let cached {
+                solved = cached
+            } else if let solving {
+                solved = await withTaskCancellationHandler { await solving.value } onCancel: { solving.cancel() }
+                guard !Task.isCancelled else { return }
+                LayoutCache.store(solved, for: key)
+            } else { return }
             guard !Task.isCancelled else { return }
+            apply(solved)
+            starts = loaded
+            arranging = false
             ready = true
             flyInToken += 1
         }
     }
 
-    private struct SolveKey: Equatable {
-        var plan: FloorPlan
-        var items: [LayoutItem]
-    }
-
     /// Placements shown in 3D: none until the fly-in's starts are known.
     private var shownPlacements: [Placement] { ready ? option?.placements ?? [] : [] }
 
-    private func solve() {
-        // Lived-in pass: small things onto furniture tops, art and mirrors onto the walls
-        // (PropPlacer's default wall top matches NewHomeScene's 1.1 m cut, the height every wall
-        // has when it is nearest the camera; back walls rise higher but art stays below the cut).
-        let placer = PropPlacer(plan: plan)
-        options = LayoutSolver(plan: plan).solveAll(furniture.items).map { option in
-            var option = option
-            option.placements = placer.place(option.placements, items: furniture.items)
-            return option
-        }
+    /// Shows solved layouts (MooveKit `LayoutSolver.arrangeAll`: every style with the lived-in
+    /// pass, small things on furniture tops and art on the walls under the 1.1 m cut).
+    private func apply(_ solved: [LayoutOption]) {
+        options = solved
         // Reopen on the layout the user saved last, if any.
         if let home, let last = store.snapshot.layouts(for: home.id).max(by: { $0.id < $1.id }),
            let match = LayoutSolver.Style.allCases.first(where: { $0.label == last.name }) {
@@ -395,35 +313,6 @@ struct NewHomeDetail: View {
     private func save() async {
         guard let home, let option else { return }
         if await store.saveLayout(option.placements, name: option.name, for: home) { savedStyle = option.style }
-    }
-
-    // MARK: Moving from
-
-    /// "Moving from 2 rooms · 14 items ›", or the empty state when no room is picked.
-    @ViewBuilder
-    private func movingFromRow(_ m: MovingFrom) -> some View {
-        if m.noneSelected {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("No rooms selected").blockTitle()
-                Text("Pick the scanned rooms whose kept items are moving.").monoMeta()
-                Button("Choose rooms", action: onChooseRooms)
-                    .buttonStyle(.pill(.primary, compact: true))
-                    .accessibilityIdentifier("newHome.chooseRooms")
-            }
-            .padding(.vertical, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .ruled()
-        } else {
-            Button(action: onChooseRooms) {
-                LedgerRow(title: MovingRooms.summary(m.choices, items: m.itemCount),
-                          meta: m.choices.filter(\.included).map(\.room.name).joined(separator: " · "), chevron: true) {
-                    IconTile(systemName: "shippingbox")
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint("Choose which scanned rooms move to the new home")
-            .accessibilityIdentifier("newHome.movingFrom")
-        }
     }
 
     // MARK: Header
@@ -466,9 +355,10 @@ struct NewHomeDetail: View {
             FloorPlan3DView(plan: plan, focusRoom: focusRoom, items: furniture.items, placements: shownPlacements, flyInToken: flyInToken,
                             flyInStarts: starts)
                 .frame(height: 420)
+                .overlay { if arranging { arrangingNotice } }
                 .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
                 .accessibilityElement()
-                .accessibilityLabel(stageLabel)
+                .accessibilityLabel(arranging ? "Arranging your home" : stageLabel)
                 .accessibilityHint("Drag to orbit, pinch to zoom, double-tap to reset. Pick a room below to zoom in.")
             HStack(spacing: 10) {
                 Circle().fill(Theme.accent).frame(width: 8, height: 8).accessibilityHidden(true)
@@ -486,6 +376,19 @@ struct NewHomeDetail: View {
             .padding(.top, 6)
         }
         .padding(.horizontal, Theme.gutter)
+    }
+
+    /// Over the stage while the layouts solve.
+    private var arrangingNotice: some View {
+        VStack(spacing: 10) {
+            ProgressView()
+            Text("Arranging your home…").monoText(13, weight: .bold).foregroundStyle(Theme.text)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background(Theme.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+        .accessibilityHidden(true)
+        .transition(.opacity)
     }
 
     /// "3D view of Maple House: 6 rooms, 14 pieces placed, showing Bedroom".
@@ -552,6 +455,8 @@ struct NewHomeDetail: View {
         var room: String?
         /// An extra bed kept out of the layout (more beds than bedrooms).
         var stored = false
+        /// A mattress laid on this bed frame (drawn as part of the bed).
+        var onBed: String? = nil
         var id: UInt64 { item.id }
     }
 
@@ -559,8 +464,12 @@ struct NewHomeDetail: View {
     private var pieceRows: [PieceRow] {
         let byId = Dictionary(furniture.items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let order = Dictionary(plan.rooms.enumerated().map { ($0.element.name, $0.offset) }, uniquingKeysWith: { a, _ in a })
+        let onBed = Dictionary((option?.placements ?? []).compactMap { p in p.onTopOf.map { (p.itemId, $0) } }, uniquingKeysWith: { a, _ in a })
+        let mattresses = MattressPairing.drawnWithBed(option?.placements ?? [], items: furniture.items)
         let placed = (option?.placements ?? [])
-            .compactMap { p in byId[p.itemId].map { PieceRow(item: $0, room: p.room) } }
+            .compactMap { p in byId[p.itemId].map { item in
+                PieceRow(item: item, room: p.room, onBed: mattresses.contains(p.itemId) ? onBed[p.itemId].flatMap { byId[$0]?.name } : nil)
+            } }
             .sorted { a, b in
                 let ra = order[a.room ?? ""] ?? .max, rb = order[b.room ?? ""] ?? .max
                 return ra != rb ? ra < rb : a.item.name < b.item.name
@@ -591,7 +500,7 @@ struct NewHomeDetail: View {
                         focusRoom = room
                         withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(Self.stageID, anchor: .top) }
                     } label: {
-                        LedgerRow(title: row.item.name, meta: "\(Self.size(row.item)) · \(room)", chevron: true) {
+                        LedgerRow(title: row.item.name, meta: [Self.size(row.item), row.onBed.map { "on the \($0)" }, room].compactMap { $0 }.joined(separator: " · "), chevron: true) {
                             VoxelThumbnail(row.item)
                         } trailing: {
                             if focusRoom == room { MonoTag(text: "In view", tone: Theme.accentStrong) }
