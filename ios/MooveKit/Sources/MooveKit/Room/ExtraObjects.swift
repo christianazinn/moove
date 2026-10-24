@@ -244,9 +244,17 @@ public struct SightingMerger: Sendable {
         return resolved.filter { t in
             let box = DetectorPlacement.padDepth(t.box, to: ObjectVocabulary.minimumDepth[t.label] ?? 0, camera: t.camera)
             return !existing.contains { o in
-                Self.isDuplicate(box, of: FittedBox(center: o.transform.position, size: o.dimensions, yaw: o.transform.yaw))
+                let roomPlan = FittedBox(center: o.transform.position, size: o.dimensions, yaw: o.transform.yaw)
+                return Self.isDuplicate(box, of: roomPlan) || (o.category == "bathtub" && Self.standsOverTub(t.box, roomPlan))
             }
         }
+    }
+
+    /// Something standing in or over a bathtub is part of the shower (a curtain the detector
+    /// calls a "room divider" became a 1.4 m bookshelf in Rio's room), not something you'd move.
+    static func standsOverTub(_ a: FittedBox, _ tub: FittedBox) -> Bool {
+        let tubTop = tub.center.y + tub.size.y / 2
+        return a.center.y - a.size.y / 2 >= tubTop - 0.15 && footprintOverlap(a, tub) >= duplicateFootprintOverlap
     }
 
     /// Share of the smaller footprint two boxes must cover for a detection to count as a

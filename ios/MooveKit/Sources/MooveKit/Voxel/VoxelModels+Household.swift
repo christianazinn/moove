@@ -695,3 +695,116 @@ extension Canvas {
         }
     }
 }
+
+// MARK: screens
+
+extension Canvas {
+    /// Room divider / folding screen (hinged panels zigzagging across the depth, a frame and a
+    /// fabric or slat infill) or a curtain (a rod and fabric hanging in folds). Detector "room
+    /// dividers" over a bathtub are shower curtains, which the scan drops before import.
+    func screen(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
+        let curtain = name.word("curtain", "curtains", "drapes") || name.has("shower curtain")
+        if curtain {
+            let fabric = colorFromName(name, 0xEDE6DA), fold = shade(fabric, 0.88)
+            box(0, Y - 1, 0, X, Y, 1, P.brass)  // rod
+            for x in upTo(0, X) {
+                // folds: the fabric steps back and forth one voxel every couple of columns
+                let z = (x / 2) % 2 == 0 ? 0 : min(1, Z - 1)
+                box(x, 0, z, x + 1, Y - 1, z + 1, (x / 2) % 2 == 0 ? fabric : fold)
+            }
+            return
+        }
+        let wood = name.has("wood", "wooden", "oak", "bamboo", "walnut", "rattan")
+        let frameC = colorFromName(name, wood ? P.oak : P.black)
+        let infill = name.has("rattan", "cane", "bamboo") ? 0xC9A66B : name.has("slat", "louver", "shutter") ? shade(frameC, 1.1) : 0xE9E2D4
+        let panels = max(2, min(4, rd(D(X) * voxelM / 0.45)))
+        let depth = max(1, Z - 1)
+        for p in 0..<panels {
+            let x0 = p * X / panels, x1 = max(x0 + 1, (p + 1) * X / panels)
+            for x in x0..<x1 {
+                // zigzag: even panels lean back, odd ones forward
+                let t = D(x - x0) / D(max(1, x1 - x0 - 1))
+                let z = clamp(rd(p % 2 == 0 ? t * D(depth) : (1 - t) * D(depth)), 0, Z - 1)
+                let edge = x == x0 || x == x1 - 1
+                box(x, 1, z, x + 1, Y, z + 1) { _, y, _ in edge || y == 1 || y == Y - 1 ? frameC : infill }
+                if edge { set(x, 0, z, shade(frameC, 0.8)) }  // feet
+            }
+        }
+    }
+}
+
+// MARK: bathroom fixtures
+
+extension Canvas {
+    /// Porcelain toilet: tank against the wall (z = 0), a rounded bowl on a narrower foot, seat
+    /// and lid on the rim, water inside, a chrome flush lever on the tank.
+    func toilet(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
+        let china = colorFromName(name, 0xF3F1EC), shadow = shade(china, 0.9), seatC = shade(china, 0.95)
+        let tankD = max(2, rd(D(Z) * 0.28)), tankBottom = rd(D(Y) * 0.45), rim = max(3, rd(D(Y) * 0.5))
+        // tank with a lid line
+        box(1, tankBottom, 0, X - 1, Y, tankD) { _, y, _ in y == Y - 1 ? shadow : china }
+        set(2, Y - 3, tankD, P.metal)
+        set(3, Y - 3, tankD, P.metal)  // flush lever
+        // bowl: an ellipse in plan, narrower at the foot, open on top with water inside
+        let cx = D(X - 1) / 2, rz = D(Z - tankD) / 2, cz = D(tankD) + rz - 0.5
+        for y in upTo(0, rim) {
+            let foot = y < rim / 2
+            let rx = (foot ? 0.32 : 0.5) * D(X), rzz = (foot ? 0.55 : 1.0) * rz
+            for z in upTo(tankD - 1, Z) {
+                for x in upTo(0, X) {
+                    let e = ((D(x) - cx) / rx) * ((D(x) - cx) / rx) + ((D(z) - cz) / rzz) * ((D(z) - cz) / rzz)
+                    guard e <= 1 else { continue }
+                    let inside = !foot && e < 0.45
+                    if inside { if y == rim - 2 { set(x, y, z, 0xBFD8E2, flat: true) } } else { set(x, y, z, foot ? shadow : china) }
+                }
+            }
+        }
+        // seat ring and the raised lid behind it
+        for z in upTo(tankD, Z) {
+            for x in upTo(0, X) {
+                let e = ((D(x) - cx) / (0.5 * D(X))) * ((D(x) - cx) / (0.5 * D(X))) + ((D(z) - cz) / rz) * ((D(z) - cz) / rz)
+                if e <= 1 && e >= 0.45 { set(x, rim, z, seatC) }
+            }
+        }
+        box(1, rim + 1, tankD, X - 1, min(Y, rim + 1 + max(3, rd(D(Z - tankD) * 0.8))), tankD + 1, seatC)
+    }
+
+    /// Bathroom sink: a basin with a rounded bowl in a counter slab, a chrome faucet at the back.
+    func sink(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
+        let china = colorFromName(name, 0xF3F1EC), shadow = shade(china, 0.88)
+        box(0, 0, 0, X, Y, Z) { x, y, z in
+            let edge = x == 0 || x == X - 1 || z == 0 || z == Z - 1
+            return y == Y - 1 && !edge ? nil : (y < Y / 2 ? shadow : china)
+        }
+        // bowl: hollow out an ellipse below the top, a little water
+        let cx = D(X - 1) / 2, cz = D(Z) / 2 + 0.5, rx = D(X) * 0.38, rz = D(Z) * 0.32
+        for y in upTo(1, Y) {
+            for z in upTo(1, Z - 1) {
+                for x in upTo(1, X - 1) {
+                    let e = ((D(x) - cx) / rx) * ((D(x) - cx) / rx) + ((D(z) - cz) / rz) * ((D(z) - cz) / rz)
+                    if e < 1 { if y == 1 { set(x, y, z, 0xBFD8E2, flat: true) } else { clear(x, y, z) } }
+                }
+            }
+        }
+        // faucet: a post at the back and a spout over the bowl
+        let fx = X / 2
+        box(fx, Y - 1, 0, fx + 1, Y + 0, 1, P.metal)
+        set(fx, Y - 1, 1, P.metal)
+    }
+
+    /// Bathtub: thick porcelain walls round a hollow inside, a rolled rim, a faucet at one end.
+    func bathtub(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
+        let china = colorFromName(name, 0xF3F1EC), shadow = shade(china, 0.9), rimC = shade(china, 1.03)
+        let wall = max(1, rd(D(min(X, Z)) * 0.08))
+        box(0, 0, 0, X, Y, Z) { x, y, z in
+            let inside = x >= wall && x < X - wall && z >= wall && z < Z - wall && y >= 2
+            if inside { return y == 2 ? 0xDCE8EC : nil }
+            if y == Y - 1 { return rimC }
+            return y < 2 ? shadow : china
+        }
+        // faucet and spout at the x = 0 end
+        let fz = Z / 2
+        box(0, Y - 1, fz, 1, Y, fz + 1, P.metal)
+        set(wall, Y - 2, fz, P.metal)
+    }
+}
