@@ -96,20 +96,72 @@ import Testing
     @Test func oneBedPerBedroomExtrasToStorage() {
         each { label, plan, items, option in
             var beds: [String: [UInt64]] = [:]
-            for p in option.placements where role(p.itemId, items) == .bed { beds[p.room, default: []].append(p.itemId) }
+            for p in option.placements where role(p.itemId, items) == .bed && p.onTopOf == nil { beds[p.room, default: []].append(p.itemId) }
             for (room, ids) in beds {
                 #expect(plan.room(named: room)?.kind == .bedroom, "\(label): a bed in \(room)")
                 let twins = ids.allSatisfy { id in items.first { $0.id == id }!.widthM <= DesignRole.twinWidthM }
                 #expect(ids.count == 1 || (ids.count == 2 && twins), "\(label): \(ids.count) beds in \(room)")
             }
-            let allBeds = items.filter { DesignRole.of($0) == .bed }
+            let paired = MattressPairing.pairs(items)
+            let allBeds = items.filter { DesignRole.of($0) == .bed && paired[$0.id] == nil }
             let bedrooms = plan.rooms.filter { $0.kind == .bedroom }.count
             #expect(beds.values.map(\.count).reduce(0, +) == min(allBeds.count, bedrooms) || beds.values.contains { $0.count == 2 }, "\(label)")
             for id in option.stored { #expect(role(id, items) == .bed && option.unplaced.contains(id)) }
         }
+
+        // A paired mattress sits on its bed, never in a room of its own.
+        each { label, _, items, option in
+            for (m, bed) in MattressPairing.pairs(items) {
+                let mp = option.placements.first { $0.itemId == m }
+                if let bp = option.placements.first(where: { $0.itemId == bed }) {
+                    #expect(mp?.onTopOf == bed && mp?.room == bp.room && mp?.x == bp.x && mp?.y == bp.y, "\(label): mattress \(m) not on its bed")
+                } else {
+                    #expect(mp == nil && option.unplaced.contains(m), "\(label)")
+                }
+            }
+        }
         // The demo house has two bedrooms: of the three re-scanned beds, one is stored.
         let o = LayoutSolver(plan: DemoHouse.floorPlan).solve(LayoutFixtures.rescannedBedroom, style: .byFunction)
         #expect(o.stored.count == 1)
+    }
+
+    @Test func boughtMattressGoesOnTheKeptFrame() {
+        // The demo: a bought full mattress for the kept full size metal bed frame.
+        let items = LayoutFixtures.demoFurniture
+        let mattress = BoughtFurniture.layoutId(forShoppingItem: 50)
+        #expect(MattressPairing.pairs(items) == [mattress: 10])
+        for o in LayoutSolver(plan: DemoHouse.floorPlan).solveAll(items) {
+            let bed = o.placements.first { $0.itemId == 10 }!
+            let m = o.placements.first { $0.itemId == mattress }!
+            #expect(m.onTopOf == 10 && m.room == bed.room && m.x == bed.x && m.y == bed.y && m.rotationDeg == bed.rotationDeg)
+            #expect((m.elevationM ?? 0) > 0)
+            // No second bed: Bedroom 2 stays without one.
+            #expect(!o.placements.contains { $0.room == "Bedroom 2" && role($0.itemId, items) == .bed }, "\(o.name)")
+            #expect(MattressPairing.drawnWithBed(o.placements, items: items) == [mattress])
+            // The lived-in pass leaves it on the frame.
+            let lived = PropPlacer(plan: DemoHouse.floorPlan).place(o.placements, items: items)
+            #expect(lived.first { $0.itemId == mattress } == m)
+        }
+    }
+
+    @Test func mattressPairsWithAMatchingBed() {
+        func bed(_ id: UInt64, _ name: String, _ w: Double, _ d: Double, h: Double = 0.5) -> LayoutItem {
+            LayoutItem(id: id, name: name, category: "bed", widthM: w, depthM: d, heightM: h)
+        }
+        func mattress(_ id: UInt64, _ w: Double, _ d: Double) -> LayoutItem {
+            LayoutItem(id: id, name: "Mattress", category: "mattress", widthM: w, depthM: d, heightM: 0.25)
+        }
+        // Queen bed + queen mattress (turned round): a pair.
+        #expect(MattressPairing.pairs([bed(1, "Queen bed", 1.6, 2.1), mattress(2, 2.0, 1.55)]) == [2: 1])
+        // King bed + twin mattress: too far apart; a bunk never takes one.
+        #expect(MattressPairing.pairs([bed(1, "King bed", 1.95, 2.1), mattress(2, 1.0, 1.9)]).isEmpty)
+        #expect(MattressPairing.pairs([bed(1, "Bunk bed", 1.0, 2.0, h: 1.5), mattress(2, 1.0, 1.95)]).isEmpty)
+        // Two mattresses, one frame: the closer one pairs, the other stays a bed of its own.
+        let items = [bed(1, "Queen bed frame", 1.6, 2.05), mattress(2, 1.0, 1.9), mattress(3, 1.55, 2.0)]
+        #expect(MattressPairing.pairs(items) == [3: 1])
+        let o = LayoutSolver(plan: DemoHouse.floorPlan).solve(items, style: .byFunction)
+        #expect(o.placements.first { $0.itemId == 3 }?.onTopOf == 1)
+        #expect(o.placements.first { $0.itemId == 2 }?.room == "Bedroom 2")
     }
 
     @Test func twinsShareTheKidsRoom() {
@@ -371,5 +423,14 @@ import Testing
         var c = b
         c.widthM = 1.6 // a different bed
         #expect(MovingRooms.dedupe([a, c], roomName: { _ in "bedroom" }).count == 2)
+    }
+}
+
+@Suite struct ArrangeTests {
+    @Test func arrangeOffTheMainActorMatchesTheSyncPass() async {
+        let items = LayoutFixtures.demoFurniture
+        let options = await LayoutSolver.arrange(plan: DemoHouse.floorPlan, items: items)
+        #expect(options == LayoutSolver(plan: DemoHouse.floorPlan).arrangeAll(items))
+        #expect(options.map(\.style) == LayoutSolver.Style.allCases)
     }
 }
