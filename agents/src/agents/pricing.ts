@@ -103,7 +103,7 @@ async function price(conn: Conn, it: Item): Promise<void> {
     if (comps.length) {
       conn.reducers.addComps({
         itemId: it.id,
-        comps: comps.slice(0, 20).map(c => ({ ...c, priceCents: BigInt(c.priceCents) })),
+        comps: comps.slice(0, 20).map(c => ({ source: c.source, title: c.title, url: c.url, priceCents: BigInt(c.priceCents) })),
       });
     }
     const e = estimate(comps, it.condition);

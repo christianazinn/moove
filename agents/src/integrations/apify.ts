@@ -8,6 +8,9 @@ export interface Comp {
   title: string;
   priceCents: number;
   url: string;
+  /** Listing photo, when the actor returned one. Only the SAM 3D agent uses it (as a candidate
+   *  product image); older caches don't have it. Never sent to the add_comps reducer. */
+  imageUrl?: string;
 }
 export type CompsResult = { comps: Comp[]; replayed: boolean };
 
@@ -58,8 +61,20 @@ function toCents(v: unknown): number {
   return -1;
 }
 
+// Listing photo fields: eBay sold listings (caffein.dev) and FB Marketplace (apify) dataset schemas.
+const IMAGE_KEYS = [
+  'fullResThumbnailUrl',
+  'thumbnailUrl',
+  'primary_listing_photo.photo_image_url',
+  'primaryListingPhoto.photo_image_url',
+  'primary_listing_photo.image.uri',
+  'image',
+  'imageUrl',
+];
+const httpsOrUndefined = (v: unknown): string | undefined => (typeof v === 'string' && /^https:\/\//i.test(v) ? v : undefined);
+
 // Actor outputs differ, so normalize tolerantly and drop rows without a usable price.
-function normalize(source: string, rows: any[]): Comp[] {
+export function normalize(source: string, rows: any[]): Comp[] {
   return rows
     .map(r => ({
       source,
@@ -68,8 +83,10 @@ function normalize(source: string, rows: any[]): Comp[] {
         pick(r, ['soldPrice', 'price', 'listing_price.amount', 'listingPrice.amount', 'sellingPrice', 'formattedPrice', 'priceWithCurrency'])
       ),
       url: String(pick(r, ['url', 'itemUrl', 'listingUrl', 'link', 'marketplace_listing_url']) ?? ''),
+      imageUrl: httpsOrUndefined(pick(r, IMAGE_KEYS)),
     }))
-    .filter(c => c.title && c.priceCents > 0);
+    .filter(c => c.title && c.priceCents > 0)
+    .map(c => (c.imageUrl ? c : { source: c.source, title: c.title, priceCents: c.priceCents, url: c.url }));
 }
 
 export const compsSlug = (q: string) => q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
