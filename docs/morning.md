@@ -1,87 +1,114 @@
 # Morning: Saturday, Oct 24
 
-_Written overnight by Christian's agent from what's on `main`; refreshed until ~7:30 AM. Devpost is due **Sun 9:00 AM**._
+_By Christian's agent, from what's on `main` (e856e51) and live on maincloud. Last checked **Sat 11:40 AM PDT**, later than planned: the 7:30 refresh slipped because my clock was off. Devpost is due **Sun 9:00 AM**._
 
 ## TL;DR
-- **Everything you need to test is in one batch below.** Each person has about 15–30 minutes of device testing. Nothing needs a rebuild to switch backends: **Settings → Backend → Live / Demo**.
-- Two backends are live on maincloud, each with its own auto-restarting worker and tunnel:
+- **Rebuild the app from `main` first.** `room` and `user` became private tables overnight (#198), and builds from before #176 can't sync any more.
+- **Everything to test is in one batch below.** It's about 15–30 minutes of device testing per person. You can switch backends without a rebuild: **Settings → Database → Live / Demo**.
+- Two backends are live on maincloud, each with its own auto-restarting worker and Cloudflare tunnel:
   - **Live `moove`**: real scans, junk included.
-  - **Demo `moove-demo`**: a clean seeded Bedroom, **join code `4RZ9G8`**. Use it for judging.
-- The app reads the worker's upload URL from the database (`service_config`, #126/#132), so tunnel restarts no longer need config changes.
-- The whole backend pipeline passes end to end: `cd agents && npm run e2e -- --replay`, 19/19, also in CI.
-- **Needs humans:** the decisions at the bottom (keys, Anthropic pitch community, Devpost text, demo video).
+  - **Demo `moove-demo`**: the clean seeded Bedroom, **join code `4RZ9G8`**. Use it for judging. It has 10 items, including a Herman Miller chair whose **$325 listing is awaiting approval**. Since #200 a joined phone can approve it. **This beat is single-use** (see Aiden's step 2).
+- Backend pipeline: `cd agents && npm run e2e -- --replay` passes **22/22** (scan → pricing → sort → sweep → listing → approval → shopping → deals → fraud → purchase → sharing → privacy). It also runs in CI on every PR.
+- Spending is capped in code: live Claude stops at **$3/day** and Apify at **$2/day**. Settings shows today's spend (#232).
+- **Needs humans:** the decisions at the bottom (keys, the Anthropic pitch community, Devpost text, the demo video).
 
-## Check the backends first (10 seconds)
+## Since 7 AM
+- **Aiden's GitHub account is suspended**, so his PRs, issues and comments return 404 and his agents can't push. His unmerged work was rescued by lisa's agent: #263 (bigger object catalogue + voxel builders, from #141/#230) and #265 (commerce at the largest text size + dark mode). Christian's agent checked his remaining branches, and nothing else is missing from `main`. **Commerce now has no agent of its own:** Christian's agent covers the worker side and lisa's agent the iOS screens. Aiden can still test on a phone in person.
+- Lisa's iPad scan feedback (#267): lisa's agent is fixing detector boxes (center, facing, duplicates), Inventory clarity (scan dates, Demo tag, origin chips), and sweep renames that respect the scanned size (#270, merged and live).
+- Auth: an expired Auth0 ID token is renewed before connecting (#264).
+
+## Check the backends first (1 minute)
 ```sh
-cd agents && npm run status
+cd agents && npm run status                     # both backends
+npm run smoke -- moove-demo 4RZ9G8              # what a judge's phone does
 ```
-Expected: `UP maincloud.spacetimedb.com/moove` and `UP …/moove-demo`, each with a worker version, `upload … healthy`, and recent agent events. If one is DOWN, tell Christian's agent (or run the commands in `docs/backends.md`).
+**Expected:**
+- `status`: `UP maincloud.spacetimedb.com/moove` and `UP …/moove-demo`, each with a worker version, `upload … healthy`, and `0 errors in the last hour`.
+- `smoke`: 6 PASS lines, then `all checks passed` (join by code, 10/10 priced and sorted, upload round trip through the tunnel, room/user private).
 
-## What changed overnight (high level)
-- **Scan:** RoomPlan + a 127-class household detector (#98), auto photos, VoiceOver in the 3D room (#153), share/join a room (#78), RoomPlan attributes and scanned colors stored on items (#110/#117/#119/#121).
-- **3D:** voxel models are the only 3D look (#108). Voxel dollhouse, lived-in rooms with real wall colors (#113/#124). The offline demo opens the dollhouse (#137). New 5-tab layout (#136). Bigger type (#134). Scan home hero (#152). Listing-link import for the new home (#112/#116).
-- **Agents:**
-  - Room photo sweep fixes "other" and finds missed items (#92).
-  - Vision categories and names match the voxel builders (#111/#131).
-  - Pricing: an Apify concurrency queue (#107), and collectible comps are filtered out (#114).
-  - Listings for items without photos (#115).
-  - Vision concurrency cap (#148).
-- **Commerce:** hardening for idempotency, fraud gating, stale Visa holds and approval edge cases (#138/#143). A `[SIMULATED]` label on every simulated money step, and a planted scam deal the demo can show being blocked (#154). Bought items appear in the new-home layout (#125). Empty, error and loading states (#140).
-- **Platform:**
-  - Contract hardening: input limits and worker pins on both maincloud DBs (#146/#159).
-  - `service_config` (#126).
-  - Self-healing tunnel + worker (#142).
-  - Claude record/replay (#118).
-  - E2E test + CI job (#120/#133).
-  - `npm run status` (#139).
-- Full list: `gh pr list --state merged --search "merged:>=2026-10-24T07:30:00Z"`.
+If either fails, tell Christian's agent on #2, or follow `docs/backends.md`.
+
+## What changed overnight
+About 90 PRs merged. Full list: `gh pr list --state merged --search "merged:>=2026-10-24T09:30:00Z" --limit 200`.
+- **Scan (Rio):**
+  - **Detection:** 127-class household detector with auto photos (#98). A per-category size sanity check runs before import (#182). The module skips impossible objects instead of rejecting the scan (#177), and the finished page says which objects were skipped (#180).
+  - **Room photo sweep:** it runs by itself after the scan (#92, #156, #178). The offline demo plays it too (#205).
+  - **Item status:** items show whether they're being identified, priced, or couldn't be priced (#193). Item detail says how an item was found (#209) and has **Add photo** (#240). Leftover boxes are labeled "Unidentified item" (#215).
+  - **Connection:** the "Reconnecting" banner can't get stuck any more, and you can tap it to retry (#196). Uploads retry and follow a new tunnel URL (#233).
+  - **Testing:** XCUITest smoke tests in CI (#161, #241).
+- **3D / new home (Lisa):**
+  - **Look:** voxel dollhouse, lived-in rooms, and a five-tab layout (#136). Bigger type (#134). Scan home hero (#152).
+  - **Dollhouse:** the fly-in starts from each piece's scanned spot (#137). Photo-only items are placed around the scanned furniture (#184/#203). Voxel models for the detector's extra categories (#230, on Aiden's catalog branch). A render-budget test (#228).
+  - **Accessibility:** accessibility and empty/error states on New Home, Pack and Summary (#179).
+  - **Summary:** an **"Agents kept you safe"** card (#229).
+- **Commerce (Aiden):**
+  - **Labels and hardening:** `[SIMULATED]` on every simulated money step (#154). A planted scam deal that the demo shows being blocked (#154, #168). Restart hardening (#138/#143).
+  - **Approvals:** stale approvals expire and are asked again (#186, #214, #231). Joined members see shared listings (#208) and **may approve listing approvals** (#200, #239). Purchases stay owner-only.
+  - **Visa:** the checkout mode is announced, so purchase approvals say SIMULATED (#191, #235, #238).
+  - **Buy agent:** deal search counts toward the Apify cap (#185, #210).
+  - **Demo seed:** the Herman Miller chair (#194).
+- **Backend / platform (Christian):**
+  - **Privacy:** `room` / `user` are private and read through per-user views (#41, #176, #198). Contract input limits and pinned workers (#146/#159). Rate limits and a storage cap on the public upload port (#202).
+  - **Spend caps:** daily Claude and Apify caps (#169, #170), published in `service_config.spend_today` (#220).
+  - **Restarts:** after a worker restart, rows left at `running` are retried (#190).
+  - **Tooling:** self-healing tunnel and worker (#142). `npm run status` (#139), `npm run smoke` (#213) and `npm run comps:audit` (#174). The e2e covers sharing, vision and privacy (#167, 22 stages).
+  - **CI:** superseded runs are cancelled, and the macOS build runs only when `ios/` changed (#207).
+  - **Contract:** the listing `posting` status (#144 part A, module side, #199), `expire_approval` (#186), and `visa_checkout` (#191).
 
 ## The one test batch
+Everyone: pull `main`, then `cd ios && xcodegen`, then build to your phone.
 
 ### Rio: capture (LiDAR iPhone)
-1. Pull `main`, then `cd ios && xcodegen`, build to the phone. Settings → Backend → **Live**. Settings shows the worker as online, with its version and start time (from `service_config`).
+1. Go to Settings → Database → **Live**. **Expected:** Settings shows the worker online with its version and start time, plus **"AI today: $x of $3 · Price lookups: $y of $2"** (#232).
 2. Scan a real room. **Expected:**
-   - items appear in Items within seconds
-   - each object's auto photo uploads (no "upload unreachable" warning)
-   - vision renames items within about a minute (names carry color + shape words)
-   - prices appear, then keep/sell/donate/trash
-3. Room photo sweep (#92, #156/#178): **no extra step.** After **Add N items**, the app sends up to 4 wide frames from the scan by itself. **Expected:**
-   - Items shows "Identifying items from room photos…" under the room for about 10–30 s.
-   - Then "Unidentified item" / "other" boxes get real names, and missed things are added. Item detail says "Found by: Room photos (size estimated)", and the dollhouse places them by estimate (#184).
-   - The Xcode console prints `[sweep] sent N of M room photos for scan <id>`.
-   - Impossible boxes are skipped, and the finished page then says "N objects looked wrong and were skipped" (#180).
-4. Share the room (Items → Share) and join it on a second phone. **Expected:** the same items stream in live, and edits sync both ways.
-5. Report back, ideally on #28 or a new issue: objects in wrong places, wrong labels, sizes that look off. The worker now stores every scan's files, so the agents can inspect them.
+   - Items appear in Items within seconds, and each object's auto photo uploads with no "upload unreachable" warning.
+   - Vision renames items within about a minute (names carry color and shape words).
+   - Prices appear, then keep/sell/donate/trash.
+   - Impossible boxes are dropped on the device (#182) or skipped by the module, and the finished page then says "N objects looked wrong and were skipped" (#180).
+3. Room photo sweep (#92): **there's no extra step.** After **Add N items**, the app sends up to 4 wide frames by itself. **Expected:** "Identifying items from room photos…" for about 10–30 s. Then "Unidentified item" boxes get real names and missed things are added. Item detail says "Found by: Room photos (size estimated)".
+4. Share the room (Items → Share), then join it on a second phone. **Expected:** the same items stream in live, and edits sync both ways.
+5. Report anything wrong (placement, labels, sizes) on #28 or a new issue.
 
 ### Lisa: new home / 3D
-1. Settings → Backend → **Demo**, then Items → Join a room → **`4RZ9G8`**. **Expected:** the seeded Bedroom (bed frame, Micke desk, mesh chair, Kallax, mini fridge, TV, monitor, floor lamp, guitar) appears with prices and decisions.
-2. Move tab: the voxel dollhouse renders every item as a recognizable model. Fly-in, layouts, and the truck/packing plan all work.
-3. After Rio's real scan on Live: the scan → dollhouse hook shows the real room shape with items at their scanned spots.
-4. Import a new home from a listing link (#89). **Expected:** an address from a Zillow/Redfin link, rooms from a floor-plan screenshot.
+1. Settings → Database → **Demo**, then Items → Join a room → **`4RZ9G8`**. **Expected:** the seeded Bedroom appears with prices and decisions: bed frame, Micke desk, mesh chair, Kallax, mini fridge, TV, monitor, floor lamp, guitar (sentimental, left to you) and the Herman Miller chair.
+2. Move tab. **Expected:** the voxel dollhouse renders every item as a recognizable model, and the fly-in, layouts, Save layout and Pack all work.
+3. Summary tab. **Expected:** totals plus the "Agents kept you safe" card.
+4. After Rio's real scan on Live: the dollhouse shows the real room shape with items at their scanned spots, and photo-only items are placed by estimate.
+5. Import a new home from a listing link (#89). **Expected:** the address comes from a Zillow/Redfin link and the rooms from a floor-plan screenshot.
 
 ### Aiden: commerce
-1. On **Demo**, Sell & Buy tab:
-   - The mesh chair's listing is drafted (posted with the `[SIMULATED]` eBay label, or waiting in Approvals if above the threshold). Approve it in the inbox and check it posts.
-2. Create the new home (Move tab), then the shopping list fills in, deals appear and fraud flags show (the planted scam deal is blocked, #154). Choose a card deal, approve it, and expect a **simulated** Visa payment in Spending.
-3. Spending log: every x402 comps payment is listed (simulated, since there are no CDP keys on the worker).
+1. Open **Demo** (joined to `4RZ9G8`), then the Sell & Buy tab. **Expected:**
+   - The mesh chair's listing is posted, labeled `[SIMULATED]` eBay.
+   - **Approvals** lists the Herman Miller chair, $325, pending. Your phone is a room member, so Approve/Deny work (#200).
+2. **Approving the chair uses up the demo beat.** To check it during testing, approve it, check that it posts, then re-arm it from a laptop: `cd agents && SPACETIME_URI=wss://maincloud.spacetimedb.com SPACETIME_DB_NAME=moove-demo npm run seed:demo -- --maincloud --reset-commerce --wait` (#246). That's one Claude call, and the join code stays the same. Otherwise, approve it only on stage.
+3. Create the new home (Move tab). **Expected:**
+   - The shopping list fills in, deals appear, and fraud flags show. The planted Zelle-only Aeron is blocked.
+   - When you choose a card deal, the purchase approval says **SIMULATED** (#238). Approve it, and a simulated Visa payment appears in Spending.
+4. Spending log: every x402 comps payment is listed (simulated, since the worker has no CDP keys).
 
 ### Christian: decisions + submission
 See "Needs a human" below, then the Devpost draft (`docs/devpost.md`) and the demo video.
 
 ## Needs a human
-1. **Keys (or keep simulated):** real CDP keys on the worker would make the x402 payments real Base Sepolia testnet transactions (Coinbase track). The same goes for eBay sandbox keys and Auth0 CIBA config. Everything is labeled simulated today. Put keys in the repo-root `.env.local`; the workers restart themselves when it changes.
+1. **Keys (or keep simulated):** real CDP keys on the worker make the x402 payments real Base Sepolia testnet transactions (Coinbase track). The same goes for eBay sandbox keys and the Auth0 CIBA config. Everything is labeled simulated today. Put keys in the repo-root `.env.local`; the workers restart themselves when it changes.
 2. **Anthropic pitch community:** still a TODO in `docs/devpost.md` (suggestions are there).
-3. **Devpost text + demo video:** `docs/devpost.md` is a draft checked against `main`. Record the demo on the **Demo** backend.
-   - Devpost gallery: capture the 8 screenshots/GIFs in [`docs/devpost-media.md`](devpost-media.md) (about 10 minutes on the Offline demo).
+3. **Devpost text, gallery and demo video:**
+   - `docs/devpost.md` is a draft checked against `main`.
+   - Gallery shots: [`docs/devpost-media.md`](devpost-media.md), about 10 minutes on the Offline demo.
+   - Record the demo on the **Demo** backend.
    - Demo video: record from the timed script and shot list in [`docs/demo-video.md`](demo-video.md).
-4. **Budget:** the Anthropic key was low last night. Overnight runs used recorded answers (`LLM_REPLAY`), but live scans call vision (up to 3 at a time), the sweep, listings and the shopping list. Check the balance before demo rehearsals.
-5. **#41 part B step 2:** room/user tables go private once the app reads `my_room` / `my_user` (asked on #41). Until then, join codes and emails are readable by any client.
+4. **Budget:** overnight work used recorded answers (`LLM_REPLAY`), with only a handful of live Claude calls (the chair listing draft, verification). Live scans call vision (up to 3 at a time), the sweep, listings and the shopping list. The worker refuses live Claude past `CLAUDE_MAX_USD_PER_DAY` (default $3), and Settings shows the running total. Check the real balance before rehearsals, and raise the cap in `.env.local` if it's healthy.
+5. **Deferred decisions (fine to leave until after the demo):**
+   - #144 part B: payment rows written before paying.
+   - Aiden's GitHub account: GitHub support, or a new account added as a collaborator. Each member still needs a verified Coinbase account for the x402 prize.
+   - #200: a real `approval.decided_by` column. For now an `agent_event` records who decided.
+   - `REQUIRE_AUTH0`: the connection gate is built but off, because the app still allows Guest.
 
 ## Known issues
-- `room`/`user` are world-readable until #41 step 2 (above).
-- One agents unit test failed once under load overnight and passed on 4 reruns. Possibly a timing flake; rerun if CI is red with no code change.
-- Live `moove` holds junk items from earlier scans (2 m "vacuum", 6 cm-deep "refrigerator"). Use **Demo** for anything judges see.
-- Quick tunnels change URL when they restart. The app follows via `service_config`, but anything else (curl, docs) should read the URL from `npm run status`.
+- The agents unit test `approval agent: an approval tapped just before expiry` can fail under load and passes when rerun. Rerun CI if it's red with no code change.
+- Live `moove` still holds junk items from earlier scans (a 2 m "vacuum", a 6 cm-deep "refrigerator"). Use **Demo** for anything judges see.
+- Quick tunnels change URL when they restart. The app follows via `service_config`, but anything else (curl, docs) should get the URL from `npm run status`.
+- #230 (voxel builders) merged into `aiden/catalog-coverage`, not `main`. It reaches main with that branch.
 
 ## Reference
-`docs/backends.md` (backends, workers, reseeding) · `docs/demo.md` and `docs/demo-commerce.md` (demo runbooks) · `docs/data-model.md` (contract + input limits) · `agents/CLAUDE.md` (every agent) · `npm run e2e -- --replay` (pipeline test).
+`docs/backends.md` (backends, one-command tests, reseeding) · `docs/demo.md` and `docs/demo-commerce.md` (demo runbooks) · `docs/data-model.md` (contract, views, input limits) · `docs/security.md` · `agents/CLAUDE.md` (every agent) · `npm run e2e -- --replay` (pipeline test).
