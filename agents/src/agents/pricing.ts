@@ -69,6 +69,11 @@ export function isGenericQuery(it: Item): boolean {
   return !it.brand && GENERIC_NAMES.has((it.name || it.category).trim().toLowerCase());
 }
 
+/** Borrowed comps (a similar item's cache) that Claude kept none of: don't price from them. */
+export function rejectsBorrowed(similarTo: string, f: Pick<FilterResult, 'claude' | 'error'>): boolean {
+  return similarTo !== '' && f.claude === 'failed' && /^kept none/.test(f.error ?? '');
+}
+
 export function needsPricing(it: Item): boolean {
   if (it.pricingStatus !== 'pending' || inFlight.has(it.id) || coolingDown.has(it.id) || isGenericQuery(it)) return false;
   return it.detailsStatus === 'done' || it.detailsStatus === 'failed' || it.photoUrls.length === 0;
@@ -108,6 +113,12 @@ async function price(conn: Conn, it: Item, retry: (it: Item, delayMs: number) =>
     });
     // Drop accessories/parts/bundles/other products before they skew the estimate.
     const f = await filterComps(it, raw, { cacheFile: filterCacheFile(q) });
+    if (rejectsBorrowed(similarTo, f)) {
+      // Borrowed comps that Claude says are all a different product: no price beats a wrong one.
+      conn.reducers.setItemStage({ itemId: it.id, stage: 'failed', field: 'pricing' });
+      logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'error', message: `No live comps, and the cached comps for "${similarTo}" aren't this item (${f.error}); not priced`, refTable: 'item', refId: it.id, data: { query: q, similarTo, borrowedRejected: true } });
+      return;
+    }
     const comps = f.comps;
     const dropped = raw.length - comps.length;
     if (f.claude === 'failed') {

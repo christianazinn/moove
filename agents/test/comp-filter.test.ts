@@ -173,3 +173,30 @@ test("the judge's reason is cleaned and capped before it reaches event messages"
   assert.ok(!/[<>\u200b]/.test(f.reason!));
   assert.ok(f.droppedByClaude.every((d) => d.why === f.reason));
 });
+
+// Titles from Rio's committed caches (Oct 24) that the rules used to let through.
+test("the pre-filter drops parts sold alone, hardware, damaged units and toys", () => {
+  const chair: ItemDesc = { ...item, name: "black mesh office chair", brand: "", category: "chair" };
+  const junk = [
+    "Herman Miller Aeron Chair Seat Mesh Only",
+    "A Pair of Herman Miller Aeron Chair Plastic Arm Filler For Fixed Aeron Arms",
+    "Herman Miller Aeron Chair Back Backrest Assembly Bolts (Set Of 4 Screws)",
+    "DAMAGED Office Chair",
+    "Office chair, not working",
+    "New View Pewter Place Card Holders VTG Miniature Chairs Dollhouse Decor Set 8",
+    "BARBIE White Wicker Patio Set Sofa Chair w/ CUSHIONS Table Rug 1989",
+    "CD~ TEARS FOR FEARS~ 1985~SONGS FROM THE BIG CHAIR",
+    "Wolverine Deadpool movie promos drinking soda cup topper seated chair",
+  ];
+  const keep = ["LOCAL PICKUP ONLY Herman Miller Aeron Classic Mesh Office Desk Chair", "Black Mesh Office Chair"];
+  const r = preFilter([...junk, ...keep].map(t => comp(t)), chair);
+  assert.deepEqual(r.kept.map(c => c.title), keep);
+  assert.equal(r.dropped.length, junk.length);
+});
+
+test("the new rules still yield to the item's own words", () => {
+  const toyChest: ItemDesc = { ...item, name: "wooden toy chest", brand: "", category: "storage" };
+  assert.equal(preFilter([comp("Solid wood toy chest with lid")], toyChest).kept.length, 1);
+  const cdRack: ItemDesc = { ...item, name: "CD rack", brand: "", category: "storage" };
+  assert.equal(preFilter([comp("Tall CD rack holds 200 CDs")], cdRack).kept.length, 1);
+});
