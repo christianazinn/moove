@@ -220,6 +220,49 @@ final class MooveStore {
         await run { try await $0.setSentimental(itemId: item.id, maybeSentimental: value) }
     }
 
+    // MARK: Fix-it (correct a misread scan item; `ItemFix` builds the attributes)
+
+    @discardableResult
+    func renameItem(_ item: Item, to name: String) async -> Bool {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name != item.name else { return true }
+        guard await run({ try await $0.renameItem(itemId: item.id, name: name) }) else { return false }
+        // The voxel model follows the new name, even over RoomPlan's own attributes.
+        return await setItemAttributes(ItemFix.renamed(to: name, attributes: currentAttributes(item)), for: item)
+    }
+
+    /// "What is it?": the chip's kind wins in every 3D view; a generic name ("Storage") becomes its word.
+    @discardableResult
+    func setQuickKind(_ kind: ItemFix.QuickKind, for item: Item) async -> Bool {
+        let change = ItemFix.apply(kind, name: item.name, category: item.category, attributes: currentAttributes(item))
+        if let name = change.name, !(await run({ try await $0.renameItem(itemId: item.id, name: name) })) { return false }
+        return await setItemAttributes(change.attributes, for: item)
+    }
+
+    /// Turn around (180°) or, with `by90`, the next quarter turn.
+    @discardableResult
+    func turn(_ item: Item, by90: Bool = false) async -> Bool {
+        let attrs = currentAttributes(item)
+        return await setItemAttributes(by90 ? ItemFix.rotating90(attrs) : ItemFix.turningAround(attrs), for: item)
+    }
+
+    /// "Not a real item": `delete_item`.
+    @discardableResult
+    func deleteItem(_ item: Item) async -> Bool {
+        await run { try await $0.deleteItem(itemId: item.id) }
+    }
+
+    @discardableResult
+    func setItemAttributes(_ attributes: [String], for item: Item) async -> Bool {
+        guard attributes != currentAttributes(item) else { return true }
+        return await run { try await $0.setItemAttributes(itemId: item.id, attributes: attributes) }
+    }
+
+    /// The item's attributes as synced now (a view's copy can be a write behind).
+    private func currentAttributes(_ item: Item) -> [String] {
+        snapshot.items.first { $0.id == item.id }?.attributes ?? item.attributes
+    }
+
     /// `set_item_colors`. Quiet: a failed color write only loses the real color (the model
     /// falls back to its palette), so it doesn't raise the error banner.
     @discardableResult

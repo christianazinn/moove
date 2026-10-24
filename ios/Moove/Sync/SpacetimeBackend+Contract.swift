@@ -157,6 +157,19 @@ extension SpacetimeBackend {
         try await call(SetItemColorsReducer(itemid: itemId, colorsjson: colors?.json ?? ""))
     }
 
+    // Fix-it: correct a misread scan item (existing reducers).
+    func renameItem(itemId: UInt64, name: String) async throws {
+        try await call(MooveBindings.RenameItemReducer(itemid: itemId, nameArg: name))
+    }
+
+    func deleteItem(itemId: UInt64) async throws {
+        try await call(MooveBindings.DeleteItemReducer(itemid: itemId))
+    }
+
+    func setItemAttributes(itemId: UInt64, attributes: [String]) async throws {
+        try await call(MooveBindings.SetItemAttributesReducer(itemid: itemId, attributes: attributes))
+    }
+
     // Sharing (#10): the module also normalizes, but send the clean code anyway.
     func joinRoom(code: String) async throws {
         try await call(MooveBindings.JoinRoomReducer(code: Room.normalizeJoinCode(code)))

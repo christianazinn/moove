@@ -59,6 +59,7 @@ struct ItemDetailView: View {
                 }
 
                 decision(item)
+                ItemFixSection(item: item)
                 details(item)
                 comps(item)
             }
