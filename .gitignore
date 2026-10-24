@@ -38,6 +38,7 @@ spacetime/target/
 # misc
 .DS_Store
 uploads/
+uploads-*/
 .claude/settings.local.json
 
 # large local reference files (summarized in docs/tracks.md)
