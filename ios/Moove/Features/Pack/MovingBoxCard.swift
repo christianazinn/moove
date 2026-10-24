@@ -135,6 +135,7 @@ struct MovingBoxCard: View {
     private var accessibilityText: String {
         var parts = ["Box \(box.id)", box.title, box.roomName, box.size.label, "\(Int(box.weightKg.rounded())) kilograms"]
         if !box.reason.isEmpty { parts.append(box.reason) }
+        if box.estimatedOnly && !box.openFirst && !box.keepWithYou { parts.append("everyday stuff, an estimate") }
         parts += box.stamps.map(\.rawValue)
         parts.append(sealed ? "sealed" : "\(packed) of \(box.contents.count) packed")
         return parts.joined(separator: ", ")

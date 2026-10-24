@@ -142,8 +142,8 @@ struct BoxDetailView: View {
                     thumbnail(line, size: 44)
                 }
             }
-            if box.contents.contains(where: { $0.itemId == nil }) {
-                Text("Typical: usual contents, not from your scan.")
+            if box.contents.contains(where: \.estimated) {
+                Text("Estimate: everyday stuff a room like this usually has, not from your scan. It counts toward the truck.")
                     .monoMeta()
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
@@ -177,8 +177,8 @@ struct BoxDetailView: View {
     }
 }
 
-/// A check-off line: square checkbox, a 3D thumbnail, item name with why it's here (or "typical" for
-/// lines not from the scan), quantity.
+/// A check-off line: square checkbox, a 3D thumbnail, item name with why it's here (or "estimate" for
+/// typical lines not from the scan), quantity.
 private struct ContentRow<Thumb: View>: View {
     var line: BoxContent
     var done: Bool
@@ -202,7 +202,7 @@ private struct ContentRow<Thumb: View>: View {
                         .fixedSize(horizontal: false, vertical: true)
                     if line.itemId == nil {
                         // "Faint" in spirit; `muted` so it still passes 4.5:1.
-                        Text("typical").monoText(12.5).foregroundStyle(Theme.muted)
+                        Text("estimate").monoText(12.5).foregroundStyle(Theme.muted)
                     } else if let reason = line.reason {
                         Text(reason).monoText(12.5).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                     }
@@ -219,7 +219,7 @@ private struct ContentRow<Thumb: View>: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(line.name)\(line.quantity > 1 ? ", \(line.quantity)" : "")\(line.itemId == nil ? ", typical" : line.reason.map { ", \($0)" } ?? "")")
+        .accessibilityLabel("\(line.name)\(line.quantity > 1 ? ", \(line.quantity)" : "")\(line.estimated ? ", estimate" : line.reason.map { ", \($0)" } ?? "")")
         .accessibilityValue(done ? "Packed" : "Not packed")
         .accessibilityAddTraits(done ? [.isButton, .isSelected] : .isButton)
     }
