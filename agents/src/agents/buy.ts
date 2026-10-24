@@ -26,6 +26,8 @@ const AUTO_CHOOSE = (process.env.BUY_AUTO_CHOOSE ?? '1') !== '0';
 // 1 = wait for the fraud screen (#18) to score a deal before buying it. Off until a fraud agent runs.
 const REQUIRE_FRAUD_SCORE = process.env.BUY_REQUIRE_FRAUD_SCORE === '1';
 
+// The one place the deal source is chosen. Live Apify search (aiden/15-live-deals) plugs in here as
+// `createDealSource(process.env)`, which falls back to this fixture replay.
 const dealSource: DealSource = fixtureDealSource();
 
 const searching = new Set<bigint>(); // shopping item ids searched this session
