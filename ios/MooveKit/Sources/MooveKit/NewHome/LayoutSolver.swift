@@ -91,9 +91,34 @@ public struct LayoutSolver: Sendable {
     }
 
     public func solve(_ items: [LayoutItem], style: Style) -> LayoutOption {
+        solve(items, style: style, obstacles: [])
+    }
+
+    /// Places `items` around pieces that already have a spot (a scan's furniture), leaving
+    /// those where they are. `fixed` placements are returned unchanged, and each one whose item
+    /// is in `items` (or `fixedItems`) blocks its footprint, rotation included, so nothing new
+    /// overlaps it. Fixed placements with no known size, wall-mounted ones and ones sitting on
+    /// another piece don't block the floor. Only items without a fixed placement are placed;
+    /// the ones that don't fit go to `unplaced`.
+    public func solve(_ items: [LayoutItem], style: Style, around fixed: [Placement], fixedItems: [LayoutItem] = []) -> LayoutOption {
+        var sizes: [UInt64: LayoutItem] = [:]
+        for item in fixedItems + items where sizes[item.id] == nil { sizes[item.id] = item }
+        let fixedIds = Set(fixed.map(\.itemId))
+        let obstacles: [OrientedRect] = fixed.compactMap { p in
+            guard let item = sizes[p.itemId], !p.isWallMounted, p.onTopOf == nil else { return nil }
+            return OrientedRect(center: PlanPoint(p.x, p.y), halfWidth: item.widthM / 2, halfDepth: item.depthM / 2,
+                                rotationDeg: p.rotationDeg).inflated(by: itemGapM / 2)
+        }
+        let used = Dictionary(fixed.compactMap { p in sizes[p.itemId].map { (p.room, $0.widthM * $0.depthM) } }, uniquingKeysWith: +)
+        var option = solve(items.filter { !fixedIds.contains($0.id) }, style: style, obstacles: obstacles, used: used)
+        option.placements = (fixed + option.placements).sorted { $0.itemId < $1.itemId }
+        return option
+    }
+
+    func solve(_ items: [LayoutItem], style: Style, obstacles fixed: [OrientedRect], used seeded: [String: Double] = [:]) -> LayoutOption {
         let rooms = plan.rooms.filter { $0.kind != .hallway && $0.polygon.count >= 3 }
-        var obstacles = doorKeepOuts()
-        var used: [String: Double] = [:] // footprint area placed per room
+        var obstacles = doorKeepOuts() + fixed
+        var used = seeded // footprint area placed per room
         var placements: [Placement] = []
         var unplaced: [UInt64] = []
 
@@ -207,7 +232,32 @@ public struct LayoutSolver: Sendable {
     }
 
     func isFree(_ rect: OrientedRect, in room: FloorPlanRoom, obstacles: [OrientedRect]) -> Bool {
-        rect.corners.allSatisfy { room.contains($0) || Self.onBoundary($0, of: room) } && !obstacles.contains { $0.overlaps(rect) }
+        Self.inside(rect, room) && !obstacles.contains { $0.overlaps(rect) }
+    }
+
+    /// The whole rectangle is in the room, not just its corners: in an L-shaped room a box
+    /// can have every corner inside and still cover the inner corner.
+    static func inside(_ rect: OrientedRect, _ room: FloorPlanRoom) -> Bool {
+        let c = rect.corners
+        guard c.allSatisfy({ room.contains($0) || onBoundary($0, of: room) }) else { return false }
+        // No wall crosses a side of the box, and no room corner pokes into it.
+        let sides = c.indices.map { (c[$0], c[($0 + 1) % c.count]) }
+        for (a, b) in room.edges {
+            if sides.contains(where: { properlyCross(a, b, $0.0, $0.1) }) { return false }
+        }
+        let (ax, az) = rect.axes
+        return !room.polygon.contains { p in
+            let v = p - rect.center
+            return abs(v.dot(ax)) < rect.halfWidth - 1e-6 && abs(v.dot(az)) < rect.halfDepth - 1e-6
+        }
+    }
+
+    /// Segments p1-p2 and q1-q2 cross at a point inside both (touching or collinear doesn't count).
+    static func properlyCross(_ p1: PlanPoint, _ p2: PlanPoint, _ q1: PlanPoint, _ q2: PlanPoint) -> Bool {
+        let eps = 1e-9
+        let d1 = (p2 - p1).cross(q1 - p1), d2 = (p2 - p1).cross(q2 - p1)
+        let d3 = (q2 - q1).cross(p1 - q1), d4 = (q2 - q1).cross(p2 - q1)
+        return ((d1 > eps && d2 < -eps) || (d1 < -eps && d2 > eps)) && ((d3 > eps && d4 < -eps) || (d3 < -eps && d4 > eps))
     }
 
     private static func onBoundary(_ p: PlanPoint, of room: FloorPlanRoom) -> Bool {
