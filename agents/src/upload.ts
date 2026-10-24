@@ -25,6 +25,7 @@ const FILE_RE = /^\/files\/([A-Za-z0-9][\w-]*\.(\w+))$/;
 // Minimal file store for photos, USDZ scans and CapturedRoom JSON (SpacetimeDB isn't a blob store).
 //   POST /upload[?name=...]  raw body, Content-Type header  -> 201 { "url": "<public url>" }
 //   GET  /files/<name>                                       -> the file
+//   GET  /healthz                                            -> 200 { "ok": true } (platform health checks)
 // Hardening (#17): type allowlist + magic-byte check, size cap, EXIF/GPS stripped from JPEG/PNG,
 // random UUID names (the client's ?name is ignored), no directory listing, nosniff + CSP.
 // Not yet: auth on POST (needs Auth0 login from #1; the iOS uploader already sends a Bearer token
@@ -35,6 +36,7 @@ export function startUploadServer(port = config.uploadPort): Server {
     res.setHeader('x-content-type-options', 'nosniff');
     try {
       const pathname = new URL(req.url ?? '/', 'http://x').pathname;
+      if (req.method === 'GET' && pathname === '/healthz') return send(res, 200, { ok: true });
       if (req.method === 'POST' && pathname === '/upload') {
         const type = (req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
         // HEIC can carry EXIF/GPS we can't strip cheaply, so it's refused rather than stored as-is.
