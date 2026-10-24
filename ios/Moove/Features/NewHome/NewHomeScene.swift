@@ -82,10 +82,10 @@ final class NewHomeScene {
         group.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
 
         let small = min(room.widthM, room.depthM) < 2
-        let title = text(room.name, size: small ? 0.22 : 0.32, weight: .semibold, color: UIColor(white: 0.15, alpha: 1))
+        let title = text(room.name, size: small ? 0.22 : 0.32, weight: .semibold, color: Theme.uiColor(0x1E1B16))
         group.addChild(title)
         if room.kind != .hallway {
-            let dims = text(String(format: "%.1f × %.1f m", room.widthM, room.depthM), size: small ? 0.15 : 0.2, weight: .regular, color: UIColor(white: 0.42, alpha: 1))
+            let dims = text(String(format: "%.1f × %.1f m", room.widthM, room.depthM), size: small ? 0.15 : 0.2, weight: .regular, color: Theme.uiColor(0x6E665A))
             dims.position.y -= small ? 0.28 : 0.4
             group.addChild(dims)
         }
@@ -94,7 +94,7 @@ final class NewHomeScene {
 
     private static func text(_ string: String, size: CGFloat, weight: UIFont.Weight, color: UIColor) -> ModelEntity {
         let mesh = MeshResource.generateText(
-            string, extrusionDepth: 0.005, font: .systemFont(ofSize: size, weight: weight),
+            string, extrusionDepth: 0.005, font: .monospacedSystemFont(ofSize: size, weight: weight),
             containerFrame: .zero, alignment: .center, lineBreakMode: .byTruncatingTail
         )
         let entity = ModelEntity(mesh: mesh, materials: [UnlitMaterial(color: color)])
@@ -109,23 +109,23 @@ final class NewHomeScene {
         case wall, glass, floor(UIColor)
     }
 
+    /// Warm, muted floors in the same family as the app theme (Theme.swift).
     private static func floorColor(_ kind: RoomKind) -> Swatch {
         switch kind {
-        case .bedroom: .floor(UIColor(red: 0.80, green: 0.86, blue: 0.97, alpha: 1))
-        case .living: .floor(UIColor(red: 0.96, green: 0.90, blue: 0.80, alpha: 1))
-        case .kitchen: .floor(UIColor(red: 0.84, green: 0.94, blue: 0.84, alpha: 1))
-        case .dining: .floor(UIColor(red: 0.97, green: 0.86, blue: 0.82, alpha: 1))
-        case .bathroom: .floor(UIColor(red: 0.80, green: 0.93, blue: 0.95, alpha: 1))
-        case .office: .floor(UIColor(red: 0.90, green: 0.86, blue: 0.96, alpha: 1))
-        case .hallway, .other: .floor(UIColor(white: 0.90, alpha: 1))
+        case .bedroom, .office: .floor(Theme.uiColor(0xDCE0D0))
+        case .living: .floor(Theme.uiColor(0xE6DCC8))
+        case .kitchen: .floor(Theme.uiColor(0xE1D9CB))
+        case .dining: .floor(Theme.uiColor(0xEFD9CD))
+        case .bathroom: .floor(Theme.uiColor(0xD9DEE2))
+        case .hallway, .other: .floor(Theme.uiColor(0xEFE8DC))
         }
     }
 
     static func material(_ swatch: Swatch) -> PhysicallyBasedMaterial {
         var m = PhysicallyBasedMaterial()
         switch swatch {
-        case .wall: m.baseColor = .init(tint: UIColor(white: 0.97, alpha: 1))
-        case .glass: m.baseColor = .init(tint: UIColor(red: 0.55, green: 0.78, blue: 0.95, alpha: 1))
+        case .wall: m.baseColor = .init(tint: Theme.uiColor(0xF7F3EC))
+        case .glass: m.baseColor = .init(tint: Theme.uiColor(0x7B8B99))
         case .floor(let color): m.baseColor = .init(tint: color)
         }
         m.roughness = .init(floatLiteral: 0.9)

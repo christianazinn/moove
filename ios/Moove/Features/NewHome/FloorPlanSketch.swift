@@ -26,31 +26,32 @@ struct FloorPlanSketch: View {
                 var path = Path()
                 path.move(to: pt(wall.from))
                 path.addLine(to: pt(wall.to))
-                ctx.stroke(path, with: .color(.primary.opacity(0.75)), lineWidth: 1.5)
+                ctx.stroke(path, with: .color(Theme.planWall), lineWidth: 1.5)
             }
             for window in plan.windows {
                 var path = Path()
                 path.move(to: pt(window.from))
                 path.addLine(to: pt(window.to))
-                ctx.stroke(path, with: .color(.blue.opacity(0.6)), lineWidth: 3)
+                ctx.stroke(path, with: .color(Theme.slate), lineWidth: 3)
             }
             guard showLabels else { return }
             for room in plan.rooms where room.kind != .hallway && min(room.widthM, room.depthM) * scale > 40 {
-                ctx.draw(Text(room.name).font(.caption2.weight(.medium)).foregroundStyle(.primary), at: pt(room.centroid))
+                ctx.draw(Text(room.name).font(.mono(10, weight: .bold)).foregroundStyle(Theme.text), at: pt(room.centroid))
             }
         }
         .accessibilityLabel("Floor plan with \(plan.rooms.count) rooms")
     }
 
+    /// Muted, warm floor tints per room type; same family as the 3D view.
     static func color(_ kind: RoomKind) -> Color {
         switch kind {
-        case .bedroom: Color(red: 0.80, green: 0.86, blue: 0.97)
-        case .living: Color(red: 0.96, green: 0.90, blue: 0.80)
-        case .kitchen: Color(red: 0.84, green: 0.94, blue: 0.84)
-        case .dining: Color(red: 0.97, green: 0.86, blue: 0.82)
-        case .bathroom: Color(red: 0.80, green: 0.93, blue: 0.95)
-        case .office: Color(red: 0.90, green: 0.86, blue: 0.96)
-        case .hallway, .other: Color(white: 0.90)
+        case .bedroom: Theme.accentSoft
+        case .living: Theme.planFloor
+        case .kitchen: Theme.surface
+        case .dining: Theme.dangerSoft
+        case .bathroom: Theme.surface2
+        case .office: Theme.accentSoft
+        case .hallway, .other: Theme.surface
         }
     }
 }
