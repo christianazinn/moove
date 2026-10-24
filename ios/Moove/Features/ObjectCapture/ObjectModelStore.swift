@@ -14,6 +14,7 @@ final class ObjectModelStore {
 
     private(set) var revision = 0
     @ObservationIgnored private var remoteCache: [String: URL] = [:]
+    @ObservationIgnored private var remoteSource: [String: URL] = [:]
 
     private let root = URL.documentsDirectory.appending(path: "models", directoryHint: .isDirectory)
     private let turnsKey = "moove.modelTurns"
@@ -32,6 +33,9 @@ final class ObjectModelStore {
 
     func hasModel(_ id: String?) -> Bool { id.map { modelURL(for: $0) != nil } ?? false }
 
+    /// Quick Look / AR only open USDZ; SAM 3D models are GLB.
+    static func isQuickLookable(_ url: URL) -> Bool { url.pathExtension.lowercased() == "usdz" }
+
     /// Called when a capture finishes building.
     func didSaveModel(for id: String) {
         // The images and checkpoint are big; only the USDZ is needed now.
@@ -43,6 +47,7 @@ final class ObjectModelStore {
     func deleteModel(for id: String) {
         try? FileManager.default.removeItem(at: folder(for: id))
         remoteCache[id] = nil
+        remoteSource[id] = nil
         revision += 1
     }
 
@@ -62,9 +67,11 @@ final class ObjectModelStore {
 
     // MARK: Synced models
 
-    /// Downloads a model another device uploaded (item.modelUrl) into the cache.
+    /// Downloads a synced model (item.modelUrl: another phone's capture, or SAM 3D) into the cache.
     func fetchRemote(_ url: URL, for id: String) async {
-        guard modelURL(for: id) == nil else { return }
+        let local = modelFile(for: id)
+        guard !FileManager.default.fileExists(atPath: local.path), remoteSource[id] != url else { return }
+        remoteSource[id] = url
         if url.isFileURL {
             // Another device's file URL is useless here; only our own files are readable.
             guard FileManager.default.fileExists(atPath: url.path) else { return }
@@ -75,7 +82,8 @@ final class ObjectModelStore {
         do {
             let (temp, response) = try await URLSession.shared.download(from: url)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { return }
-            let dest = FileManager.default.temporaryDirectory.appending(path: "remote-\(Self.safe(id)).usdz")
+            let ext = url.pathExtension.lowercased() == "glb" ? "glb" : "usdz"
+            let dest = FileManager.default.temporaryDirectory.appending(path: "remote-\(Self.safe(id))-\(abs(url.lastPathComponent.hashValue)).\(ext)")
             try? FileManager.default.removeItem(at: dest)
             try FileManager.default.moveItem(at: temp, to: dest)
             remoteCache[id] = dest

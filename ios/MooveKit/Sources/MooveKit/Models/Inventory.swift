@@ -18,6 +18,12 @@ public enum DispositionSource: String, Codable, Sendable {
     case auto, user
 }
 
+/// Where an item's 3D model came from: Object Capture on the phone (beats
+/// everything) or SAM 3D from a photo (worker).
+public enum ModelSource: String, Codable, Sendable {
+    case capture, sam3d
+}
+
 public struct User: Codable, Sendable, Hashable, Identifiable {
     public var identity: IdentityHex
     public var auth0Sub: String?
@@ -90,13 +96,17 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
     public var fragile: Bool
     public var maybeSentimental: Bool
     public var updatedAt: Date
+    /// 3D model (#65): a USDZ from Object Capture or a GLB from SAM 3D.
+    public var modelUrl: String?
+    public var modelSource: ModelSource?
 
     public init(
         id: UInt64, owner: IdentityHex, roomId: UInt64, scanObjectId: String? = nil,
         name: String, category: String, widthM: Double, heightM: Double, depthM: Double,
         photoUrls: [String] = [], material: String? = nil, brand: String? = nil, condition: Int? = nil,
         estValueCents: Int64? = nil, disposition: Disposition = .undecided, dispositionSource: DispositionSource = .auto,
-        dispositionReason: String? = nil, fragile: Bool = false, maybeSentimental: Bool = false, updatedAt: Date = .now
+        dispositionReason: String? = nil, fragile: Bool = false, maybeSentimental: Bool = false, updatedAt: Date = .now,
+        modelUrl: String? = nil, modelSource: ModelSource? = nil
     ) {
         self.id = id
         self.owner = owner
@@ -118,6 +128,8 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
         self.fragile = fragile
         self.maybeSentimental = maybeSentimental
         self.updatedAt = updatedAt
+        self.modelUrl = modelUrl
+        self.modelSource = modelSource
     }
 
     public var volumeM3: Double { widthM * heightM * depthM }

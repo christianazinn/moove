@@ -21,6 +21,10 @@ packages:
   Auth0:
     url: https://github.com/auth0/Auth0.swift
     exactVersion: 3.1.0
+  GLTFKit2:
+    # Loads SAM 3D's GLB models into RealityKit (#65); RealityKit itself only reads USDZ.
+    url: https://github.com/warrenm/GLTFKit2
+    exactVersion: 0.5.15
 targets:
   Moove:
     type: application
@@ -38,6 +42,7 @@ targets:
       - package: SpacetimeDB
         product: BSATN
       - package: Auth0
+      - package: GLTFKit2
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(MOOVE_BUNDLE_ID)
