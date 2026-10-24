@@ -73,11 +73,26 @@ extension VoxelModels {
         case .clock: Envelope(short: 0.0...0.6, long: 0.08...0.8, height: 0.06...2.4)
         case .toy: Envelope(short: 0.0...1.2, long: 0.05...1.6, height: 0.04...1.6)
         case .rack: Envelope(short: 0.12...0.8, long: 0.25...2.0, height: 0.2...2.1)
+        // scan 9's fixtures (the same ranges as ObjectSanity's) and the folding screen
+        case .toilet: Envelope(short: 0.3...0.9, long: 0.4...1.0, height: 0.35...1.1)
+        case .sink: Envelope(short: 0.2...1.0, long: 0.3...2.5, height: 0.08...1.2)
+        case .bathtub: Envelope(short: 0.5...1.3, long: 0.9...2.3, height: 0.25...0.9)
+        case .fireplace: Envelope(short: 0.15...1.2, long: 0.4...3.0, height: 0.4...2.6)
+        case .stairs: Envelope(short: 0.5...3.0, long: 0.8...6.0, height: 0.3...4.0)
+        case .screen: Envelope(short: 0.02...1.0, long: 0.3...3.0, height: 0.8...2.4)
         case .decor:
             // a pillow / cushion is thin one way (it may stand up against a sofa back) and never tall
             isPillow(n) ? Envelope(short: 0.0...1.0, long: 0.2...1.3, height: 0.04...0.6) : nil
         default: nil
         }
+    }
+
+    /// Furniture kinds that a small, flat scanned box (`isSmallFlat`) can't be.
+    static let flatFurniture: Set<Kind> = [.desk, .table, .sofa, .dresser]
+
+    /// Under 30 cm tall and at most 1.2 m long: lies on a bed or a shelf rather than standing on the floor.
+    static func isSmallFlat(_ s: (Double, Double, Double)) -> Bool {
+        s.2 < 0.3 && max(s.0, s.1) <= 1.2
     }
 
     /// A throw pillow / cushion (not a "floor cushion" bean bag or a "pillow top" mattress, which route first).
@@ -132,7 +147,11 @@ extension VoxelModels {
         if cat == "storage" && kind == .bookshelf && !caseWords && tableShapedStorage(s, minSlim: 0.5) { return .table }
         guard let env = envelope(kind, name: n), !env.contains(s) else { return kind }
         // the name's kind doesn't fit: draw what the shape clearly is, if anything
-        guard let byShape = kindByShape(s, name: n), byShape != kind else { return kind }
+        guard let byShape = kindByShape(s, name: n), byShape != kind else {
+            // scan 9: a 15 cm tall "workbench" (a detector find lying on the bed) can't be a desk.
+            // A small, flat thing a furniture name doesn't fit is soft goods: a pillow or a folded blanket.
+            return Self.flatFurniture.contains(kind) && isSmallFlat(s) ? .softGoods : kind
+        }
         if let alt = envelope(byShape, name: n), !alt.contains(s) { return kind }
         return byShape
     }

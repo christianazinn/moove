@@ -144,7 +144,9 @@ import Testing
 
     @Test func dealTitleThatWouldDrawSomethingElseFallsBackToTheItemName() {
         #expect(BoughtFurniture.modelName(itemName: "Floor lamp", dealTitle: "Arc floor lamp for sofa", category: "lamp") == "Floor lamp")
-        #expect(BoughtFurniture.modelName(itemName: "TV stand", dealTitle: "TV stand with bookshelf", category: "dresser") == "TV stand")
+        #expect(BoughtFurniture.modelName(itemName: "TV stand", dealTitle: "Bookshelf TV stand", category: "dresser") == "TV stand")
+        // a qualifier tail doesn't change the head noun's model (scan 9 follow-up), so the title stays
+        #expect(BoughtFurniture.modelName(itemName: "TV stand", dealTitle: "TV stand with bookshelf", category: "dresser") == "TV stand with bookshelf")
         #expect(BoughtFurniture.modelName(itemName: "Sofa", dealTitle: "  ", category: "sofa") == "Sofa")
         #expect(BoughtFurniture.modelName(itemName: "Sofa", dealTitle: nil, category: "sofa") == "Sofa")
     }

@@ -184,7 +184,7 @@ import Testing
             ("electronics", "Baby monitor", .electronics), ("furniture", "Computer desk with keyboard tray", .desk),
             ("luggage", "Duffel bag", .suitcase), ("suitcase", "Carry-on suitcase", .suitcase), ("decor", "Bean bag chair", .beanBag),
             ("other", "Exercise bike", .fitness), ("bike", "Kids BMX bike", .bike), ("kitchenware", "Vacuum sealer", .kitchenware),
-            ("kitchenware", "Vacuum flask", .kitchenware), ("clothes", "Ski jacket", .clothes), ("furniture", "Ski rack", .box),
+            ("kitchenware", "Vacuum flask", .kitchenware), ("clothes", "Ski jacket", .clothes), ("furniture", "Ski rack", .unknown),
             ("rug", "Persian carpet", .rug), ("decor", "Orange vase", .decor), ("storage", "Storage bin", .basket),
         ]
         for (cat, name, want) in cases { #expect(kind(cat, name) == want, "\(cat)/\(name)") }

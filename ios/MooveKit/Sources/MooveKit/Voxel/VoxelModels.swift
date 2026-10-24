@@ -77,7 +77,7 @@ public enum VoxelModels {
         // a robot vacuum is a low disc whatever height a loose scan box (or the default) says
         if kind == .vacuum && Canvas.isRobotVacuum(name, Y) { Y = min(Y, 3); NY = Y }
         // RoomPlan has no bunk category: a bed box 1.2 m+ tall (or named bunk) is one
-        let bunk = kind == .bed && (name.has("bunk") || Y >= vox(1.2))
+        let bunk = kind == .bed && (name.has("bunk", "loft bed") || Y >= vox(1.2))
         if bunk { Y = max(Y, vox(1.4)); NY = Y }
         if kind == .bed && !bunk {
             // h <= 0.7 m: h is the mattress-top height, the headboard rises above it
@@ -164,6 +164,21 @@ public enum VoxelModels {
         case .clock: g.clock(X, NY, Z, name)
         case .toy: g.toy(X, NY, Z, name)
         case .rack: g.rack(X, NY, Z, name)
+        case .toilet: g.toilet(X, NY, Z, name)
+        case .sink: g.sink(X, NY, Z, name)
+        case .bathtub: g.bathtub(X, NY, Z, name)
+        case .fireplace: g.fireplace(X, NY, Z, name)
+        case .stairs: g.stairs(X, NY, Z, name)
+        case .screen: g.foldingScreen(X, NY, Z, name)
+        case .softGoods: g.softGoods(X, NY, Z, name)
+        case .unknown: g.drapedObject(X, NY, Z, name)
+        case .ball: g.ball(X, NY, Z, name)
+        case .helmet: g.helmet(X, NY, Z, name)
+        case .racket: g.racket(X, NY, Z, name)
+        case .weights: g.weights(X, NY, Z, name)
+        case .yogaMat: g.yogaMat(X, NY, Z, name)
+        case .ironingBoard: g.ironingBoard(X, NY, Z, name)
+        case .horn: g.horn(X, NY, Z, name)
         case .box: g.kraftBox(X, NY, Z, name)
         }
         return (g.output(), g.surfaces)
@@ -206,7 +221,12 @@ public enum VoxelModels {
         case framedPhotos, stove, dishwasher, microwave, bench, ottoman, bike, suitcase
         case guitar, piano, keyboard, drums, vacuum, monitor, scooter, bag, fitness, board
         case motorcycle, stroller, wheelchair, grill, lawnMower, crib, ladder, trunk, basket, trashCan, toolbox
-        case petCrate, petBed, catTree, clock, toy, rack, box
+        case petCrate, petBed, catTree, clock, toy, rack
+        // scan 9 (#bathroom fixtures, the room divider, soft / unknown things) and the detector's last props
+        case toilet, sink, bathtub, fireplace, stairs, screen, softGoods, unknown
+        case ball, helmet, racket, weights, yogaMat, ironingBoard, horn
+        /// A taped moving box: only for things named a box (an unnamed thing is `.unknown`).
+        case box
 
         /// Default size (w, d, h) in meters when a dimension is missing or invalid.
         var defaultSize: (Double, Double, Double) {
@@ -271,6 +291,21 @@ public enum VoxelModels {
             case .clock: (0.35, 0.05, 0.35)
             case .toy: (0.35, 0.3, 0.4)
             case .rack: (0.5, 0.5, 1.8)
+            case .toilet: (0.4, 0.7, 0.78)
+            case .sink: (0.6, 0.48, 0.85)
+            case .bathtub: (1.6, 0.75, 0.55)
+            case .fireplace: (1.3, 0.45, 1.1)
+            case .stairs: (0.95, 2.4, 2.6)
+            case .screen: (1.5, 0.35, 1.7)
+            case .softGoods: (0.5, 0.4, 0.15)
+            case .unknown: (0.5, 0.45, 0.6)
+            case .ball: (0.24, 0.24, 0.24)
+            case .helmet: (0.22, 0.28, 0.18)
+            case .racket: (0.28, 0.05, 0.68)
+            case .weights: (0.35, 0.14, 0.14)
+            case .yogaMat: (0.62, 0.14, 0.14)
+            case .ironingBoard: (1.3, 0.38, 0.9)
+            case .horn: (0.3, 0.2, 0.7)
             case .box: (0.5, 0.4, 0.4)
             }
         }
@@ -324,8 +359,21 @@ public enum VoxelModels {
             case .petBed: (6, 3, 5)
             case .catTree: (6, 12, 6)
             case .clock: (5, 5, 1)
-            case .toy: (6, 6, 5)
+            case .toy: (6, 3, 5)
             case .rack: (5, 8, 3)
+            case .toilet: (6, 8, 8)
+            case .sink: (6, 3, 5)
+            case .bathtub: (12, 5, 8)
+            case .fireplace: (10, 10, 4)
+            case .stairs: (6, 8, 8)
+            case .screen: (6, 12, 3)
+            case .softGoods: (4, 3, 4)
+            case .unknown: (4, 4, 4)
+            case .ball: (3, 3, 3)
+            case .helmet: (4, 3, 4)
+            case .weights, .yogaMat: (4, 2, 2)
+            case .ironingBoard: (8, 4, 3)
+            case .horn: (3, 4, 2)
             default: nil
             }
         }
@@ -340,8 +388,52 @@ public enum VoxelModels {
     /// A user's fix-it choice (`UserKind.table`, `ItemFix`) wins over everything, size check included.
     static func route(category cat: String, name n: VName, attrs: Set<String> = [], size: (Double, Double, Double)? = nil) -> Kind {
         if let user = ItemFix.voxelKind(lowercasedAttributes: attrs) { return user }
-        let named = routeByName(category: cat, name: n, attrs: attrs, size: size)
-        return saneKind(named, category: cat, name: n, attrs: attrs, size: size)
+        var named = routeByName(category: cat, name: n, attrs: attrs, size: size)
+        // the head noun phrase first ("Metal bunk bed with ladder" is a bed, not a ladder); the
+        // full name only when the head says nothing beyond the category ("Thing with drawers")
+        let head = headPhrase(n.s)
+        if head != n.s && routeByName(category: "", name: VName(head)) != .unknown {
+            named = routeByName(category: cat, name: VName(head), attrs: attrs, size: size)
+        }
+        named = trustingCategory(named, category: cat, attrs: attrs, size: size)
+        // the size check may not leave the family either, while the category's own kind fits
+        return trustingCategory(saneKind(named, category: cat, name: n, attrs: attrs, size: size), category: cat, attrs: attrs, size: size)
+    }
+
+    /// The name's head noun phrase: everything before a qualifier tail (" with ...", " w/ ",
+    /// " and ", " plus ", " including ", ", ", " - ", " + ", parentheses), like the worker's
+    /// sizefit `kindOf`. The whole name when nothing is left.
+    static func headPhrase(_ s: String) -> String {
+        var cut = s.endIndex
+        for sep in [" with ", " w/ ", " and ", " plus ", " including ", " includes ", ", ", " - ", " – ", " + ", " (", "("] {
+            if let r = s.range(of: sep), r.lowerBound < cut { cut = r.lowerBound }
+        }
+        let head = trimmed(String(s[..<cut]))
+        return head.count >= 2 ? head : s
+    }
+
+    /// RoomPlan's own furniture categories, and the kinds a name may turn each into.
+    static let roomPlanFamilies: [String: Set<Kind>] = [
+        "bed": [.bed, .mattress, .crib, .petBed, .sofa],
+        "sofa": [.sofa, .beanBag, .bench, .ottoman, .chair, .bed],
+        "table": [.table, .desk, .bench],
+        "chair": [.chair, .bench, .ottoman, .sofa, .wheelchair, .beanBag],
+        "storage": [.dresser, .bookshelf, .table, .desk, .trunk, .basket, .toolbox, .rack, .box, .quiltRack, .tv, .crib, .trashCan, .petCrate],
+        "refrigerator": [.appliance], "stove": [.stove, .microwave, .appliance], "oven": [.stove, .microwave, .appliance],
+        "dishwasher": [.dishwasher, .appliance], "washerdryer": [.appliance], "television": [.tv, .monitor],
+        "toilet": [.toilet], "sink": [.sink], "bathtub": [.bathtub], "fireplace": [.fireplace, .stove], "stairs": [.stairs],
+    ]
+
+    /// A specific RoomPlan category whose envelope the size fits wins over a name that asks for an
+    /// unrelated kind (a "bed" named "... bunk bed, ladder" stays a bed); names may still pick
+    /// within the category's family (a "table" named "desk" is a desk).
+    static func trustingCategory(_ kind: Kind, category cat: String, attrs: Set<String>, size: (Double, Double, Double)?) -> Kind {
+        guard let family = roomPlanFamilies[cat], !family.contains(kind) else { return kind }
+        let own = routeByName(category: cat, name: VName(""), attrs: attrs, size: size)
+        guard family.contains(own) else { return kind }
+        if let s = size, s.0.isFinite, s.1.isFinite, s.2.isFinite, s.0 > 0, s.1 > 0, s.2 > 0,
+           let env = envelope(own, name: VName("")), !env.contains(s) { return kind }
+        return own
     }
 
     /// The builder the category, name and RoomPlan attributes ask for, before the size check.
@@ -366,6 +458,8 @@ public enum VoxelModels {
             // the detector's remaining categories by name, before the furniture words: a "wheel
             // chair" isn't a chair, a "dog bed" not a bed, a "desk clock" not a desk, a "dirt bike"
             // not a bicycle, a "toy chest" not a dresser
+            if let k = fixtureKind(n) { return k } // a "sink cabinet" is a sink, a "toilet" never a dresser
+            if let k = sportsKind(n) { return k } // a "bike helmet" isn't a bike
             if let k = householdKind(n) { return k }
             if n.word("lamp", "lamps", "sconce", "lantern") { return .lamp }
             // a dining set ("Farmhouse dining table + 4 chairs") is drawn as its table
@@ -381,6 +475,7 @@ public enum VoxelModels {
             || n.word("drawers", "cabinet") { return .dresser }
         if n.word("rug") || n.has("carpet") { return .rug }
         if n.has("quilt rack", "blanket rack", "blanket ladder", "quilt ladder", "towel rack") { return .quiltRack }
+        if !small && isSoftGoods(n) { return .softGoods }
         if n.has("mirror") { return .mirror }
         if n.has("frame") && n.has("photo", "picture", "portrait") { return .framedPhotos }
         if n.has("fridge", "refrigerator", "freezer") { return .appliance }
@@ -473,6 +568,22 @@ public enum VoxelModels {
         case "bike", "bicycle": return .bike
         case "suitcase", "luggage": return .suitcase
         case "box", "boxes": return .box
+        // scan 9: RoomPlan's bathroom / building categories and the detector's last props
+        case "toilet", "wc", "commode": return .toilet
+        case "sink", "basin", "bathroom sink", "kitchen sink", "washbasin": return .sink
+        case "bathtub", "tub", "bath", "bath tub": return .bathtub
+        case "fireplace", "hearth", "wood stove": return .fireplace
+        case "stairs", "staircase", "stair", "steps", "stairway": return .stairs
+        case "room divider", "divider", "folding screen", "privacy screen", "partition": return .screen
+        case "ball", "balls": return .ball
+        case "helmet", "helmets": return .helmet
+        case "racket", "racquet", "tennis racket": return .racket
+        case "weights", "weight", "dumbbell", "dumbbells", "kettlebell", "barbell": return .weights
+        case "yoga mat", "exercise mat", "mat": return .yogaMat
+        case "ironing board": return .ironingBoard
+        case "saxophone", "trumpet", "trombone", "clarinet", "flute", "tuba", "brass", "wind instrument": return .horn
+        case "blanket", "blankets", "bedding", "linens", "linen", "towels", "towel", "textiles": return .softGoods
+        case "other", "unknown", "misc", "object": return fallbackKind(n, size)
         case "storage":
             if n.word("bin", "bins", "tote", "totes", "basket", "baskets", "hamper") { return .basket }
             return n.word("box", "crate", "container") ? .box : .bookshelf
@@ -503,8 +614,14 @@ public enum VoxelModels {
             if n.word("plant", "plants", "succulent", "fern", "monstera") { return .plant }
             if n.word("photos") { return .photos }
             return .decor
-        default: return size.map(shapeKind) ?? .box
+        default: return fallbackKind(n, size)
         }
+    }
+
+    /// A broad or unknown category: a moving box when the name says box, else the shape's kind.
+    static func fallbackKind(_ n: VName, _ size: (Double, Double, Double)?) -> Kind {
+        if n.word("box", "boxes", "carton", "cartons") || n.has("moving box", "cardboard box") { return .box }
+        return size.map(shapeKind) ?? .unknown
     }
 
     /// A musical instrument named in `n`, or an amp (`.electronics`). `loose`: the category already
@@ -522,6 +639,9 @@ public enum VoxelModels {
             let wide = size.map { $0.0.isFinite && $0.0 >= 0.75 } ?? false
             if loose || wide || n.has("casio", "yamaha", "korg", "roland", "nord", "kawai", "alesis", "piano") { return .keyboard }
         }
+        if n.word("saxophone", "saxophones", "sax", "trumpet", "trumpets", "trombone", "trombones", "clarinet", "clarinets",
+                  "flute", "flutes", "tuba", "tubas", "cornet", "flugelhorn", "euphonium", "oboe", "bassoon")
+            || n.has("french horn") { return .horn }
         if n.word("piano", "pianos", "pianoforte", "pianola") || n.has("baby grand", "grand piano", "upright piano") { return .piano }
         if n.has("guitar", "ukulele", "double bass", "upright bass")
             || n.word("violin", "violins", "viola", "cello", "cellos", "fiddle", "uke", "banjo", "mandolin") { return .guitar }
@@ -568,6 +688,53 @@ public enum VoxelModels {
     }
 
     static func isClock(_ n: VName) -> Bool { n.word("clock", "clocks") }
+
+    /// Built-in fixtures RoomPlan finds (toilet, sink, bathtub, fireplace, stairs) and room dividers.
+    static func fixtureKind(_ n: VName) -> Kind? {
+        if n.word("toilet", "toilets", "wc", "commode", "bidet") || n.has("water closet") {
+            if !n.has("toilet paper", "toilet roll", "toilet brush", "toilet seat cover", "toiletries", "toilet bag", "toilet mat") { return .toilet }
+        }
+        if n.word("sink", "sinks", "washbasin", "basin") || n.has("bathroom vanity", "vanity sink", "vanity unit", "sink cabinet") {
+            if !n.has("sink mat", "sink caddy", "sink organizer", "sink strainer", "sink rack", "basin wrench") { return .sink }
+        }
+        if n.word("bathtub", "bathtubs", "jacuzzi") || n.has("bath tub", "clawfoot", "claw-foot", "soaking tub", "alcove tub", "freestanding tub") {
+            if !n.has("bathtub mat", "bath mat", "bathtub tray", "tub chair") { return .bathtub }
+        }
+        if n.word("fireplace", "fireplaces", "hearth", "woodstove") || n.has("wood stove", "wood burner", "log burner", "wood-burning stove") {
+            if !n.has("fireplace tool", "fireplace screen", "fireplace poker", "fireplace grate") { return .fireplace }
+        }
+        if n.word("stairs", "staircase", "staircases", "stairway", "stair") && !n.has("stair gate", "stair runner", "stair rail", "stair lift") {
+            return .stairs
+        }
+        if n.has("room divider", "folding screen", "privacy screen", "divider screen", "dressing screen", "shoji", "partition screen") {
+            return .screen
+        }
+        return nil
+    }
+
+    /// The detector's small sports props: balls, helmets, rackets, weights, yoga mats, plus the ironing board.
+    static func sportsKind(_ n: VName) -> Kind? {
+        if n.has("ironing board") { return .ironingBoard }
+        if n.word("helmet", "helmets") { return .helmet }
+        if n.word("racket", "rackets", "racquet", "racquets") { return .racket }
+        if n.word("dumbbell", "dumbbells", "kettlebell", "kettlebells", "barbell", "barbells", "weights")
+            || n.has("weight plate", "free weight", "hand weight") { return .weights }
+        if n.has("yoga mat", "exercise mat", "gym mat", "pilates mat", "foam roller") { return .yogaMat }
+        if n.word("ball", "balls", "basketball", "basketballs", "football", "footballs", "volleyball", "soccerball", "medicine ball")
+            || n.has("soccer ball", "beach ball", "exercise ball", "yoga ball", "stability ball", "bowling ball") {
+            if !n.has("ball gown", "ballpoint", "ball python", "meatball", "ball jar", "ball chair") { return .ball }
+        }
+        return nil
+    }
+
+    /// Blankets, towels and linens (folded or stacked). Racks, ladders, chests and baskets for
+    /// them route first.
+    static func isSoftGoods(_ n: VName) -> Bool {
+        if n.has("paper towel", "towel holder", "towel bar", "towel hook", "towel warmer", "towel ring") { return false }
+        return n.word("blanket", "blankets", "comforter", "comforters", "duvet", "duvets", "towel", "towels", "linens", "bedding",
+                      "bedspread", "afghan")
+            || n.has("throw blanket", "folded blanket", "weighted blanket", "bed sheets")
+    }
 
     static func toyKind(_ n: VName) -> Kind? {
         n.word("toy", "toys", "teddy", "plush", "plushie", "plushies", "dollhouse", "doll", "dolls", "lego")
@@ -619,17 +786,18 @@ public enum VoxelModels {
     ]
 
     /// Last resort for a broad category ("furniture", "other") whose name has no keyword: the
-    /// likeliest piece for the scanned (w, d, h) in meters. Small or odd shapes stay boxes.
+    /// likeliest piece for the scanned (w, d, h) in meters. Small or odd shapes are drawn as an
+    /// unknown thing under a dust sheet (not a moving box, which reads as a misdrawn box).
     static func shapeKind(_ s: (Double, Double, Double)) -> Kind {
         let (w, d, h) = s
-        guard w.isFinite, d.isFinite, h.isFinite, w > 0, d > 0, h > 0 else { return .box }
+        guard w.isFinite, d.isFinite, h.isFinite, w > 0, d > 0, h > 0 else { return .unknown }
         let foot = max(w, d), slim = min(w, d)
         if h < 0.35 && foot >= 1.2 { return .rug }
         if h >= 1.2 && slim <= 0.5 { return .bookshelf }
         if h >= 0.6 && h <= 0.85 && foot >= 0.9 { return slim <= 0.75 ? .desk : .table }
         if h >= 0.4 && h <= 0.7 && foot >= 1.4 && slim >= 0.9 { return .bed }
         if h >= 0.65 && h <= 1.2 && foot >= 0.6 && foot <= 1.6 && slim >= 0.4 { return .dresser }
-        return .box
+        return .unknown
     }
 
     // MARK: sizing

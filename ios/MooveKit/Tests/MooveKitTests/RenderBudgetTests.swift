@@ -59,6 +59,11 @@ import Testing
         .toolbox: ("toolbox", "toolbox"), .petCrate: ("pet crate", "pet crate"), .petBed: ("pet bed", "dog bed"),
         .catTree: ("cat tree", "cat tree"), .clock: ("clock", "wall clock"), .toy: ("toy", "stuffed animal"),
         .rack: ("coat rack", "coat rack"),
+        .toilet: ("toilet", "toilet"), .sink: ("sink", "sink"), .bathtub: ("bathtub", "bathtub"), .fireplace: ("fireplace", "fireplace"),
+        .stairs: ("stairs", "stairs"), .screen: ("room divider", "room divider"), .softGoods: ("other", "folded blanket"),
+        .unknown: ("other", "other"), .ball: ("ball", "basketball"), .helmet: ("helmet", "bike helmet"),
+        .racket: ("racket", "tennis racket"), .weights: ("weights", "dumbbell"), .yogaMat: ("yoga mat", "yoga mat"),
+        .ironingBoard: ("ironing board", "ironing board"), .horn: ("saxophone", "saxophone"),
     ]
 
     static func triangles(_ spec: VoxelItemSpec) -> Int { VoxelMesher.mesh(VoxelModels.build(spec)).triangleCount }

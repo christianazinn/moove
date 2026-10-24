@@ -454,14 +454,19 @@ extension Canvas {
             set(rd(cx), Y - 1, rd(cz), P.bulb, flat: true)
             return
         }
-        // vase with dried stems
-        let vh = max(2, rd(D(Y) * 0.5))
-        let vc = colorFromName(name, P.sage)
+        // a ceramic vase (scan 9: the old sage vase full of dried stems read as a potted plant). Stems
+        // only when the name asks for them; a bare vase fills the height.
+        let stems = name.has("flower", "stems", "dried", "pampas", "bouquet", "eucalyptus", "branch", "twig", "floral", "tulip")
+        let vh = stems ? max(2, rd(D(Y) * 0.5)) : Y
+        let vc = colorFromName(name, pick([0xE4DED2, P.terracotta, 0x7E95A8, 0xD9C7A4, 0xB9A58A]))
         for y in upTo(0, vh) {
             let t = D(y) / D(max(1, vh - 1))
             // the belly fills the scanned footprint, the neck narrows
             cyl(cx, cz, max(1, R * (0.6 + 0.4 * sin(t * Double.pi)) - (t > 0.8 ? 0.4 : 0)), y, y + 1, vc)
         }
+        // a rim at the mouth
+        if !stems && vh >= 4 { cyl(cx, cz, max(1, R * 0.55), vh - 1, vh, shade(vc, 0.92), hollow: true) }
+        guard stems else { return }
         for _ in 0..<5 {
             let ex = clampD(cx + (rand() - 0.5) * D(X) * 0.8, 0, D(X - 1))
             let ez = clampD(cz + (rand() - 0.5) * D(Z) * 0.8, 0, D(Z - 1))
@@ -473,8 +478,8 @@ extension Canvas {
     /// Throw pillow / cushion filling its box: puffed in the middle, thin pinched seams at the
     /// edges, corners tucked in. Lying flat when the box is low, standing up (face toward +z,
     /// propped against a sofa back) when it is taller than deep. A seeded few get stripes.
-    func pillow(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
-        let fab = colorFromName(name, accentPair(avoiding: P.linen).0)
+    func pillow(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName, fallback: Int? = nil) {
+        let fab = colorFromName(name, fallback ?? accentPair(avoiding: P.linen).0)
         let seam = shade(fab, 0.84), stripe = shade(fab, 0.86)
         let upright = Y > Z
         // face axes (x, f) and the thickness axis t: f = y, t = z standing up; f = z, t = y lying

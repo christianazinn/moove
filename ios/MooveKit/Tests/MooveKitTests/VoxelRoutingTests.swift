@@ -70,8 +70,9 @@ struct VoxelRoutingTests {
         #expect(kind("furniture", "Furniture", 1.6, 0.9, 0.75) == .table)
         #expect(kind("furniture", "Furniture", 0.8, 0.3, 1.8) == .bookshelf)
         #expect(kind("furniture", "Furniture", 1.5, 2.0, 0.5) == .bed)
-        #expect(kind("other", "Thing", 0.4, 0.3, 0.3) == .box)
-        #expect(kind("other", "Thing") == .box) // no size: box
+        #expect(kind("other", "Thing", 0.4, 0.3, 0.3) == .unknown) // scan 9: a dust-sheeted thing, not a moving box
+        #expect(kind("other", "Thing") == .unknown) // no size: unknown
+        #expect(kind("other", "Moving box", 0.4, 0.3, 0.3) == .box)
     }
 
     @Test func newKindsBuild() {
