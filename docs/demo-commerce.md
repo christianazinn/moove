@@ -98,7 +98,7 @@ The rail refuses before signing: `Refused x402 payment for comps for 'IKEA Poang
 **Fallback:**
 1. `X402_SIMULATE=1 npm run x402:demo`: same flow, nothing signed, every message starts with `[SIMULATED]`. Say it's simulated.
 2. Open the proof tx links (below) and say "this is the same call, settled earlier".
-3. Worker pricing without Apify: comps are cached in `agents/fixtures/comps/`. The committed replay `herman-miller-office-chair.json` (#63, 18 real comps) covers the demo Herman Miller office chair and is labeled `[REPLAYED]`. Any other item with Apify down or no `APIFY_TOKEN` errors with "APIFY_TOKEN not set and no cached comps for this query". Show those on the phone's Offline demo instead.
+3. Worker pricing without Apify: comps are cached in `agents/fixtures/comps/`. The committed replay `herman-miller-office-chair.json` (#63, 18 real comps) covers the demo Herman Miller office chair and is labeled `[REPLAYED]`. `SEED_COMMERCE=1 npm run seed:demo` adds that chair to the seeded Bedroom, set to sell (see `docs/backends.md`). Any other item with Apify down or no `APIFY_TOKEN` errors with "APIFY_TOKEN not set and no cached comps for this query". Show those on the phone's Offline demo instead.
 
 ## Step 2: The spending log
 Merged (PR #36). Since #28 the live backend subscribes to `payment` and `agent_event`, so in live mode this screen shows the worker's real rows (unverified on device). The steps below are the Offline demo fixture.

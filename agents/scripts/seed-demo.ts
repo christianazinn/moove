@@ -3,6 +3,11 @@
 // user, not the worker. A running worker then prices every item from the committed comps caches
 // ([REPLAYED], no Apify calls). Items have no photos, so vision (Claude) never runs on them.
 //
+// SEED_COMMERCE=1 also seeds the commerce story (DEMO_COMMERCE_OBJECTS: a Herman Miller chair set to sell,
+// which the listing agent drafts over the $100 threshold and asks approval for). On an already-seeded
+// Bedroom it adds just the missing commerce items, so the join code stays the same. Off by default: the
+// listing draft is a live Claude call on a maincloud worker.
+//
 // Skips if this user already has a "Bedroom" (prints its join code) unless --force, which imports another.
 // --wait[=SEC] waits (default 90s) for the worker to price the items and prints the estimates.
 // The user's token lives in .user-token.<db> (SEED_USER_TOKEN_FILE overrides), so re-runs are the same user.
@@ -14,9 +19,11 @@ import type { Identity } from "spacetimedb";
 import { DbConnection, tables } from "../src/module_bindings/index.js";
 import type { Item, Room } from "../src/module_bindings/types.js";
 import { config } from "../src/config.js";
-import { DEMO_HOME, DEMO_OBJECTS, DEMO_ROOM_NAME, demoQuery } from "./demo-room.js";
+import { DEMO_COMMERCE_OBJECTS, DEMO_HOME, DEMO_OBJECTS, DEMO_ROOM_NAME, demoQuery } from "./demo-room.js";
 
 const force = process.argv.includes("--force");
+const commerce = process.env.SEED_COMMERCE === "1";
+const objects = commerce ? [...DEMO_OBJECTS, ...DEMO_COMMERCE_OBJECTS] : DEMO_OBJECTS;
 const waitArg = process.argv.find((a) => a === "--wait" || a.startsWith("--wait="));
 const waitSec = waitArg ? Number(waitArg.split("=")[1] ?? 90) : 0;
 if (!Number.isFinite(waitSec) || waitSec < 0) {
@@ -53,7 +60,7 @@ const { conn, identity } = await new Promise<{ conn: DbConnection; identity: Ide
         .subscriptionBuilder()
         .onApplied(() => resolve({ conn, identity }))
         .onError((ctx) => reject(ctx.event ?? new Error("subscription failed")))
-        .subscribe([tables.myRoom, tables.item, tables.myUser]);
+        .subscribe([tables.myRoom, tables.item, tables.myUser, tables.listing, tables.approval]);
     })
     .onConnectError((_ctx, err) => reject(err))
     .build();
@@ -66,7 +73,26 @@ const itemsIn = (room: Room) => [...conn.db.item.iter()].filter((it) => it.roomI
 function printItems(room: Room): void {
   for (const it of itemsIn(room).sort((a, b) => Number(a.id - b.id))) {
     const price = it.pricingStatus === "done" ? `${dollars(it.estValueCents)} (${dollars(it.estLowCents)}-${dollars(it.estHighCents)})` : it.pricingStatus;
-    console.log(`  #${it.id} ${it.name.padEnd(26)} ${it.category.padEnd(12)} ${price}${it.maybeSentimental ? "  [sentimental]" : ""}`);
+    console.log(`  #${it.id} ${it.name.padEnd(26)} ${it.category.padEnd(12)} ${price.padEnd(16)} ${it.disposition}${it.maybeSentimental ? "  [sentimental]" : ""}`);
+    for (const l of conn.db.listing.iter()) {
+      if (l.itemId !== it.id) continue;
+      const appr = [...conn.db.approval.iter()].filter((a) => a.kind === "listing" && a.refId === l.id).map((a) => a.status);
+      console.log(`      listing #${l.id} "${l.title}" ${dollars(l.priceCents)} ${l.status}${appr.length ? ` (approval ${appr.join(", ")})` : ""}`);
+    }
+  }
+}
+
+// What the seed does as the user once an object is imported: flag it sentimental, or tap Sell.
+async function applyUserEdits(room: Room, objs: typeof objects): Promise<void> {
+  for (const o of objs.filter((o) => o.sentimental || o.sell)) {
+    const find = () => itemsIn(room).find((i) => i.scanObjectId === o.scanObjectId);
+    // Let a running worker price it first: an update that lands while the item still reads `pending`
+    // can make the pricing agent price it twice. No worker within 20s means no race, so edit it anyway.
+    await waitFor("pricing before editing", () => (["done", "failed"].includes(find()?.pricingStatus ?? "") ? true : undefined), 20_000).catch(() => {});
+    const it = find();
+    if (!it) continue;
+    if (o.sentimental) await conn.reducers.setSentimental({ itemId: it.id, value: true });
+    if (o.sell) await conn.reducers.setDisposition({ itemId: it.id, disposition: "sell" });
   }
 }
 
@@ -77,6 +103,13 @@ try {
   if (existing.length && !force) {
     room = existing.reduce((a, b) => (b.id > a.id ? b : a)); // newest; iter() order isn't by id
     console.log(`\nAlready seeded: "${room.name}" (room #${room.id}, ${itemsIn(room).length} items). Use --force to import another.`);
+    const missing = commerce ? DEMO_COMMERCE_OBJECTS.filter((o) => !itemsIn(room).some((i) => i.scanObjectId === o.scanObjectId)) : [];
+    for (const { sentimental: _s, sell: _sell, ...o } of missing) await conn.reducers.addItem({ roomId: room.id, object: o });
+    if (missing.length) {
+      await waitFor("the commerce items", () => (missing.every((o) => itemsIn(room).some((i) => i.scanObjectId === o.scanObjectId)) ? true : undefined));
+      await applyUserEdits(room, missing);
+      console.log(`Added ${missing.length} commerce item(s) (SEED_COMMERCE=1): ${missing.map((o) => o.name).join(", ")}`);
+    }
   } else {
     if (conn.db.myUser.count() === 0n) await conn.reducers.registerUser({ auth0Sub: "", name: "Demo Student", email: "demo@moove.app" });
     const before = new Set(existing.map((r) => r.id));
@@ -85,19 +118,12 @@ try {
       home: DEMO_HOME,
       usdzUrl: "",
       capturedRoomJsonUrl: "",
-      objects: DEMO_OBJECTS.map(({ sentimental: _s, ...o }) => o),
+      objects: objects.map(({ sentimental: _s, sell: _sell, ...o }) => o),
     });
     room = await waitFor("the new room", () => myBedrooms().find((r) => !before.has(r.id)));
-    await waitFor("its items", () => (itemsIn(room).length >= DEMO_OBJECTS.length ? true : undefined));
-    for (const o of DEMO_OBJECTS.filter((o) => o.sentimental)) {
-      const find = () => itemsIn(room).find((i) => i.scanObjectId === o.scanObjectId);
-      // Let a running worker price it first: an update that lands while the item still reads `pending`
-      // can make the pricing agent price it twice. No worker within 20s means no race, so flag it anyway.
-      await waitFor("pricing before flagging", () => (["done", "failed"].includes(find()?.pricingStatus ?? "") ? true : undefined), 20_000).catch(() => {});
-      const it = find();
-      if (it) await conn.reducers.setSentimental({ itemId: it.id, value: true });
-    }
-    console.log(`\nSeeded "${room.name}" (room #${room.id}, home '${room.home}') with ${DEMO_OBJECTS.length} items.`);
+    await waitFor("its items", () => (itemsIn(room).length >= objects.length ? true : undefined));
+    await applyUserEdits(room, objects);
+    console.log(`\nSeeded "${room.name}" (room #${room.id}, home '${room.home}') with ${objects.length} items${commerce ? " (incl. SEED_COMMERCE=1)" : ""}.`);
   }
   console.log(`Join code: ${room.joinCode}   (in the app: join_room("${room.joinCode}"))`);
 
@@ -110,9 +136,18 @@ try {
       console.warn("Not all items priced yet. Is the worker running against this database?");
       failed = true;
     }
+    if (commerce) {
+      // The listing agent drafts each sell item (a Claude call), then asks approval above the threshold.
+      const sells = itemsIn(room).filter((it) => DEMO_COMMERCE_OBJECTS.some((o) => o.sell && o.scanObjectId === it.scanObjectId));
+      const listed = (it: Item) => [...conn.db.listing.iter()].some((l) => l.itemId === it.id && l.status !== "draft");
+      await waitFor("listings", () => (sells.every(listed) ? true : undefined), waitSec * 1000).catch(() => {
+        console.warn("The commerce item has no listing past draft yet (the listing agent needs Claude; check the worker log).");
+        failed = true;
+      });
+    }
   }
   printItems(room);
-  if (!waitSec) console.log(`Queries the pricing agent will run: ${DEMO_OBJECTS.map(demoQuery).join(" | ")}`);
+  if (!waitSec) console.log(`Queries the pricing agent will run: ${objects.map(demoQuery).join(" | ")}`);
 } catch (err) {
   console.error("seed failed:", (err as Error).message ?? err);
   failed = true;
