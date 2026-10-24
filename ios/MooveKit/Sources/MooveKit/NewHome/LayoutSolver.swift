@@ -121,7 +121,7 @@ public struct LayoutSolver: Sendable {
 
     /// Rooms in the order to try them for this item.
     func roomOrder(for item: LayoutItem, rooms: [FloorPlanRoom], style: Style, used: [String: Double]) -> [FloorPlanRoom] {
-        let preferred = Self.preferredKinds(for: item.category)
+        let preferred = Self.preferredKinds(for: item)
         func affinity(_ r: FloorPlanRoom) -> Int { preferred.firstIndex(of: r.kind).map { preferred.count - $0 } ?? 0 }
         func fill(_ r: FloorPlanRoom) -> Double { (used[r.name] ?? 0) / max(r.areaM2, 0.01) }
         // Primary rooms (biggest of each kind) first, so "Bedroom" gets the bed before "Bedroom 2".
@@ -147,15 +147,24 @@ public struct LayoutSolver: Sendable {
         }
     }
 
+    /// Room kinds for an item: by category, except low media cabinets (category "dresser", but
+    /// named "TV stand"/"media console") go where the TV goes.
+    static func preferredKinds(for item: LayoutItem) -> [RoomKind] {
+        if VName(item.name.lowercased()).has("tv stand", "television stand", "media console", "tv console", "entertainment center") {
+            return preferredKinds(for: "tv")
+        }
+        return preferredKinds(for: item.category)
+    }
+
     static func preferredKinds(for category: String) -> [RoomKind] {
         switch category.lowercased() {
-        case "bed": [.bedroom]
+        case "bed", "mattress": [.bedroom]
         case "sofa", "couch", "television", "tv": [.living, .office]
         case "table", "desk": [.office, .dining, .living, .bedroom]
         case "chair": [.office, .dining, .living, .bedroom]
         case "storage", "dresser", "nightstand", "bookshelf": [.bedroom, .living, .office]
         case "lamp": [.living, .bedroom, .office]
-        case "appliance", "refrigerator", "oven", "stove", "dishwasher", "washer", "dryer": [.kitchen]
+        case "appliance", "kitchenware", "refrigerator", "oven", "stove", "dishwasher", "washer", "dryer": [.kitchen]
         case "toilet", "bathtub", "sink": [.bathroom]
         case "decor", "plant": [.living, .bedroom, .dining]
         default: [.living, .bedroom, .office]
