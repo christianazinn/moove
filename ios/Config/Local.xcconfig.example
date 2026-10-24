@@ -1,0 +1,8 @@
+// Copy to Config/Local.xcconfig (gitignored) and fill in.
+// DEVELOPMENT_TEAM = ABCDE12345
+// MOOVE_BUNDLE_ID = app.moove.Moove.yourname
+// Local SpacetimeDB on your laptop (use its LAN IP for a physical phone):
+// MOOVE_SPACETIME_HOST = http:/$()/192.168.1.20:3000
+// MOOVE_UPLOAD_BASE_URL = http:/$()/192.168.1.20:8787
+// MOOVE_AUTH0_DOMAIN = moove-calhacks.us.auth0.com
+// MOOVE_AUTH0_CLIENT_ID = xxxxxxxxxxxxxxxx
