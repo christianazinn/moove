@@ -1,0 +1,9 @@
+{
+  "model": "claude-haiku-5-5",
+  "output": {
+    "keep": [
+      8
+    ],
+    "reason": "Dropped non-tables (bag, print ad, lamps, doll furniture, petit point vanity tray, jacket, stool, dough box, Barbie set) and kept only listing 8, a side table of similar size; the item is a generic table, so most listings are off-category or vintage/collectible."
+  }
+}

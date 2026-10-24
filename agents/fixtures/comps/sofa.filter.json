@@ -1,0 +1,15 @@
+{
+  "a8bb07d858706b68": {
+    "item": "sofa; category sofa; 0.90 x 0.70 x 0.90 m (W x H x D)",
+    "n": 15,
+    "keep": [
+      3,
+      6,
+      11,
+      12,
+      14
+    ],
+    "reason": "Kept generic sofa/sectional listings (3, 6, 11, 12, 14); dropped designer RH sofas (1, 2), accessories and parts (5, 8), chairs and rockers (4, 7, 9), a cabinet/loveseat lot (10), a set bundle (13), …",
+    "model": "claude-haiku-5-5"
+  }
+}

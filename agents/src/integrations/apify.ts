@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
 
@@ -165,6 +165,57 @@ export function reserveApifySpend(usd: number, opts: { file?: string; cap?: numb
 export function cachedComps(query: string): Comp[] | null {
   const file = cacheFile(query);
   return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Comp[]) : null;
+}
+
+// When Apify can't run (out of credit, the daily cap, no token), the pricing agent falls back to the
+// cached real comps of the most similar query it has. Similarity is overlap of "thing" words: colors,
+// materials and placement words don't count, so "white wall-mounted hair dryer" never matches "white
+// wall-mounted sink". The candidate must share a thing word with the query or its category, and the best
+// Jaccard over thing words wins.
+const STOP = new Set([
+  'with', 'and', 'the', 'for', 'of', 'in', 'on', 'to', 'cm', 'inch', 'size', 'used', 'new',
+  'white', 'black', 'gray', 'grey', 'brown', 'red', 'blue', 'green', 'yellow', 'orange', 'pink', 'purple', 'beige', 'tan',
+  'silver', 'gold', 'chrome', 'clear', 'dark', 'light', 'wood', 'wooden', 'metal', 'plastic', 'glass', 'fabric', 'leather',
+  'mesh', 'oak', 'pine', 'wall', 'mounted', 'floor', 'standing', 'small', 'large', 'tall', 'big', 'mini', 'round', 'square',
+  'rectangular', 'thin', 'flat', 'open', 'bathroom', 'kitchen', 'office', 'patterned', 'decorative', 'piece', 'two', 'full',
+]);
+const BROAD_CATEGORIES = new Set(['other', 'unknown', 'object', 'item', 'storage', 'electronics', 'decor', 'appliance', 'kitchenware', 'clothes', 'books', 'art', 'photos', 'instrument']);
+const words = (s: string) => new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 1 && !STOP.has(w)));
+export function similarCachedComps(query: string, category = '', dir = path.join('fixtures', 'comps')): { query: string; comps: Comp[]; score: number } | null {
+  const q = words(query);
+  const rawQ = new Set(query.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  // Broad categories ("electronics", "decor") say too little to borrow someone else's prices.
+  const cat = new Set([...words(category)].filter(w => !BROAD_CATEGORIES.has(w)));
+  let best: { file: string; score: number } | null = null;
+  let files: string[] = [];
+  try {
+    files = readdirSync(dir).filter(f => f.endsWith('.json') && !f.endsWith('.filter.json'));
+  } catch {
+    return null;
+  }
+  for (const f of files) {
+    const slug = f.slice(0, -'.json'.length);
+    if (slug === compsSlug(query)) continue; // that's the exact cache, already tried
+    const w = words(slug.replace(/-/g, ' '));
+    const shared = [...w].filter(x => q.has(x) || cat.has(x));
+    if (!shared.length || shared.every(x => BROAD_CATEGORIES.has(x))) continue;
+    // Ties (e.g. "chair" vs "mesh office chair") go to the candidate sharing more words overall.
+    const raw = slug.split('-').filter(x => rawQ.has(x)).length;
+    const score = shared.length / new Set([...q, ...w]).size + raw * 0.01;
+    if (!best || score > best.score) best = { file: f, score };
+  }
+  if (!best) return null;
+  try {
+    const comps = JSON.parse(readFileSync(path.join(dir, best.file), 'utf8')) as Comp[];
+    return comps.length ? { query: best.file.slice(0, -'.json'.length).replace(/-/g, ' '), comps, score: best.score } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Apify can't run at all right now: retrying won't help, but a similar cached query might. */
+export function isApifyUnavailable(err: unknown): boolean {
+  return err instanceof ApifyCapError || /Monthly usage hard limit|platform-feature-disabled|APIFY_TOKEN not set|spend cap reached|HTTP 40[23]\b/i.test(String(err));
 }
 
 // Comps for a free-text item query. Results are cached in fixtures/comps/ (keeps Apify spend

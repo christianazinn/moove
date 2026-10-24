@@ -1,0 +1,27 @@
+{
+  "ecbc651f622f9225": {
+    "item": "gray metal twin bunk bed with ladder; category bed; material gray powder-coated metal frame with fabric side panels; 1.08 x 1.47 x 2.06 m (W x H x D); condition good",
+    "n": 8,
+    "keep": [
+      1,
+      2,
+      3,
+      5,
+      6
+    ],
+    "reason": "Dropped red, white, black and twin-over-queen/full variants as different products or sizes, and kept gray twin-over-twin metal bunk beds, including the IKEA TUFFING line and the gray OBO listing with…",
+    "model": "claude-haiku-5-5"
+  },
+  "38f0ecc822165a87": {
+    "item": "gray metal twin bunk bed with ladder; category bed; material gray painted metal frame with fabric side panels; 1.06 x 1.50 x 2.07 m (W x H x D); condition good",
+    "n": 8,
+    "keep": [
+      1,
+      2,
+      3,
+      5
+    ],
+    "reason": "Dropped red, black, and white bunk beds and the twin-over-full and twin-over-queen variants as different products or sizes, and the $100 gray desk-and-shelf bunk bed as a different configuration with…",
+    "model": "claude-haiku-5-5"
+  }
+}

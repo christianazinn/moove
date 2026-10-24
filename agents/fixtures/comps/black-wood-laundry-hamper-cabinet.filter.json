@@ -1,0 +1,14 @@
+{
+  "eb77801bd0d244f4": {
+    "item": "black wood laundry hamper cabinet; category storage; material dark brown wood laminate; 0.58 x 0.95 x 0.28 m (W x H x D); condition fair",
+    "n": 8,
+    "keep": [
+      2,
+      4,
+      5,
+      8
+    ],
+    "reason": "Dropped 1 (double hamper, not cabinet), 3 (brand new, not used item), 6 (hamper with lid and wheels, different product), 7 (loose hampers with shelf, not cabinet); kept cabinet-style listings 2, 4, 5…",
+    "model": "claude-haiku-5-5"
+  }
+}
