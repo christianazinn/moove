@@ -117,7 +117,7 @@ final class MooveSmokeTests: XCTestCase {
 
         // Opens on the voxel dollhouse (#236), the app's one 3D look for items.
         let voxel = app.descendants(matching: .any)["room.voxel"].firstMatch
-        XCTAssertTrue(voxel.waitForExistence(timeout: 15), "voxel dollhouse view")
+        XCTAssertTrue(voxel.waitForExistence(timeout: slow), "voxel dollhouse view")
         sleep(3)  // let RealityKit draw a frame
         snap("04-room-voxel")
 
