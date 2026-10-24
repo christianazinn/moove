@@ -11,6 +11,6 @@ let package = Package(
     ],
     targets: [
         .target(name: "MooveKit", resources: [.copy("Resources/demo-house.json")]),
-        .testTarget(name: "MooveKitTests", dependencies: ["MooveKit"]),
+        .testTarget(name: "MooveKitTests", dependencies: ["MooveKit"], resources: [.copy("Fixtures")]),
     ]
 )

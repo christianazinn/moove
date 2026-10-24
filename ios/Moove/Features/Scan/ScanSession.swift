@@ -41,6 +41,10 @@ final class ScanSession {
     var roomName = "Bedroom"
     private(set) var objects: [DetectedObject] = []
     private(set) var photos: [UUID: URL] = [:]
+    /// Objects whose photo was cut from a scan keyframe (#82), not taken by the user.
+    private(set) var autoPhotos: Set<UUID> = []
+    /// True while auto photos are being cut after the scan.
+    private(set) var autoPhotosPending = false
     private(set) var geometry: RoomGeometry?
     /// Wall, floor and per-object colors sampled from the capture's camera frames. Nil until
     /// the analysis finishes (a second or two after capture), or if no frames were kept.
@@ -59,16 +63,22 @@ final class ScanSession {
     }
 
     var roomJSON: URL { folder.appending(path: "room.json") }
+    /// Moove's own geometry: RoomPlan's room plus the extra detected objects (#73).
+    var geometryJSON: URL { folder.appending(path: "geometry.json") }
     var roomUSDZ: URL { folder.appending(path: "room.usdz") }
 
-    func captured(_ room: CapturedRoom) {
+    /// `extras` are objects RoomPlan doesn't recognize, found by the extra detector (#73).
+    /// `photographer` holds the scan's keyframes; every object gets its best view as a
+    /// photo, so the checklist starts mostly filled in (#82).
+    func captured(_ room: CapturedRoom, extras: [RoomGeometry.Object] = [], photographer: AutoPhotographer? = nil) {
         frameRecorder.stop()
         do {
             try JSONEncoder().encode(room).write(to: roomJSON)
             try room.export(to: roomUSDZ, exportOptions: .model)
-            let geometry = RoomGeometry(room)
+            var geometry = RoomGeometry(room)
+            geometry.objects += extras
             self.geometry = geometry
-            try JSONEncoder().encode(geometry).write(to: folder.appending(path: "geometry.json"))
+            try JSONEncoder().encode(geometry).write(to: geometryJSON)
         } catch {
             phase = .failed("Couldn't save the scan: \(error.localizedDescription)")
             return
@@ -83,9 +93,36 @@ final class ScanSession {
                 depthM: Double(object.dimensions.z),
                 attributes: Self.attributeStrings(object)
             )
+        } + extras.compactMap { extra in
+            // Detector finds have no RoomPlan attributes (#110: send []).
+            UUID(uuidString: extra.id).map {
+                DetectedObject(id: $0, category: extra.category, widthM: Double(extra.dimensions.x),
+                               heightM: Double(extra.dimensions.y), depthM: Double(extra.dimensions.z))
+            }
         }
         phase = .reviewing
         analyzeColors()
+        if let photographer, let geometry = self.geometry { takeAutoPhotos(of: geometry.objects, with: photographer) }
+    }
+
+    private func takeAutoPhotos(of objects: [RoomGeometry.Object], with photographer: AutoPhotographer) {
+        autoPhotosPending = true
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let started = Date()
+            let jpegs = photographer.photos(for: objects)
+            print("[auto-photos] \(jpegs.count) of \(objects.count) objects in \(Int(Date().timeIntervalSince(started) * 1000)) ms")
+            await self?.applyAutoPhotos(jpegs)
+        }
+    }
+
+    private func applyAutoPhotos(_ jpegs: [String: Data]) {
+        autoPhotosPending = false
+        for object in objects {
+            // Never replace a photo the user took meanwhile.
+            guard photos[object.id] == nil, let jpeg = jpegs[object.id.uuidString] else { continue }
+            setPhoto(jpeg, for: object)
+            autoPhotos.insert(object.id)
+        }
     }
 
     /// Samples real colors from the kept frames off the main actor. The raw geometry is in
@@ -111,6 +148,7 @@ final class ScanSession {
     func remove(_ object: DetectedObject) {
         objects.removeAll { $0.id == object.id }
         if let file = photos.removeValue(forKey: object.id) { try? FileManager.default.removeItem(at: file) }
+        autoPhotos.remove(object.id)
     }
 
     func setPhoto(_ jpeg: Data, for object: DetectedObject) {
@@ -118,6 +156,7 @@ final class ScanSession {
         do {
             try jpeg.write(to: url)
             photos[object.id] = url
+            autoPhotos.remove(object.id)  // a user photo replaces an auto one; applyAutoPhotos re-marks its own
         } catch {
             phase = .failed("Couldn't save the photo: \(error.localizedDescription)")
         }
@@ -150,7 +189,9 @@ final class ScanSession {
         // room files fall back to this device's copies (only the app reads them),
         // and photos are left off so the vision agent never gets a URL it can't fetch.
         let usdzUrl = await send(roomUSDZ, "model/vnd.usdz+zip") ?? roomUSDZ.absoluteString
-        let jsonUrl = await send(roomJSON, "application/json") ?? roomJSON.absoluteString
+        // Upload Moove's geometry (it includes objects RoomPlan doesn't know); RoomPlan's
+        // raw room.json stays in the on-device fixture folder.
+        let jsonUrl = await send(geometryJSON, "application/json") ?? geometryJSON.absoluteString
         var photoUrls: [UUID: String] = [:]
         for (id, file) in photos { photoUrls[id] = await send(file, "image/jpeg") }
 
