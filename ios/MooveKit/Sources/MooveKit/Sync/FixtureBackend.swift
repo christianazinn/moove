@@ -19,6 +19,7 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         case noSuchScan
         case invalidUrl
         case tooManyPhotos
+        case nameTooLong
     }
 
     private let lock = NSLock()
@@ -272,6 +273,34 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
     public func setItemColors(itemId: UInt64, colorsJson: String) async throws {
         guard let json = ItemColors.normalizedJson(colorsJson) else { throw Failure.invalidColors }
         try updateOwnedItem(itemId) { $0.colors = ItemColors(json: json) }
+    }
+
+    // MARK: Fix-it (rename_item, delete_item, set_item_attributes)
+
+    /// `MAX_NAME` in the module.
+    public static let maxNameLength = 120
+
+    public func renameItem(itemId: UInt64, name: String) async throws {
+        guard name.count <= Self.maxNameLength else { throw Failure.nameTooLong }
+        try updateOwnedItem(itemId) { $0.name = name }
+    }
+
+    public func deleteItem(itemId: UInt64) async throws {
+        try mutateAuthed { s, me in
+            guard let i = s.items.firstIndex(where: { $0.id == itemId }) else { throw Failure.noSuchItem }
+            guard s.items[i].owner == me || memberRoomIds.contains(s.items[i].roomId) else { throw Failure.unauthorized }
+            s.items.remove(at: i)
+        }
+    }
+
+    /// Validated and de-duplicated like the module's `attributesJsonOf`.
+    public func setItemAttributes(itemId: UInt64, attributes: [String]) async throws {
+        guard attributes.count <= ScanObject.maxAttributes, attributes.allSatisfy(ScanObject.isValidAttribute) else {
+            throw Failure.invalidAttribute
+        }
+        var seen = Set<String>()
+        let unique = attributes.filter { seen.insert($0).inserted }
+        try updateOwnedItem(itemId) { $0.attributes = unique }
     }
 
     public func joinRoom(code: String) async throws {

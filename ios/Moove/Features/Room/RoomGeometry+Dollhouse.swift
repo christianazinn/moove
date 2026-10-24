@@ -114,6 +114,9 @@ enum DollhouseTransform {
                 if DollhouseTransform.frontFacesWall(center: center, rotationDeg: deg, depthM: Double(object.dimensions.z), polygon: polygon) {
                     deg = DollhouseTransform.normalizeDeg(deg + 180)
                 }
+                // The user's fix-it turn ("Turn around", `UserRotate.*`) on top of the scanned facing,
+                // so the Scan page, the room's Voxel view and the fly-in starts all agree.
+                deg = ItemFix.rotationDeg(deg, turnedBy: item.attributes)
                 // Off the floor (a wall-mounted TV, an upper cabinet): keep the scanned height.
                 let bottom = Double(object.transform.position.y) - Double(object.dimensions.y) / 2 - floorY
                 let elevation = bottom > DollhouseTransform.minElevationM ? Self.cm(bottom) : nil

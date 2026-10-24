@@ -334,7 +334,9 @@ public enum VoxelModels {
     /// categories: bed, chair, table, storage, lamp, appliance, decor, sofa), then checks the
     /// pick against the scanned size (`saneKind`, VoxelModels+Sanity.swift): a tall thin "pillow"
     /// is drawn as a lamp, a table-shaped RoomPlan "storage" as a table.
+    /// A user's fix-it choice (`UserKind.table`, `ItemFix`) wins over everything, size check included.
     static func route(category cat: String, name n: VName, attrs: Set<String> = [], size: (Double, Double, Double)? = nil) -> Kind {
+        if let user = ItemFix.voxelKind(lowercasedAttributes: attrs) { return user }
         let named = routeByName(category: cat, name: n, attrs: attrs, size: size)
         return saneKind(named, category: cat, name: n, attrs: attrs, size: size)
     }

@@ -131,6 +131,12 @@ public protocol SyncBackend: AnyObject, Sendable {
     func setSentimental(itemId: UInt64, maybeSentimental: Bool) async throws
     /// `set_item_colors` (#110): colors sampled from the scan's frames. nil clears them.
     func setItemColors(itemId: UInt64, colors: ItemColors?) async throws
+    /// Fix-it (`rename_item`, `delete_item`, `set_item_attributes`): correct a misread scan item.
+    /// `setItemAttributes` replaces the whole list, so pass the item's existing attributes with
+    /// the change (`ItemFix`).
+    func renameItem(itemId: UInt64, name: String) async throws
+    func deleteItem(itemId: UInt64) async throws
+    func setItemAttributes(itemId: UInt64, attributes: [String]) async throws
 
     /// Joins someone else's room by its join code (#10). Its scans and items then
     /// stream in like the user's own. Joining a room you already have is a no-op.
