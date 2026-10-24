@@ -10,12 +10,13 @@ import { pricingAgent, setCompsSource } from './agents/pricing.js';
 import { installPaidComps, paidCompsSource, pricingPaysX402, startCompsPaywall } from './integrations/paid-comps.js';
 import { listingAgent } from './agents/listing.js';
 import { approvalAgent } from './agents/approval.js';
+import { sortAgent } from './agents/sort.js';
 import { shoppingListAgent } from './agents/shopping.js';
 import { buyAgent } from './agents/buy.js';
 import type { Agent } from './agents/types.js';
 
 // Register agents here as they land (vision, pricing, sort, listing, buy, fraud, ...).
-const agents: Agent[] = [visionAgent, pricingAgent, listingAgent, approvalAgent, shoppingListAgent, buyAgent];
+const agents: Agent[] = [visionAgent, pricingAgent, sortAgent, listingAgent, approvalAgent, shoppingListAgent, buyAgent];
 
 startUploadServer();
 
