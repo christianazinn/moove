@@ -67,22 +67,14 @@ struct SpendingTotals: View {
 
     var body: some View {
         let refused = log.budgets.map(\.refusals).reduce(0, +)
-        HStack(spacing: 0) {
-            StatFigure(label: "Spent", value: UsdMicros.format(log.realSpentUsdMicros))
-                .padding(.vertical, 18).padding(.trailing, 14)
-                .accessibilityLabel("Spent for real, \(UsdMicros.format(log.realSpentUsdMicros))")
-            Rectangle().fill(Theme.line).frame(width: 1)
-            StatFigure(label: "Simulated", value: UsdMicros.format(log.simulatedSpentUsdMicros), tint: Theme.ochreInk)
-                .padding(.vertical, 18).padding(.horizontal, 14)
-                .accessibilityLabel("Simulated, \(UsdMicros.format(log.simulatedSpentUsdMicros)), no money moved")
-            Rectangle().fill(Theme.line).frame(width: 1)
-            StatFigure(label: "Refused", value: "\(refused)", tint: Theme.danger)
-                .padding(.vertical, 18).padding(.leading, 14)
-                .accessibilityLabel("\(refused) \(refused == 1 ? "payment" : "payments") refused by spend caps")
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .ruled(.top)
-        .ruled()
+        StatStrip(figures: [
+            .init(label: "Spent", value: UsdMicros.format(log.realSpentUsdMicros),
+                  spoken: "Spent for real, \(UsdMicros.format(log.realSpentUsdMicros))"),
+            .init(label: "Simulated", value: UsdMicros.format(log.simulatedSpentUsdMicros), tint: Theme.ochreInk,
+                  spoken: "Simulated, \(UsdMicros.format(log.simulatedSpentUsdMicros)), no money moved"),
+            .init(label: "Refused", value: "\(refused)", tint: Theme.danger,
+                  spoken: "\(refused) \(refused == 1 ? "payment" : "payments") refused by spend caps"),
+        ])
     }
 }
 
@@ -195,6 +187,8 @@ struct PaymentRow: View {
                 .accessibilityIdentifier("payment.basescan.\(payment.id)")
             }
         }
+        // Full width: at accessibility sizes AdaptiveLine stacks and its Spacer no longer stretches the row.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 16)
         .padding(.bottom, payment.explorerURL != nil && payment.txHash != nil ? 4 : 16)
         .ruled()
@@ -231,13 +225,10 @@ struct RefusalRow: View {
                     .sansText(15)
                     .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 6) {
-                    Text(event.agent.agentLabel)
-                    if let remaining = data.remainingUsdMicros {
-                        Text("· \(UsdMicros.format(remaining)) budget left")
-                    }
-                }
-                .monoMeta()
+                // One Text, so it wraps as a sentence instead of two squeezed columns at large sizes.
+                Text(event.agent.agentLabel + (data.remainingUsdMicros.map { " · \(UsdMicros.format($0)) budget left" } ?? ""))
+                    .monoMeta()
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Nothing was signed or paid.").monoMeta()
             }
         }
