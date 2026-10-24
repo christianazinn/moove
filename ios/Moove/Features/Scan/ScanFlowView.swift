@@ -241,23 +241,62 @@ struct ScanFlowView: View {
     }
 
     /// "Also found: Bicycle, Plant" while scanning, for things RoomPlan doesn't outline.
+    /// One small chip per kind in a row that scrolls sideways (newest first), so a busy room
+    /// doesn't squeeze every name into one line; past `maxFoundChips` it ends in "+N more".
     @ViewBuilder private var foundChips: some View {
         if !found.isEmpty {
-            let counts = Dictionary(grouping: found, by: { $0 }).map { ($0.key, $0.value.count) }.sorted { $0.0 < $1.0 }
-            HStack(spacing: 6) {
-                Text("Also found:").font(.caption.weight(.semibold))
-                ForEach(counts, id: \.0) { name, n in
-                    Label(n > 1 ? "\(name.capitalized) ×\(n)" : name.capitalized, systemImage: ItemThumbnail.icon(for: name))
-                        .font(.caption)
+            let counts = Self.foundCounts(found)
+            let shown = counts.prefix(Self.maxFoundChips)
+            let more = counts.count - shown.count
+            HStack(spacing: 8) {
+                Text("Also found")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: .capsule)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(shown, id: \.name) { c in
+                            Label(c.n > 1 ? "\(c.name.capitalized) ×\(c.n)" : c.name.capitalized,
+                                  systemImage: ItemThumbnail.icon(for: c.name))
+                                .font(.caption)
+                                .lineLimit(1)
+                                .fixedSize()
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(.ultraThinMaterial, in: .capsule)
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                        if more > 0 {
+                            Text("+\(more) more")
+                                .font(.caption.weight(.semibold))
+                                .fixedSize()
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(.ultraThinMaterial, in: .capsule)
+                        }
+                    }
+                    .padding(.trailing, 16)
                 }
             }
-            .padding(.horizontal, 12).padding(.vertical, 8)
+            .padding(.leading, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Also found: " + counts.map { n, c in c > 1 ? "\(c) \(n)" : n }.joined(separator: ", "))
-            .background(.ultraThinMaterial, in: .capsule)
+            .accessibilityLabel("Also found: " + counts.map { $0.n > 1 ? "\($0.n) \($0.name)" : $0.name }.joined(separator: ", "))
             .padding(.bottom, 110)
+            .animation(.snappy, value: found)
             .transition(.opacity)
         }
+    }
+
+    static let maxFoundChips = 8
+
+    /// Kinds with their counts, newest kind first (the detector reports in the order it confirms).
+    static func foundCounts(_ found: [String]) -> [(name: String, n: Int)] {
+        var order: [String] = []
+        var n: [String: Int] = [:]
+        for f in found {
+            if n[f] == nil { order.append(f) }
+            n[f, default: 0] += 1
+        }
+        return order.reversed().map { (name: $0, n: n[$0]!) }
     }
 
     private var uploader: Uploader {
