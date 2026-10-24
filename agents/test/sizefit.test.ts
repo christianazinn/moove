@@ -6,7 +6,7 @@ import type { Item, Scan, ScanPhoto } from "../src/module_bindings/types.js";
 // Size checks on agent renames and sweep finds (#267): pure functions, then the sweep and vision
 // agents against fake connections.
 const { kindOf, outOfRange, renameMisfit, scannedTwin } = await import("../src/sizefit.js");
-const { vetSweep, sweep } = await import("../src/agents/sweep.js");
+const { vetSweep, sweep, isBuiltIn } = await import("../src/agents/sweep.js");
 const { visionAgent, setVisionDeps } = await import("../src/agents/vision.js");
 type SweepResult = import("../src/agents/sweep.js").SweepResult;
 
@@ -158,4 +158,29 @@ test("vision keeps a scanned item's name and category when its answer can't fit 
   assert.equal(calls[0].category, "");
   assert.equal(calls[0].material, "linen");
   assert.ok(events.some(e => e.message === 'Kept "lamp": "white throw pillow" doesn\'t fit a 0.30×0.30×1.50 m box (1.50 m height is too big for a pillow)'));
+});
+
+test("vetSweep: parts of the room aren't inventory (shutters behind Rio's bed came back as an item)", () => {
+  const r: SweepResult = {
+    matches: [],
+    newItems: [
+      { name: "white plantation window shutters", category: "decor", ...detail, widthM: 1.2, depthM: 0.05, heightM: 1.5 },
+      { name: "wooden door", category: "other", ...detail, widthM: 0.9, depthM: 0.05, heightM: 2.0 },
+      { name: "box fan", category: "fan", ...detail, widthM: 0.5, depthM: 0.2, heightM: 0.5 },
+      { name: "window fan", category: "fan", ...detail, widthM: 0.6, depthM: 0.2, heightM: 0.4 },
+      { name: "shower caddy", category: "decor", ...detail, widthM: 0.3, depthM: 0.15, heightM: 0.6 },
+    ],
+  };
+  const v = vetSweep(r, [], ["https://w/files/a.jpg"]);
+  assert.deepEqual(v.newItems.map(n => n.name), ["box fan", "window fan", "shower caddy"]);
+  assert.deepEqual(v.builtIns, ["white plantation window shutters", "wooden door"]);
+});
+
+test("isBuiltIn: fixtures and window coverings, but not movable things that mention them", () => {
+  for (const name of ["vertical blinds", "bay window", "radiator", "light switch", "ceiling light", "fireplace", "built-in bookshelf", "toilet", "bathroom sink", "curtain rod"]) {
+    assert.equal(isBuiltIn({ name, category: "other" }), true, name);
+  }
+  for (const name of ["floor lamp", "wall art", "wall clock", "window AC unit", "door mat", "floor mirror", "plant", "wall-mounted TV", "linen curtains"]) {
+    assert.equal(isBuiltIn({ name, category: "decor" }), false, name);
+  }
 });
