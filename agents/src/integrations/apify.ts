@@ -121,28 +121,43 @@ async function runActor(src: Source, q: string): Promise<Comp[]> {
 // The free plan has about $5/month, and a scan that names 30 objects means about 60 runs. The estimated
 // cost of every live comps run (results x the actor's per-result price) goes into a per-day total
 // in APIFY_SPEND_FILE. Past APIFY_MAX_USD_PER_DAY, lookups without a cache are refused.
+// The buy agent's live deal search (deals-apify.ts, #185) counts into the same total through
+// reserveApifySpend(), which books each run's maxTotalChargeUsd before the run starts.
 export class ApifyCapError extends Error {}
 type ApifySpend = Record<string, { usd: number; runs: number }>;
 const apifyDay = (d = new Date()) => d.toISOString().slice(0, 10);
-function readApifySpend(): ApifySpend {
+function readApifySpend(file = config.apify.spendFile): ApifySpend {
   try {
-    return JSON.parse(readFileSync(config.apify.spendFile, 'utf8')) as ApifySpend;
+    return JSON.parse(readFileSync(file, 'utf8')) as ApifySpend;
   } catch {
     return {};
   }
 }
-export function apifySpentToday(): { usd: number; runs: number } {
-  return readApifySpend()[apifyDay()] ?? { usd: 0, runs: 0 };
+export function apifySpentToday(file = config.apify.spendFile): { usd: number; runs: number } {
+  return readApifySpend(file)[apifyDay()] ?? { usd: 0, runs: 0 };
 }
-function addApifySpend(usd: number): void {
-  const log = readApifySpend();
+function addApifySpend(usd: number, file = config.apify.spendFile): void {
+  const log = readApifySpend(file);
   const t = log[apifyDay()] ?? { usd: 0, runs: 0 };
   try {
-    mkdirSync(path.dirname(config.apify.spendFile), { recursive: true });
-    writeFileSync(config.apify.spendFile, JSON.stringify({ ...log, [apifyDay()]: { usd: t.usd + usd, runs: t.runs + 1 } }, null, 2));
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify({ ...log, [apifyDay()]: { usd: t.usd + usd, runs: t.runs + 1 } }, null, 2));
   } catch (err) {
     console.warn(`[apify] couldn't record spend: ${String(err)}`);
   }
+}
+
+/**
+ * Books one run of up to `usd` (the run's maxTotalChargeUsd) into today's total before it starts.
+ * Returns false and books nothing when that would pass APIFY_MAX_USD_PER_DAY (0 = no cap). The read
+ * and write are synchronous, so parallel runs in one worker can't both squeeze under the cap.
+ */
+export function reserveApifySpend(usd: number, opts: { file?: string; cap?: number } = {}): boolean {
+  const file = opts.file ?? config.apify.spendFile;
+  const cap = opts.cap ?? config.apify.maxUsdPerDay;
+  if (cap > 0 && apifySpentToday(file).usd + usd > cap + 1e-9) return false;
+  addApifySpend(usd, file);
+  return true;
 }
 
 // Cache-only read: the comps saved for this query, or null. Never calls Apify, so screens like
