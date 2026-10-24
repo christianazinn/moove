@@ -84,6 +84,7 @@ extension ListingStatus {
         case .draft: "Drafting"
         case .awaitingApproval: "Needs approval"
         case .rejected: "Not posted"
+        case .posting: simulated ? "Posting (simulated)…" : "Posting…"
         case .posted: simulated ? "Posted (simulated)" : "Live on eBay"
         case .sold: simulated ? "Sold (simulated)" : "Sold"
         case .failed: "Failed to post"
@@ -100,7 +101,9 @@ extension Listing {
 
     /// VoiceOver summary: "Herman Miller..., $410, needs approval, simulated listing, not on eBay".
     public var accessibilitySummary: String {
-        var parts = [title, formattedPrice, status.displayLabel(simulated: simulated).lowercased()]
+        // No ellipsis in speech: "posting (simulated)", not "posting (simulated) dot dot dot".
+        let spokenStatus = status.displayLabel(simulated: simulated).replacingOccurrences(of: "…", with: "").lowercased()
+        var parts = [title, formattedPrice, spokenStatus]
         if simulated { parts.append("simulated listing, not on eBay") }
         return parts.joined(separator: ", ")
     }
