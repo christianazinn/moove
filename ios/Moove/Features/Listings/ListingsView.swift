@@ -39,12 +39,16 @@ struct ListingsView: View {
                     if !rows.isEmpty {
                         ListHeader(title: group.title, count: "\(rows.count)")
                             .padding(.top, 40)
-                        ForEach(rows) { listing in
-                            NavigationLink(value: ListingRoute(listingId: listing.id)) {
-                                ListingRow(listing: listing, item: item(for: listing),
-                                           problem: store.snapshot.problem(for: listing))
+                        // Own VStack per group, so a listing that changes group (awaiting approval ->
+                        // posted) can't collide with its old row in the LazyVStack (same bug as Approvals).
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(rows) { listing in
+                                NavigationLink(value: ListingRoute(listingId: listing.id)) {
+                                    ListingRow(listing: listing, item: item(for: listing),
+                                               problem: store.snapshot.problem(for: listing))
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -135,6 +139,7 @@ struct ListingRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(listing.accessibilitySummary + (problem.map { ". \($0)" } ?? ""))
         .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("listing.\(listing.id)")
     }
 }
 
