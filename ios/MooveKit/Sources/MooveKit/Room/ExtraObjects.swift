@@ -72,40 +72,75 @@ public struct Sighting: Sendable {
     public var label: String
     public var confidence: Float
     public var points: [SIMD3<Float>]
+    /// Where the camera was (world space). Used to tell distinct views apart and to
+    /// know which side of the object LiDAR saw (#267).
+    public var camera: SIMD3<Float>?
+    /// Frame timestamp (s).
+    public var time: Double?
 
-    public init(label: String, confidence: Float, points: [SIMD3<Float>]) {
+    public init(label: String, confidence: Float, points: [SIMD3<Float>], camera: SIMD3<Float>? = nil, time: Double? = nil) {
         self.label = label
         self.confidence = confidence
         self.points = points
+        self.camera = camera
+        self.time = time
     }
 }
 
 /// Clusters sightings into objects: the same label within reach of an existing
 /// object's center joins it (its points sharpen the fit), otherwise it starts a new
-/// one. Objects seen only once are dropped as likely false positives, unless they're
-/// big and the detector was sure (a scooter glimpsed once, from one side).
+/// one. The box is refitted from the points of every sighting. Objects seen in only one
+/// view are dropped as likely false positives unless the detector was very sure, or the
+/// object is big, sure enough and something RoomPlan never finds (a scooter glimpsed
+/// once, from one side). Sightings from (nearly) the same frame and angle count as one view.
 public struct SightingMerger: Sendable {
     public struct Track: Sendable {
         /// Stable for the life of the merger.
         public var id: Int
         public var label: String
+        /// Every sighting that joined, including near-duplicates from the same view.
         public var sightings: Int
+        /// Distinct views: sightings at least `SightingMerger.minViewGap` seconds or
+        /// `minViewAngle` apart from the previous view. This is what confirms a track.
+        public var views: Int
         public var bestConfidence: Float
         /// Sum of the sightings' confidences: the label's weight when two labels claim one object.
         public var totalConfidence: Float
         public var points: [SIMD3<Float>]
         public var box: FittedBox
+        /// Last counted view (for the distinct-view test).
+        var lastView: (time: Double?, camera: SIMD3<Float>?)
+        var cameraSum = SIMD3<Float>(repeating: 0)
+        var cameraCount = 0
+        /// Mean camera position over the sightings (nil without camera poses).
+        public var camera: SIMD3<Float>? { cameraCount > 0 ? cameraSum / Float(cameraCount) : nil }
+
+        mutating func noteCamera(_ c: SIMD3<Float>?) {
+            guard let c else { return }
+            cameraSum += c
+            cameraCount += 1
+        }
     }
 
     public private(set) var tracks: [Track] = []
     public var floorY: Float?
     /// Caps memory: keep an even sample of at most this many points per object.
     public var maxPointsPerTrack = 4000
-    /// A single sighting counts when the detector was at least this sure...
-    public var singleSightingConfidence: Float = 0.7  // 0.6 let big false positives (walls, windows) in from one glance
+    /// A single view counts when the detector was at least this sure...
+    /// (0.6, then 0.7 let false positives in from one glance; #267 raised it.)
+    public var singleSightingConfidence: Float = 0.85
     /// ...and the object's longest side is at least this long (m). Small one-offs are
-    /// mostly misfires; big things are often seen only briefly from one side.
+    /// mostly misfires.
     public var singleSightingMinSize: Float = 0.5
+    /// Big things RoomPlan never finds (scooters, bikes) are often seen only briefly
+    /// from one side, so for them one view at this confidence is enough...
+    public var bigSingleSightingConfidence: Float = 0.7
+    /// ...when the longest side is at least this long (m).
+    public var bigSingleSightingMinSize: Float = 1.0
+    /// Two sightings are separate views when their frames are this far apart in time (s)...
+    public var minViewGap: Double = 0.3
+    /// ...or seen from directions this far apart (radians, about the object's center).
+    public var minViewAngle: Float = 15 * .pi / 180
 
     public init(floorY: Float? = nil) { self.floorY = floorY }
 
@@ -114,14 +149,23 @@ public struct SightingMerger: Sendable {
     @discardableResult
     public mutating func add(_ s: Sighting) -> Int? {
         guard let box = BoxFit.fit(s.points, floorY: floorY) else { return nil }
+        // Compare centers after padding each box away from its camera: one view is only
+        // the object's near face, so views from two sides would otherwise sit too far apart.
+        let minDepth = ObjectVocabulary.minimumDepth[s.label] ?? 0
+        let probe = DetectorPlacement.padDepth(box, to: minDepth, camera: s.camera).center
         let match = tracks.indices
             .filter { tracks[$0].label == s.label }
-            .map { ($0, horizontalDistance(tracks[$0].box.center, box.center)) }
+            .map { ($0, horizontalDistance(DetectorPlacement.padDepth(tracks[$0].box, to: minDepth, camera: tracks[$0].camera).center, probe)) }
             .filter { $0.1 < max(0.6, max(tracks[$0.0].box.size.x, box.size.x) * 0.6) }
             .min { $0.1 < $1.1 }
         if let (i, _) = match {
             var t = tracks[i]
             t.sightings += 1
+            if isNewView(s, after: t.lastView, center: t.box.center) {
+                t.views += 1
+                t.lastView = (s.time, s.camera)
+            }
+            t.noteCamera(s.camera)
             t.bestConfidence = max(t.bestConfidence, s.confidence)
             t.totalConfidence += s.confidence
             t.points = Self.thin(t.points + s.points, to: maxPointsPerTrack)
@@ -130,15 +174,40 @@ public struct SightingMerger: Sendable {
             return t.id
         }
         let id = tracks.count
-        tracks.append(Track(id: id, label: s.label, sightings: 1, bestConfidence: s.confidence, totalConfidence: s.confidence,
-                            points: Self.thin(s.points, to: maxPointsPerTrack), box: box))
+        var track = Track(id: id, label: s.label, sightings: 1, views: 1, bestConfidence: s.confidence, totalConfidence: s.confidence,
+                          points: Self.thin(s.points, to: maxPointsPerTrack), box: box, lastView: (s.time, s.camera))
+        track.noteCamera(s.camera)
+        tracks.append(track)
         return id
+    }
+
+    /// Whether `s` is a different view from `last`: far enough apart in time or angle.
+    /// Without timestamps or camera poses every sighting counts as its own view.
+    func isNewView(_ s: Sighting, after last: (time: Double?, camera: SIMD3<Float>?), center: SIMD3<Float>) -> Bool {
+        var known = false
+        if let t0 = last.time, let t1 = s.time {
+            known = true
+            if abs(t1 - t0) >= minViewGap { return true }
+        }
+        if let c0 = last.camera, let c1 = s.camera {
+            known = true
+            let a = SIMD2(c0.x - center.x, c0.z - center.z), b = SIMD2(c1.x - center.x, c1.z - center.z)
+            let la = (a * a).sum().squareRoot(), lb = (b * b).sum().squareRoot()
+            if la > 1e-3, lb > 1e-3 {
+                let cosine = min(1, max(-1, (a * b).sum() / (la * lb)))
+                if acos(cosine) >= minViewAngle { return true }
+            }
+        }
+        return !known
     }
 
     /// Whether a track has enough evidence to report.
     public func isConfirmed(_ t: Track, minSightings: Int = 2) -> Bool {
-        t.sightings >= minSightings
-            || (t.bestConfidence >= singleSightingConfidence && max(t.box.size.x, t.box.size.y, t.box.size.z) >= singleSightingMinSize)
+        let longest = max(t.box.size.x, t.box.size.y, t.box.size.z)
+        if t.views >= minSightings { return true }
+        if t.bestConfidence >= singleSightingConfidence && longest >= singleSightingMinSize { return true }
+        return !ObjectVocabulary.isRoomPlanCategory(t.label)
+            && t.bestConfidence >= bigSingleSightingConfidence && longest >= bigSingleSightingMinSize
     }
 
     /// The objects found: confirmed tracks, one label per physical object, minus what
@@ -148,10 +217,12 @@ public struct SightingMerger: Sendable {
     /// - When two labels claim the same space (an e-scooter that also scores as a
     ///   bicycle), the label with more total confidence, weighted by how plausible the
     ///   measured size is for it, wins.
-    /// - An object mostly inside a RoomPlan object's volume is a duplicate of it. A
-    ///   detection in a category RoomPlan also finds (chair, table...) is dropped when
-    ///   it overlaps any RoomPlan object noticeably. Objects merely standing on a
-    ///   RoomPlan object (a monitor on a table) are kept.
+    /// - A detection is a duplicate of a RoomPlan object (any category: an "ottoman"
+    ///   RoomPlan calls a table) when their footprints overlap by at least
+    ///   `duplicateFootprintOverlap` of the smaller footprint and they share height.
+    ///   The detection is first padded to its category's minimum depth away from the
+    ///   camera (`DetectorPlacement.padDepth`), since LiDAR only saw its front.
+    ///   Objects merely standing on a RoomPlan object (a monitor on a table) are kept.
     public func results(minSightings: Int = 2, excluding existing: [RoomGeometry.Object] = [], refit: Bool = true) -> [Track] {
         var kept = tracks.compactMap { t -> Track? in
             var t = t
@@ -165,17 +236,73 @@ public struct SightingMerger: Sendable {
         for t in kept {
             if let i = resolved.firstIndex(where: { $0.label != t.label && Self.overlap(t.box, $0.box) > 0.5 }) {
                 resolved[i].sightings += t.sightings  // the same object under another label
+                resolved[i].views += t.views
                 continue
             }
             resolved.append(t)
         }
         return resolved.filter { t in
-            !existing.contains { o in
-                let roomPlan = FittedBox(center: o.transform.position, size: o.dimensions, yaw: o.transform.yaw)
-                let inside = Self.overlap(t.box, roomPlan, relativeTo: .first)
-                return inside > 0.5 || (ObjectVocabulary.isRoomPlanCategory(t.label) && inside > 0.15)
+            let box = DetectorPlacement.padDepth(t.box, to: ObjectVocabulary.minimumDepth[t.label] ?? 0, camera: t.camera)
+            return !existing.contains { o in
+                Self.isDuplicate(box, of: FittedBox(center: o.transform.position, size: o.dimensions, yaw: o.transform.yaw))
             }
         }
+    }
+
+    /// Share of the smaller footprint two boxes must cover for a detection to count as a
+    /// RoomPlan object's duplicate (#267: 0.5 of the detection's volume let an ottoman
+    /// through next to RoomPlan's box for it).
+    public static let duplicateFootprintOverlap: Float = 0.25
+    /// ...and the share of the shorter box's height they must share (so a monitor
+    /// standing on a desk isn't the desk).
+    public static let duplicateHeightOverlap: Float = 0.3
+
+    static func isDuplicate(_ a: FittedBox, of b: FittedBox) -> Bool {
+        let lo = max(a.center.y - a.size.y / 2, b.center.y - b.size.y / 2)
+        let hi = min(a.center.y + a.size.y / 2, b.center.y + b.size.y / 2)
+        guard hi - lo >= duplicateHeightOverlap * min(a.size.y, b.size.y) else { return false }
+        return footprintOverlap(a, b) >= duplicateFootprintOverlap
+    }
+
+    /// Shared footprint area of two upright boxes (exact, rotated rectangles), as a
+    /// share of the smaller footprint.
+    static func footprintOverlap(_ a: FittedBox, _ b: FittedBox) -> Float {
+        func poly(_ box: FittedBox) -> [SIMD2<Float>] {
+            let p = RoomGeometry.footprint(width: box.size.x, depth: box.size.z, box.transform)
+            return signedArea(p) < 0 ? p.reversed() : p
+        }
+        let pa = poly(a), pb = poly(b)
+        let smaller = min(abs(signedArea(pa)), abs(signedArea(pb)))
+        guard smaller > 1e-6 else { return 0 }
+        return abs(signedArea(clip(pa, by: pb))) / smaller
+    }
+
+    static func signedArea(_ p: [SIMD2<Float>]) -> Float {
+        guard p.count >= 3 else { return 0 }
+        var s: Float = 0
+        for i in p.indices {
+            let a = p[i], b = p[(i + 1) % p.count]
+            s += a.x * b.y - b.x * a.y
+        }
+        return s / 2
+    }
+
+    /// Sutherland-Hodgman: `subject` clipped to the convex, counter-clockwise `clip`.
+    static func clip(_ subject: [SIMD2<Float>], by clip: [SIMD2<Float>]) -> [SIMD2<Float>] {
+        var out = subject
+        for i in clip.indices where !out.isEmpty {
+            let a = clip[i], e = clip[(i + 1) % clip.count] - a
+            func side(_ p: SIMD2<Float>) -> Float { e.x * (p.y - a.y) - e.y * (p.x - a.x) }
+            let input = out
+            out = []
+            for j in input.indices {
+                let p = input[j], q = input[(j + 1) % input.count]
+                let sp = side(p), sq = side(q)
+                if sp >= 0 { out.append(p) }
+                if (sp >= 0) != (sq >= 0) { out.append(p + (q - p) * (sp / (sp - sq))) }
+            }
+        }
+        return out
     }
 
     private func horizontalDistance(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float {
@@ -183,11 +310,8 @@ public struct SightingMerger: Sendable {
         return (d * d).sum().squareRoot()
     }
 
-    enum Relative { case smaller, first }
-
-    /// Shared volume of two upright boxes, as a share of the smaller one's volume (or
-    /// of the first's). Footprints are approximated by their axis-aligned bounds.
-    static func overlap(_ a: FittedBox, _ b: FittedBox, relativeTo: Relative = .smaller) -> Float {
+    /// Shared volume of two upright boxes, as a share of the smaller one's volume. Footprints are approximated by their axis-aligned bounds.
+    static func overlap(_ a: FittedBox, _ b: FittedBox) -> Float {
         func bounds(_ box: FittedBox) -> (lo: SIMD3<Float>, hi: SIMD3<Float>) {
             let pts = RoomGeometry.footprint(width: box.size.x, depth: box.size.z, box.transform)
             let lo = pts.reduce(pts[0]) { pointwiseMin($0, $1) }, hi = pts.reduce(pts[0]) { pointwiseMax($0, $1) }
@@ -198,7 +322,7 @@ public struct SightingMerger: Sendable {
         let inter = d.x * d.y * d.z
         let ea = ahi - alo, eb = bhi - blo
         let va = ea.x * ea.y * ea.z, vb = eb.x * eb.y * eb.z
-        let base = relativeTo == .first ? va : min(va, vb)
+        let base = min(va, vb)
         return base > 0 ? inter / base : 0
     }
 
