@@ -4,7 +4,9 @@
 // Sepolia with CDP keys, labeled simulated otherwise).
 //
 // Payments must never break pricing: if the rail refuses (over budget) or the paid call fails for
-// any reason, the source falls back to calling the lookup directly and logs that it did.
+// any reason, the source falls back to calling the lookup directly and logs that it did. The one
+// exception is when the paywall's own lookup already failed (502 "comps lookup failed"): running the
+// same lookup again would just repeat that failure, so the error goes to pricing, which fails the item.
 
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -39,7 +41,8 @@ export async function startCompsPaywall(
 ): Promise<CompsPaywallServer> {
   const { app, paywalled, payTo } = await createCompsPaywall(opts.lookup ?? lookupComps, opts.env ?? process.env);
   const server = await new Promise<Server>((resolve, reject) => {
-    const s = app.listen(opts.port ?? config.x402Port, '127.0.0.1', () => resolve(s));
+    // Express 5 passes listen errors (e.g. EADDRINUSE) to this callback instead of leaving them unhandled.
+    const s = app.listen(opts.port ?? config.x402Port, '127.0.0.1', (err?: Error) => (err ? reject(err) : resolve(s)));
     s.once('error', reject);
   });
   const { port } = server.address() as AddressInfo;
@@ -47,6 +50,33 @@ export async function startCompsPaywall(
   console.log(`[x402] comps paywall on ${baseUrl}${COMPS_ROUTE} (${paywalled ? `paywalled, payTo ${payTo}` : 'not paywalled'})`);
   return { server, baseUrl, paywalled };
 }
+
+/**
+ * Starts the paywall and installs the paid source. If the paywall can't start (port taken, CDP
+ * outage, bad keys) it logs loudly and leaves pricing on direct (unpaid) lookups, so the worker
+ * keeps running. Returns whether the paid source was installed.
+ */
+export async function installPaidComps(deps: {
+  start: () => Promise<{ baseUrl: string }>;
+  install: (baseUrl: string) => void;
+  logError?: (message: string, err: unknown) => void;
+}): Promise<boolean> {
+  let baseUrl: string;
+  try {
+    ({ baseUrl } = await deps.start());
+  } catch (err) {
+    (deps.logError ?? console.error)(
+      '[x402] COMPS PAYWALL FAILED TO START, pricing will use direct (unpaid) Apify lookups:',
+      err,
+    );
+    return false;
+  }
+  deps.install(baseUrl);
+  return true;
+}
+
+/** The paywall answered 502 because its own comps lookup failed; retrying the lookup won't help. */
+export class CompsLookupFailedError extends Error {}
 
 type LogFn = (e: {
   owner: Identity;
@@ -82,17 +112,28 @@ export function createPaidCompsSource(deps: PaidCompsDeps, baseUrl: string): Com
         },
         url,
       );
-      if (!response.ok) throw new Error(`comps endpoint answered HTTP ${response.status}`);
+      if (!response.ok) {
+        if (response.status === 502) {
+          const body = (await response.json().catch(() => undefined)) as { error?: unknown } | undefined;
+          if (typeof body?.error === 'string' && body.error.startsWith('comps lookup failed')) {
+            throw new CompsLookupFailedError(body.error);
+          }
+        }
+        throw new Error(`comps endpoint answered HTTP ${response.status}`);
+      }
       const body = (await response.json()) as Partial<CompsResult>;
       if (!Array.isArray(body.comps)) throw new Error('comps endpoint returned no comps array');
       return { comps: body.comps, replayed: !!body.replayed };
     } catch (err) {
+      // The paywall already ran the lookup and it failed: pricing logs the error and fails the item.
+      if (err instanceof CompsLookupFailedError) throw err;
       // The rail already logged refusals (and its own payment failures); this only records the fallback.
+      // A fallback isn't an error by itself (if the direct lookup fails, pricing logs that as one).
       const refused = err instanceof SpendRefusedError;
       deps.log({
         owner: item.owner,
         agent: 'pricing',
-        kind: refused ? 'tool_call' : 'error',
+        kind: 'tool_call',
         message: refused
           ? `x402 payment refused, looking up comps for "${query}" directly (unpaid)`
           : `Paid comps lookup failed (${(err as Error).message}), looking up "${query}" directly (unpaid)`,
