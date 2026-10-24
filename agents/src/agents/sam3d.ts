@@ -272,6 +272,29 @@ export async function build(conn: Conn, it: Item, deps: Sam3dDeps = currentDeps)
 // (#84): its scan crop, photos the user took, or web images of the identified product. Object
 // Capture models from the phone take precedence (set_item_model never lets a sam3d result replace
 // one). Without FAL_KEY it does nothing and items stay pending, so models appear once it's added.
+// Spend from earlier worker runs in the last SAM3D_SPEND_WINDOW_H hours. The worker runs under a
+// supervisor that restarts it, so the in-process counter alone would reset on every crash. Sums
+// costUsd on this agent's tool_call events; refunds for refused fal calls aren't subtracted, so
+// it errs toward spending less.
+export function priorSpendUsd(
+  events: Iterable<{ agent: string; kind: string; dataJson: string; createdAt: { toMillis(): bigint } }>,
+  nowMs: number,
+  windowMs = config.sam3d.spendWindowH * 3600_000
+): number {
+  let usd = 0;
+  for (const e of events) {
+    if (e.agent !== 'sam3d' || e.kind !== 'tool_call' || !e.dataJson) continue;
+    if (nowMs - Number(e.createdAt.toMillis()) > windowMs) continue;
+    try {
+      const c = Number((JSON.parse(e.dataJson) as { costUsd?: unknown }).costUsd);
+      if (Number.isFinite(c) && c > 0) usd += c;
+    } catch {
+      // not JSON: no cost recorded
+    }
+  }
+  return usd;
+}
+
 export const sam3dAgent: Agent = {
   name: 'sam3d',
   start(conn) {
@@ -279,6 +302,8 @@ export const sam3dAgent: Agent = {
       console.log('[sam3d] FAL_KEY not set: 3D models from photos are off (items stay pending)');
       return;
     }
+    spentUsd = priorSpendUsd(conn.db.agentEvent.iter(), Date.now());
+    console.log(`[sam3d] prior spend in the last ${config.sam3d.spendWindowH} h: ${money(spentUsd)} of ${money(config.sam3d.maxUsd)}`);
     const queue: Item[] = [];
     let running = 0;
     const pump = () => {
