@@ -120,11 +120,33 @@ final class MooveStore {
         await run { try await $0.setSentimental(itemId: item.id, maybeSentimental: value) }
     }
 
-    private func run(_ op: (SyncBackend) async throws -> Void) async {
+    // MARK: New home (#13, #14)
+
+    var newHome: NewHome? { snapshot.myNewHome }
+
+    /// Returns false if the write failed (the error is in `lastError`).
+    @discardableResult
+    func createNewHome(name: String, source: NewHomeSource, plan: FloorPlan) async -> Bool {
+        guard let json = try? plan.jsonString() else {
+            lastError = "Couldn't encode the floor plan"
+            return false
+        }
+        return await run { try await $0.createNewHome(name: name, source: source, floorPlanJson: json) }
+    }
+
+    @discardableResult
+    func saveLayout(_ placements: [Placement], name: String, for home: NewHome) async -> Bool {
+        await run { try await $0.saveLayout(newHomeId: home.id, name: name, placementsJson: Layout.encode(placements)) }
+    }
+
+    @discardableResult
+    private func run(_ op: (SyncBackend) async throws -> Void) async -> Bool {
         do {
             try await op(backend)
+            return true
         } catch {
             lastError = String(describing: error)
+            return false
         }
     }
 }
