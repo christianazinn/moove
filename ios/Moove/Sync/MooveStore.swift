@@ -120,6 +120,26 @@ final class MooveStore {
         await run { try await $0.setSentimental(itemId: item.id, maybeSentimental: value) }
     }
 
+    // MARK: Shopping (#15)
+
+    var shoppingItems: [ShoppingItem] { snapshot.myShoppingItems }
+
+    @discardableResult
+    func addShoppingItem(name: String, category: String, reason: String) async -> Bool {
+        await run { try await $0.addShoppingItem(name: name, category: category, reason: reason) }
+    }
+
+    @discardableResult
+    func removeShoppingItem(_ item: ShoppingItem) async -> Bool {
+        await run { try await $0.removeShoppingItem(shoppingItemId: item.id) }
+    }
+
+    /// The buy agent checks out the chosen deal (asking for approval above the threshold).
+    @discardableResult
+    func choose(_ deal: Deal, for item: ShoppingItem) async -> Bool {
+        await run { try await $0.chooseDeal(shoppingItemId: item.id, dealId: deal.id) }
+    }
+
     // MARK: New home (#13, #14)
 
     var newHome: NewHome? { snapshot.myNewHome }

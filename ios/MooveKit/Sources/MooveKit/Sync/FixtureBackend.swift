@@ -11,6 +11,8 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         case alreadyDecided
         case invalidStatus
         case unauthorized
+        case noSuchShoppingItem
+        case dealDoesNotMatchItem
     }
 
     private let lock = NSLock()
@@ -34,7 +36,7 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
 
     /// The bundled demo inventory (already priced and sorted, as if the agents had run).
     public static func demo(identity: IdentityHex = "fixture-user") -> FixtureBackend {
-        FixtureBackend(identity: identity, seed: DemoFixtures.inventory(owner: identity))
+        FixtureBackend(identity: identity, seed: DemoFixtures.demo(owner: identity))
     }
 
     // MARK: Connection
@@ -122,6 +124,70 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         try updateOwnedItem(itemId) { $0.maybeSentimental = maybeSentimental }
     }
 
+    // MARK: Shopping (#15)
+
+    public func addShoppingItem(name: String, category: String, reason: String) async throws {
+        try mutateAuthed { s, me in
+            s.shoppingItems.append(ShoppingItem(id: takeId(), owner: me, name: name, category: category, reason: reason))
+        }
+    }
+
+    public func removeShoppingItem(shoppingItemId: UInt64) async throws {
+        try mutateAuthed { s, me in
+            guard let i = s.shoppingItems.firstIndex(where: { $0.id == shoppingItemId }) else { return }
+            guard s.shoppingItems[i].owner == me else { throw Failure.unauthorized }
+            s.shoppingItems.remove(at: i)
+        }
+    }
+
+    public func chooseDeal(shoppingItemId: UInt64, dealId: UInt64) async throws {
+        try mutateAuthed { s, me in
+            guard let i = s.shoppingItems.firstIndex(where: { $0.id == shoppingItemId }) else { throw Failure.noSuchShoppingItem }
+            guard s.shoppingItems[i].owner == me else { throw Failure.unauthorized }
+            guard s.deals.contains(where: { $0.id == dealId && $0.shoppingItemId == shoppingItemId }) else {
+                throw Failure.dealDoesNotMatchItem
+            }
+            s.shoppingItems[i].chosenDealId = dealId
+            runBuyAgent(&s, shoppingItemId: shoppingItemId, me: me)
+        }
+    }
+
+    /// Stand-in for the worker's buy agent (agents/src/agents/buy.ts), always simulated: for the
+    /// chosen card-checkout deal, ask for approval above the owner's threshold, otherwise (or once
+    /// approved at the same price) record a settled simulated Visa payment and mark the item bought.
+    private func runBuyAgent(_ s: inout SyncSnapshot, shoppingItemId: UInt64, me: IdentityHex) {
+        guard let i = s.shoppingItems.firstIndex(where: { $0.id == shoppingItemId }),
+              s.shoppingItems[i].status != .bought,
+              let deal = s.chosenDeal(for: s.shoppingItems[i]),
+              deal.supportsCardCheckout, !deal.isFraudBlocked,
+              !s.visaPayments(for: deal.id).contains(where: { $0.status != .failed })
+        else { return }
+        let threshold = s.users.first { $0.identity == me }?.approvalThresholdCents ?? 10_000
+        if threshold < 0 || deal.priceCents > threshold {
+            let approval = s.purchaseApproval(for: deal.id)
+            guard approval?.status == .approved, approval?.amountCents == deal.priceCents else {
+                // Ask once; a denial stands. A stale approval (price changed) asks again.
+                if approval == nil || (approval?.status == .approved && approval?.amountCents != deal.priceCents) {
+                    s.approvals.append(Approval(
+                        id: takeId(), owner: me, kind: .purchase, refId: deal.id, amountCents: deal.priceCents,
+                        summary: "Buy \"\(deal.title)\" from \(deal.source) for \(Self.dollars(deal.priceCents))"))
+                }
+                return
+            }
+        }
+        let item = s.shoppingItems[i]
+        s.payments.append(Payment(
+            id: takeId(), owner: me, agent: "buy", rail: .visa, purpose: "\(item.name): \(deal.title)",
+            payee: "simulated merchant", amountUsdMicros: deal.priceCents * 10_000, status: .settled, simulated: true,
+            refTable: "deal", refId: deal.id))
+        s.shoppingItems[i].status = .bought
+    }
+
+    private static func dollars(_ cents: Int64) -> String {
+        let c = cents % 100
+        return "$\(cents / 100).\(c < 10 ? "0" : "")\(c)"
+    }
+
     public func createNewHome(name: String, source: NewHomeSource, floorPlanJson: String) async throws {
         try mutateAuthed { s, me in
             s.newHomes.append(NewHome(id: takeId(), owner: me, name: name, source: source, floorPlanJson: floorPlanJson))
@@ -156,6 +222,11 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
                     s.listings[l].status = .rejected
                 }
                 s.listings[l].updatedAt = now
+            }
+            // Stand-in for the buy agent (#15): an approved purchase checks out (simulated).
+            if a.kind == .purchase, status == .approved,
+               let item = s.shoppingItems.first(where: { $0.chosenDealId == a.refId }) {
+                runBuyAgent(&s, shoppingItemId: item.id, me: me)
             }
         }
     }

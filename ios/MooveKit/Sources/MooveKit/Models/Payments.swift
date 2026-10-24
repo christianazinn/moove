@@ -339,10 +339,15 @@ public struct SpendingLog: Sendable, Equatable {
         realSpentUsdMicros = counted.filter { !$0.simulated }.map(\.amountUsdMicros).reduce(0, +)
         simulatedSpentUsdMicros = counted.filter(\.simulated).map(\.amountUsdMicros).reduce(0, +)
 
-        let agents = Set(payments.map(\.agent)).union(refusals.map(\.agent)).union(x402Events.map(\.agent))
+        // Budgets are the x402 spend caps, so only x402 spend and refusals count against them. Card
+        // (Visa) spend has its own caps on the worker and shows up in `totalsByRail` instead.
+        let x402Counted = counted.filter { $0.rail == .x402 }
+        let x402Refusals = refusals.filter { $0.data.rail != "visa" }
+        let agents = Set(payments.filter { $0.rail == .x402 }.map(\.agent))
+            .union(x402Refusals.map(\.agent)).union(x402Events.map(\.agent))
         budgets = agents.sorted().map { agent in
-            let mine = counted.filter { $0.agent == agent }
-            let myRefusals = refusals.filter { $0.agent == agent }
+            let mine = x402Counted.filter { $0.agent == agent }
+            let myRefusals = x402Refusals.filter { $0.agent == agent }
             // The worker ledger's live budget, as of the agent's newest x402 step.
             let newest = x402Events
                 .filter { $0.agent == agent }
