@@ -13,7 +13,7 @@ import MooveBindings
 
 extension SpacetimeBackend {
     static let tableNames = [
-        "user", "room", "room_member", "scan", "item", "comp",
+        "my_user", "my_room", "room_member", "scan", "item", "comp",
         "new_home", "layout", "listing", "approval",
         "payment", "agent_event", "shopping_item", "deal",
         "service_config",
@@ -21,15 +21,17 @@ extension SpacetimeBackend {
 
     /// Everything the signed-in identity can see: its own rows, plus rooms,
     /// scans and items shared with it through `room_member` (#10).
-    /// Tables are public, so the WHERE clauses are what keeps this per-user.
+    /// `user` and `room` are read through the per-user views `my_user` / `my_room`
+    /// (#41 part B), so those tables can go private: the views already include
+    /// rooms joined through `room_member`. The other tables are still public, so
+    /// their WHERE clauses are what keeps them per-user.
     static func subscriptionQueries(me: IdentityHex) -> [String] {
         let id = "0x\(me)"
         let shared = "JOIN room_member ON %1$@ = room_member.room_id WHERE room_member.member = \(id)"
         return [
-            "SELECT * FROM user WHERE identity = \(id)",
+            "SELECT * FROM my_user",
             "SELECT * FROM room_member WHERE member = \(id)",
-            "SELECT * FROM room WHERE owner = \(id)",
-            "SELECT room.* FROM room " + String(format: shared, "room.id"),
+            "SELECT * FROM my_room",
             "SELECT * FROM scan WHERE owner = \(id)",
             "SELECT scan.* FROM scan " + String(format: shared, "scan.room_id"),
             "SELECT * FROM item WHERE owner = \(id)",
@@ -49,8 +51,9 @@ extension SpacetimeBackend {
     }
 
     static let tableDecoders: [@Sendable (SpacetimeDBClient) async -> Void] = [
-        { await $0.registerTableRowDecoder(MooveBindings.UserRow.self) },
-        { await $0.registerTableRowDecoder(MooveBindings.RoomRow.self) },
+        // Views return the base tables' row types; codegen emits no rows for views.
+        { await $0.registerTableRowDecoder(table: "my_user", decoder: MooveBindings.UserRow.decoder()) },
+        { await $0.registerTableRowDecoder(table: "my_room", decoder: MooveBindings.RoomRow.decoder()) },
         { await $0.registerTableRowDecoder(MooveBindings.RoomMemberRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.ScanRow.self) },
         { await $0.registerTableRowDecoder(MooveBindings.ItemRow.self) },
@@ -74,8 +77,8 @@ extension SpacetimeBackend {
     static func makeSnapshot(cache: [String: [AnyHashable: Any]], me: IdentityHex?) -> SyncSnapshot {
         func rows<R>(_ table: String, _: R.Type) -> [R] { cache[table]?.values.compactMap { $0 as? R } ?? [] }
         var s = SyncSnapshot(me: me)
-        s.users = rows("user", MooveBindings.UserRow.self).map(User.init)
-        s.rooms = rows("room", MooveBindings.RoomRow.self).map(Room.init).sorted { $0.id < $1.id }
+        s.users = rows("my_user", MooveBindings.UserRow.self).map(User.init)
+        s.rooms = rows("my_room", MooveBindings.RoomRow.self).map(Room.init).sorted { $0.id < $1.id }
         s.scans = rows("scan", MooveBindings.ScanRow.self).map(Scan.init).sorted { $0.id < $1.id }
         s.items = rows("item", MooveBindings.ItemRow.self).map(Item.init).sorted { $0.id < $1.id }
         s.comps = rows("comp", MooveBindings.CompRow.self).map(Comp.init).sorted { $0.id < $1.id }
