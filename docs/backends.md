@@ -2,18 +2,26 @@
 
 Several ready-to-test backends run at once, so the team can test in one batch. `cd agents && npm run status` checks all the maincloud ones in a few seconds (worker version, upload URL health, data counts, recent errors).
 
+**One-command test per backend:**
+| Backend | Command (from `agents/`) | Expected |
+|---|---|---|
+| Live + Demo health | `npm run status` | `UP` for each, upload `healthy` |
+| Demo, as a judge's phone | `npm run smoke -- moove-demo 4RZ9G8` | `PASS` for join by code, 9 items priced and sorted, upload round trip, and room/user private |
+| Live, as a phone | `npm run smoke -- moove <a room's join code>` | same, for that room |
+| Whole pipeline, local | `npm run e2e -- --replay` (needs `spacetime start`) | `22/22 passed` |
+
+`smoke` joins the room as a test user (token in `agents/.user-token.smoke.<db>`) and uploads one 222-byte PNG. It spends no Claude, Apify or payments. Before #41 step 2 is on a database, its privacy check FAILs on purpose.
+
 | Backend | Database | Worker | Upload URL | Use it for |
 |---|---|---|---|---|
 | **Live** | maincloud `moove` | Christian's laptop, `run-worker.sh`, port 8787 | read `service_config.upload_base_url` (Cloudflare tunnel, changes when the laptop restarts; the newest is always on #2) | Team testing with real scans. Has every scan done so far, junk included. |
 | **Demo** | maincloud `moove-demo` | Christian's laptop, `run-worker.sh`, port 8797 | `service_config.upload_base_url` on `moove-demo` (its own tunnel) | Clean judge demo. Seeded "Bedroom", 9 priced and sorted items. **Join code `4RZ9G8`.** |
-| **E2E** | local `moove-e2e` (wiped every run) | spawned by the test, port 8790 | `http://localhost:8790` | Automated pipeline test: `cd agents && npm run e2e -- --replay` (15 stages, PASS/FAIL table). Also runs in CI. |
+| **E2E** | local `moove-e2e` (wiped every run) | spawned by the test, port 8790 | `http://localhost:8790` | Automated pipeline test: `cd agents && npm run e2e -- --replay` (PASS/FAIL table). Also runs in CI. |
 | **Your local** | local `moove-<you>` | `npm start` with your own `SPACETIME_DB_NAME` / `UPLOAD_PORT` | `http://<LAN IP>:<port>` | Lane development without touching maincloud. |
 
 ## Pointing the app at a backend
-- `ios/Config/Local.xcconfig`: `MOOVE_SPACETIME_HOST = https:/$()/maincloud.spacetimedb.com`, `MOOVE_SPACETIME_DB = moove` or `moove-demo`. Rebuild.
-- Upload URL: until the app reads `service_config` (#122), set `MOOVE_UPLOAD_BASE_URL` to the database's `upload_base_url`:
-  `spacetime sql -s maincloud moove-demo "SELECT key, value FROM service_config"`, or run `npm run status`.
-- To see the demo room on a second phone: Inventory → **Join a room** → `4RZ9G8` (once #78 room sharing is on main).
+- In the app: **Settings → Database → Live (`moove`) / Demo (`moove-demo`)**, with no rebuild. The app reads the upload URL from the database's `service_config` (#132), so tunnel restarts need no config. `ios/Config/Local.xcconfig` (`MOOVE_SPACETIME_HOST`, `MOOVE_SPACETIME_DB`, `MOOVE_UPLOAD_BASE_URL`) only sets the defaults and fallback.
+- To see the demo room on a second phone: Items → **Join a room** → `4RZ9G8`.
 
 ## Running a worker (Christian)
 From the main checkout `agents/` (keep it on `main`, because the supervisor re-runs whatever is checked out):
