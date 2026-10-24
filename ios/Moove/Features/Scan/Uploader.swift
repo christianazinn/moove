@@ -33,3 +33,13 @@ struct HTTPUploader: Uploader {
 struct LocalUploader: Uploader {
     func upload(_ file: URL, contentType: String) async throws -> String { file.absoluteString }
 }
+
+/// Live backend with no upload server configured: every upload fails, so the scan is
+/// imported with its room files local-only instead of syncing `file://` URLs.
+struct UnavailableUploader: Uploader {
+    struct NotConfigured: LocalizedError {
+        var errorDescription: String? { "no upload server is configured" }
+    }
+
+    func upload(_ file: URL, contentType: String) async throws -> String { throw NotConfigured() }
+}
