@@ -9,6 +9,10 @@ struct InventoryView: View {
         List {
             ForEach(store.snapshot.rooms) { room in
                 Section(room.name) {
+                    NavigationLink(value: room) {
+                        Label("View room in 3D", systemImage: "cube.transparent")
+                            .foregroundStyle(.tint)
+                    }
                     ForEach(store.items.filter { $0.roomId == room.id }) { item in
                         LabeledContent(item.name, value: item.estValueCents?.usd ?? "pricing…")
                     }
@@ -21,6 +25,7 @@ struct InventoryView: View {
             }
         }
         .navigationTitle("Inventory")
+        .navigationDestination(for: Room.self) { RoomDetailView(room: $0) }
     }
 }
 
