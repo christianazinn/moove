@@ -42,4 +42,6 @@ export default __t.row({
   modelStatus: __t.string().name("model_status"),
   attributesJson: __t.string().name("attributes_json"),
   colorsJson: __t.string().name("colors_json"),
+  identifyConfidence: __t.string().name("identify_confidence"),
+  closeupHint: __t.string().name("closeup_hint"),
 });

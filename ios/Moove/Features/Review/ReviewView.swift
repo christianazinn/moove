@@ -35,6 +35,24 @@ struct ReviewView: View {
                 }
             }
             .listSectionSeparator(.hidden)
+            let closeups = Review.wantingCloseups(store.visibleItems)
+            if !closeups.isEmpty {
+                // #276: one more photo would pin down these items' exact model, and so their price
+                Section {
+                    ListHeader(title: "A photo would help", count: "\(closeups.count)")
+                        .padding(.top, 40)
+                        .chromeRow()
+                    ForEach(closeups) { item in
+                        NavigationLink(value: item.id) { ReviewRow(item: item) }
+                            .ledgerListRow()
+                    }
+                    Text("Open one and tap Add another photo. Moove identifies and prices it again.")
+                        .monoMeta()
+                        .padding(.top, 12)
+                        .chromeRow()
+                }
+                .listSectionSeparator(.hidden)
+            }
             ForEach(sections, id: \.section) { group in
                 Section {
                     ListHeader(title: group.section.title, count: "\(group.items.count)")

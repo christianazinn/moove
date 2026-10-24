@@ -148,6 +148,9 @@ const item = table(
     // Voxel look (#110). Appended with defaults so existing rows migrate.
     attributesJson: t.string().default('[]'), // JSON array of RoomPlan attributes, e.g. ["ChairType.swivel"]
     colorsJson: t.string().default(''), // {"primary":"#RRGGBB","secondary":"#RRGGBB"}, '' if unknown
+    // How exactly vision identified it (#276). Appended with defaults so existing rows migrate.
+    identifyConfidence: t.string().default(''), // IDENTIFY_CONFIDENCE or '' (not reported)
+    closeupHint: t.string().default(''), // the one photo that would identify it, '' if none would help
   }
 );
 
@@ -922,6 +925,8 @@ function insertItem(
     modelStatus: 'pending',
     attributesJson: attributesJson ?? '[]',
     colorsJson: '',
+    identifyConfidence: '',
+    closeupHint: '',
   });
 }
 
@@ -1065,6 +1070,24 @@ export const setItemDetails = spacetimedb.reducer(
       fragile: it.fragile || args.fragile,
       maybeSentimental: it.maybeSentimental || args.maybeSentimental,
       detailsStatus: 'done',
+      updatedAt: ctx.timestamp,
+    });
+  }
+);
+
+// Vision's confidence in the exact product and the close-up that would pin it down (#276). Separate
+// from set_item_details so a worker built before #276 keeps working against this module.
+const IDENTIFY_CONFIDENCE = ['high', 'medium', 'low', ''] as const;
+const MAX_CLOSEUP_HINT = 120;
+export const setItemIdentify = spacetimedb.reducer(
+  { itemId: t.u64(), confidence: t.string(), closeupHint: t.string() },
+  (ctx, { itemId, confidence, closeupHint }) => {
+    requireWorker(ctx);
+    const it = getItem(ctx, itemId);
+    ctx.db.item.id.update({
+      ...it,
+      identifyConfidence: oneOf('confidence', confidence, IDENTIFY_CONFIDENCE),
+      closeupHint: closeupHint.trim().slice(0, MAX_CLOSEUP_HINT),
       updatedAt: ctx.timestamp,
     });
   }

@@ -13,7 +13,7 @@ const owner = { toHexString: () => "owner" };
 const item = (o: Partial<Item>): Item =>
   ({ id: 1n, owner, name: "chair", category: "chair", widthM: 0.6, heightM: 1, depthM: 0.6, photoUrls: ["https://w/files/a.jpg"], detailsStatus: "pending", ...o }) as unknown as Item;
 
-const details = { name: "black mesh office chair", category: "chair", material: "black mesh", brand: "", condition: "good" as const, fragile: false, maybeSentimental: false, notes: "" };
+const details = { name: "black mesh office chair", category: "chair", material: "black mesh", brand: "", condition: "good" as const, fragile: false, maybeSentimental: false, notes: "", identifyConfidence: "low" as const, closeupHint: "" };
 
 function fakeConn(rows: Item[]) {
   const byId = new Map(rows.map(r => [r.id, r]));
@@ -31,6 +31,7 @@ function fakeConn(rows: Item[]) {
     reducers: {
       setItemStage: async (a: Record<string, unknown>) => void calls.push({ name: "setItemStage", args: a }),
       setItemDetails: async (a: Record<string, unknown>) => void calls.push({ name: "setItemDetails", args: a }),
+      setItemIdentify: async (a: Record<string, unknown>) => void calls.push({ name: "setItemIdentify", args: a }),
       logAgentEvent: async (e: { kind: string; message: string }) => void events.push(e),
     },
   };
@@ -61,7 +62,7 @@ test("identifies an item, skipping photos that fail to load", async () => {
   visionAgent.start(conn);
   await sleep(30);
   assert.equal(sentImages, 1);
-  assert.deepEqual(calls.map(c => c.name), ["setItemStage", "setItemDetails"]);
+  assert.deepEqual(calls.map(c => c.name), ["setItemStage", "setItemDetails", "setItemIdentify"]);
   assert.equal(calls[0].args.stage, "running");
   assert.equal(calls[1].args.name, "black mesh office chair");
   assert.equal(events.at(-1)!.kind, "result");
@@ -101,4 +102,26 @@ test("at most VISION_CONCURRENCY identifications run at once", async () => {
   await sleep(150);
   assert.equal(peak, 2);
   assert.equal(calls.filter(c => c.name === "setItemDetails").length, 7);
+});
+
+test("writes vision's confidence and close-up hint (#276)", async () => {
+  setVisionDeps({
+    load: async u => ({ mediaType: "image/jpeg", data: u }),
+    call: async () => ({ ...details, name: "Apple MacBook Pro", brand: "Apple", identifyConfidence: "medium" as const, closeupHint: "model number on the bottom case" }),
+  });
+  const { conn, calls } = fakeConn([item({ id: 9n })]);
+  visionAgent.start(conn);
+  await sleep(30);
+  const id = calls.find(c => c.name === "setItemIdentify");
+  assert.deepEqual(id?.args, { itemId: 9n, confidence: "medium", closeupHint: "model number on the bottom case" });
+});
+
+test("a module without set_item_identify still gets the details", async () => {
+  setVisionDeps({ load: async u => ({ mediaType: "image/jpeg", data: u }), call: async () => details });
+  const { conn, calls, events } = fakeConn([item({ id: 10n })]);
+  (conn.reducers as unknown as Record<string, unknown>).setItemIdentify = async () => { throw new Error("no such reducer"); };
+  visionAgent.start(conn);
+  await sleep(30);
+  assert.ok(calls.some(c => c.name === "setItemDetails"));
+  assert.equal(events.at(-1)!.kind, "result");
 });
