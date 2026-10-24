@@ -38,6 +38,10 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
     private var snapshotContinuations: [UUID: AsyncStream<SyncSnapshot>.Continuation] = [:]
     private var statusContinuations: [UUID: AsyncStream<SyncStatus>.Continuation] = [:]
     private var lastStatus: SyncStatus = .disconnected
+    /// Bumped on every connect/disconnect. A cancelled task from an older connection can still
+    /// run its exit path after a reconnect; tagging events with their generation keeps it from
+    /// setting `.failed` (or touching rows) while the new connection is fine.
+    private var generation = ConnectionGeneration()
 
     init(host: String, db: String) {
         self.host = host
@@ -48,6 +52,7 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
 
     func connect(token: String?) async throws -> (identity: IdentityHex, token: String) {
         await disconnect()
+        let gen = lock.withLock { generation.advance() }
         broadcast(status: .connecting)
 
         let client = try SpacetimeDBClient(host: host, db: db)
@@ -60,7 +65,7 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
             track(Task { [weak self] in
                 for await event in events {
                     guard let self, !Task.isCancelled else { return }
-                    self.apply(event, table: table)
+                    self.apply(event, table: table, generation: gen)
                 }
             })
         }
@@ -72,8 +77,9 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
             track(Task { [weak self] in
                 var pending: CheckedContinuation<(identity: IdentityHex, token: String), Error>? = continuation
                 func fail(_ why: String) {
-                    self?.broadcast(status: .failed(why))
-                    pending?.resume(throwing: Failure.connectFailed(why))
+                    // A superseded connection says nothing; its caller gets a cancellation.
+                    let current = self?.broadcast(status: .failed(why), from: gen) ?? false
+                    pending?.resume(throwing: current ? Failure.connectFailed(why) : CancellationError())
                     pending = nil
                 }
                 for await event in connectionEvents {
@@ -83,20 +89,23 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
                         // Also fires after each auto-reconnect. The SDK doesn't
                         // replay subscriptions, so drop the cache and resubscribe.
                         let hex = identity.description
-                        self.lock.withLock {
+                        let current = self.lock.withLock { () -> Bool in
+                            guard self.generation.isCurrent(gen) else { return false }
                             self.me = hex
                             self.staging = [:]
+                            return true
                         }
+                        guard current else { break }
                         do {
-                            try await self.subscribe(client, me: hex)
-                            self.broadcast(status: .connected)
+                            try await self.subscribe(client, me: hex, generation: gen)
+                            self.broadcast(status: .connected, from: gen)
                             pending?.resume(returning: (hex, newToken))
                             pending = nil
                         } catch {
                             fail("subscribe failed: \(error)")
                         }
                     case let .reconnecting(attempt):
-                        self.broadcast(status: .reconnecting(attempt: attempt))
+                        self.broadcast(status: .reconnecting(attempt: attempt), from: gen)
                     case let .disconnected(reason):
                         fail(reason ?? "disconnected")
                     case let .error(error):
@@ -118,6 +127,7 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
                 self.cache = [:]
                 self.staging = nil
                 self.me = nil
+                self.generation.advance()
             }
             return (self.client, self.tasks)
         }
@@ -131,21 +141,24 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
         lock.withLock { tasks.append(task) }
     }
 
-    private func subscribe(_ client: SpacetimeDBClient, me: IdentityHex) async throws {
+    private func subscribe(_ client: SpacetimeDBClient, me: IdentityHex, generation gen: UInt64) async throws {
         let handle = try await client.subscribe(Self.subscriptionQueries(me: me))
         try await handle.applied()
         // Initial rows reach `apply` through per-table row streams, which can lag
         // the applied() callback a little; let them drain before the swap.
         try? await Task.sleep(for: .milliseconds(250))
-        lock.withLock {
+        let current = lock.withLock { () -> Bool in
+            guard generation.isCurrent(gen) else { return false }
             if let staged = staging { cache = staged }
             staging = nil
+            return true
         }
-        publish()
+        if current { publish() }
     }
 
-    private func apply(_ event: RowEvent, table: String) {
-        let syncing = lock.withLock { () -> Bool in
+    private func apply(_ event: RowEvent, table: String, generation gen: UInt64) {
+        let syncing = lock.withLock { () -> Bool? in
+            guard generation.isCurrent(gen) else { return nil }
             func write(_ target: inout [String: [AnyHashable: Any]]) {
                 switch event {
                 case let .inserted(row), let .updated(_, row):
@@ -161,7 +174,7 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
             write(&cache)
             return false
         }
-        if !syncing { schedulePublish() }
+        if syncing == false { schedulePublish() }
     }
 
     /// Coalesces bursts (a reducer touching many rows, agents writing) into at
@@ -219,6 +232,17 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
         lock.withLock {
             lastStatus = status
             for c in statusContinuations.values { c.yield(status) }
+        }
+    }
+
+    /// Broadcasts only if `gen` is still the live connection. Returns whether it was.
+    @discardableResult
+    private func broadcast(status: SyncStatus, from gen: UInt64) -> Bool {
+        lock.withLock {
+            guard generation.isCurrent(gen) else { return false }
+            lastStatus = status
+            for c in statusContinuations.values { c.yield(status) }
+            return true
         }
     }
 
