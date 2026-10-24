@@ -11,15 +11,20 @@ struct ScanFlowView: View {
     @State private var stopRequested = false
     @State private var photographing: ScanSession.DetectedObject?
 
+    private var capturing: Bool { session.phase == .capturing }
+
     var body: some View {
         NavigationStack {
             content
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        if session.phase != .finished { Button("Cancel") { dismiss() } }
+                        // The capture phase draws its own Cancel over the camera.
+                        if session.phase != .finished && !capturing { Button("Cancel") { dismiss() } }
                     }
                 }
+                .toolbar(capturing ? .hidden : .automatic, for: .navigationBar)
         }
+        .tint(Theme.accentStrong)
         .fullScreenCover(item: $photographing) { object in
             CameraPicker { jpeg in
                 if let jpeg {
@@ -34,128 +39,192 @@ struct ScanFlowView: View {
     @ViewBuilder private var content: some View {
         switch session.phase {
         case .capturing:
-            RoomCaptureContainer(stopRequested: $stopRequested) { result in
-                switch result {
-                case .success(let room): session.captured(room)
-                case .failure(let error): session.phase = .failed(error.localizedDescription)
+            ZStack(alignment: .top) {
+                RoomCaptureContainer(stopRequested: $stopRequested) { result in
+                    switch result {
+                    case .success(let room): session.captured(room)
+                    case .failure(let error): session.phase = .failed(error.localizedDescription)
+                    }
                 }
-            }
-            .ignoresSafeArea()
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { stopRequested = true }.disabled(stopRequested)
-                }
+                .ignoresSafeArea()
+                captureChrome
             }
         case .reviewing:
             if let geometry = session.geometry {
                 RoomVisualizationView(geometry: geometry)
-                    .safeAreaInset(edge: .bottom) {
-                        VStack(spacing: 6) {
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        VStack(alignment: .leading, spacing: 12) {
                             Text("\(geometry.objects.count) pieces of furniture, \(geometry.walls.count) walls, \(geometry.openings.count) doors & windows")
-                                .font(.footnote).foregroundStyle(.secondary)
+                                .monoMeta()
+                                .fixedSize(horizontal: false, vertical: true)
                             Button {
                                 session.phase = .photos
                             } label: {
                                 Text("Looks right: photograph items").frame(maxWidth: .infinity)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.large)
+                            .buttonStyle(.pill(.primary))
                         }
-                        .padding()
-                        .background(.bar)
+                        .padding(.horizontal, Theme.gutter)
+                        .padding(.vertical, 16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Theme.bg)
+                        .ruled(.top)
                     }
             }
         case .photos:
             photoChecklist
         case .uploading(let done, let total):
-            ProgressView(value: Double(done), total: Double(max(total, 1))) {
-                Text("Uploading \(done) of \(total)…")
+            VStack(alignment: .leading, spacing: 16) {
+                Text("01 — Scan · Uploading").eyebrow()
+                Text("Uploading \(done) of \(total)…").blockTitle()
+                ProgressView(value: Double(done), total: Double(max(total, 1)))
+                    .tint(Theme.accentFill)
+                    .accessibilityLabel("Uploading \(done) of \(total)")
             }
-            .padding(40)
+            .padding(.horizontal, 40)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .mooveScreen()
         case .finished:
-            ContentUnavailableView {
-                Label("\(session.objects.count) items added", systemImage: "checkmark.circle.fill")
-            } description: {
-                if let problem = session.uploadProblem {
-                    Text("Photos couldn't be uploaded (\(problem)), so agents can't identify items yet. The room is saved, and the 3D view works on this device.")
-                } else {
-                    Text("Agents are identifying and pricing them now.")
-                }
-            } actions: {
-                Button("See inventory") { dismiss() }.buttonStyle(.borderedProminent)
+            ScanStatusPanel(
+                eyebrow: "01 — Scan · Done",
+                systemImage: "checkmark.circle",
+                tint: Theme.accentStrong,
+                title: "\(session.objects.count) items added",
+                message: session.uploadProblem.map { "Photos couldn't be uploaded (\($0)), so agents can't identify items yet. The room is saved, and the 3D view works on this device." }
+                    ?? "Agents are identifying and pricing them now."
+            ) {
+                Button("See inventory") { dismiss() }.buttonStyle(.pill(.primary))
             }
         case .failed(let why):
-            ContentUnavailableView {
-                Label("Scan problem", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(why)
-            } actions: {
+            ScanStatusPanel(
+                eyebrow: "01 — Scan · Problem",
+                systemImage: "exclamationmark.triangle",
+                tint: Theme.danger,
+                title: "Scan problem",
+                message: why
+            ) {
                 if !session.objects.isEmpty {
-                    Button("Try upload again") { session.phase = .photos }
+                    Button("Try upload again") { session.phase = .photos }.buttonStyle(.pill(.primary))
                 }
-                Button("Close") { dismiss() }
+                Button("Close") { dismiss() }.buttonStyle(.pill(.outline))
             }
         }
+    }
+
+    /// Cancel and Done over the live camera: pills on the page color so they read on any scene.
+    private var captureChrome: some View {
+        HStack {
+            Button("Cancel") { dismiss() }
+                .buttonStyle(.pill(.outline, compact: true))
+                .background(Capsule().fill(Theme.bg).padding(.vertical, 4))
+            Spacer()
+            Button("Done") { stopRequested = true }
+                .buttonStyle(.pill(.primary, compact: true))
+                .disabled(stopRequested)
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.top, 8)
     }
 
     private var photoChecklist: some View {
         List {
             Section {
-                TextField("Room name", text: $session.roomName)
-            } footer: {
-                Text("Take a photo of each item so Moove can tell what it is, its brand and its condition.")
-            }
-            if session.objects.isEmpty {
-                Section {
-                    Label("RoomPlan didn't recognize any furniture", systemImage: "exclamationmark.magnifyingglass")
-                        .font(.headline)
-                    Text("It detects beds, sofas, chairs, tables, storage, appliances, TVs and similar, and needs each one in view for a moment. Add your items by photo below, or cancel and scan again more slowly. The room itself is saved either way.")
-                        .font(.callout).foregroundStyle(.secondary)
+                PageHeader(
+                    eyebrow: "01 — Scan · Photos",
+                    title: "Photograph each item.",
+                    lede: "Take a photo of each item so Moove can tell what it is, its brand and its condition."
+                )
+                .padding(.top, 16)
+                .padding(.bottom, 28)
+                .chromeRow()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Room name").eyebrow()
+                    TextField("Room name", text: $session.roomName)
+                        .monoText(16, weight: .bold)
+                        .foregroundStyle(Theme.text)
+                        .frame(minHeight: 44)
+                        .ruled()
                 }
-            }
-            Section {
-                Button {
-                    photographing = .manual()
-                } label: {
-                    Label("Add an item by photo", systemImage: "camera.badge.ellipsis")
-                }
-            } footer: {
-                Text("For anything RoomPlan missed: small things, decor, items on shelves. Moove identifies it from the photo.")
-            }
-            Section("\(session.photos.count) of \(session.objects.count) photographed") {
-                ForEach(session.objects) { object in
-                    Button { photographing = object } label: {
-                        HStack(spacing: 12) {
-                            photoThumb(object)
-                            VStack(alignment: .leading) {
-                                Text(object.manual ? "New item" : object.category.capitalized).foregroundStyle(.primary)
-                                Text(dims(object)).font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: session.photos[object.id] == nil ? "camera" : "checkmark.circle.fill")
-                                .foregroundStyle(session.photos[object.id] == nil ? Color.accentColor : .green)
-                        }
+                .chromeRow()
+                if session.objects.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("RoomPlan didn't recognize any furniture", systemImage: "exclamationmark.magnifyingglass")
+                            .blockTitle()
+                        Text("It detects beds, sofas, chairs, tables, storage, appliances, TVs and similar, and needs each one in view for a moment. Add your items by photo below, or cancel and scan again more slowly. The room itself is saved either way.")
+                            .sansText(14.5)
+                            .foregroundStyle(Theme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    .padding(.top, 28)
+                    .chromeRow()
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    Button {
+                        photographing = .manual()
+                    } label: {
+                        Label("Add an item by photo", systemImage: "camera.badge.ellipsis").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.pill(.outline))
+                    Text("For anything RoomPlan missed: small things, decor, items on shelves. Moove identifies it from the photo.")
+                        .monoMeta()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.top, 28)
+                .chromeRow()
+            }
+            .listSectionSeparator(.hidden)
+            Section {
+                ListHeader(title: "Photographed", count: "\(session.photos.count) of \(session.objects.count)")
+                    .padding(.top, 40)
+                    .chromeRow()
+                ForEach(session.objects) { object in
+                    let done = session.photos[object.id] != nil
+                    Button { photographing = object } label: {
+                        HStack(spacing: 16) {
+                            photoThumb(object)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(object.manual ? "New item" : object.category.capitalized).blockTitle()
+                                Text(dims(object)).monoMeta()
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Image(systemName: done ? "checkmark.circle.fill" : "camera")
+                                .font(.system(size: 17, weight: done ? .regular : .light))
+                                .foregroundStyle(done ? Theme.accentStrong : Theme.text)
+                                .frame(width: 44, height: 44)
+                        }
+                        .padding(.vertical, 12)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                     .swipeActions {
                         if object.manual {
                             Button("Remove", systemImage: "trash", role: .destructive) { session.remove(object) }
                         }
                     }
+                    .ledgerListRow()
                 }
             }
+            .listSectionSeparator(.hidden)
+            Color.clear.frame(height: 24).chromeRow()
         }
+        .listStyle(.plain)
+        .environment(\.defaultMinListRowHeight, 0)
         .navigationTitle("Photograph items")
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) {
+        .mooveScreen()
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             Button {
                 Task { await session.submit(to: store, uploader: uploader) }
             } label: {
                 Text(session.objects.isEmpty ? "Save room" : "Add \(session.objects.count) item\(session.objects.count == 1 ? "" : "s")")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .padding()
+            .buttonStyle(.pill(.primary))
+            .padding(.horizontal, Theme.gutter)
+            .padding(.vertical, 12)
+            .background(Theme.bg)
+            .ruled(.top)
         }
     }
 
@@ -171,18 +240,71 @@ struct ScanFlowView: View {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
                 Image(systemName: ItemThumbnail.icon(for: object.category))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 18, weight: .light))
+                    .foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(.quaternary)
+                    .background(Theme.surface)
             }
         }
-        .frame(width: 44, height: 44)
-        .clipShape(.rect(cornerRadius: 8))
+        .frame(width: 56, height: 56)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+        .accessibilityHidden(true)
     }
 
     private func dims(_ o: ScanSession.DetectedObject) -> String {
         if o.manual { return "Added by photo" }
         let f = { (v: Double) in v.formatted(.number.precision(.fractionLength(1))) }
         return "\(f(o.widthM)) × \(f(o.depthM)) × \(f(o.heightM)) m"
+    }
+}
+
+/// Finished / failed: a quiet centered block with an icon, mono heading, message and pill actions.
+private struct ScanStatusPanel<Actions: View>: View {
+    var eyebrow: String
+    var systemImage: String
+    var tint: Color
+    var title: String
+    var message: String
+    @ViewBuilder var actions: Actions
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(eyebrow).eyebrow().padding(.bottom, 16)
+            Image(systemName: systemImage)
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(tint)
+                .padding(.bottom, 14)
+                .accessibilityHidden(true)
+            Text(title)
+                .pageTitle()
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            Text(message)
+                .lede()
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
+            VStack(alignment: .leading, spacing: 10) { actions }
+                .padding(.top, 28)
+        }
+        .padding(.horizontal, Theme.gutter)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .mooveScreen()
+    }
+}
+
+private extension View {
+    /// A non-interactive row (heading, note, field): no separator, page background, gutter insets.
+    func chromeRow() -> some View {
+        listRowInsets(EdgeInsets(top: 0, leading: Theme.gutter, bottom: 0, trailing: Theme.gutter))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Theme.bg)
+    }
+
+    /// An item row: page background and a full-width rule-colored separator.
+    func ledgerListRow() -> some View {
+        listRowInsets(EdgeInsets(top: 0, leading: Theme.gutter, bottom: 0, trailing: Theme.gutter))
+            .listRowBackground(Theme.bg)
+            .listRowSeparatorTint(Theme.line)
+            .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
     }
 }

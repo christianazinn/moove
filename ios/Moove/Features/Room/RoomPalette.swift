@@ -36,14 +36,17 @@ enum RoomPalette {
         }
     }
 
+    /// The theme's disposition swatches (sage keep, ochre sell, slate donate, stone trash,
+    /// clay undecided), fixed rather than adaptive so RealityKit materials and the black
+    /// plan labels read the same in light and dark mode.
     static func decision(_ item: Item?) -> UIColor {
-        guard let item else { return hex(0xC4C9D0) }
+        guard let item else { return hex(0xC9BFAE) }
         switch item.disposition {
-        case .keep: return hex(0x4A90E2)
-        case .sell: return hex(0x34C77B)
-        case .donate: return hex(0x9B6DFF)
-        case .trash: return hex(0x9AA0A6)
-        case .undecided: return hex(0xFF9F43)
+        case .keep: return hex(0x8B9A7B)
+        case .sell: return hex(0xC9A35A)
+        case .donate: return hex(0x93A3B1)
+        case .trash: return hex(0xA39887)
+        case .undecided: return hex(0xD27A5E)
         }
     }
 

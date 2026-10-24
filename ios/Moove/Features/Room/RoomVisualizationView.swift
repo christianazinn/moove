@@ -25,8 +25,7 @@ struct RoomVisualizationView: View {
         let centered = geometry.centered()
         let shown = fullWalls ? centered : centered.cutaway(at: 1.2)
         ZStack(alignment: .bottom) {
-            LinearGradient(colors: [Color(white: 0.97), Color(red: 0.88, green: 0.91, blue: 0.97)], startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
+            Theme.bg.ignoresSafeArea()
             Group {
                 if style == .model, #available(iOS 18.0, *) {
                     RoomModelView(geometry: shown, items: items, mode: mode, showLabels: showLabels, selection: $selection)
@@ -43,16 +42,15 @@ struct RoomVisualizationView: View {
                 }
                 legend
             }
-            .padding()
+            .padding(.horizontal, Theme.gutter)
+            .padding(.bottom, 16)
             .animation(.snappy, value: selection)
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Picker("View", selection: $style) {
-                    ForEach(Style.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 140)
+                PillPicker(options: Style.allCases, selection: $style) { $0.label }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("View")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -66,6 +64,7 @@ struct RoomVisualizationView: View {
                 }
             }
         }
+        .mooveScreen()
         .onAppear {
             mode = initialMode
             #if DEBUG
@@ -80,18 +79,20 @@ struct RoomVisualizationView: View {
             ? Disposition.allCases.map { d in (d.label, RoomPalette.decision(Item(id: 0, owner: "", roomId: 0, name: "", category: "", widthM: 0, heightM: 0, depthM: 0, disposition: d))) }
             : Array(Set(geometry.objects.map(\.category))).sorted().map { ($0.capitalized, RoomPalette.category($0)) }
         return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 ForEach(entries, id: \.0) { name, color in
-                    HStack(spacing: 5) {
-                        RoundedRectangle(cornerRadius: 3).fill(Color(color)).frame(width: 12, height: 12)
-                        Text(name).font(.caption)
+                    HStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 3).fill(Color(color)).frame(width: 10, height: 10)
+                            .accessibilityHidden(true)
+                        Text(name).monoText(11.5, maxScale: 1.5).foregroundStyle(Theme.text)
                     }
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
-        .background(.regularMaterial, in: .capsule)
+        .background(Capsule().fill(Theme.bg))
+        .overlay(Capsule().strokeBorder(Theme.line, lineWidth: 1))
         .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -102,35 +103,55 @@ private struct SelectedObjectCard: View {
     let close: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             if let item {
-                ItemThumbnail(item: item, size: 52)
+                ItemThumbnail(item: item, size: 56)
             } else {
                 Image(systemName: ItemThumbnail.icon(for: object.category))
-                    .font(.title2).frame(width: 52, height: 52)
-                    .background(Color(RoomPalette.category(object.category)).opacity(0.25), in: .rect(cornerRadius: 9))
+                    .font(.system(size: 18, weight: .light))
+                    .foregroundStyle(Theme.text)
+                    .frame(width: 56, height: 56)
+                    .background(Color(RoomPalette.category(object.category)).opacity(0.3),
+                                in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+                    .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text(item?.name ?? object.category.capitalized).font(.headline)
-                Text(size).font(.caption).foregroundStyle(.secondary)
+                Text(item?.name ?? object.category.capitalized).blockTitle().lineLimit(2)
+                Text(size).monoMeta()
                 if let item {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         DispositionChip(disposition: item.disposition)
-                        if let value = item.estValueCents { Text(value.usd).font(.caption.monospacedDigit()) }
+                        if let value = item.estValueCents { Text(value.usd).rowValue() }
                     }
                 }
             }
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
             if let item {
                 NavigationLink(value: item.id) {
-                    Image(systemName: "chevron.right.circle.fill").font(.title2)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Theme.accentInk)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Theme.accentFill))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Item details")
             }
-            Button("Close", systemImage: "xmark.circle.fill", action: close)
-                .labelStyle(.iconOnly).font(.title2).foregroundStyle(.secondary)
+            Button("Close", systemImage: "xmark", action: close)
+                .labelStyle(.iconOnly)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(Theme.muted)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+                .buttonStyle(.plain)
         }
-        .padding(12)
-        .background(.regularMaterial, in: .rect(cornerRadius: 18))
+        .padding(.leading, 14)
+        .padding(.trailing, 6)
+        .padding(.vertical, 12)
+        .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
     }
 
     private var size: String {
