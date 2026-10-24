@@ -55,3 +55,6 @@ ios/Moove/Resources/Info.plist
 
 # Core ML models are downloaded by ios/scripts/fetch-models.sh (too big for git)
 ios/Moove/Resources/Models/
+
+# scripts/tunnel.sh output
+.tunnel-url*
