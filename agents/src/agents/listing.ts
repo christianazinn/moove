@@ -5,10 +5,11 @@ import type { Approval, Item, Listing } from '../module_bindings/types.js';
 import { config } from '../config.js';
 import { logEvent } from '../events.js';
 import { structuredCall } from '../integrations/anthropic.js';
-import { dollars, simulatedEbay, type EbayPoster } from '../integrations/ebay.js';
+import { chooseEbay, dollars, simulatedEbay, type EbayPoster } from '../integrations/ebay.js';
 
-// Real eBay posting is out of scope for the demo (decision on #11), so this is the only backend.
-const ebay: EbayPoster = simulatedEbay;
+// Real eBay (sandbox) once scripts/ebay-setup.ts has filled in the EBAY_* keys, otherwise the
+// labeled simulation (#11, #32). Fixed at startup so a draft's `simulated` flag matches how it posts.
+const ebay: EbayPoster = chooseEbay();
 
 const DEFAULT_THRESHOLD_CENTS = 10_000n;
 // Demo nicety: flip posted simulated listings to `sold` after this many seconds (0 = never).
@@ -95,9 +96,16 @@ function approvalFor(conn: Conn, l: Listing): Approval | undefined {
 async function post(conn: Conn, l: Listing): Promise<void> {
   const it = conn.db.item.id.find(l.itemId);
   const ref = { owner: l.owner, agent: 'listing', refTable: 'listing', refId: l.id };
-  logEvent(conn, { ...ref, kind: 'plan', message: `Posting "${l.title}" to eBay at ${dollars(l.priceCents)}${ebay.simulated ? ' (simulated)' : ''}` });
+  // A listing posts the way it was drafted, so its `simulated` flag stays true to what happened.
+  if (!l.simulated && ebay.simulated) {
+    conn.reducers.updateListing({ listingId: l.id, status: 'failed', externalId: '', url: '', priceCents: -1n });
+    logEvent(conn, { ...ref, kind: 'error', message: 'Drafted for real eBay, but the eBay keys are no longer configured' });
+    return;
+  }
+  const poster = l.simulated ? simulatedEbay : ebay;
+  logEvent(conn, { ...ref, kind: 'plan', message: `Posting "${l.title}" to eBay at ${dollars(l.priceCents)}${poster.simulated ? ' (simulated)' : ''}` });
   try {
-    const r = await ebay.publish(
+    const r = await poster.publish(
       {
         listingId: l.id,
         title: l.title,
@@ -106,8 +114,11 @@ async function post(conn: Conn, l: Listing): Promise<void> {
         condition: it?.condition ?? '',
         category: it?.category ?? '',
         photoUrls: it?.photoUrls ?? [],
+        itemName: it?.name ?? l.title,
+        brand: it?.brand ?? '',
+        material: it?.material ?? '',
       },
-      s => logEvent(conn, { ...ref, kind: 'tool_call', message: `eBay ${s.call}${ebay.simulated ? ' (simulated)' : ''}: ${s.detail}`, data: { ...s, simulated: ebay.simulated } })
+      s => logEvent(conn, { ...ref, kind: 'tool_call', message: `eBay ${s.call}${poster.simulated ? ' (simulated)' : ''}: ${s.detail}`, data: { ...s, simulated: poster.simulated } })
     );
     conn.reducers.updateListing({ listingId: l.id, status: 'posted', externalId: r.externalId, url: r.url, priceCents: -1n });
     logEvent(conn, { ...ref, kind: 'result', message: `Live as item #${r.externalId}${r.simulated ? ' (simulated)' : ''}`, data: r });
