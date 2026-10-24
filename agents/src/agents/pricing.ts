@@ -2,7 +2,8 @@ import type { Agent } from './types.js';
 import type { Conn } from '../spacetime.js';
 import type { Item } from '../module_bindings/types.js';
 import { logEvent } from '../events.js';
-import { lookupComps, type Comp, type CompsResult } from '../integrations/apify.js';
+import { filterCacheFile, lookupComps, type Comp, type CompsResult } from '../integrations/apify.js';
+import { filterComps, type FilterResult } from './comp-filter.js';
 
 // Where comps come from. Defaults to calling Apify directly; once the x402 rail (#7) is wired,
 // swap in a source that buys them from the paywalled /x402/comps endpoint so every lookup is a
@@ -33,11 +34,29 @@ export function queryFor(it: Item): string {
   return [it.brand, it.name || it.category].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
 }
 
+// One line for the event log, e.g. "Kept 11 of 17 comps (5 by rules, 1 by Claude: ...)".
+export function filterSummary(f: FilterResult, total: number): string {
+  if (f.mode === 'off') return `Comp filter off (PRICING_COMP_FILTER=0), using all ${total} comps`;
+  const parts = [`${f.droppedByRules.length} by rules`];
+  if (f.claude === 'ok' || f.claude === 'cached') {
+    parts.push(`${f.droppedByClaude.length} by Claude${f.claude === 'cached' ? ' [REPLAYED]' : ''}: ${f.reason}`);
+  }
+  return `Kept ${f.comps.length} of ${total} comps (dropped ${parts.join(', ')})`;
+}
+
 const inFlight = new Set<bigint>();
 
 // Price after vision has had its chance: details done/failed, or no photos to look at.
-function needsPricing(it: Item): boolean {
-  if (it.pricingStatus !== 'pending' || inFlight.has(it.id)) return false;
+// RoomPlan's catch-all categories. "other" or "storage" alone buys junk comps, so items named only
+// that wait until vision (or the user, via rename_item) gives them a real name.
+const GENERIC_NAMES = new Set(['', 'other', 'unknown', 'object', 'item', 'storage']);
+
+export function isGenericQuery(it: Item): boolean {
+  return !it.brand && GENERIC_NAMES.has((it.name || it.category).trim().toLowerCase());
+}
+
+export function needsPricing(it: Item): boolean {
+  if (it.pricingStatus !== 'pending' || inFlight.has(it.id) || isGenericQuery(it)) return false;
   return it.detailsStatus === 'done' || it.detailsStatus === 'failed' || it.photoUrls.length === 0;
 }
 
@@ -47,7 +66,40 @@ async function price(conn: Conn, it: Item): Promise<void> {
   conn.reducers.setItemStage({ itemId: it.id, stage: 'running', field: 'pricing' });
   logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'tool_call', message: `Looking up comps for "${q}"`, refTable: 'item', refId: it.id });
   try {
-    const { comps, replayed } = await compsSource(q, it);
+    const { comps: raw, replayed } = await compsSource(q, it);
+    // Drop accessories/parts/bundles/other products before they skew the estimate.
+    const f = await filterComps(it, raw, { cacheFile: filterCacheFile(q) });
+    const comps = f.comps;
+    const dropped = raw.length - comps.length;
+    if (f.claude === 'failed') {
+      logEvent(conn, {
+        owner: it.owner,
+        agent: 'pricing',
+        kind: 'error',
+        message: `Claude comp filter failed (${f.error}), using rule-filtered comps`,
+        refTable: 'item',
+        refId: it.id,
+        data: { query: q, fallback: true, reason: f.error },
+      });
+    }
+    if (raw.length) {
+      logEvent(conn, {
+        owner: it.owner,
+        agent: 'pricing',
+        kind: 'tool_call',
+        message: filterSummary(f, raw.length),
+        refTable: 'item',
+        refId: it.id,
+        data: {
+          query: q,
+          mode: f.mode,
+          claude: f.claude,
+          kept: comps.length,
+          dropped,
+          droppedTitles: [...f.droppedByRules, ...f.droppedByClaude].map(d => `${d.comp.title} (${d.why})`),
+        },
+      });
+    }
     if (comps.length) {
       conn.reducers.addComps({
         itemId: it.id,
@@ -65,10 +117,10 @@ async function price(conn: Conn, it: Item): Promise<void> {
       owner: it.owner,
       agent: 'pricing',
       kind: 'result',
-      message: `${replayed ? '[REPLAYED] ' : ''}${q}: ~$${e.est / 100} ($${e.low / 100}-$${e.high / 100}) from ${comps.length} comps`,
+      message: `${replayed ? '[REPLAYED] ' : ''}${q}: ~$${e.est / 100} ($${e.low / 100}-$${e.high / 100}) from ${comps.length} comps${dropped ? ` (${dropped} irrelevant dropped)` : ''}`,
       refTable: 'item',
       refId: it.id,
-      data: { query: q, replayed, n: comps.length, ...e },
+      data: { query: q, replayed, n: comps.length, dropped, filter: f.mode, filterClaude: f.claude, ...e },
     });
   } catch (err) {
     conn.reducers.setItemStage({ itemId: it.id, stage: 'failed', field: 'pricing' });

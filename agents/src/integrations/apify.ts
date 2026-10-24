@@ -72,8 +72,11 @@ function normalize(source: string, rows: any[]): Comp[] {
     .filter(c => c.title && c.priceCents > 0);
 }
 
-const cacheFile = (q: string) =>
-  path.join('fixtures', 'comps', `${q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)}.json`);
+export const compsSlug = (q: string) => q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
+// Cache path for a query, relative to agents/ (the worker's cwd).
+export const cacheFile = (q: string) => path.join('fixtures', 'comps', `${compsSlug(q)}.json`);
+// The pricing agent's relevance-filter verdicts for this query's comps sit next to them.
+export const filterCacheFile = (q: string) => path.join('fixtures', 'comps', `${compsSlug(q)}.filter.json`);
 
 async function runActor(src: Source, q: string): Promise<Comp[]> {
   const url = new URL(`https://api.apify.com/v2/acts/${src.actor}/run-sync-get-dataset-items`);
@@ -90,11 +93,19 @@ async function runActor(src: Source, q: string): Promise<Comp[]> {
   return normalize(src.name, (await res.json()) as any[]);
 }
 
+// Cache-only read: the comps saved for this query, or null. Never calls Apify, so screens like
+// fraud (#18) can use comps for free without triggering a paid run.
+export function cachedComps(query: string): Comp[] | null {
+  const file = cacheFile(query);
+  return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Comp[]) : null;
+}
+
 // Comps for a free-text item query. Results are cached in fixtures/comps/ (keeps Apify spend
 // down and doubles as the demo fallback). Cached results come back with replayed=true.
 export async function lookupComps(query: string): Promise<CompsResult> {
+  const cached = cachedComps(query);
+  if (cached) return { comps: cached, replayed: true };
   const file = cacheFile(query);
-  if (existsSync(file)) return { comps: JSON.parse(readFileSync(file, 'utf8')), replayed: true };
   if (!config.apify.token) throw new Error('APIFY_TOKEN not set and no cached comps for this query');
   const settled = await Promise.allSettled(config.apify.sources.map(s => runActor(SOURCES[s], query)));
   const comps = settled.flatMap(r => (r.status === 'fulfilled' ? r.value : []));

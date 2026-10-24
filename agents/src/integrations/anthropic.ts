@@ -1,33 +1,30 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import type { z } from 'zod';
-import '../config.js'; // loads .env.local before the client reads ANTHROPIC_API_KEY
+import { config } from '../config.js'; // also loads .env.local before the client reads ANTHROPIC_API_KEY
+import { loadPhoto, type ImageInput } from './photos.js';
 
 // Credentials resolve from ANTHROPIC_API_KEY (or an `ant auth login` profile).
 export const anthropic = new Anthropic();
 
-export type ImageInput = { mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'; data: string };
+export type { ImageInput } from './photos.js';
 
-// Fetches an image (from our upload server or anywhere) and base64-encodes it, so the API
-// never needs to reach a localhost/LAN URL itself.
-// Photo URLs come from clients (add_item_photo), so only plain http(s) is fetched, with a size cap.
-const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
-export async function loadImage(url: string): Promise<ImageInput> {
-  if (!/^https?:\/\//i.test(url)) throw new Error(`refusing to fetch non-http(s) photo URL`);
-  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-  if (!res.ok) throw new Error(`fetch ${url}: ${res.status}`);
-  if (Number(res.headers.get('content-length') ?? '0') > MAX_IMAGE_BYTES) throw new Error(`photo over ${MAX_IMAGE_BYTES} bytes`);
-  const type = (res.headers.get('content-type') ?? '').split(';')[0];
-  const mediaType = (['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const).find(t => t === type) ?? 'image/jpeg';
-  const bytes = Buffer.from(await res.arrayBuffer());
-  if (bytes.length > MAX_IMAGE_BYTES) throw new Error(`photo over ${MAX_IMAGE_BYTES} bytes`);
-  return { mediaType, data: bytes.toString('base64') };
+// Loads a photo and base64-encodes it, so the API never needs to reach a localhost/LAN URL itself.
+// Never fetches arbitrary URLs (SSRF, #44): our own uploads are read from disk, anything else must be
+// https on an ALLOWED_PHOTO_HOSTS host with public addresses. See photos.ts.
+export function loadImage(url: string): Promise<ImageInput> {
+  return loadPhoto(url, {
+    publicUploadBaseUrl: config.publicUploadBaseUrl,
+    uploadDir: config.uploadDir,
+    allowedHosts: config.allowedPhotoHosts,
+  });
 }
 
 export class RefusalError extends Error {}
 
 // One structured-output call: images + instructions in, schema-validated object out.
-// Server-side fallbacks re-run on another model if the request is declined.
+// Server-side fallbacks re-run on another model if the request is declined. Haiku has none,
+// so pass fallbacks: false for MODEL_FAST calls.
 export async function structuredCall<S extends z.ZodType>(opts: {
   model: string;
   system: string;
@@ -35,12 +32,14 @@ export async function structuredCall<S extends z.ZodType>(opts: {
   images?: ImageInput[];
   schema: S;
   effort?: 'low' | 'medium' | 'high';
+  // Thinking counts toward this, so leave room above the answer's size.
+  maxTokens?: number;
+  fallbacks?: boolean;
 }): Promise<z.infer<S>> {
   const response = await anthropic.beta.messages.parse({
     model: opts.model,
-    max_tokens: 16000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
+    max_tokens: opts.maxTokens ?? 16000,
+    ...(opts.fallbacks === false ? {} : { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }),
     system: opts.system,
     output_config: { format: betaZodOutputFormat(opts.schema), effort: opts.effort ?? 'low' },
     messages: [

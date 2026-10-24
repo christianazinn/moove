@@ -1,6 +1,6 @@
 import { test, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fixtureUsdz, generateModel, isZip, MeshyError } from '../src/integrations/meshy.js';
@@ -15,7 +15,7 @@ const USDZ = Buffer.concat([Buffer.from('PK\x03\x04', 'latin1'), Buffer.alloc(60
 
 const item = (over: Partial<Item> = {}): Item =>
   ({
-    id: 1n, owner: 'owner-1', name: 'IKEA Poang chair', category: 'chair', photoUrls: ['http://x/1.jpg'],
+    id: 1n, owner: 'owner-1', name: 'IKEA Poang chair', category: 'chair', photoUrls: [`${config.publicUploadBaseUrl}/files/photo-1.jpg`], // read from UPLOAD_DIR (main's SSRF policy, #44)
     detailsStatus: 'done', modelStatus: 'pending', modelSource: '', modelUrl: '', ...over,
   }) as unknown as Item;
 
@@ -67,6 +67,7 @@ const saved = { meshy: { ...config.meshy }, sam3d: { ...config.sam3d }, uploadDi
 before(() => {
   dir = mkdtempSync(path.join(tmpdir(), 'meshy-'));
   config.uploadDir = dir;
+  writeFileSync(path.join(dir, 'photo-1.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10]));
 });
 after(() => {
   rmSync(dir, { recursive: true, force: true });

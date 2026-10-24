@@ -33,6 +33,8 @@ export const Approval = __t.object("Approval", {
   status: __t.string(),
   requestedAt: __t.timestamp(),
   updatedAt: __t.timestamp(),
+  decidedVia: __t.string(),
+  cibaSubject: __t.string(),
 });
 export type Approval = __Infer<typeof Approval>;
 
@@ -184,6 +186,7 @@ export const Scan = __t.object("Scan", {
   usdzUrl: __t.string(),
   capturedRoomJsonUrl: __t.string(),
   createdAt: __t.timestamp(),
+  sweepStatus: __t.string(),
 });
 export type Scan = __Infer<typeof Scan>;
 
@@ -197,6 +200,15 @@ export const ScanObjectInput = __t.object("ScanObjectInput", {
   photoUrl: __t.string(),
 });
 export type ScanObjectInput = __Infer<typeof ScanObjectInput>;
+
+export const ScanPhoto = __t.object("ScanPhoto", {
+  id: __t.u64(),
+  owner: __t.identity(),
+  scanId: __t.u64(),
+  url: __t.string(),
+  createdAt: __t.timestamp(),
+});
+export type ScanPhoto = __Infer<typeof ScanPhoto>;
 
 export const ShoppingItem = __t.object("ShoppingItem", {
   id: __t.u64(),

@@ -26,38 +26,37 @@ extension ListingStatus {
 
     var tint: Color {
         switch self {
-        case .draft: .secondary
-        case .awaitingApproval: .orange
-        case .rejected, .failed: .red
-        case .posted: .green
-        case .sold: .blue
+        case .draft: Theme.muted
+        case .awaitingApproval: Theme.ochreInk
+        case .rejected, .failed: Theme.danger
+        case .posted: Theme.accentStrong
+        case .sold: Theme.text
         }
     }
 }
 
+/// Status as a colored dot and mono label (the prototype's `.tag`). The dot pulses while drafting.
 struct ListingStatusChip: View {
     let status: ListingStatus
 
     var body: some View {
-        Label(status.label, systemImage: status.systemImage)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .foregroundStyle(status.tint)
-            .background(status.tint.opacity(0.12), in: .capsule)
-            .symbolEffect(.pulse, isActive: status == .draft)
+        HStack(spacing: 6) {
+            Image(systemName: "circle.fill")
+                .font(.system(size: 7))
+                .symbolEffect(.pulse, isActive: status == .draft)
+                .accessibilityHidden(true)
+            Text(status.label).monoText(12.5)
+        }
+        .foregroundStyle(status.tint)
+        .lineLimit(1)
     }
 }
 
 /// CLAUDE.md hard rule: anything simulated says so in the UI.
 struct SimulatedTag: View {
     var body: some View {
-        Text("SIMULATED")
-            .font(.caption2.weight(.bold))
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .foregroundStyle(.secondary)
-            .overlay(Capsule().strokeBorder(.secondary.opacity(0.5)))
+        MonoTag(text: "Simulated", tone: Theme.ochreInk)
+            .accessibilityElement(children: .ignore)
             .accessibilityLabel("Simulated listing, not posted to eBay")
     }
 }

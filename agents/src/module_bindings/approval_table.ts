@@ -20,4 +20,6 @@ export default __t.row({
   status: __t.string(),
   requestedAt: __t.timestamp().name("requested_at"),
   updatedAt: __t.timestamp().name("updated_at"),
+  decidedVia: __t.string().name("decided_via"),
+  cibaSubject: __t.string().name("ciba_subject"),
 });
