@@ -8,7 +8,7 @@ import { z } from "zod";
 // LLM record/replay (no network: every case here is a hit or a refused miss).
 const dir = mkdtempSync(path.join(tmpdir(), "llm-replay-"));
 process.env.LLM_REPLAY_DIR = dir;
-const { structuredCall, replayKey, replayMode } = await import("../src/integrations/anthropic.js");
+const { structuredCall, replayKey, replayMode, replayGuardError } = await import("../src/integrations/anthropic.js");
 
 const schema = z.object({ name: z.string(), n: z.number() });
 const base = { model: "claude-sonnet-5-5", system: "sys", text: "hello", schema };
@@ -38,4 +38,13 @@ test("replay returns the recorded answer, misses fail loudly, stale recordings f
   writeFileSync(path.join(dir, `${replayKey(stale)}.json`), JSON.stringify({ output: { name: "chair" } }));
   await assert.rejects(structuredCall(stale));
   delete process.env.LLM_REPLAY;
+});
+
+test("LLM_REPLAY is refused against maincloud, allowed locally and when off", () => {
+  for (const mode of ["replay", "record", "auto"] as const) {
+    assert.match(replayGuardError(mode, "wss://maincloud.spacetimedb.com") ?? "", new RegExp(`LLM_REPLAY=${mode} is not allowed against maincloud`));
+    assert.equal(replayGuardError(mode, "ws://localhost:3000"), null);
+  }
+  assert.equal(replayGuardError("off", "wss://maincloud.spacetimedb.com"), null);
+  assert.ok(replayGuardError(replayMode(" Auto "), "WSS://MAINCLOUD.SPACETIMEDB.COM/"));
 });
