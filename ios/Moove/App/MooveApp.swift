@@ -1,4 +1,5 @@
 import SwiftUI
+import MooveKit
 
 @main
 struct MooveApp: App {
@@ -7,9 +8,27 @@ struct MooveApp: App {
 
     var body: some Scene {
         WindowGroup {
-            AuthGate()
-                .environment(auth)
-                .environment(store)
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["MOOVE_ROOM_PREVIEW"] != nil {
+                // Screenshot harness: the demo bedroom, no login.
+                NavigationStack {
+                    RoomVisualizationView(
+                        geometry: DemoFixtures.roomGeometry(),
+                        items: Dictionary(uniqueKeysWithValues: DemoFixtures.inventory(owner: "me").items.map { ($0.scanObjectId!, $0) })
+                    )
+                }
+            } else {
+                gate
+            }
+            #else
+            gate
+            #endif
         }
+    }
+
+    private var gate: some View {
+        AuthGate()
+            .environment(auth)
+            .environment(store)
     }
 }
