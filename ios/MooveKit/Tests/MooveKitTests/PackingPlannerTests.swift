@@ -58,6 +58,143 @@ import Testing
         #expect(p.boxes.first { $0.openFirst }?.contents.allSatisfy { $0.itemId == nil } == true)
     }
 
+    // MARK: Filling boxes (fewer boxes)
+
+    @Test func demoPlanUsesFewBoxes() {
+        let p = plan
+        // Before consolidation the demo came out as 16 boxes, most of them half empty.
+        #expect(p.boxes.count <= 9)
+        #expect(p.boxes.filter { !$0.openFirst && !$0.keepWithYou }.count <= 7)
+        let living = p.boxes.filter { $0.room == "Living room" }
+        #expect(living.count == 2)
+        let padded = try! #require(living.first { $0.fragile })
+        #expect(padded.reason == "Throws pad the vases, under 8 kg")
+        #expect(padded.contents.contains { $0.name == "Throws and cushions" })
+        #expect(padded.contents.contains { $0.name == "Vases and ceramics" })
+        // Books are estimated once (one scanned room), in the living room, with the board games.
+        let books = p.boxes.filter { $0.kinds.contains("books") }
+        #expect(books.count == 1)
+        #expect(books.first?.room == "Living room")
+        #expect(books.first?.contents.contains { $0.name == "Board games and media" } == true)
+        // Bedding and shoes ride under the hanging clothes.
+        let wardrobe = try! #require(p.boxes.first { $0.size == .wardrobe })
+        #expect(wardrobe.kinds.contains("hanging") && wardrobe.kinds.contains("bedding"))
+        #expect(wardrobe.reason == "On hangers, soft things packed below")
+    }
+
+    @Test(arguments: [0, 1, 2]) func consolidatedBoxesKeepTheRules(input: Int) {
+        let p = [plan, PackingPlanner.plan(items: bigMove, destinationRoom: bigMoveRooms), PackingPlanner.plan(items: bigMove)][input]
+        let soft: Set<String> = ["clothes", "shoes", "bedding", "hanging"]
+        for box in p.boxes {
+            let kinds = Set(box.kinds)
+            #expect(box.weightKg <= box.size.maxKg + 1e-9, "\(box.title)")
+            if box.fragile { #expect(box.weightKg <= PackingPlanner.fragileMaxKg + 1e-9, "\(box.title)") }
+            // Never heavy books with fragile things.
+            if box.fragile { #expect(!kinds.contains("books"), "\(box.title)") }
+            // Kitchen only with kitchen, or soft padding around fragile dishes.
+            if kinds.contains("kitchen") {
+                #expect(kinds.subtracting(["kitchen"]).isSubset(of: ["clothes", "bedding"]), "\(box.title)")
+                if kinds.count > 1 { #expect(box.fragile, "\(box.title)") }
+            }
+            if kinds.contains("bathroom") { #expect(kinds == ["bathroom"], "\(box.title)") }
+            if box.size == .wardrobe { #expect(kinds.isSubset(of: soft), "\(box.title)") }
+            // The tote and the keep-with-you box stay on their own.
+            if kinds.contains("openFirst") { #expect(kinds == ["openFirst"] && box.openFirst) }
+            if kinds.contains("keepWithYou") { #expect(kinds == ["keepWithYou"] && box.keepWithYou) }
+            #expect(box.contents.allSatisfy { $0.quantity > 0 })
+        }
+        #expect(p.boxes.filter(\.openFirst).count == 1)
+        #expect(p.boxes.filter(\.keepWithYou).count == 1)
+    }
+
+    private func draft(_ kind: PackKind, _ size: BoxSize, room: String = "Office", fragile: Bool = false,
+                       _ lines: [(String, Int, Double, Double)]) -> DraftBox {
+        var d = DraftBox(size: size, room: room, kinds: [kind], fragile: fragile, lightOnly: false)
+        for (name, qty, litres, kg) in lines {
+            d.add(PackUnit(itemId: nil, name: name, quantity: qty, litres: litres, kg: kg, room: room, kind: kind, fragile: fragile), quantity: qty)
+        }
+        return d
+    }
+
+    @Test func mergesUpsizeSmallToMediumInsteadOfAddingABox() {
+        let books = draft(.books, .small, [("Books", 20, 1, 0.5)])     // 20 L, 10 kg
+        let desk = draft(.desk, .small, [("Papers", 1, 18, 4)])        // 18 L, 4 kg
+        let out = PackingPlanner.consolidate([books, desk])
+        #expect(out.count == 1)
+        #expect(out.first?.size == .medium)
+        #expect(out.first?.kinds == [.books, .desk])
+        #expect(abs((out.first?.kg ?? 0) - 14) < 1e-9)
+        // Too heavy together: they stay two boxes.
+        let heavy = draft(.books, .small, [("Books", 30, 0.6, 0.5)])   // 18 L, 15 kg
+        #expect(PackingPlanner.consolidate([heavy, desk, desk]).count == 2)
+    }
+
+    @Test func kindRulesDecideWhatShares() {
+        let pots = draft(.kitchen, .medium, room: "Kitchen", [("Pots", 3, 6, 1.2)])
+        let dishes = draft(.kitchen, .dishPack, room: "Kitchen", fragile: true, [("Plates", 6, 2.5, 0.5)])
+        let clothes = draft(.clothes, .large, room: "Kitchen", [("Shirts", 5, 1.4, 0.3)])
+        let towels = draft(.bedding, .large, room: "Kitchen", [("Tea towels", 4, 2, 0.2)])
+        let vases = draft(.decor, .medium, room: "Kitchen", fragile: true, [("Vases", 2, 5, 0.8)])
+        let books = draft(.books, .small, room: "Kitchen", [("Books", 10, 1, 0.5)])
+        // Kitchen with kitchen, and soft things may pad fragile dishes; never clothes with pots.
+        #expect(pots.combined(with: dishes, relaxed: false) != nil)
+        #expect(dishes.combined(with: towels, relaxed: false)?.padding?.soft == "tea towels")
+        #expect(pots.combined(with: clothes, relaxed: false) == nil)
+        #expect(pots.combined(with: clothes, relaxed: true) == nil)
+        // Never books with fragile things, even in the sparse pass.
+        #expect(books.combined(with: vases, relaxed: true) == nil)
+        #expect(vases.combined(with: books, relaxed: false) == nil)
+        // Soft things pad decor; the merged box is fragile and says so.
+        let padded = try! #require(towels.combined(with: vases, relaxed: false))
+        #expect(padded.fragile)
+        #expect(Reasons.box(padded) == "Tea towels pad the vases, under 8 kg")
+        // Different rooms never share; the special boxes never take anything in.
+        var other = vases
+        other.room = "Bedroom"
+        #expect(towels.combined(with: other, relaxed: true) == nil)
+        let tote = DraftBox(size: .tote, room: "Open first", kinds: [.openFirst], fragile: false, lightOnly: false)
+        #expect(tote.combined(with: towels, relaxed: true) == nil)
+    }
+
+    @Test func fragileMergesStayUnderEightKilos() {
+        let dishes = draft(.kitchen, .dishPack, room: "Kitchen", fragile: true, [("Plates", 12, 2.5, 0.55)]) // 6.6 kg
+        let pots = draft(.kitchen, .medium, room: "Kitchen", [("Pots", 3, 6, 1.2)])                          // 3.6 kg
+        #expect(dishes.combined(with: pots, relaxed: false) == nil)
+        #expect(PackingPlanner.consolidate([dishes, pots]).count == 2)
+    }
+
+    @Test func sparseBoxesJoinAnotherBoxOfTheirRoom() {
+        // Desk papers don't usually go with clothes, but a nearly empty box of them does.
+        let clothes = draft(.clothes, .large, room: "Bedroom", [("Shirts", 20, 1.4, 0.3)])
+        let desk = draft(.desk, .small, room: "Bedroom", [("Papers", 1, 6, 3)])
+        #expect(clothes.combined(with: desk, relaxed: false) == nil)
+        let out = PackingPlanner.consolidate([clothes, desk])
+        #expect(out.count == 1)
+        #expect(out.first?.kinds == [.desk, .clothes])
+    }
+
+    @Test func typicalBooksAreCountedOncePerScannedRoom() {
+        // Demo: one scanned bedroom, headed for a bedroom and a living room: one room's worth of books.
+        let rooms = Set(plan.boxes.filter { $0.kinds.contains("books") }.map(\.room))
+        #expect(rooms == ["Living room"])
+        // Two scanned rooms: both get their books.
+        var two = items
+        for i in two.indices where two[i].id == 13 { two[i].roomId = 2 } // the Kallax came from a second room
+        let p = PackingPlanner.plan(items: two)
+        let bookRooms = Set(p.boxes.filter { $0.kinds.contains("books") }.map(\.room))
+        #expect(bookRooms == ["Bedroom", "Living room"])
+    }
+
+    @Test func estimatedContentsAreMarked() {
+        let p = plan
+        let shade = try! #require(p.boxes.first { $0.contents.contains { $0.itemId == 14 } })
+        #expect(!shade.estimatedOnly)
+        #expect(shade.scannedLineCount == 1)
+        #expect(shade.contents.first { $0.itemId == 14 }?.estimated == false)
+        #expect(p.boxes.filter(\.estimatedOnly).count == p.boxes.count - 1)
+        #expect(p.boxes.flatMap(\.contents).filter(\.estimated).allSatisfy { $0.itemId == nil && $0.reason == nil })
+    }
+
     @Test func sentimentalItemsTravelWithYou() {
         // The demo's one sentimental item is the guitar; add small framed photos so a box gets used too.
         let items = items + [item(99, "Framed photos", "decor", (0.4, 0.5, 0.05), fragile: true, sentimental: true, .undecided)]
