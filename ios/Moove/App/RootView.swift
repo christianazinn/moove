@@ -29,6 +29,9 @@ struct RootView: View {
                 .tag("approvals")
                 .tabItem { Label("Approvals", systemImage: "checkmark.shield") }
                 .badge(store.pendingApprovals.count)
+            NavigationStack { screen(SpendingView()) }
+                .tag("spending")
+                .tabItem { Label("Spending", systemImage: "creditcard") }
             NavigationStack { screen(SummaryView()) }
                 .tag("summary")
                 .tabItem { Label("Summary", systemImage: "chart.bar.doc.horizontal") }
