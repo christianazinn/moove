@@ -14,6 +14,7 @@ const HOME = ['old', 'new'] as const;
 const DISPOSITION = ['undecided', 'keep', 'sell', 'donate', 'trash'] as const;
 const DISPOSITION_SOURCE = ['auto', 'user'] as const;
 const STAGE = ['pending', 'running', 'done', 'failed'] as const;
+const SWEEP_STATUS = ['none', 'pending', 'running', 'done', 'failed'] as const;
 const MODEL_SOURCE = ['capture', 'sam3d'] as const; // Object Capture on the phone, or SAM 3D from a photo (#65)
 const LISTING_STATUS = ['draft', 'awaiting_approval', 'rejected', 'posted', 'sold', 'failed'] as const;
 const APPROVAL_KIND = ['listing', 'purchase'] as const;
@@ -87,6 +88,20 @@ const scan = table(
     roomId: t.u64().index('btree'),
     usdzUrl: t.string(),
     capturedRoomJsonUrl: t.string(),
+    createdAt: t.timestamp(),
+    // Room photo sweep (#73 follow-up). Appended with a default so existing rows migrate.
+    sweepStatus: t.string().default('none'), // SWEEP_STATUS
+  }
+);
+
+// Wide room photos taken after a scan; the sweep agent names RoomPlan's boxes and finds what it missed.
+const scanPhoto = table(
+  { name: 'scan_photo', public: true },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    owner: t.identity().index('btree'),
+    scanId: t.u64().index('btree'),
+    url: t.string(),
     createdAt: t.timestamp(),
   }
 );
@@ -278,6 +293,7 @@ const spacetimedb = schema({
   room,
   roomMember,
   scan,
+  scanPhoto,
   item,
   comp,
   listing,
@@ -523,6 +539,7 @@ export const importScan = spacetimedb.reducer(
       usdzUrl,
       capturedRoomJsonUrl,
       createdAt: ctx.timestamp,
+      sweepStatus: 'none',
     });
     for (const o of objects) insertItem(ctx, ctx.sender, r.id, s.id, o);
   }
@@ -546,6 +563,7 @@ export const createScan = spacetimedb.reducer(
       usdzUrl,
       capturedRoomJsonUrl,
       createdAt: ctx.timestamp,
+      sweepStatus: 'none',
     });
     const existing = new Map<string, ReturnType<typeof getItem>>();
     for (const it of ctx.db.item.roomId.filter(roomId)) {
@@ -767,6 +785,120 @@ export const setItemDetails = spacetimedb.reducer(
       maybeSentimental: it.maybeSentimental || args.maybeSentimental,
       detailsStatus: 'done',
       updatedAt: ctx.timestamp,
+    });
+  }
+);
+
+// ---------- room photo sweep ----------
+const MAX_SCAN_PHOTOS = 12;
+
+// The app attaches a wide room photo to a scan (after uploading it to the worker). Each photo
+// re-queues the sweep; the agent waits for photos to stop arriving before it runs.
+export const addScanPhoto = spacetimedb.reducer(
+  { scanId: t.u64(), url: t.string() },
+  (ctx, { scanId, url }) => {
+    const sc = ctx.db.scan.id.find(scanId);
+    if (!sc) throw new SenderError(`no scan ${scanId}`);
+    requireRoomAccess(ctx, sc.roomId);
+    if (!isHttpUrl(url)) throw new SenderError('photo URL must be http(s)');
+    if ([...ctx.db.scanPhoto.scanId.filter(scanId)].length >= MAX_SCAN_PHOTOS) {
+      throw new SenderError(`at most ${MAX_SCAN_PHOTOS} photos per scan`);
+    }
+    ctx.db.scanPhoto.insert({ id: 0n, owner: sc.owner, scanId, url, createdAt: ctx.timestamp });
+    ctx.db.scan.id.update({ ...sc, sweepStatus: 'pending' });
+  }
+);
+
+export const setSweepStatus = spacetimedb.reducer(
+  { scanId: t.u64(), status: t.string() },
+  (ctx, { scanId, status }) => {
+    requireWorker(ctx);
+    const sc = ctx.db.scan.id.find(scanId);
+    if (!sc) throw new SenderError(`no scan ${scanId}`);
+    ctx.db.scan.id.update({ ...sc, sweepStatus: oneOf('status', status, SWEEP_STATUS) });
+  }
+);
+
+// The sweep recognized a scanned item in a room photo. Unlike set_item_details, a better name
+// replaces RoomPlan's category name, and a changed name or brand re-queues pricing so the
+// estimate follows the real item. A user's own disposition is untouched (sort respects it).
+export const applySweepMatch = spacetimedb.reducer(
+  {
+    itemId: t.u64(),
+    name: t.string(),
+    category: t.string(),
+    material: t.string(),
+    brand: t.string(),
+    condition: t.string(),
+    fragile: t.bool(),
+    maybeSentimental: t.bool(),
+    photoUrl: t.string(),
+  },
+  (ctx, a) => {
+    requireWorker(ctx);
+    const it = getItem(ctx, a.itemId);
+    const name = a.name || it.name;
+    const brand = a.brand || it.brand;
+    const renamed = name.toLowerCase() !== it.name.toLowerCase() || brand.toLowerCase() !== it.brand.toLowerCase();
+    const addPhoto = isHttpUrl(a.photoUrl) && !it.photoUrls.includes(a.photoUrl);
+    ctx.db.item.id.update({
+      ...it,
+      name,
+      category: a.category || it.category,
+      material: a.material || it.material,
+      brand,
+      condition: a.condition || it.condition,
+      fragile: it.fragile || a.fragile,
+      maybeSentimental: it.maybeSentimental || a.maybeSentimental,
+      photoUrls: addPhoto ? [...it.photoUrls, a.photoUrl] : it.photoUrls,
+      detailsStatus: 'done',
+      ...(renamed && it.pricingStatus !== 'running'
+        ? { pricingStatus: 'pending', estValueCents: -1n, estLowCents: -1n, estHighCents: -1n }
+        : {}),
+      updatedAt: ctx.timestamp,
+    });
+  }
+);
+
+// Something the scan missed but a room photo shows. scan_object_id is "photo:<scan>" so the app
+// knows it has no RoomPlan box (size is the model's estimate, there is no position).
+export const addSweepItem = spacetimedb.reducer(
+  {
+    scanId: t.u64(),
+    name: t.string(),
+    category: t.string(),
+    widthM: t.f64(),
+    heightM: t.f64(),
+    depthM: t.f64(),
+    material: t.string(),
+    brand: t.string(),
+    condition: t.string(),
+    fragile: t.bool(),
+    maybeSentimental: t.bool(),
+    photoUrl: t.string(),
+  },
+  (ctx, a) => {
+    requireWorker(ctx);
+    const sc = ctx.db.scan.id.find(a.scanId);
+    if (!sc) throw new SenderError(`no scan ${a.scanId}`);
+    if (!a.name) throw new SenderError('name required');
+    const it = insertItem(ctx, sc.owner, sc.roomId, sc.id, {
+      scanObjectId: `photo:${sc.id}`,
+      name: a.name,
+      category: a.category,
+      widthM: a.widthM,
+      heightM: a.heightM,
+      depthM: a.depthM,
+      photoUrl: a.photoUrl,
+    });
+    ctx.db.item.id.update({
+      ...it,
+      material: a.material,
+      brand: a.brand,
+      condition: a.condition,
+      fragile: a.fragile,
+      maybeSentimental: a.maybeSentimental,
+      detailsStatus: 'done', // the sweep already looked at it; don't pay for vision again
     });
   }
 );
