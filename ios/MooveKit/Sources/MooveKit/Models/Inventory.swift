@@ -303,18 +303,18 @@ extension Item {
     /// priced, and left out of sale totals even if an older worker priced them (Rio's hotel
     /// bathroom: a $48 toilet, a $64 tub, a $32 radiator). A sink caddy or a toilet brush is an item.
     public var isBuiltInFixture: Bool {
-        let words = Set("\(name) \(category)".lowercased().split(whereSeparator: { !$0.isLetter && $0 != "-" }).map(String.init))
-        let fixtures: Set<String> = ["toilet", "toilets", "bathtub", "bathtubs", "sink", "sinks", "washbasin", "washbasins",
-                                     "fireplace", "fireplaces", "stairs", "stair", "staircase", "radiator", "radiators",
-                                     "shower", "showers", "built-in", "built-ins", "builtin"]
-        let accessories: Set<String> = ["caddy", "caddies", "mat", "mats", "organizer", "organizers", "strainer", "strainers",
-                                        "stopper", "paper", "brush", "brushes", "plunger", "cleaner", "towel", "towels", "rack",
-                                        "racks", "shelf", "shelves", "curtain", "curtains", "head", "heads", "heater", "heaters",
-                                        "portable", "oil", "cover", "covers", "tool", "tools", "screen", "gate", "gates"]
         let joined = "\(name) \(category)".lowercased()
-        let tub = joined.contains("bath tub")
-        return (tub || !words.isDisjoint(with: fixtures)) && words.isDisjoint(with: accessories)
+        let words = Set(joined.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map(String.init))
+        return (joined.contains("bath tub") || !words.isDisjoint(with: Self.fixtureWords)) && words.isDisjoint(with: Self.accessoryWords)
     }
+
+    private static let fixtureWords: Set<String> = ["toilet", "toilets", "bathtub", "bathtubs", "sink", "sinks", "washbasin", "washbasins",
+                                                    "fireplace", "fireplaces", "stairs", "stair", "staircase", "radiator", "radiators",
+                                                    "shower", "showers", "built-in", "built-ins", "builtin"]
+    private static let accessoryWords: Set<String> = ["caddy", "caddies", "mat", "mats", "organizer", "organizers", "strainer", "strainers",
+                                                      "stopper", "paper", "brush", "brushes", "plunger", "cleaner", "towel", "towels", "rack",
+                                                      "racks", "shelf", "shelves", "curtain", "curtains", "head", "heads", "heater", "heaters",
+                                                      "portable", "oil", "cover", "covers", "tool", "tools", "screen", "gate", "gates"]
 
     /// What the item adds to "expected sales" and other totals: nothing for a built-in fixture.
     public var saleValueCents: Int64? { isBuiltInFixture ? nil : estValueCents }
