@@ -10,6 +10,8 @@ Read the "Today's reality" box first. Before the demo, check any PR still marked
 > - **The fraud agent runs in the worker** (#64, closes #18). Every new deal gets a fraud score and reasons a moment after it is written (`FRAUD_SETTLE_MS`, 1.5 s). The buy agent never buys a deal scored 0.7 or more.
 > - **Every demo shopping item has a committed live deal replay** (16 files, `agents/fixtures/deals-live-*.json`, 3+ real listings each, enforced by `agents/test/deals-apify.test.ts`).
 > - **Live proof comes from the laptop:** terminal output from `npm run x402:demo` or the worker, and the basescan tx page. `npm run e2e` is the no-spend rehearsal of the whole worker pipeline.
+> - **Five tabs since #136** (proposal #129): Scan · Items · Sell & Buy · Move · Summary. The commerce screens are the **Sell & Buy** tab's segments, in this order: Listings (the default), Shopping, Approvals (reads "Approvals · N" while requests are pending) and Spending. The Sell & Buy tab icon carries the pending-approvals badge. Review and Inventory are under Items, New Home and Pack under Move.
+> - **Commerce screens polished in #140:** one filled SIMULATED pill everywhere, "Posted (simulated)" instead of "Live on eBay", a reason on every failed or denied row, voxel thumbnails in Shopping, and a fuller Offline demo fixture (a "Not posted" listing group, an Area rug with a declined checkout, 2 pending approvals and 3 in History). Every commerce screen also has a "Connecting…" and a "Can't reach the backend" state instead of a blank list.
 > - Still open: #10 (two-phone room sharing, draft PR #78), #125 (bought items in the new-home layout, draft), #123 (docs). Merged since Saturday:
 >   - #28: scan + live sync (all tables, all reducers)
 >   - #58: CIBA poll fails closed without a matching id_token
@@ -69,10 +71,10 @@ Photos for eBay (only for a real sandbox post)
 Phone
 - [ ] On launch the login screen appears (merged, #25). Tap **"Continue without an account"** unless you are demoing a real sign-in. End-to-end sign-in was not verified in #25 ("Callback URL mismatch").
 - [ ] Settings (gear icon, top right) > Backend > Data source has two options: **"SpacetimeDB (live)"** (the default) and **"Offline demo (fixtures)"**. The choice is remembered across launches.
-- [ ] **Live dry run (10:00, unverified on device so far):** with the maincloud worker running, Data source on live, Settings > Status should say Connected (no banner when connected; "Connecting…", "Reconnecting (attempt N)…" or "Offline: ..." otherwise). Pick a home in the New Home tab ("Use this home"), then check More > Shopping fills with items and deals, each deal with a fraud chip, and that Spending shows the worker's payment rows. If anything is missing or slow, use Offline demo for the whole segment.
+- [ ] **Live dry run (10:00, unverified on device so far):** with the maincloud worker running, Data source on live, Settings > Status should say Connected (no banner when connected; "Connecting…", "Reconnecting (attempt N)…" or "Offline: ..." otherwise). Pick a home in Move > New Home ("Use this home"), then check Sell & Buy > Shopping fills with items and deals, each deal with a fraud chip, and that Sell & Buy > Spending shows the worker's payment rows. If a commerce screen shows "Connecting…" with a spinner and then **"Can't reach the backend"** (with the reason and "Check the server address in Settings > Backend, or switch Data source to "Offline demo (fixtures)" to see sample data."), the phone isn't reaching maincloud. A connected but empty live account shows an empty state with a next step instead ("No listings yet", "Nothing to approve", "Nothing to buy yet" with an Add item button, and so on), never a blank list. If anything is missing or slow, use Offline demo for the whole segment.
 - [ ] For Offline demo, pick **"Offline demo (fixtures)"**. The banner should read "Offline demo: fixture data, nothing is synced".
-- [ ] Tabs visible: Scan, Review, Spending, New Home, then **More** for Inventory, Listings, Approvals, Shopping, Pack and Summary. The Approvals tab shows a badge with the pending count.
-- [ ] To reset the fixture between rehearsals, switch Data source to live and back, or relaunch the app. Untested; check once.
+- [ ] Tabs visible: **Scan, Items, Sell & Buy, Move, Summary** (#136; there is no More tab). Sell & Buy has the segments Listings, Shopping, Approvals · 2 and Spending, and its tab icon shows a badge of 2 (the pending approvals) on the fixture.
+- [ ] To reset the fixture between rehearsals, relaunch the app (that's what the #140 test plan uses). Switching Data source to live and back is untested.
 
 ## Step 1: The pricing agent pays for data over x402
 **Live today (merged rail, PR #23/#45):** from `agents/` on laptop A:
@@ -101,12 +103,17 @@ The rail refuses before signing: `Refused x402 payment for comps for 'IKEA Poang
 ## Step 2: The spending log
 Merged (PR #36). Since #28 the live backend subscribes to `payment` and `agent_event`, so in live mode this screen shows the worker's real rows (unverified on device). The steps below are the Offline demo fixture.
 
-**Tap:** Spending tab.
+**Tap:** Sell & Buy > Spending.
 
 **Judges see (Offline demo fixture):**
-- Totals row: Spent, Simulated (orange) and Refused. Per the fixture, that's $0.01 real spent (the real tx), $180.005 simulated (most of it the $179.99 simulated Visa mattress from step 5) and 1 refusal.
+- Totals row: **Spent $0.01** (the real tx), **Simulated $180.005** (orange: $0.015 of simulated x402 plus the $179.99 simulated Visa mattress; the declined rug isn't counted) and **Refused 1**.
 - Budgets section: "Pricing agent" ($4.975 left) and "Shopping agent" ($5.00 left), each out of the $5 cap with a progress bar. Rows show "Reported by the agent worker" when the worker sent its budget (otherwise "Your payments only").
-- Activity list: the real $0.01 payment "Premium comps for "Herman Miller Aeron"" with a **"Basescan 0xc794…136c"** link (it opens the real proof tx), three payments with orange **SIMULATED** badges (two x402 data calls and the $179.99 Visa mattress), a struck-through failed $0.02 "Seller report for a used dresser", a red "Refused" row ("$0.25 is over the per-call max of $0.10") and a "Failed attempt" row.
+- Activity list:
+  - The real $0.01 payment "Premium comps for "Herman Miller Aeron"" with a **"Basescan 0xc794…136c"** link (it opens the real proof tx).
+  - Three rows with the filled **SIMULATED** pill and **no** Basescan link: two x402 data calls ($0.01 IKEA desk comps, $0.005 mini-fridge price history) and the $179.99 Visa mattress ("Buy agent · Visa", Settled).
+  - The $89.99 Visa rug, struck through, SIMULATED and Failed, with the red reason "Did not buy "5x7 flatweave area rug, cream/gray": declined (card declined by the issuer, simulated)".
+  - The struck-through, Failed $0.02 "Seller report for a used dresser" with "x402 payment for seller report for a used dresser failed (HTTP 402, insufficient_funds)".
+  - A red "Refused" $0.25 row ("$0.25 is over the per-call max of $0.10", "Nothing was signed or paid.") and a "Failed attempt" row.
 - Tap the Basescan link to open the real Base Sepolia transaction.
 
 Offline, say clearly: "This screen is on fixture data right now; the Basescan link is our real payment." Live, every row is the worker's, and every simulated row is still labeled.
@@ -121,12 +128,13 @@ Merged: eBay listing agent (#30, real sandbox posting #34), Auth0 CIBA + in-app 
 **Live CIBA path (unverified on device):** it needs a `sell` item owned by the phone's identity on maincloud and a `user` row with `auth0_sub`. Since #28 the app can create both: a scan from the phone goes through `import_scan_v2`, and after an Auth0 sign-in the live `registerUser` passes the Auth0 `sub`. Two open risks: end-to-end sign-in was not verified in #25 ("Callback URL mismatch"), and the item has to be sorted (or set) to sell and priced before the listing agent drafts it. `npm run seed:demo` can't stand in, because it creates the room under its own user identity, not the phone's. The worker log lines to point at: `Sent approval request to the owner's phone via Auth0 Guardian: ...`, then `Approved on the phone (...)`, then `Posting "..." to eBay at $...` and `Live as item #...` (with `(simulated)` when the eBay keys aren't set). Rehearse it once at 10:00 if you want to show the push; otherwise don't attempt it at the table. `npm run e2e` covers the worker side (listing drafted, approval requested, owner approves in the app, simulated eBay post) but not CIBA.
 
 **Tap (Offline demo, the reliable path):**
-1. More > Approvals. Section "Needs you · 3" (the Aeron listing, the Sofa purchase and a $240 Craigslist mattress purchase), with the note "Also sent to your phone via Auth0 Guardian when set up. Approving here works too."
-2. The listing request: "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition", **$410**, tagged Sell and Simulated (fixture listings are simulated).
-3. Tap **Approve**. It moves to History as "Approved". History already holds an approved $125 dresser and a denied $189 sofa.
-4. Optional: More > Listings shows the groups "Needs you", "Live", "Drafting", "Sold" (and "Not posted" when there is one). In the fixture, the Aeron is at $410, the desk is live at $35, a mini fridge is drafting at $70 and the bean bag sold at $18. Every fixture listing has a Simulated tag.
+1. Sell & Buy > Approvals (the segment reads "Approvals · 2"). Section **"Needs you · 2"**: a Sell request for the Aeron at $410 and a Buy request for the 78" upholstered sofa at $429.99 "from wayfair", then the note "Also sent to your phone via Auth0 Guardian when set up. Approving here works too."
+2. The listing request: "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition", **$410**, tagged Sell with the SIMULATED pill (fixture listings are simulated).
+3. **History · 3**, each with an outcome line: the denied $480 Aeron ("You denied it. The listing wasn't posted."), the denied $189 sofa ("You denied it. Nothing was bought.") and the approved $125 dresser ("You approved it. The buy agent checks out with Visa.").
+4. Tap **Approve** on the $410 Aeron. A spinner, then it moves to History as Approved ("You approved it. The listing agent posts it."), and "Needs you" drops to 1.
+5. Optional: Sell & Buy > Listings. Groups: **Needs you** (the Aeron $410, until you approve it), **Live** (the IKEA desk $35, plus the Aeron once approved), **Drafting** (mini fridge $70), **Sold** (bean bag $18, "Sold (simulated)") and **Not posted · 2**: the Aeron $480 with "Not posting: denied", and the Mini Fridge $70 "Failed to post" with "Posting failed: eBay needs at least one public https photo URL (simulated)". Live rows read **"Posted (simulated)"**, never "Live on eBay", and every row has the SIMULATED pill. Tap the desk: the notice "Simulated post. Not live on eBay, and no buyer can see it." and no eBay item number. Tap the failed fridge: "Couldn't post this listing. Posting failed: … You can still copy the text and post it yourself."
 
-**Numbers:** threshold $100 (10000 cents default), Aeron $410, so it needs approval.
+**Numbers:** threshold $100 (10000 cents default), Aeron $410, so it needs approval. The fixture's first $480 draft was denied, and the agent re-priced it to $410.
 
 **Fallback:** if CIBA doesn't arrive, the in-app inbox is the designed fallback, so say "it falls back to the in-app inbox" and approve there. If Auth0 isn't configured at all, approvals simply wait in the inbox; there is no simulated auto-approver any more.
 
@@ -144,10 +152,11 @@ Merged (#40, with the live Apify deals from #52 folded in), fraud screen merged 
 **Every demo shopping item has a committed live replay:** 16 files in `agents/fixtures/` (`deals-live-<item>.json`, fetched with real Apify runs on Oct 24): area rug, bed frame, bookshelf, cookware set, desk, desk chair, dining chairs, dining table, dresser, floor lamp, mattress, nightstand, office chair, shower curtain set, sofa and TV stand. Each has 3 to 9 real active listings (the sofa's are 4 eBay only), and `agents/test/deals-apify.test.ts` checks every file has 3+ listings, no seller identities, and is served for its item name. A shopping item with another name (Claude can write e.g. "Full size mattress") has no exact replay; it is searched live with the token, or falls back to sample data.
 
 **Tap (Offline demo):**
-1. More > Shopping. "Still to buy · 3" (bought items don't count) lists Mattress (Bought), then Sofa, Desk chair and Dining table (Deals found). A "Needs you · 1" section with the Sofa purchase sits above it.
-2. Tap **Desk chair** to see its deals. The Craigslist "Herman Miller Aeron size B" for $95 shows the chip **"Likely fraud · 0.81"** with its reasons ("Price is 75% under comparable listings", "Seller asks for payment before pickup"). Chips read "Low fraud risk", "Some fraud risk" (0.3 and up) or "Likely fraud" (0.7 and up). An unscored deal shows no fraud chip at all.
-3. Offline, that 0.81 is fixture data. Live, every chip comes from the worker's fraud agent. Fixture deals are all sample data, so they show a **Sample** badge; replayed deals show **Replay**; live deals have no badge.
-4. Tap **Choose** on a deal. Choose is locked while a hold or a purchase approval is pending for that item, and the chosen deal shows "Chosen" instead. Choosing a fraud-blocked deal shows "Not buying: the fraud screen flagged this deal."
+1. Sell & Buy > Shopping. A "Needs you · 1" card for the Sofa purchase (sofa thumbnail, $429.99, fraud chip) sits above **"Still to buy · 4"** (bought items don't count): Mattress (Bought, green check), Sofa, Desk chair, Dining table and **Area rug** (Deals found). Every row has a voxel thumbnail. The Area rug row shows SIMULATED and "Checkout failed. Nothing was charged. Pick another deal."
+2. Tap **Desk chair**: 3 deals, each with its own voxel chair. The Craigslist "Herman Miller Aeron size B" for $95 shows the chip **"Likely fraud · 0.81"**, its reasons ("Price is 75% under comparable listings", "Seller asks for payment before pickup") and a red **"Blocked: likely fraud"** tag where Choose would be (the worker refuses it anyway). Chips read "Low fraud risk", "Some fraud risk" (0.3 and up) or "Likely fraud" (0.7 and up). A deal that hasn't been scored yet says "Not fraud-screened yet" (on the fixture, the IKEA MARKUS chair).
+3. Fraud screening is real in the worker (the `fraud` agent, #64), but on Offline demo the 0.81 and every other score are fixture values. Live, every chip comes from the worker's fraud agent. Fixture deals are all sample data, so they show a **Sample** badge; replayed deals show **Replay**; live deals have no badge.
+4. Tap **Choose** on the Target "Mesh task chair with arms, black" ($79.99, under the $100 limit). Checkout reads "Paid through the simulated Visa rail. No real card was charged." with a SIMULATED Paid row, and Spending gets a new $79.99 SIMULATED Visa row. Choose is locked while a hold or a purchase approval is pending for that item, and the chosen deal shows "Chosen" instead.
+5. Optional, a declined checkout: back on the list, tap **Area rug**. Checkout shows Failed $89.99 SIMULATED, the red "Did not buy … declined (card declined by the issuer, simulated)" and "Nothing was charged. Pick another deal below to try again." Choose the Amazon "Washable 5x7 boho area rug" ($64.99): it is paid (simulated) and the rug shows Bought on the list.
 
 **Fallback:** Offline demo. If a live search fails, the worker uses the replay or sample data, both labeled.
 
@@ -157,9 +166,10 @@ Merged (#40). **The demo checkout is the labeled simulation (`VISA_PROVIDER=simu
 **How it behaves:** at or under the $100 threshold, the buy agent checks out right away. Over it, it asks first: the worker's approval summary reads `Pay $X to <merchant> for: <title>`, and the phone push reads "Moove: buy X USD: <deal title>".
 
 **Tap (Offline demo):**
-1. More > Shopping, the "Needs you" card: the deal "78\" upholstered sofa, gray", "$429.99 from wayfair", Approve and Deny, and the note "Over your approval limit. The agent pays with Visa only after you approve." The same request is in More > Approvals, where the row shows the fixture's older summary wording (`Buy "78" upholstered sofa, gray" from wayfair for $429.99`) and no note.
-2. Tap **Approve**. The fixture records a settled, simulated Visa payment for it.
-3. Spending shows the mattress as a Visa payment ($179.99, SIMULATED badge, "Buy agent · Visa · Settled"). In Shopping it shows "Paid" with a SIMULATED pill.
+1. Sell & Buy > Shopping, the "Needs you" card: the deal "78\" upholstered sofa, gray", "$429.99 from wayfair", Approve and Deny, and the note "Over your approval limit. The agent pays with Visa only after you approve." The same request is the second row in Sell & Buy > Approvals, with the same deal title and "from wayfair" (no note).
+2. Tap **Approve**. The fixture records a settled, simulated $429.99 Visa payment for it. With the Aeron approved in step 3, Approvals now reads "Needs you · 0" and "You're all caught up. New requests over your limit show up here." above History.
+3. Sell & Buy > Spending: the $179.99 mattress and now the $429.99 sofa as Visa payments with the SIMULATED pill, "Buy agent · Visa", Settled, no Basescan link. In Shopping the sofa's Checkout shows "Paid" with a SIMULATED pill.
+4. If you Deny instead (confirm "Deny $429.99"), it moves to History as Denied and Shopping > Sofa's Checkout reads "You denied this purchase. Nothing was bought."
 
 Live (unverified on device): approving a purchase from the phone calls `decide_approval`, the worker re-checks the approval and captures on the simulated rail, and the `payment` row (rail `visa`, `simulated: true`) syncs back. `npm run e2e` covers this on the worker side ("payment settled, simulated: true").
 
@@ -176,7 +186,7 @@ It prints `Visa checkout: SIMULATED`, the payment row, every agent event (`[SIMU
 **Fallback:** the simulated Visa rail, always labeled. If the worker isn't cooperating, `visa:demo` in the terminal shows the full hold, re-check and capture sequence on its own.
 
 ## Step 6: Summary
-Merged (#31, restyled in #49). **Tap:** More > Summary.
+Merged (#31, restyled in #49). **Tap:** the Summary tab.
 
 **Judges see:** "07 — Summary", "Your move, handled." and "N items: where each one went, what it brought in, and what the agents did.", the Net and kept-from-landfill stats, "Where everything went" (Kept / Sold / Donated / Trashed / Undecided), and a **Money** block with sold, still selling, spent and net, plus one line per rail ("x402 data payments", and "Visa purchases" once there are card payments). The Money block shows a **Simulated** tag whenever any money in it is simulated, so on the fixture it will show. Then the landfill line ("~N kg kept out of landfill") and "What the agents did". With no payment or event rows (a fresh live account), it shows labeled demo lines and a "Demo" tag. Exact figures depend on the fixture; read them off the screen rather than quoting numbers.
 
