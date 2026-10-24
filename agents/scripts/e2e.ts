@@ -516,7 +516,7 @@ await stage("share: second phone joins by code, sees items, edits sync back", as
         c.subscriptionBuilder()
           .onApplied(() => resolve({ conn: c, identity }))
           .onError(ctx => reject(ctx.event ?? new Error("subscription failed")))
-          .subscribe([tables.myRoom, tables.item, tables.roomMember, tables.myListing, tables.myApproval]);
+          .subscribe([tables.myRoom, tables.item, tables.roomMember, tables.myListing, tables.myApproval, tables.myPayment, tables.myAgentEvent]);
       })
       .onConnectError((_ctx, err) => reject(err))
       .build();
@@ -549,7 +549,16 @@ await stage("share: second phone joins by code, sees items, edits sync back", as
       const onPurchase = await err(second.conn.reducers.decideApproval({ approvalId: purchase.id, status: "approved" }));
       if (!onPurchase.includes("not your approval")) throw new Error(`member deciding a purchase approval: ${onPurchase}`);
     }
-    return { detail: `joined with ${myRoom.joinCode}, sees ${theirs.length} items; member set "${target.name}" to donate, owner saw it; member sees ${seen.length} listing approval(s), may decide listings, not purchases` };
+    // #254: the member sees the room's x402 comps payments and item/listing agent steps, never the
+    // owner's purchase payments or buy/fraud/approval events.
+    const itemIds = new Set(theirs.map(i => i.id));
+    await until("member's my_payment", () => [...second.conn.db.myPayment.iter()].some(p => p.refTable === "item" && itemIds.has(p.refId)) || undefined, 15_000);
+    const pays = [...second.conn.db.myPayment.iter()];
+    if (pays.some(p => p.refTable !== "item")) throw new Error("a member's my_payment includes a non-item (purchase) payment");
+    const evs = [...second.conn.db.myAgentEvent.iter()];
+    if (!evs.some(e => e.refTable === "item")) throw new Error("member's my_agent_event has no item events");
+    if (evs.some(e => e.refTable !== "item" && e.refTable !== "listing")) throw new Error(`a member's my_agent_event includes ${evs.find(e => e.refTable !== "item" && e.refTable !== "listing")!.refTable} events`);
+    return { detail: `joined with ${myRoom.joinCode}, sees ${theirs.length} items; member set "${target.name}" to donate, owner saw it; member sees ${seen.length} listing approval(s), may decide listings, not purchases; sees ${pays.length} room x402 payment(s) and ${evs.length} item/listing events` };
   } finally {
     second.conn.disconnect();
   }

@@ -578,6 +578,41 @@ export const myApproval = spacetimedb.view({ name: 'my_approval', public: true }
   return out;
 });
 
+// #254 (decision 0254): x402 comps payments and agent steps for items in rooms the sender shares,
+// plus their own rows. Purchase payments and buy/fraud/approval events reference the owner's own
+// deals, shopping list and approvals (not items), so they stay owner-only.
+function sharedItems(ctx: { sender: Identity; db: any }) {
+  const byOwner = new Map<string, { owner: Identity; ids: Set<bigint> }>();
+  for (const roomId of sharedRoomIds(ctx)) {
+    for (const it of ctx.db.item.roomId.filter(roomId)) {
+      if (it.owner.isEqual(ctx.sender)) continue; // own rows come from the owner filter
+      const k = it.owner.toHexString();
+      if (!byOwner.has(k)) byOwner.set(k, { owner: it.owner, ids: new Set() });
+      byOwner.get(k)!.ids.add(it.id);
+    }
+  }
+  return [...byOwner.values()];
+}
+
+export const myPayment = spacetimedb.view({ name: 'my_payment', public: true }, t.array(payment.rowType), ctx => {
+  const out = [...ctx.db.payment.owner.filter(ctx.sender)];
+  for (const { owner, ids } of sharedItems(ctx)) {
+    for (const p of ctx.db.payment.owner.filter(owner)) if (p.refTable === 'item' && ids.has(p.refId)) out.push(p);
+  }
+  return out;
+});
+
+export const myAgentEvent = spacetimedb.view({ name: 'my_agent_event', public: true }, t.array(agentEvent.rowType), ctx => {
+  const out = [...ctx.db.agentEvent.owner.filter(ctx.sender)];
+  const listingIds = new Set(sharedListings(ctx).filter(l => !l.owner.isEqual(ctx.sender)).map(l => l.id));
+  for (const { owner, ids } of sharedItems(ctx)) {
+    for (const e of ctx.db.agentEvent.owner.filter(owner)) {
+      if ((e.refTable === 'item' && ids.has(e.refId)) || (e.refTable === 'listing' && listingIds.has(e.refId))) out.push(e);
+    }
+  }
+  return out;
+});
+
 export const workerRoom = spacetimedb.view({ name: 'worker_room', public: true }, t.array(room.rowType), ctx =>
   ctx.db.worker.identity.find(ctx.sender) ? [...ctx.db.room.iter()] : []
 );
