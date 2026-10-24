@@ -70,6 +70,10 @@ enum DollhouseTransform {
     static let maxCornerGapM: Double = 0.5
     /// Openings farther than this from every polygon edge are dropped.
     static let maxOpeningDistanceM: Double = 0.5
+    /// Objects whose bottom is higher than this above the floor keep their scanned height.
+    static let minElevationM: Double = 0.3
+    /// Smallest RoomPlan floor polygon trusted as the room's outline.
+    static let minFloorAreaM2: Double = 1
 
     struct Frame: Equatable {
         /// Radians, right-handed about +Y, applied to world (x, z).
@@ -102,6 +106,7 @@ enum DollhouseTransform {
 
         func placements(for geometry: RoomGeometry, items: [Item], roomName: String) -> [Placement] {
             let objects = Dictionary(geometry.objects.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            let floorY = Double(geometry.floorY)
             return items.compactMap { item in
                 guard let key = item.scanObjectId, let object = objects[key] else { return nil }
                 let center = frame.point(object.transform.position)
@@ -109,7 +114,11 @@ enum DollhouseTransform {
                 if DollhouseTransform.frontFacesWall(center: center, rotationDeg: deg, depthM: Double(object.dimensions.z), polygon: polygon) {
                     deg = DollhouseTransform.normalizeDeg(deg + 180)
                 }
-                return Placement(itemId: item.id, room: roomName, x: Self.cm(center.x), y: Self.cm(center.y), rotationDeg: deg)
+                // Off the floor (a wall-mounted TV, an upper cabinet): keep the scanned height.
+                let bottom = Double(object.transform.position.y) - Double(object.dimensions.y) / 2 - floorY
+                let elevation = bottom > DollhouseTransform.minElevationM ? Self.cm(bottom) : nil
+                return Placement(itemId: item.id, room: roomName, x: Self.cm(center.x), y: Self.cm(center.y), rotationDeg: deg,
+                                 elevationM: elevation)
             }
         }
 
@@ -124,8 +133,10 @@ enum DollhouseTransform {
         // 2. Square the room up.
         let phi = alignment(for: walls)
         let rotated = walls.map { squared((rotate($0.0, by: phi), rotate($0.1, by: phi))) }
-        // 3. Outline: closed wall loop, else RoomPlan's floor, else a hull, else a default box.
-        var polygon = wallLoop(rotated)
+        // 3. Outline: RoomPlan's own floor polygon when it's sane (keeps L-shaped rooms), else the
+        // closed wall loop, else the floor polygon anyway, else a hull, else a default box.
+        var polygon = validFloor(g, phi: phi, walls: rotated)
+            ?? wallLoop(rotated)
             ?? largestFloor(g, phi: phi)
             ?? hull(rotated.flatMap { [$0.0, $0.1] })
             ?? hull(g.objects.flatMap { o in
@@ -269,6 +280,71 @@ enum DollhouseTransform {
     static func largestFloor(_ g: RoomGeometry, phi: Double) -> [PlanPoint]? {
         let outlines = g.floors.map { $0.outline.map { rotate(PlanPoint(Double($0.x), Double($0.y)), by: phi) } }.filter { $0.count >= 3 }
         return outlines.max { abs(signedArea($0)) < abs(signedArea($1)) }
+    }
+
+    /// RoomPlan's floor polygon (largest floor, plan axes), squared up and without collinear
+    /// points, when it is a usable outline: at least 3 corners, `minFloorAreaM2` or more, not
+    /// self-intersecting, and (when there are walls) within 1 m of the walls' extent so it's
+    /// the same room. Nil otherwise, so the wall loop decides.
+    static func validFloor(_ g: RoomGeometry, phi: Double, walls: [(PlanPoint, PlanPoint)]) -> [PlanPoint]? {
+        guard let raw = largestFloor(g, phi: phi) else { return nil }
+        let polygon = withoutCollinear(squaredPolygon(cleaned(raw)))
+        guard polygon.count >= 3, abs(signedArea(polygon)) >= minFloorAreaM2, isSimple(polygon) else { return nil }
+        let ends = walls.flatMap { [$0.0, $0.1] }
+        if !ends.isEmpty {
+            let fx = polygon.map(\.x), fy = polygon.map(\.y), wx = ends.map(\.x), wy = ends.map(\.y)
+            let off = [fx.min()! - wx.min()!, fx.max()! - wx.max()!, fy.min()! - wy.min()!, fy.max()! - wy.max()!]
+            guard off.allSatisfy({ abs($0) <= 1 }) else { return nil }
+        }
+        return polygon
+    }
+
+    /// Makes nearly axis-aligned edges exactly axis-aligned (both ends get their mean
+    /// coordinate), like `squared` does for walls. Perpendicular neighbours keep their
+    /// other coordinate, so corners stay square.
+    static func squaredPolygon(_ p: [PlanPoint]) -> [PlanPoint] {
+        guard p.count >= 3 else { return p }
+        var q = p
+        for i in q.indices {
+            let j = (i + 1) % q.count
+            let (a, b) = squared((q[i], q[j]))
+            q[i] = a
+            q[j] = b
+        }
+        return q
+    }
+
+    /// Drops corners where the outline runs straight on (within ~2°).
+    static func withoutCollinear(_ p: [PlanPoint]) -> [PlanPoint] {
+        var q = p
+        var i = 0
+        while q.count > 3 && i < q.count {
+            let a = q[(i + q.count - 1) % q.count], b = q[i], c = q[(i + 1) % q.count]
+            let u = b - a, v = c - b
+            if u.length < 1e-9 || v.length < 1e-9 || (abs(u.cross(v)) < 0.035 * u.length * v.length && u.dot(v) > 0) {
+                q.remove(at: i)
+            } else {
+                i += 1
+            }
+        }
+        return q
+    }
+
+    /// True when no two non-adjacent edges cross.
+    static func isSimple(_ p: [PlanPoint]) -> Bool {
+        let n = p.count
+        guard n >= 3 else { return false }
+        func crosses(_ a: PlanPoint, _ b: PlanPoint, _ c: PlanPoint, _ d: PlanPoint) -> Bool {
+            let d1 = (b - a).cross(c - a), d2 = (b - a).cross(d - a)
+            let d3 = (d - c).cross(a - c), d4 = (d - c).cross(b - c)
+            return d1 * d2 < 0 && d3 * d4 < 0
+        }
+        for i in 0..<n {
+            for j in (i + 1)..<n where j != i + 1 && !(i == 0 && j == n - 1) {
+                if crosses(p[i], p[(i + 1) % n], p[j], p[(j + 1) % n]) { return false }
+            }
+        }
+        return true
     }
 
     /// Convex hull (monotone chain, counterclockwise), nil for fewer than 3 distinct points.

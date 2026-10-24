@@ -31,6 +31,13 @@ public enum VoxelHouse {
         public static let windowFrame: VoxelColor = 0xF7F3EB
         /// Renderers draw this color translucent.
         public static let glass: VoxelColor = 0xBFDCEA
+        // Realism (lived-in) trim, from MoveWise's scene.js COLORS.
+        /// Protruding baseboard: the lower row matches the in-wall baseboard, the top row catches light.
+        public static let baseboardTop: VoxelColor = 0xB8946A
+        public static let curtain: VoxelColor = 0xE3D8C4
+        public static let curtainFold: VoxelColor = 0xCCC2B0
+        public static let curtainRod: VoxelColor = 0x6B5B4B
+        public static let finial: VoxelColor = 0xC29A55
     }
 
     /// Height of the window sill above the floor; glass fills the wall above it.
@@ -44,7 +51,26 @@ public enum VoxelHouse {
     /// The whole home as one grid: base, plank floors per room, cut-away tiled walls with
     /// door gaps and windows, baseboards. Grid voxel (0,0,0) sits at world
     /// (plan.bounds.minX - marginM, 0, plan.bounds.minY - marginM).
-    public static func build(_ plan: FloorPlan, cutawayHeightM: Double = 1.1) -> VoxelGrid {
+    ///
+    /// `realism` (MoveWise's lived-in shell): protruding baseboards along every room-side wall
+    /// face and cream folded curtains on a rod beside each window. MoveWise also hangs a pendant
+    /// light from the ceiling; here the walls are cut at `cutawayHeightM` (1.1 m) while the
+    /// ceiling would be at ~2.6 m, so a pendant would float in mid-air above the cut and block
+    /// the view into the room. It is left out on purpose.
+    ///
+    /// `wallColor` / `floorColor`: measured colors (e.g. sampled from scan photos). Walls tile
+    /// with shades of it (grout and cap a little darker); floors tint the planks (or wet-room
+    /// tiles), keeping the plank / grout variation.
+    public static func build(_ plan: FloorPlan, cutawayHeightM: Double = 1.1, realism: Bool = true,
+                             wallColor: VoxelColor? = nil, floorColor: VoxelColor? = nil) -> VoxelGrid {
+        func tint(_ c: VoxelColor, _ f: Double) -> VoxelColor { VoxelColor(max(1, shade(Int(c & 0xFFFFFF), f))) }
+        let wallTiles = wallColor.map { [tint($0, 1), tint($0, 0.97), tint($0, 1.02)] } ?? Palette.wallTile
+        let wallGrout = wallColor.map { tint($0, 0.93) } ?? Palette.wallGrout
+        let wallCap = wallColor.map { tint($0, 0.91) } ?? Palette.wallCap
+        let planks = floorColor.map { c in [1.0, 1.05, 0.95, 1.02, 0.92, 1.07].map { tint(c, $0) } } ?? Palette.oak
+        let plankSeam = floorColor.map { tint($0, 0.84) } ?? Palette.plankSeam
+        let floorTiles = floorColor.map { [tint($0, 1), tint($0, 0.97), tint($0, 1.02)] } ?? Palette.floorTile
+        let floorGrout = floorColor.map { tint($0, 0.9) } ?? Palette.floorGrout
         let b = plan.bounds
         let V = VoxelGrid.voxelSize
         let wallRows = VoxelGrid.count(cutawayHeightM)
@@ -137,19 +163,19 @@ public enum VoxelHouse {
                 p += 1
             }
         }
-        func floorColor(_ i: Int, _ k: Int, room r: Int) -> VoxelColor {
+        func floorVoxel(_ i: Int, _ k: Int, room r: Int) -> VoxelColor {
             let room = plan.rooms[r]
             switch room.kind {
             case .bathroom, .kitchen:
                 let rb = room.bounds
                 let u = i - col(rb.minX, ox, nx), w = k - col(rb.minY, oz, nz)
                 let s = floorTileSize
-                if u % s == 0 || w % s == 0 { return Palette.floorGrout }
-                return Palette.floorTile[Int(hash(u / s, w / s, 13) * Double(Palette.floorTile.count))]
+                if u % s == 0 || w % s == 0 { return floorGrout }
+                return floorTiles[Int(hash(u / s, w / s, 13) * Double(floorTiles.count))]
             default:
                 let j = k / plankWidth, c = j * nx + i
-                if plankEnd[c] { return Palette.plankSeam }
-                return Palette.oak[Int(hash(j, Int(plankId[c]), 11) * Double(Palette.oak.count))]
+                if plankEnd[c] { return plankSeam }
+                return planks[Int(hash(j, Int(plankId[c]), 11) * Double(planks.count))]
             }
         }
 
@@ -168,7 +194,7 @@ public enum VoxelHouse {
                     }
                     g[i, 1, k] = Palette.plinth
                 } else if r >= 0 {
-                    g[i, 1, k] = floorColor(i, k, room: r)
+                    g[i, 1, k] = floorVoxel(i, k, room: r)
                 }
                 if sillLip[c], hasWindows { g[i, baseVoxels + sillK, k] = Palette.sill }
                 guard axis != 0 else { continue }
@@ -179,12 +205,12 @@ public enum VoxelHouse {
                     if row < 2 {
                         color = Palette.baseboard
                     } else if row == wallRows - 1 {
-                        color = Palette.wallCap
+                        color = wallCap
                     } else {
                         let t = row - 2, s = wallTileSize
                         color = along % s == 0 || t % s == 0
-                            ? Palette.wallGrout
-                            : Palette.wallTile[Int(hash(along / s, t / s, Int(axis)) * Double(Palette.wallTile.count))]
+                            ? wallGrout
+                            : wallTiles[Int(hash(along / s, t / s, Int(axis)) * Double(wallTiles.count))]
                     }
                     if hasWindows, case let .window(frame) = opening[c] {
                         if row == sillK {
@@ -194,6 +220,74 @@ public enum VoxelHouse {
                         }
                     }
                     g[i, y, k] = color
+                }
+            }
+        }
+
+        guard realism else { return g }
+        func isDoor(_ c: Int) -> Bool { if case .door = opening[c] { return true } else { return false } }
+
+        // 6. Protruding baseboards: two rows on every room column touching a (non-door) wall.
+        if wallRows > 4 {
+            for k in 0..<nz {
+                for i in 0..<nx {
+                    let c = k * nx + i
+                    guard wallAxis[c] == 0, roomAt[c] >= 0 else { continue }
+                    let touches = [(i - 1, k), (i + 1, k), (i, k - 1), (i, k + 1)].contains { ii, kk in
+                        guard ii >= 0, kk >= 0, ii < nx, kk < nz else { return false }
+                        let n = kk * nx + ii
+                        return wallAxis[n] != 0 && !isDoor(n)
+                    }
+                    guard touches else { continue }
+                    g[i, baseVoxels, k] = Palette.baseboard
+                    g[i, baseVoxels + 1, k] = Palette.baseboardTop
+                }
+            }
+        }
+
+        // 7. Curtains: folded cream strips on each side of every window, on the room side(s), hanging
+        // from a rod along the wall top (the cut) to the floor. Folds stand out one voxel more.
+        if hasWindows {
+            let topY = baseVoxels + wallRows - 1 // rod layer (the cap row)
+            func column(_ p: PlanPoint) -> Int? {
+                let i = Int(((p.x - ox) / V).rounded(.down)), k = Int(((p.y - oz) / V).rounded(.down))
+                guard i >= 0, k >= 0, i < nx, k < nz else { return nil }
+                return k * nx + i
+            }
+            for window in plan.windows {
+                let d = window.to - window.from, len = d.length
+                guard len > 2 * V else { continue }
+                let dir = d * (1 / len), normal = PlanPoint(-dir.y, dir.x)
+                let n = max(3, Int((min(max(len * 0.22, 0.2), 0.36) / V).rounded()))
+                for side in [1.0, -1.0] {
+                    let inward = normal * side
+                    let mid = (window.from + window.to) * 0.5
+                    guard let probe = column(mid + inward * (2.5 * V)), roomAt[probe] >= 0, wallAxis[probe] == 0 else { continue }
+                    // Along-wall centers: each panel overlaps the frame by one voxel, then runs outward.
+                    var ts: [(t: Double, fold: Bool)] = []
+                    for j in 0..<n {
+                        ts.append((V - (Double(j) + 0.5) * V, j % 2 == 0))
+                        ts.append((len - V + (Double(j) + 0.5) * V, j % 2 == 0))
+                    }
+                    for (t, fold) in ts {
+                        let base = window.from + dir * t
+                        guard let wallC = column(base + inward * (0.5 * V)), !isDoor(wallC) else { continue }
+                        for (depth, onlyFold) in [(1.5, false), (2.5, true)] where !onlyFold || fold {
+                            guard let c = column(base + inward * (depth * V)), roomAt[c] >= 0, wallAxis[c] == 0 else { continue }
+                            let i = c % nx, k = c / nx
+                            for y in baseVoxels..<topY { g[i, y, k] = fold ? Palette.curtain : Palette.curtainFold }
+                        }
+                    }
+                    // Rod with brass finials, one voxel past the panels.
+                    let reach = Double(n) * V
+                    var t = -reach
+                    while t <= len + reach + 1e-9 {
+                        if let c = column(window.from + dir * t + inward * (1.5 * V)), roomAt[c] >= 0, wallAxis[c] == 0 {
+                            let end = t + reach < V || len + reach - t < V
+                            g[c % nx, topY, c / nx] = end ? Palette.finial : Palette.curtainRod
+                        }
+                        t += V
+                    }
                 }
             }
         }

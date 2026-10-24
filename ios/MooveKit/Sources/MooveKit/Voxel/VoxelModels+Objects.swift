@@ -420,7 +420,7 @@ extension Canvas {
             return
         }
         if name.has("monitor", "screen", "display") {
-            tv(X, Y, Z, name, wall: false)
+            tv(X, Y, Z, name, wall: attr(VoxelModels.wallMountAttribute.lowercased()))
             return
         }
         if name.has("speaker", "subwoofer") {

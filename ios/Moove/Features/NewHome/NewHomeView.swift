@@ -219,7 +219,14 @@ struct NewHomeDetail: View {
     }
 
     private func solve() {
-        options = LayoutSolver(plan: plan).solveAll(furniture.items)
+        // Lived-in pass: small things onto furniture tops, art and mirrors onto the walls
+        // (PropPlacer's default wall top matches NewHomeScene's 1.1 m cutaway).
+        let placer = PropPlacer(plan: plan)
+        options = LayoutSolver(plan: plan).solveAll(furniture.items).map { option in
+            var option = option
+            option.placements = placer.place(option.placements, items: furniture.items)
+            return option
+        }
         // Reopen on the layout the user saved last, if any.
         if let home, let last = store.snapshot.layouts(for: home.id).max(by: { $0.id < $1.id }),
            let match = LayoutSolver.Style.allCases.first(where: { $0.label == last.name }) {
