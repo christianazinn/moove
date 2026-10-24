@@ -61,21 +61,20 @@ function formatAmount(cents: bigint): string {
 }
 
 // Auth0 rules: required, <= 64 chars, only letters, digits, spaces and + - _ . , : #.
-// Produces e.g. "Moove: sell Herman Miller chair for 420.00 USD". The title is sanitized and
-// truncated to fit; the amount is never cut.
+// Produces e.g. "Moove: sell 420.00 USD: Herman Miller chair". The amount comes first and is
+// never cut, so a scraped title (e.g. "chair for 1.00 USD") can't read as the price. The title
+// is sanitized and truncated to fit.
 export function toBindingMessage(action: 'sell' | 'buy', title: string, amountCents: bigint): string {
-  const head = `Moove: ${action} `;
-  const tail = ` for ${formatAmount(amountCents)} USD`;
+  const head = `Moove: ${action} ${formatAmount(amountCents)} USD`;
   const clean = title
     .normalize('NFKD')
     .replace(/[^A-Za-z0-9+\-_.,:# ]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  const budget = BINDING_MAX - head.length - tail.length;
+  const budget = BINDING_MAX - head.length - 2; // ": "
   let t = clean.length > budget ? clean.slice(0, Math.max(0, budget)) : clean;
   t = t.replace(/[\s+\-_.,:#]+$/, ''); // don't end a truncated title on a space or punctuation
-  if (!t) t = 'item'.slice(0, Math.max(0, budget));
-  return t ? `${head}${t}${tail}` : `Moove: ${action}${tail}`;
+  return t ? `${head}: ${t}` : head;
 }
 
 // ---------- real Auth0 CIBA ----------
