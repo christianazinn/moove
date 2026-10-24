@@ -20,22 +20,20 @@ public struct MoveSummary: Sendable, Equatable {
         }
     }
 
-    /// Money going out: an x402 data payment or a Visa purchase.
+    /// Money going out: an x402 data payment or a Visa purchase. In USD micros
+    /// (millionths of a dollar), like the `payment` table: x402 calls cost fractions of a cent.
     public struct Spend: Sendable, Hashable {
         public var agent: String
         public var rail: String
-        public var amountCents: Int64
+        public var amountMicros: Int64
         public var simulated: Bool
 
-        public init(agent: String, rail: String, amountCents: Int64, simulated: Bool) {
+        public init(agent: String, rail: String, amountMicros: Int64, simulated: Bool) {
             self.agent = agent
             self.rail = rail
-            self.amountCents = amountCents
+            self.amountMicros = amountMicros
             self.simulated = simulated
         }
-
-        /// USDC atomic units (6 decimals) to cents, rounding to nearest.
-        public static func cents(fromAtomicUSDC atomic: Int64) -> Int64 { (atomic + 5_000) / 10_000 }
     }
 
     public struct Event: Sendable, Hashable {
@@ -54,8 +52,8 @@ public struct MoveSummary: Sendable, Equatable {
 
     public struct RailTotal: Sendable, Hashable, Identifiable {
         public var rail: String
-        public var cents: Int64
-        public var simulatedCents: Int64
+        public var micros: Int64
+        public var simulatedMicros: Int64
         public var id: String { rail }
     }
 
@@ -72,7 +70,7 @@ public struct MoveSummary: Sendable, Equatable {
     public var soldCents: Int64
     /// Listed but not sold yet, plus sell items not listed yet (at their estimate).
     public var pendingSalesCents: Int64
-    public var spentCents: Int64
+    public var spentMicros: Int64
     public var rails: [RailTotal]
     /// Portion of all money figures that is simulated, for the "simulated" label.
     public var hasSimulatedMoney: Bool
@@ -84,8 +82,8 @@ public struct MoveSummary: Sendable, Equatable {
     public var divertedKg: Double
     public var keptVolumeM3: Double
 
-    /// Earned plus still-expected sales, minus everything spent.
-    public var netCents: Int64 { soldCents + pendingSalesCents - spentCents }
+    /// Earned plus still-expected sales, minus everything spent, in USD micros.
+    public var netMicros: Int64 { (soldCents + pendingSalesCents) * 10_000 - spentMicros }
 
     public init(items: [Item], sales: [Sale], spend: [Spend], events: [Event], timelineLimit: Int = 8) {
         itemCount = items.count
@@ -101,13 +99,13 @@ public struct MoveSummary: Sendable, Equatable {
         soldCents = best.values.filter { $0.stage == .sold }.reduce(0) { $0 + $1.priceCents }
         pendingSalesCents = best.values.filter { $0.stage != .sold }.reduce(0) { $0 + $1.priceCents }
 
-        spentCents = spend.reduce(0) { $0 + $1.amountCents }
+        spentMicros = spend.reduce(0) { $0 + $1.amountMicros }
         rails = Dictionary(grouping: spend, by: \.rail)
             .map { rail, lines in
-                RailTotal(rail: rail, cents: lines.reduce(0) { $0 + $1.amountCents },
-                          simulatedCents: lines.filter(\.simulated).reduce(0) { $0 + $1.amountCents })
+                RailTotal(rail: rail, micros: lines.reduce(0) { $0 + $1.amountMicros },
+                          simulatedMicros: lines.filter(\.simulated).reduce(0) { $0 + $1.amountMicros })
             }
-            .sorted { ($0.cents, $1.rail) > ($1.cents, $0.rail) }
+            .sorted { ($0.micros, $1.rail) > ($1.micros, $0.rail) }
         hasSimulatedMoney = spend.contains(where: \.simulated) || best.values.contains { $0.simulated && $0.stage != .estimated }
 
         agents = Dictionary(grouping: events, by: \.agent)
@@ -141,6 +139,18 @@ public struct MoveSummary: Sendable, Equatable {
         }
     }
 
+    /// Spend lines from the `payment` table (#7, #15). Failed payments didn't cost anything.
+    public static func spend(from payments: [Payment]) -> [Spend] {
+        payments.filter(\.countsTowardBudget).map {
+            Spend(agent: $0.agent, rail: $0.rail.rawValue, amountMicros: $0.amountUsdMicros, simulated: $0.simulated)
+        }
+    }
+
+    /// Timeline entries from the `agent_event` table.
+    public static func events(from agentEvents: [AgentEvent]) -> [Event] {
+        agentEvents.map { Event(agent: $0.agent, kind: $0.kind.rawValue, message: $0.message, createdAt: $0.createdAt) }
+    }
+
     /// Rough weight from category, nudged by size. Good enough for "about N kg kept out of landfill".
     public static func estimatedKg(_ item: Item) -> Double {
         let typical: (kg: Double, m3: Double)
@@ -161,15 +171,15 @@ public struct MoveSummary: Sendable, Equatable {
 }
 
 /// Labeled stand-ins for the parts of the summary whose lanes haven't landed yet
-/// (spending log #7/#15, agent events). The UI says "demo" whenever these are used.
+/// (used only when the app has no `payment` / `agent_event` rows yet). The UI says "demo" whenever these are used.
 public enum SummaryDemo {
     public static let spend: [MoveSummary.Spend] = [
-        .init(agent: "pricing", rail: "x402", amountCents: 1, simulated: true),
-        .init(agent: "pricing", rail: "x402", amountCents: 1, simulated: true),
-        .init(agent: "pricing", rail: "x402", amountCents: 2, simulated: true),
-        .init(agent: "pricing", rail: "x402", amountCents: 1, simulated: true),
-        .init(agent: "buy", rail: "x402", amountCents: 3, simulated: true),
-        .init(agent: "buy", rail: "visa", amountCents: 8_999, simulated: true),
+        .init(agent: "pricing", rail: "x402", amountMicros: 10_000, simulated: true),
+        .init(agent: "pricing", rail: "x402", amountMicros: 10_000, simulated: true),
+        .init(agent: "pricing", rail: "x402", amountMicros: 20_000, simulated: true),
+        .init(agent: "pricing", rail: "x402", amountMicros: 10_000, simulated: true),
+        .init(agent: "buy", rail: "x402", amountMicros: 30_000, simulated: true),
+        .init(agent: "buy", rail: "visa", amountMicros: 89_990_000, simulated: true),
     ]
 
     public static func events(endingAt end: Date = .now) -> [MoveSummary.Event] {

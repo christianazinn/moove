@@ -21,7 +21,7 @@ import Testing
         let s = MoveSummary(items: items, sales: sales, spend: [], events: [])
         #expect(s.pendingSalesCents == expected)
         #expect(s.soldCents == 0)
-        #expect(s.netCents == expected)
+        #expect(s.netMicros == expected * 10_000)
         #expect(!s.hasSimulatedMoney)
     }
 
@@ -55,18 +55,22 @@ import Testing
 
     @Test func spendIsSplitByRail() {
         let s = MoveSummary(items: items, sales: [], spend: SummaryDemo.spend, events: [])
-        #expect(s.spentCents == SummaryDemo.spend.reduce(0) { $0 + $1.amountCents })
+        #expect(s.spentMicros == SummaryDemo.spend.reduce(0) { $0 + $1.amountMicros })
         #expect(s.rails.map(\.rail) == ["visa", "x402"])
-        #expect(s.rails.first { $0.rail == "x402" }?.cents == 8)
-        #expect(s.rails.allSatisfy { $0.simulatedCents == $0.cents })
-        #expect(s.netCents == -s.spentCents)
+        #expect(s.rails.first { $0.rail == "x402" }?.micros == 80_000)
+        #expect(s.rails.allSatisfy { $0.simulatedMicros == $0.micros })
+        #expect(s.netMicros == -s.spentMicros)
     }
 
-    @Test func atomicUSDCToCents() {
-        #expect(MoveSummary.Spend.cents(fromAtomicUSDC: 10_000) == 1)   // $0.01
-        #expect(MoveSummary.Spend.cents(fromAtomicUSDC: 1_000_000) == 100)
-        #expect(MoveSummary.Spend.cents(fromAtomicUSDC: 4_999) == 0)
-        #expect(MoveSummary.Spend.cents(fromAtomicUSDC: 5_000) == 1)
+    @Test func realPaymentsAndEventsFromFixtures() {
+        let snap = DemoFixtures.inventory(owner: "me")
+        #expect(!snap.payments.isEmpty && !snap.agentEvents.isEmpty)
+        let spend = MoveSummary.spend(from: snap.payments)
+        let s = MoveSummary(items: snap.items, sales: [], spend: spend, events: MoveSummary.events(from: snap.agentEvents))
+        let paid = snap.payments.filter { $0.status != .failed }.reduce(0) { $0 + $1.amountUsdMicros }
+        #expect(s.spentMicros == paid)
+        #expect(spend.count == snap.payments.filter { $0.status != .failed }.count)
+        #expect(s.agents.reduce(0) { $0 + $1.steps } == snap.agentEvents.count)
     }
 
     @Test func agentActivity() {
@@ -95,6 +99,6 @@ import Testing
 
     @Test func emptyMoveIsAllZeros() {
         let s = MoveSummary(items: [], sales: [], spend: [], events: [])
-        #expect(s.itemCount == 0 && s.netCents == 0 && s.divertedKg == 0 && s.rails.isEmpty && s.timeline.isEmpty)
+        #expect(s.itemCount == 0 && s.netMicros == 0 && s.divertedKg == 0 && s.rails.isEmpty && s.timeline.isEmpty)
     }
 }
