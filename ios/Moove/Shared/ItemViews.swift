@@ -14,15 +14,30 @@ extension Disposition {
         }
     }
 
+    /// Theme color for text and icons about this disposition (at least 4.5:1 on `bg` and `surface`).
     var tint: Color {
         switch self {
-        case .keep: .blue
-        case .sell: .green
-        case .donate: .purple
-        case .trash: .gray
-        case .undecided: .orange
+        case .keep: Theme.accentStrong
+        case .sell: Theme.ochreInk
+        case .donate: Self.slateInk
+        case .trash: Theme.muted
+        case .undecided: Theme.danger
         }
     }
+
+    /// Swatch for the small dot beside a disposition (fills only, not text).
+    var swatch: Color {
+        switch self {
+        case .keep: Theme.accent
+        case .sell: Theme.ochre
+        case .donate: Theme.slate
+        case .trash: Theme.stone
+        case .undecided: Theme.danger
+        }
+    }
+
+    /// Darker slate that reads as text in light mode.
+    private static let slateInk = Color(uiColor: Theme.dynamicUIColor(0x55657A, 0x93A3B1))
 
     static let choices: [Disposition] = [.keep, .sell, .donate, .trash]
 }
@@ -45,15 +60,15 @@ struct ItemThumbnail: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(.rect(cornerRadius: size / 6))
+        .clipShape(RoundedRectangle(cornerRadius: size >= 120 ? Theme.radiusLarge : Theme.radiusMedium, style: .continuous))
     }
 
     private var placeholder: some View {
         Image(systemName: Self.icon(for: item.category))
-            .font(.system(size: size * 0.45))
-            .foregroundStyle(.secondary)
+            .font(.system(size: size * 0.32, weight: .light))
+            .foregroundStyle(Theme.muted)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.quaternary)
+            .background(Theme.surface)
     }
 
     static func icon(for category: String) -> String {
@@ -72,15 +87,20 @@ struct ItemThumbnail: View {
     }
 }
 
+/// Disposition as a colored dot and a mono label on a quiet capsule.
 struct DispositionChip: View {
     let disposition: Disposition
 
     var body: some View {
-        Label(disposition.label, systemImage: disposition.systemImage)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .foregroundStyle(disposition.tint)
-            .background(disposition.tint.opacity(0.12), in: .capsule)
+        HStack(spacing: 6) {
+            Circle().fill(disposition.swatch).frame(width: 7, height: 7).accessibilityHidden(true)
+            Text(disposition.label).monoText(12, weight: .bold, maxScale: 1.6)
+        }
+        .lineLimit(1)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .foregroundStyle(Theme.text)
+        .background(Capsule().fill(Theme.surface))
+        .accessibilityElement(children: .combine)
     }
 }

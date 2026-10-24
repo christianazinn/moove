@@ -14,10 +14,27 @@ struct RoomDetailView: View {
             if let geometry {
                 RoomVisualizationView(geometry: geometry, items: itemsByScanObject, initialMode: .decision)
             } else if !loaded {
-                ProgressView("Loading room…")
+                ProgressView {
+                    Text("Loading room…").monoMeta()
+                }
+                .tint(Theme.muted)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .mooveScreen()
             } else {
-                ContentUnavailableView("No 3D scan for this room", systemImage: "cube.transparent",
-                                       description: Text(failure ?? "This room was added without a RoomPlan scan."))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("No 3D scan for this room").blockTitle()
+                    Text(failure ?? "This room was added without a RoomPlan scan.")
+                        .monoMeta()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 28)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .ruled(.top)
+                .ruled()
+                .accessibilityElement(children: .combine)
+                .padding(.horizontal, Theme.gutter)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .mooveScreen()
             }
         }
         .navigationTitle(room.name)
