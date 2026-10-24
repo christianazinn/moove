@@ -87,6 +87,10 @@ struct ScanHomeView: View {
                 ScanObject(scanObjectId: "bad-huge", category: "storage", widthM: 40, heightM: 2.4, depthM: 0.4),
             ]
         }
+        // UI test hook: one object nobody could name, for Review's "Needs a name".
+        if ProcessInfo.processInfo.environment["MOOVE_DEMO_UNNAMED"] != nil {
+            scan.objects.append(ScanObject(scanObjectId: "unnamed-1", category: "other", widthM: 0.5, heightM: 0.4, depthM: 0.5))
+        }
         #endif
         return scan
     }

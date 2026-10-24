@@ -10,6 +10,8 @@ struct ScanFlowView: View {
     @State private var session = ScanSession()
     @State private var stopRequested = false
     @State private var photographing: ScanSession.DetectedObject?
+    /// The row whose "Name it…" sheet is open.
+    @State private var naming: ScanSession.DetectedObject?
     /// Extra objects (#73) spotted so far during the scan.
     @State private var found: [String] = []
 
@@ -35,6 +37,11 @@ struct ScanFlowView: View {
                 photographing = nil
             }
             .ignoresSafeArea()
+        }
+        .sheet(item: $naming) { object in
+            ScanLabelSheet(title: object.label == nil ? "Name it" : "Rename", label: object.label) { label in
+                session.setLabel(label, for: object)
+            }
         }
     }
 
@@ -180,39 +187,64 @@ struct ScanFlowView: View {
                 }
                 ForEach(session.objects) { object in
                     let done = session.photos[object.id] != nil
-                    Button { photographing = object } label: {
-                        HStack(spacing: 16) {
-                            photoThumb(object)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(title(object)).blockTitle()
-                                Text(dims(object)).monoMeta()
-                                if object.category == ObjectSanity.relabelCategory, !object.manual {
-                                    // Unrecognized, or a size its label can't have (#182).
-                                    Text("Moove names it from its photo").monoMeta()
+                    let unnamed = object.category == ObjectSanity.relabelCategory && object.label == nil
+                    HStack(spacing: 8) {
+                        Button { photographing = object } label: {
+                            HStack(spacing: 16) {
+                                photoThumb(object)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(title(object)).blockTitle()
+                                    Text(dims(object)).monoMeta()
+                                    if object.label != nil {
+                                        Text("Named by you").monoMeta()
+                                    } else if unnamed, !object.manual {
+                                        // Unrecognized, or a size its label can't have (#182).
+                                        Text("Moove names it from its photo · or name it yourself").monoMeta()
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                if session.autoPhotos.contains(object.id) {
+                                    Text("Auto").monoMeta()
                                 }
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            if session.autoPhotos.contains(object.id) {
-                                Text("Auto").monoMeta()
-                            }
+                            .padding(.vertical, 12)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(accessibilityLabel(object, done: done))
+                        .accessibilityHint(done ? "Retakes the photo" : "Takes a photo")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction(named: "Name it") { naming = object }
+                        if unnamed {
+                            Button("Name it") { naming = object }
+                                .buttonStyle(.pill(.outline, compact: true))
+                                .accessibilityLabel("Name \(title(object))")
+                                .accessibilityIdentifier("scan.nameIt.\(object.id.uuidString)")
+                        }
+                        Button { photographing = object } label: {
                             Image(systemName: done ? "checkmark.circle.fill" : "camera")
                                 .font(.system(size: 17, weight: done ? .regular : .light))
                                 .foregroundStyle(done ? Theme.accentStrong : Theme.text)
                                 .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
                         }
-                        .padding(.vertical, 12)
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                        .accessibilityHidden(true)  // same as tapping the row
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(accessibilityLabel(object, done: done))
-                    .accessibilityHint(done ? "Retakes the photo" : "Takes a photo")
-                    .accessibilityAddTraits(.isButton)
+                    .contextMenu {
+                        Button(object.label == nil ? "Name it…" : "Rename…", systemImage: "pencil") { naming = object }
+                        if object.label != nil {
+                            Button("Let Moove name it", systemImage: "sparkles") { session.setLabel(nil, for: object) }
+                        }
+                    }
                     .swipeActions {
                         if object.manual {
                             Button("Remove", systemImage: "trash", role: .destructive) { session.remove(object) }
                         }
+                        Button("Name it", systemImage: "pencil") { naming = object }
+                            .tint(Theme.accentStrong)
                     }
                     .ledgerListRow()
                 }
@@ -288,12 +320,13 @@ struct ScanFlowView: View {
     /// "Chair, 0.5 by 0.5 by 0.9 meters, photographed automatically".
     private func accessibilityLabel(_ o: ScanSession.DetectedObject, done: Bool) -> String {
         let f = { (v: Double) in v.formatted(.number.precision(.fractionLength(1))) }
-        let name = o.manual ? "New item, added by photo" : "\(title(o)), \(f(o.widthM)) by \(f(o.depthM)) by \(f(o.heightM)) meters"
+        let name = o.manual ? "\(title(o)), added by photo" : "\(title(o)), \(f(o.widthM)) by \(f(o.depthM)) by \(f(o.heightM)) meters"
         let state = !done ? "no photo yet" : session.autoPhotos.contains(o.id) ? "photographed automatically from the scan" : "photographed"
         return "\(name), \(state)"
     }
 
     private func title(_ o: ScanSession.DetectedObject) -> String {
+        if let named = o.label?.title { return named }
         if o.manual { return "New item" }
         return o.category == ObjectSanity.relabelCategory ? "Unidentified item" : o.category.capitalized
     }

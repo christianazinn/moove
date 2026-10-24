@@ -157,11 +157,15 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
                 }
                 var item = Item(
                     id: takeId(), owner: me, roomId: roomId, scanObjectId: object.scanObjectId,
-                    name: object.category.capitalized, category: object.category,
+                    name: object.name ?? object.category.capitalized, category: object.category,
                     widthM: object.widthM, heightM: object.heightM, depthM: object.depthM,
                     photoUrls: object.photoUrl.map { [$0] } ?? [], attributes: attributes
                 )
-                if let template = demo[object.scanObjectId] { Self.identifyDemo(&item, as: template) }
+                if let template = demo[object.scanObjectId] {
+                    Self.identifyDemo(&item, as: template)
+                    // The stand-in vision never replaces a name the user gave it in the checklist.
+                    if let name = object.name { item.name = name }
+                }
                 s.items.append(item)
             }
             if !skipped.isEmpty {
@@ -181,7 +185,7 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         for (k, v) in [("width_m", o.widthM), ("height_m", o.heightM), ("depth_m", o.depthM)] where !v.isFinite || v < 0 || v > 30 {
             return "\(k)=\(v)"
         }
-        if o.category.count > 120 { return "name too long" }
+        if (o.name ?? o.category).count > 120 || o.category.count > 120 { return "name too long" }
         if o.scanObjectId.count > 64 { return "scan_object_id too long" }
         return nil
     }
