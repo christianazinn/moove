@@ -23,6 +23,10 @@ export const config = {
   uploadDir: env('UPLOAD_DIR', 'uploads'),
   // Largest accepted upload (USDZ scans are the big ones).
   uploadMaxBytes: Number(env('UPLOAD_MAX_BYTES', String(50 * 1024 * 1024))),
+  // Per-client POST limits and a cap on the upload dir's size (src/ratelimit.ts); 0 = off.
+  uploadRatePerMin: Number(env('UPLOAD_RATE_PER_MIN', '120')),
+  homesRatePerMin: Number(env('HOMES_IMPORT_RATE_PER_MIN', '6')),
+  uploadDirMaxBytes: Number(env('UPLOAD_DIR_MAX_MB', '2048')) * 1024 * 1024,
   // What phones/the worker use to fetch uploads; set to your LAN IP for devices.
   publicUploadBaseUrl: env('PUBLIC_UPLOAD_BASE_URL', 'http://localhost:8787'),
   // Extra https hosts the vision agent may fetch photos from (#44, comma-separated, default none).
