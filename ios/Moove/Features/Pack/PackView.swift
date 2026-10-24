@@ -152,6 +152,10 @@ struct PackView: View {
             Text("Rough estimate. Ask movers for a quote.")
                 .monoMeta()
                 .fixedSize(horizontal: false, vertical: true)
+            NavigationLink { TruckView(plan: plan, items: inputs.items) } label: {
+                Label("See it in 3D", systemImage: "cube.transparent")
+            }
+            .buttonStyle(.pill(.outline, compact: true))
         }
         .padding(18)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
