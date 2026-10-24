@@ -30,11 +30,9 @@ struct RoomVisualizationView: View {
                 if style == .model, #available(iOS 18.0, *) {
                     RoomModelView(geometry: shown, items: items, mode: mode, showLabels: showLabels, selection: $selection)
                         .id(fullWalls)  // rebuild the scene when walls change
-                        .accessibilityIdentifier("room.model")
                 } else {
                     RoomPlanView(geometry: centered, items: items, mode: mode, showLabels: showLabels, selection: $selection)
                         .padding(.bottom, 60)
-                        .accessibilityIdentifier("room.plan")
                 }
             }
             // The 3D scene and the plan canvas draw pixels VoiceOver can't read, so
@@ -42,6 +40,8 @@ struct RoomVisualizationView: View {
             // double-tap to select (which opens the item card below).
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilitySummary)
+            // On the combined element: `.ignore` hides identifiers set inside it.
+            .accessibilityIdentifier(style == .model ? "room.model" : "room.plan")
             .accessibilityChildren {
                 ForEach(geometry.objects) { object in
                     Text(accessibilityName(object))

@@ -33,10 +33,12 @@ struct InventoryView: View {
                             }
                             NavigationLink(value: room) {
                                 Label("3D", systemImage: "cube.transparent")
+                                    .labelStyle(.titleAndIcon)
                             }
                             .buttonStyle(.pill(.outline, compact: true))
                             .accessibilityLabel("View room in 3D")
                         }
+                        .fixedSize()
                     }
                     .padding(.top, 40)
                     if !isMine(room) {
