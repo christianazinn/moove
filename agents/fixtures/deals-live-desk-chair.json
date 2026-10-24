@@ -1,0 +1,102 @@
+{
+  "_note": "Cached live Apify search (active listings) for the buy agent (#15), fetched with a real APIFY_TOKEN and trimmed to the fields we use. FB seller names and eBay seller handles removed (privacy). Served for the demo 'Desk chair' shopping item (search text was 'Desk chair'). Rows read back from this file are labeled as a cached replay.",
+  "query": "Desk chair",
+  "fetchedAt": "2026-10-24T05:31:09.153Z",
+  "actors": {
+    "fb": "apify~facebook-marketplace-scraper",
+    "ebay": "automation-lab~ebay-scraper"
+  },
+  "errors": [],
+  "rows": [
+    {
+      "source": "fb",
+      "title": "Desk Chair / office chair",
+      "priceCents": 1800,
+      "url": "https://www.facebook.com/marketplace/item/1063375916330901/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "office chair",
+      "priceCents": 1000,
+      "url": "https://www.facebook.com/marketplace/item/1115030527525927/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Cream Vinyl Office/Desk Chair with Attached Leg Rest — Brand New",
+      "priceCents": 3500,
+      "url": "https://www.facebook.com/marketplace/item/1710333660018238/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "White teddy desk chair",
+      "priceCents": 2500,
+      "url": "https://www.facebook.com/marketplace/item/1069525159398855/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Home Office Chair Desk Computer Chair Adjustable Ergonomic with Lumbar Support",
+      "priceCents": 3894,
+      "url": "https://www.ebay.com/itm/135953899384",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "High Back Leather Office Chair Executive Office Desk Task Computer Chair",
+      "priceCents": 8549,
+      "url": "https://www.ebay.com/itm/395425039170",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-4 days",
+      "condition": "unknown",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "YODOLLA Ergonomic Reclining Office Chair Heat & Massage High Back Desk Chair",
+      "priceCents": 11999,
+      "url": "https://www.ebay.com/itm/386328756471",
+      "seller": "eBay seller, 99.1% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Home Office Chair Ergonomic Desk Chair PU Leather Task Chair Rolling Swivel",
+      "priceCents": 5699,
+      "url": "https://www.ebay.com/itm/393528955041",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Office Chair Ergonomic High-Back Executive Desk Chair with Adjustable Swivel",
+      "priceCents": 8074,
+      "url": "https://www.ebay.com/itm/316523614967",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    }
+  ]
+}

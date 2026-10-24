@@ -1,0 +1,92 @@
+{
+  "_note": "Cached live Apify search (active listings) for the buy agent (#15), fetched with a real APIFY_TOKEN and trimmed to the fields we use. FB seller names and eBay seller handles removed (privacy). Served for the demo 'Shower curtain set' shopping item (search text was 'Shower curtain set'). Rows read back from this file are labeled as a cached replay.",
+  "query": "Shower curtain set",
+  "fetchedAt": "2026-10-24T05:35:22.447Z",
+  "actors": {
+    "fb": "apify~facebook-marketplace-scraper",
+    "ebay": "automation-lab~ebay-scraper"
+  },
+  "errors": [],
+  "rows": [
+    {
+      "source": "fb",
+      "title": "Brand New Shower Curtain Set for Sale",
+      "priceCents": 1000,
+      "url": "https://www.facebook.com/marketplace/item/1601419605100021/",
+      "seller": "FB Marketplace seller, Daly City, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "fabric shower curtain & ceramic soap dispenser",
+      "priceCents": 1000,
+      "url": "https://www.facebook.com/marketplace/item/1005229905895210/",
+      "seller": "FB Marketplace seller, Oakland, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Shower curtain",
+      "priceCents": 2000,
+      "url": "https://www.facebook.com/marketplace/item/1743225650445863/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "No Hook Shower Curtain with Snap in Liner Set Waffle Shower Curtain for Bathroom",
+      "priceCents": 2108,
+      "url": "https://www.ebay.com/itm/158107773054",
+      "seller": "eBay seller, 99.7% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "4 Pcs Enchanted Forest Shower Curtain Set Nature Garden Bathroom Sets with Showe",
+      "priceCents": 3199,
+      "url": "https://www.ebay.com/itm/800680181385",
+      "seller": "eBay seller, 99.1% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "4 Pcs Shower Curtain Set Blue Marble with Rugs Bathroom Set New",
+      "priceCents": 2195,
+      "url": "https://www.ebay.com/itm/287663247512",
+      "seller": "eBay seller, 99.8% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "4PC Funny Get Naked Shower Curtain Sets Bathroom Decor with Rugs Non-Slip Rug",
+      "priceCents": 2595,
+      "url": "https://www.ebay.com/itm/366573126609",
+      "seller": "eBay seller, 98.9% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Shower Curtain Set Blue 3D Cubes - Bathroom Sets",
+      "priceCents": 3056,
+      "url": "https://www.ebay.com/itm/406617334039",
+      "seller": "eBay seller, 100% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    }
+  ]
+}

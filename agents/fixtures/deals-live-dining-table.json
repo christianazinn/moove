@@ -1,0 +1,102 @@
+{
+  "_note": "Cached live Apify search (active listings) for the buy agent (#15), fetched with a real APIFY_TOKEN and trimmed to the fields we use. FB seller names and eBay seller handles removed (privacy). Served for the demo 'Dining table' shopping item (search text was 'Dining table'). Rows read back from this file are labeled as a cached replay.",
+  "query": "Dining table",
+  "fetchedAt": "2026-10-24T05:31:20.943Z",
+  "actors": {
+    "fb": "apify~facebook-marketplace-scraper",
+    "ebay": "automation-lab~ebay-scraper"
+  },
+  "errors": [],
+  "rows": [
+    {
+      "source": "fb",
+      "title": "Dining table",
+      "priceCents": 3000,
+      "url": "https://www.facebook.com/marketplace/item/1785541782593177/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Black Table & 4 Chairs",
+      "priceCents": 6000,
+      "url": "https://www.facebook.com/marketplace/item/1049744398110375/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Ornate Wood Trestle Dining Table",
+      "priceCents": 4000,
+      "url": "https://www.facebook.com/marketplace/item/1625123689217767/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Modern Dark Wood and Metal Dining Table",
+      "priceCents": 4000,
+      "url": "https://www.facebook.com/marketplace/item/949430734234196/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "5-Piece Industrial Dining Table Set w/ Counter Height Table & 4 Bar Stools",
+      "priceCents": 16999,
+      "url": "https://www.ebay.com/itm/358860964804",
+      "seller": "eBay seller, 99.5% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "modern dining room set table 4 chairs",
+      "priceCents": 65000,
+      "url": "https://www.ebay.com/itm/336851121527",
+      "seller": "eBay seller, 100% positive",
+      "condition": "good",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Hans J. Wegner vintage teak table",
+      "priceCents": 100000,
+      "url": "https://www.ebay.com/itm/137745220774",
+      "seller": "eBay seller, new seller",
+      "condition": "good",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Maven Lane Zola Traditional Round Wooden Dining Table in Antiqued White Finish",
+      "priceCents": 20999,
+      "url": "https://www.ebay.com/itm/356891132935",
+      "seller": "eBay seller, 99.7% positive, Free delivery in 3 days",
+      "condition": "unknown",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Modern Square 5-Piece Dining Table Set w/ 4 Upholstered Chairs, Seats 4",
+      "priceCents": 28000,
+      "url": "https://www.ebay.com/itm/128142616371",
+      "seller": "eBay seller, 100% positive, +$10.12 delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    }
+  ]
+}

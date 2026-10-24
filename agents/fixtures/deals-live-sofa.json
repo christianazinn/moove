@@ -1,0 +1,52 @@
+{
+  "_note": "Cached live Apify search (active listings) for the buy agent (#15), fetched with a real APIFY_TOKEN and trimmed to the fields we use. FB seller names and eBay seller handles removed (privacy). Served for the demo 'Sofa' shopping item (search text was 'Sofa'). Rows read back from this file are labeled as a cached replay. One off-topic eBay row (an appliance lot) was dropped.",
+  "query": "Sofa",
+  "fetchedAt": "2026-10-24T05:28:50.199Z",
+  "actors": {
+    "fb": "apify~facebook-marketplace-scraper",
+    "ebay": "automation-lab~ebay-scraper"
+  },
+  "errors": [],
+  "rows": [
+    {
+      "source": "ebay",
+      "title": "96\" Boneless Couch Right Chaise L Shape Sectional Cloud Sofa Set for Living Room",
+      "priceCents": 23952,
+      "url": "https://www.ebay.com/itm/920000029216",
+      "seller": "eBay seller, 100% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "sectional sofa with chaise and ottoman",
+      "priceCents": 12000,
+      "url": "https://www.ebay.com/itm/168334467202",
+      "seller": "eBay seller, new seller",
+      "condition": "like_new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "XUEGW Bean Bag Chair Memory Foam Lazy Floor Sofa Adults Kids Bedroom Living Room",
+      "priceCents": 18999,
+      "url": "https://www.ebay.com/itm/237003043496",
+      "seller": "eBay seller, 98.9% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "New ListingHamlet LSF&RSF Corner Sofa W/Pillows Corduroy- Olive green",
+      "priceCents": 8967,
+      "url": "https://www.ebay.com/itm/168813095943",
+      "seller": "eBay seller, new seller, +$8.99 delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    }
+  ]
+}
