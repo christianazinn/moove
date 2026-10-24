@@ -16,6 +16,7 @@ public struct ScanRow: BSATNTableWithPrimaryKey, Equatable, Sendable {
     public let usdzUrl: String
     public let capturedRoomJsonUrl: String
     public let createdAt: Timestamp
+    public let sweepStatus: String
 
     public var primaryKey: UInt64 { id }
 
@@ -26,6 +27,7 @@ public struct ScanRow: BSATNTableWithPrimaryKey, Equatable, Sendable {
         self.usdzUrl = try reader.readString()
         self.capturedRoomJsonUrl = try reader.readString()
         self.createdAt = try Timestamp(reader: reader)
+        self.sweepStatus = try reader.readString()
     }
 }
 
@@ -37,6 +39,7 @@ extension ScanRow: BSATNRowQueryable {
         public let usdzUrl: QueryColumn<ScanRow, String>
         public let capturedRoomJsonUrl: QueryColumn<ScanRow, String>
         public let createdAt: QueryColumn<ScanRow, Timestamp>
+        public let sweepStatus: QueryColumn<ScanRow, String>
     }
     public static func makeCols(tableAlias: String) -> Cols {
         Cols(
@@ -45,7 +48,8 @@ extension ScanRow: BSATNRowQueryable {
             roomId: QueryColumn<ScanRow, UInt64>(tableAlias: tableAlias, name: "room_id"),
             usdzUrl: QueryColumn<ScanRow, String>(tableAlias: tableAlias, name: "usdz_url"),
             capturedRoomJsonUrl: QueryColumn<ScanRow, String>(tableAlias: tableAlias, name: "captured_room_json_url"),
-            createdAt: QueryColumn<ScanRow, Timestamp>(tableAlias: tableAlias, name: "created_at")
+            createdAt: QueryColumn<ScanRow, Timestamp>(tableAlias: tableAlias, name: "created_at"),
+            sweepStatus: QueryColumn<ScanRow, String>(tableAlias: tableAlias, name: "sweep_status")
         )
     }
 }

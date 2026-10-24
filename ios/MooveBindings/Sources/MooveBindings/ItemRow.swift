@@ -36,6 +36,9 @@ public struct ItemRow: BSATNTableWithPrimaryKey, Equatable, Sendable {
     public let maybeSentimental: Bool
     public let createdAt: Timestamp
     public let updatedAt: Timestamp
+    public let modelUrl: String
+    public let modelSource: String
+    public let modelStatus: String
 
     public var primaryKey: UInt64 { id }
 
@@ -66,6 +69,9 @@ public struct ItemRow: BSATNTableWithPrimaryKey, Equatable, Sendable {
         self.maybeSentimental = try reader.read()
         self.createdAt = try Timestamp(reader: reader)
         self.updatedAt = try Timestamp(reader: reader)
+        self.modelUrl = try reader.readString()
+        self.modelSource = try reader.readString()
+        self.modelStatus = try reader.readString()
     }
 }
 
@@ -96,6 +102,9 @@ extension ItemRow: BSATNRowQueryable {
         public let maybeSentimental: QueryColumn<ItemRow, Bool>
         public let createdAt: QueryColumn<ItemRow, Timestamp>
         public let updatedAt: QueryColumn<ItemRow, Timestamp>
+        public let modelUrl: QueryColumn<ItemRow, String>
+        public let modelSource: QueryColumn<ItemRow, String>
+        public let modelStatus: QueryColumn<ItemRow, String>
     }
     public static func makeCols(tableAlias: String) -> Cols {
         Cols(
@@ -123,7 +132,10 @@ extension ItemRow: BSATNRowQueryable {
             fragile: QueryColumn<ItemRow, Bool>(tableAlias: tableAlias, name: "fragile"),
             maybeSentimental: QueryColumn<ItemRow, Bool>(tableAlias: tableAlias, name: "maybe_sentimental"),
             createdAt: QueryColumn<ItemRow, Timestamp>(tableAlias: tableAlias, name: "created_at"),
-            updatedAt: QueryColumn<ItemRow, Timestamp>(tableAlias: tableAlias, name: "updated_at")
+            updatedAt: QueryColumn<ItemRow, Timestamp>(tableAlias: tableAlias, name: "updated_at"),
+            modelUrl: QueryColumn<ItemRow, String>(tableAlias: tableAlias, name: "model_url"),
+            modelSource: QueryColumn<ItemRow, String>(tableAlias: tableAlias, name: "model_source"),
+            modelStatus: QueryColumn<ItemRow, String>(tableAlias: tableAlias, name: "model_status")
         )
     }
 }
