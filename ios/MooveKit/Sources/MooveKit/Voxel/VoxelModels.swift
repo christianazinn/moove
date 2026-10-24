@@ -53,7 +53,7 @@ public enum VoxelModels {
         let cat = trimmed(spec.category.lowercased())
         let nameV = VName(spec.name.lowercased())
         let attrs = Set(spec.attributes.map { trimmed($0.lowercased()) })
-        let kind = route(category: cat, name: nameV, attrs: attrs)
+        let kind = route(category: cat, name: nameV, attrs: attrs, size: (spec.widthM, spec.depthM, spec.heightM))
         // Builders read style keywords from the name first, then the vision agent's material and
         // brand ("Desk" + "laminate" + "IKEA" reads like a white flat-pack desk). Measured photo
         // colors, when present, override the keyword palette.
@@ -120,6 +120,13 @@ public enum VoxelModels {
         case .mirror: g.mirror(X, NY, Z, name)
         case .quiltRack: g.quiltRack(X, NY, Z, name)
         case .framedPhotos: g.framedPhotos(X, NY, Z, name)
+        case .stove: g.stove(X, NY, Z, name)
+        case .dishwasher: g.dishwasher(X, NY, Z, name)
+        case .microwave: g.microwave(X, NY, Z, name)
+        case .bench: g.bench(X, NY, Z, name)
+        case .ottoman: g.ottoman(X, NY, Z, name)
+        case .bike: g.bike(X, NY, Z, name)
+        case .suitcase: g.suitcase(X, NY, Z, name)
         case .box: g.kraftBox(X, NY, Z, name)
         }
         return (g.output(), g.surfaces)
@@ -153,13 +160,13 @@ public enum VoxelModels {
     /// Which builder a spec uses (exposed for tests and debugging).
     static func kind(_ spec: VoxelItemSpec) -> Kind {
         route(category: trimmed(spec.category.lowercased()), name: VName(spec.name.lowercased()),
-              attrs: Set(spec.attributes.map { trimmed($0.lowercased()) }))
+              attrs: Set(spec.attributes.map { trimmed($0.lowercased()) }), size: (spec.widthM, spec.depthM, spec.heightM))
     }
 
     enum Kind: String, Sendable, CaseIterable {
         case sofa, bed, mattress, desk, chair, table, dresser, bookshelf, tv, lamp, books, art, photos, binder
         case kitchenware, plant, rug, clothes, electronics, decor, appliance, fan, beanBag, mirror, quiltRack
-        case framedPhotos, box
+        case framedPhotos, stove, dishwasher, microwave, bench, ottoman, bike, suitcase, box
 
         /// Default size (w, d, h) in meters when a dimension is missing or invalid.
         var defaultSize: (Double, Double, Double) {
@@ -190,6 +197,13 @@ public enum VoxelModels {
             case .mirror: (0.6, 0.05, 0.9)
             case .quiltRack: (0.9, 0.3, 0.9)
             case .framedPhotos: (0.4, 0.05, 0.5)
+            case .stove: (0.76, 0.65, 0.92)
+            case .dishwasher: (0.6, 0.6, 0.86)
+            case .microwave: (0.5, 0.38, 0.3)
+            case .bench: (1.2, 0.4, 0.45)
+            case .ottoman: (0.6, 0.6, 0.42)
+            case .bike: (1.7, 0.6, 1.0)
+            case .suitcase: (0.45, 0.28, 0.7)
             case .box: (0.5, 0.4, 0.4)
             }
         }
@@ -213,6 +227,12 @@ public enum VoxelModels {
             case .mirror: (4, 5, 1)
             case .quiltRack: (8, 8, 3)
             case .framedPhotos: (4, 5, 1)
+            case .stove, .dishwasher: (8, 10, 8)
+            case .microwave: (6, 4, 4)
+            case .bench: (8, 4, 4)
+            case .ottoman: (5, 4, 5)
+            case .bike: (16, 10, 3)
+            case .suitcase: (5, 8, 3)
             default: nil
             }
         }
@@ -222,7 +242,7 @@ public enum VoxelModels {
 
     /// Picks a builder from category + name keywords (models.js `route`, extended for Moove's
     /// categories: bed, chair, table, storage, lamp, appliance, decor, sofa).
-    static func route(category cat: String, name n: VName, attrs: Set<String> = []) -> Kind {
+    static func route(category cat: String, name n: VName, attrs: Set<String> = [], size: (Double, Double, Double)? = nil) -> Kind {
         // RoomPlan attributes first: they come from the scan itself
         if attrs.contains("storagetype.shelf") { return .bookshelf }
         if attrs.contains("storagetype.cabinet") { return .dresser }
@@ -233,6 +253,12 @@ public enum VoxelModels {
         if n.has("bean bag", "beanbag", "bean-bag", "pouf", "floor cushion") { return .beanBag }
         if n.has("sectional", "sofa", "couch", "loveseat", "futon", "settee", "armchair") { return .sofa }
         if n.has("bookcase", "bookshelf", "book shelf", "shelving", "shelf unit", "étagère") { return .bookshelf }
+        // the vision agent's specific names ("black standing desk") beat a broad category ("furniture");
+        // order matters: a "desk lamp" is a lamp, a "desk chair" a chair, a "desk with drawers" a desk
+        if n.word("lamp", "lamps", "sconce", "lantern") { return .lamp }
+        if n.word("chair", "chairs", "stool", "stools", "recliner") { return .chair }
+        if n.has("tv stand", "tv console", "tv cabinet", "tv unit", "media console", "entertainment center") { return .dresser }
+        if n.has("desk", "workstation") || n.word("vanity") { return .desk }
         if n.has("dresser", "chest of drawers", "nightstand", "night stand", "bedside", "sideboard", "credenza", "armoire", "wardrobe")
             || n.word("drawers", "cabinet") { return .dresser }
         if n.word("rug") || n.has("carpet") { return .rug }
@@ -240,7 +266,18 @@ public enum VoxelModels {
         if n.has("mirror") { return .mirror }
         if n.has("frame") && n.has("photo", "picture", "portrait") { return .framedPhotos }
         if n.has("fridge", "refrigerator", "freezer") { return .appliance }
+        if n.has("dishwasher") { return .dishwasher }
+        if n.has("washing machine") || (n.word("washer", "dryer") && !n.has("hair dryer", "pressure washer")) { return .appliance }
+        if n.has("microwave") { return .microwave }
+        if n.word("stove", "range", "oven", "cooktop") && !n.has("toaster oven", "dutch oven") { return .stove }
         if n.word("fan", "fans") { return .fan }
+        if n.word("bike", "bicycle", "e-bike", "ebike") { return .bike }
+        if n.has("suitcase", "luggage", "carry-on", "carry on") { return .suitcase }
+        if n.has("ottoman", "footstool", "foot stool", "pouf") { return .ottoman }
+        if n.word("bench", "settle") { return .bench }
+        if n.has("bed frame", "bunk bed", "daybed", "platform bed", "headboard") || n.word("bed") { return .bed }
+        if n.word("tv", "television", "tvs") { return .tv }
+        if n.word("table", "tables") { return .table }
         switch cat {
         case "sofa", "couch": return .sofa
         case "bed": return .bed
@@ -248,9 +285,10 @@ public enum VoxelModels {
         case "desk": return .desk
         case "chair": return .chair
         case "table": return n.has("desk", "workstation") ? .desk : .table
-        case "dresser": return .dresser
+        case "dresser", "nightstand", "cabinet", "wardrobe": return .dresser
+        case "bookshelf", "bookcase", "shelf", "shelving": return .bookshelf
         case "lamp", "light", "lighting": return .lamp
-        case "tv": return .tv
+        case "tv", "television": return .tv
         case "books", "book": return .books
         case "art": return .art
         case "photos": return .photos
@@ -260,15 +298,39 @@ public enum VoxelModels {
         case "kitchenware", "kitchen": return .kitchenware
         case "clothes", "clothing": return .clothes
         case "electronics": return n.word("tv", "television") ? .tv : .electronics
-        case "appliance", "appliances": return n.word("tv", "television") ? .tv : .appliance
+        case "appliance", "appliances", "refrigerator", "fridge", "washer", "dryer", "washerdryer", "washer_dryer": return .appliance
+        case "stove", "oven", "range": return .stove
+        case "dishwasher": return .dishwasher
+        case "microwave": return .microwave
+        case "fan": return .fan
+        case "mirror": return .mirror
+        case "bench": return .bench
+        case "ottoman": return .ottoman
+        case "bike", "bicycle": return .bike
+        case "suitcase", "luggage": return .suitcase
+        case "box", "boxes": return .box
         case "storage": return n.word("bin", "tote", "box", "crate", "basket", "container") ? .box : .bookshelf
         case "decor":
             if n.word("art", "artwork", "painting", "canvas", "poster", "print") { return .art }
             if n.word("plant", "plants", "succulent", "fern", "monstera") { return .plant }
             if n.word("photos") { return .photos }
             return .decor
-        default: return .box
+        default: return size.map(shapeKind) ?? .box
         }
+    }
+
+    /// Last resort for a broad category ("furniture", "other") whose name has no keyword: the
+    /// likeliest piece for the scanned (w, d, h) in meters. Small or odd shapes stay boxes.
+    static func shapeKind(_ s: (Double, Double, Double)) -> Kind {
+        let (w, d, h) = s
+        guard w.isFinite, d.isFinite, h.isFinite, w > 0, d > 0, h > 0 else { return .box }
+        let foot = max(w, d), slim = min(w, d)
+        if h < 0.35 && foot >= 1.2 { return .rug }
+        if h >= 1.2 && slim <= 0.5 { return .bookshelf }
+        if h >= 0.6 && h <= 0.85 && foot >= 0.9 { return slim <= 0.75 ? .desk : .table }
+        if h >= 0.4 && h <= 0.7 && foot >= 1.4 && slim >= 0.9 { return .bed }
+        if h >= 0.65 && h <= 1.2 && foot >= 0.6 && foot <= 1.6 && slim >= 0.4 { return .dresser }
+        return .box
     }
 
     // MARK: sizing
