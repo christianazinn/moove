@@ -20,8 +20,11 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
     public init(identity: IdentityHex = "fixture-user", seed: SyncSnapshot = SyncSnapshot()) {
         self.identity = identity
         self.state = seed
-        let maxId = (seed.rooms.map(\.id) + seed.scans.map(\.id) + seed.items.map(\.id) + seed.comps.map(\.id)
-                     + seed.newHomes.map(\.id) + seed.layouts.map(\.id)).max() ?? 0
+        let ids: [[UInt64]] = [
+            seed.rooms.map(\.id), seed.scans.map(\.id), seed.items.map(\.id), seed.comps.map(\.id),
+            seed.newHomes.map(\.id), seed.layouts.map(\.id),
+        ]
+        let maxId = ids.joined().max() ?? 0
         self.nextId = maxId + 1
     }
 
