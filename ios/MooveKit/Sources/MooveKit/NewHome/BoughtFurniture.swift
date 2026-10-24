@@ -47,6 +47,9 @@ public enum BoughtFurniture {
     /// Keyword -> footprint, most specific first ("tv stand" before "tv", "desk chair" before "desk").
     /// Every category is a voxel builder key (`voxelCategories`).
     static let rules: [(keywords: [String], footprint: Footprint)] = [
+        // Lamps first: a "Desk lamp", "Table lamp" or "Bedside lamp" is a lamp, not the furniture it's named after.
+        (["desk lamp", "table lamp", "bedside lamp", "nightstand lamp"], .init(category: "lamp", widthM: 0.25, depthM: 0.25, heightM: 0.5)),
+        (["lamp", "floor lamp"], .init(category: "lamp", widthM: 0.35, depthM: 0.35, heightM: 1.6)),
         (["sofa bed", "futon"], .init(category: "sofa", widthM: 2.0, depthM: 0.9, heightM: 0.85)),
         (["sectional"], .init(category: "sofa", widthM: 2.6, depthM: 1.6, heightM: 0.85)),
         (["loveseat", "love seat"], .init(category: "sofa", widthM: 1.5, depthM: 0.9, heightM: 0.85)),
@@ -72,8 +75,7 @@ public enum BoughtFurniture {
         (["table"], .init(category: "table", widthM: 1.2, depthM: 0.8, heightM: 0.75)),
         (["bookshelf", "bookcase", "shelf", "shelving", "shelves"], .init(category: "storage", widthM: 0.8, depthM: 0.3, heightM: 1.8)),
         (["rug", "carpet"], .init(category: "rug", widthM: 1.8, depthM: 1.2, heightM: 0.01)),
-        (["desk lamp", "table lamp"], .init(category: "lamp", widthM: 0.25, depthM: 0.25, heightM: 0.5)),
-        (["lamp", "floor lamp", "light"], .init(category: "lamp", widthM: 0.35, depthM: 0.35, heightM: 1.6)),
+        (["light"], .init(category: "lamp", widthM: 0.35, depthM: 0.35, heightM: 1.6)),
         (["plant"], .init(category: "plant", widthM: 0.4, depthM: 0.4, heightM: 1.0)),
         (["fridge", "refrigerator", "freezer"], .init(category: "appliance", widthM: 0.75, depthM: 0.7, heightM: 1.75)),
         (["washer", "dryer", "dishwasher", "oven", "stove", "range"], .init(category: "appliance", widthM: 0.6, depthM: 0.65, heightM: 0.9)),

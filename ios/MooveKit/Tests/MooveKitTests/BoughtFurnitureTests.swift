@@ -20,6 +20,17 @@ import Testing
 
     // MARK: What counts as purchased
 
+    @Test func lampsNamedAfterFurnitureAreLamps() {
+        for name in ["Desk lamp", "Table lamp", "Bedside lamp"] {
+            let f = BoughtFurniture.footprint(category: "lamp", name: name)
+            #expect(f.category == "lamp", "\(name) -> \(f.category)")
+            #expect(f.heightM == 0.5, "\(name) is a small lamp")
+        }
+        #expect(BoughtFurniture.footprint(category: "lamp", name: "Floor lamp").heightM == 1.6)
+        #expect(BoughtFurniture.footprint(category: "", name: "Desk").category == "desk")
+        #expect(BoughtFurniture.footprint(category: "", name: "Light oak dresser").category == "dresser")
+    }
+
     @Test func boughtStatusCounts() {
         var s = SyncSnapshot(me: "me")
         s.shoppingItems = [item(1, "Sofa", "sofa", status: .bought), item(2, "Desk", "desk", status: .found)]
