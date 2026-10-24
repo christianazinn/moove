@@ -76,7 +76,10 @@ public enum VoxelModels {
         if let m = kind.minDims { X = max(X, m.0); Y = max(Y, m.1); Z = max(Z, m.2); NY = Y }
         // a robot vacuum is a low disc whatever height a loose scan box (or the default) says
         if kind == .vacuum && Canvas.isRobotVacuum(name, Y) { Y = min(Y, 3); NY = Y }
-        if kind == .bed {
+        // RoomPlan has no bunk category: a bed box 1.2 m+ tall (or named bunk) is one
+        let bunk = kind == .bed && (name.has("bunk") || Y >= vox(1.2))
+        if bunk { Y = max(Y, vox(1.4)); NY = Y }
+        if kind == .bed && !bunk {
             // h <= 0.7 m: h is the mattress-top height, the headboard rises above it
             if Y <= vox(0.7) { bedTop = max(3, Y); NY = max(bedTop + 3, vox(0.95)) } else { bedTop = clamp(vox(0.55), 3, Y - 3); NY = Y }
         }
@@ -89,7 +92,7 @@ public enum VoxelModels {
         g.secondary = name.secondary
         switch kind {
         case .sofa: g.sofa(X, NY, Z, name)
-        case .bed: g.bed(X, NY, Z, name, bedTop)
+        case .bed: if bunk { g.bunkBed(X, NY, Z, name) } else { g.bed(X, NY, Z, name, bedTop) }
         case .mattress: g.mattress(X, NY, Z, name)
         case .desk: g.desk(X, NY, Z, name, lShape: g.attr("tableshapetype.lshaped"))
         case .chair:
