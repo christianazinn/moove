@@ -1,3 +1,5 @@
+import { parseAllowedHosts } from './integrations/photos.js';
+
 // Loads ../.env.local (repo root) then agents/.env.local if present. See root .env.example.
 for (const f of ['../.env.local', '.env.local']) {
   try {
@@ -27,6 +29,9 @@ export const config = {
   uploadMaxBytes: Number(env('UPLOAD_MAX_BYTES', String(50 * 1024 * 1024))),
   // What phones/the worker use to fetch uploads; set to your LAN IP for devices.
   publicUploadBaseUrl: env('PUBLIC_UPLOAD_BASE_URL', 'http://localhost:8787'),
+  // Extra https hosts the vision agent may fetch photos from (#44, comma-separated, default none).
+  // Our own uploads are read from uploadDir on disk and never fetched.
+  allowedPhotoHosts: parseAllowedHosts(env('ALLOWED_PHOTO_HOSTS')),
   // Paywalled comps endpoint the pricing agent buys from over x402 (#7); bound to 127.0.0.1.
   x402Port: Number(env('X402_PORT', '8402')),
   apify: {

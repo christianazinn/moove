@@ -16,76 +16,105 @@ struct ListingsView: View {
 
     var body: some View {
         let listings = store.snapshot.listings.sorted { $0.updatedAt > $1.updatedAt }
-        List {
-            if !listings.isEmpty {
-                Section { totals(listings) }
-            }
-            ForEach(Self.groups, id: \.title) { group in
-                let rows = listings.filter { group.statuses.contains($0.status) }
-                if !rows.isEmpty {
-                    Section("\(group.title) · \(rows.count)") {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                PageHeader(
+                    eyebrow: "04 — Sell",
+                    title: "Your listings.",
+                    lede: "What the listing agent is selling for you: drafting, waiting on your OK, live and sold."
+                )
+                if listings.isEmpty {
+                    emptyState.padding(.top, 32)
+                } else {
+                    totals(listings).padding(.top, 28)
+                }
+                ForEach(Self.groups, id: \.title) { group in
+                    let rows = listings.filter { group.statuses.contains($0.status) }
+                    if !rows.isEmpty {
+                        ListHeader(title: group.title, count: "\(rows.count)")
+                            .padding(.top, 40)
                         ForEach(rows) { listing in
                             NavigationLink(value: listing.id) { ListingRow(listing: listing, item: item(for: listing)) }
+                                .buttonStyle(.plain)
                         }
                     }
                 }
             }
+            .padding(.horizontal, Theme.gutter)
+            .padding(.top, 16)
+            .padding(.bottom, 48)
         }
         .navigationTitle("Listings")
+        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: UInt64.self) { ListingDetailView(listingId: $0) }
-        .overlay {
-            if listings.isEmpty {
-                ContentUnavailableView("No listings yet", systemImage: "tag",
-                                       description: Text("Items sorted to Sell show up here once the listing agent writes them."))
-            }
-        }
+        .mooveScreen()
         .animation(.default, value: listings)
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("No listings yet").blockTitle()
+            Text("Items sorted to Sell show up here once the listing agent writes them.").monoMeta()
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 28)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .ruled(.top)
+        .ruled()
+        .accessibilityElement(children: .combine)
     }
 
     private func item(for listing: Listing) -> Item? {
         store.items.first { $0.id == listing.itemId }
     }
 
+    /// Three headline figures between rules, split by hairlines.
     private func totals(_ listings: [Listing]) -> some View {
         let live = listings.filter { $0.status == .posted }
         let sold = listings.filter { $0.status == .sold }
-        return HStack {
-            stat("\(live.count)", "live")
-            Divider()
-            stat(live.map(\.priceCents).reduce(0, +).usd, "listed")
-            Divider()
-            stat(sold.map(\.priceCents).reduce(0, +).usd, "sold", tint: .green)
+        return HStack(spacing: 0) {
+            StatFigure(label: "Live", value: "\(live.count)")
+                .padding(.vertical, 18).padding(.trailing, 14)
+            Rectangle().fill(Theme.line).frame(width: 1)
+            StatFigure(label: "Listed", value: live.map(\.priceCents).reduce(0, +).usd)
+                .padding(.vertical, 18).padding(.horizontal, 14)
+            Rectangle().fill(Theme.line).frame(width: 1)
+            StatFigure(label: "Sold", value: sold.map(\.priceCents).reduce(0, +).usd, tint: Theme.accentStrong)
+                .padding(.vertical, 18).padding(.leading, 14)
         }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func stat(_ value: String, _ label: String, tint: Color = .primary) -> some View {
-        VStack(spacing: 2) {
-            Text(value).font(.title3.weight(.semibold).monospacedDigit()).foregroundStyle(tint)
-            Text(label).font(.caption2).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
+        .fixedSize(horizontal: false, vertical: true)
+        .ruled(.top)
+        .ruled()
     }
 }
 
+/// A ledger row: photo, bold mono title, status, price and simulated tag on the right.
 struct ListingRow: View {
     let listing: Listing
     let item: Item?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            if let item { ItemThumbnail(item: item, size: 56) }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(listing.title).font(.subheadline.weight(.semibold)).lineLimit(2)
-                HStack(spacing: 6) {
-                    Text(listing.priceCents.usd).font(.headline.monospacedDigit())
-                    Spacer()
-                    if listing.simulated { SimulatedTag() }
-                }
+        HStack(spacing: 16) {
+            if let item { ItemThumbnail(item: item, size: 56) } else { IconTile(systemName: "tag") }
+            VStack(alignment: .leading, spacing: 5) {
+                Text(listing.title).blockTitle().lineLimit(2)
                 ListingStatusChip(status: listing.status)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(listing.priceCents.usd).rowValue()
+                if listing.simulated { SimulatedTag() }
+            }
+            .layoutPriority(1)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(Theme.faint)
+                .accessibilityHidden(true)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 16)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .ruled()
     }
 }
 

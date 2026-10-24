@@ -10,6 +10,7 @@ Read these before writing code:
 - `docs/data-model.md`: SpacetimeDB tables + reducers. **This is the contract between lanes.**
 - `docs/tasks/NN-*.md`: the brief for the task you're working on (same text as the GitHub issue)
 - `docs/tracks.md`: sponsor-track requirements. Check it before cutting a corner a judge would care about.
+- `docs/demo.md`: demo runbook (seeded backup room, the 2-minute script, fallbacks)
 
 ## Repo map
 | Path | What | Owner lane |
@@ -59,5 +60,5 @@ The kickoff plan is a starting point, not a mandate. After kickoff, **agents coo
 ## Commands
 Each lane fills these in as it initializes its directory. Keep this section current.
 - `spacetime/` (needs the CLI: `curl -sSf https://install.spacetimedb.com | sh`): `npm install`, then `npm run typecheck`, `npm run build`, `spacetime start` (local server on :3000), `npm run publish:local` (or `publish:local:reset` to wipe data), `npm run generate` (regenerates `agents/src/module_bindings`, which are committed; never hand-edit them), and `npm run publish:cloud` (maincloud). Poke at it with `spacetime call -s local moove create_room '"Bedroom"' '"old"'` or `spacetime sql -s local moove "SELECT * FROM item"`.
-- `agents/`: `npm install`, `npm run dev` (watch mode) or `npm start`, and `npm run typecheck`. It connects to `SPACETIME_URI` (default `ws://localhost:3000`) and DB `moove`. Its identity is stored in `agents/.worker-token` (gitignored). The first identity to call `register_worker` owns the worker role, so keep that token, or `npm run publish:local:reset` in `spacetime/` to start over. Add agents to the array in `src/index.ts` (see the `Agent` interface in `src/agents/types.ts`). Log every step with `logEvent()` from `src/events.ts`. Hosted deploy (Docker, DO, Fly.io): `docs/deploy.md`.
+- `agents/`: `npm install`, `npm run dev` (watch mode) or `npm start`, and `npm run typecheck`. It connects to `SPACETIME_URI` (default `ws://localhost:3000`) and DB `moove`. Its identity is stored in `agents/.worker-token` (gitignored). On a local DB the first identity to call `register_worker` owns the worker role, so keep that token, or `npm run publish:local:reset` in `spacetime/` to start over. On maincloud only the identity pinned in `spacetime/src/index.ts` can be the worker (#44). Add agents to the array in `src/index.ts` (see the `Agent` interface in `src/agents/types.ts`). Log every step with `logEvent()` from `src/events.ts`.
 - `ios/`: `cd ios && xcodegen && open Moove.xcodeproj`. `cd ios/MooveKit && swift test` (also works on Linux).

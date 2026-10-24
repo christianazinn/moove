@@ -1,0 +1,92 @@
+{
+  "_note": "Cached live Apify search (active listings) for the buy agent (#15), fetched with a real APIFY_TOKEN and trimmed to the fields we use. FB seller names and eBay seller handles removed (privacy). Served for the demo 'Floor lamp' shopping item (search text was 'Floor lamp'). Rows read back from this file are labeled as a cached replay.",
+  "query": "Floor lamp",
+  "fetchedAt": "2026-10-24T05:35:10.229Z",
+  "actors": {
+    "fb": "apify~facebook-marketplace-scraper",
+    "ebay": "automation-lab~ebay-scraper"
+  },
+  "errors": [],
+  "rows": [
+    {
+      "source": "fb",
+      "title": "Floor lamp",
+      "priceCents": 1000,
+      "url": "https://www.facebook.com/marketplace/item/2160770791537511/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Brushed Nickel Torchiere Floor Lamp",
+      "priceCents": 1200,
+      "url": "https://www.facebook.com/marketplace/item/945253898604276/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "2 Room Essentials Torchiere with Task Light Floor Lamp - Silver",
+      "priceCents": 2000,
+      "url": "https://www.facebook.com/marketplace/item/1361493105450620/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Anrotix 6.3 ft 90° Foldable Floor Lamp with Remote, Dimmable LED Torchiere",
+      "priceCents": 4019,
+      "url": "https://www.ebay.com/itm/127926720691",
+      "seller": "eBay seller, 99.7% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Anrotix Dimmable LED Floor Lamp 6.3ft with Remote 90° Foldable Tall Torchiere",
+      "priceCents": 3999,
+      "url": "https://www.ebay.com/itm/188356477719",
+      "seller": "eBay seller, 100% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "56\" Corner Floor Lamp RGB LED Color Changing App & Remote Control",
+      "priceCents": 2099,
+      "url": "https://www.ebay.com/itm/377519119445",
+      "seller": "eBay seller, 99.6% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Anrotix 30W LED Floor Lamp 3000LM 90° Foldable Dimmable Standing Lamp w/ Remote",
+      "priceCents": 4999,
+      "url": "https://www.ebay.com/itm/127900322337",
+      "seller": "eBay seller, 99.7% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Smoked Glass Floor Lamp Black - Threshold",
+      "priceCents": 3699,
+      "url": "https://www.ebay.com/itm/206516389013",
+      "seller": "eBay seller, 99.5% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    }
+  ]
+}

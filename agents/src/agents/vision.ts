@@ -35,7 +35,11 @@ async function identify(conn: Conn, it: Item): Promise<void> {
     // Most recent 4 photos; skip any that fail to load rather than failing the item.
     const loaded = await Promise.allSettled(it.photoUrls.slice(-4).map(loadImage));
     const images = loaded.flatMap(r => (r.status === 'fulfilled' ? [r.value] : []));
-    if (images.length === 0) throw new Error('none of the photos could be loaded');
+    if (images.length === 0) {
+      // Say why (e.g. a host outside ALLOWED_PHOTO_HOSTS, #44) so a misconfigured base URL is easy to spot.
+      const why = loaded.find(r => r.status === 'rejected')?.reason;
+      throw new Error(`none of the photos could be loaded${why ? `: ${why instanceof Error ? why.message : String(why)}` : ''}`);
+    }
     const d = await structuredCall({
       model: config.models.vision,
       system: SYSTEM,

@@ -38,7 +38,10 @@ import AddCompsReducer from "./add_comps_reducer";
 import AddDealReducer from "./add_deal_reducer";
 import AddItemReducer from "./add_item_reducer";
 import AddItemPhotoReducer from "./add_item_photo_reducer";
+import AddScanPhotoReducer from "./add_scan_photo_reducer";
 import AddShoppingItemReducer from "./add_shopping_item_reducer";
+import AddSweepItemReducer from "./add_sweep_item_reducer";
+import ApplySweepMatchReducer from "./apply_sweep_match_reducer";
 import ChooseDealReducer from "./choose_deal_reducer";
 import CreateListingDraftReducer from "./create_listing_draft_reducer";
 import CreateNewHomeReducer from "./create_new_home_reducer";
@@ -49,12 +52,15 @@ import DeleteItemReducer from "./delete_item_reducer";
 import ImportScanReducer from "./import_scan_reducer";
 import JoinRoomReducer from "./join_room_reducer";
 import LogAgentEventReducer from "./log_agent_event_reducer";
+import RecordCibaDecisionReducer from "./record_ciba_decision_reducer";
 import RecordPaymentReducer from "./record_payment_reducer";
 import RegisterUserReducer from "./register_user_reducer";
 import RegisterWorkerReducer from "./register_worker_reducer";
+import RemoveMemberReducer from "./remove_member_reducer";
 import RemoveShoppingItemReducer from "./remove_shopping_item_reducer";
 import RenameItemReducer from "./rename_item_reducer";
 import RequestApprovalReducer from "./request_approval_reducer";
+import RotateJoinCodeReducer from "./rotate_join_code_reducer";
 import SaveLayoutReducer from "./save_layout_reducer";
 import SetApprovalThresholdReducer from "./set_approval_threshold_reducer";
 import SetAutoDispositionReducer from "./set_auto_disposition_reducer";
@@ -67,6 +73,7 @@ import SetItemModelReducer from "./set_item_model_reducer";
 import SetItemStageReducer from "./set_item_stage_reducer";
 import SetSentimentalReducer from "./set_sentimental_reducer";
 import SetShoppingStatusReducer from "./set_shopping_status_reducer";
+import SetSweepStatusReducer from "./set_sweep_status_reducer";
 import UpdateListingReducer from "./update_listing_reducer";
 import UpdatePaymentReducer from "./update_payment_reducer";
 
@@ -85,6 +92,7 @@ import PaymentRow from "./payment_table";
 import RoomRow from "./room_table";
 import RoomMemberRow from "./room_member_table";
 import ScanRow from "./scan_table";
+import ScanPhotoRow from "./scan_photo_table";
 import ShoppingItemRow from "./shopping_item_table";
 import UserRow from "./user_table";
 import WorkerRow from "./worker_table";
@@ -283,6 +291,23 @@ const tablesSchema = __schema({
       { name: 'scan_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, ScanRow),
+  scanPhoto: __table({
+    name: 'scan_photo',
+    indexes: [
+      { accessor: 'id', name: 'scan_photo_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'owner', name: 'scan_photo_owner_idx_btree', algorithm: 'btree', columns: [
+        'owner',
+      ] },
+      { accessor: 'scanId', name: 'scan_photo_scan_id_idx_btree', algorithm: 'btree', columns: [
+        'scanId',
+      ] },
+    ],
+    constraints: [
+      { name: 'scan_photo_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ScanPhotoRow),
   shoppingItem: __table({
     name: 'shopping_item',
     indexes: [
@@ -327,7 +352,10 @@ const reducersSchema = __reducers(
   __reducerSchema("add_deal", AddDealReducer),
   __reducerSchema("add_item", AddItemReducer),
   __reducerSchema("add_item_photo", AddItemPhotoReducer),
+  __reducerSchema("add_scan_photo", AddScanPhotoReducer),
   __reducerSchema("add_shopping_item", AddShoppingItemReducer),
+  __reducerSchema("add_sweep_item", AddSweepItemReducer),
+  __reducerSchema("apply_sweep_match", ApplySweepMatchReducer),
   __reducerSchema("choose_deal", ChooseDealReducer),
   __reducerSchema("create_listing_draft", CreateListingDraftReducer),
   __reducerSchema("create_new_home", CreateNewHomeReducer),
@@ -338,12 +366,15 @@ const reducersSchema = __reducers(
   __reducerSchema("import_scan", ImportScanReducer),
   __reducerSchema("join_room", JoinRoomReducer),
   __reducerSchema("log_agent_event", LogAgentEventReducer),
+  __reducerSchema("record_ciba_decision", RecordCibaDecisionReducer),
   __reducerSchema("record_payment", RecordPaymentReducer),
   __reducerSchema("register_user", RegisterUserReducer),
   __reducerSchema("register_worker", RegisterWorkerReducer),
+  __reducerSchema("remove_member", RemoveMemberReducer),
   __reducerSchema("remove_shopping_item", RemoveShoppingItemReducer),
   __reducerSchema("rename_item", RenameItemReducer),
   __reducerSchema("request_approval", RequestApprovalReducer),
+  __reducerSchema("rotate_join_code", RotateJoinCodeReducer),
   __reducerSchema("save_layout", SaveLayoutReducer),
   __reducerSchema("set_approval_threshold", SetApprovalThresholdReducer),
   __reducerSchema("set_auto_disposition", SetAutoDispositionReducer),
@@ -356,6 +387,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_item_stage", SetItemStageReducer),
   __reducerSchema("set_sentimental", SetSentimentalReducer),
   __reducerSchema("set_shopping_status", SetShoppingStatusReducer),
+  __reducerSchema("set_sweep_status", SetSweepStatusReducer),
   __reducerSchema("update_listing", UpdateListingReducer),
   __reducerSchema("update_payment", UpdatePaymentReducer),
 );

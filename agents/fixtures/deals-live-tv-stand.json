@@ -1,0 +1,72 @@
+{
+  "_note": "Cached live Apify search (active listings) for the buy agent (#15), fetched with a real APIFY_TOKEN and trimmed to the fields we use. FB seller names and eBay seller handles removed (privacy). Served for the demo 'TV stand' shopping item (search text was 'TV stand'). Rows read back from this file are labeled as a cached replay.",
+  "query": "TV stand",
+  "fetchedAt": "2026-10-24T05:32:09.601Z",
+  "actors": {
+    "fb": "apify~facebook-marketplace-scraper",
+    "ebay": "automation-lab~ebay-scraper"
+  },
+  "errors": [],
+  "rows": [
+    {
+      "source": "fb",
+      "title": "TV Stand",
+      "priceCents": 1500,
+      "url": "https://www.facebook.com/marketplace/item/1070614469342230/",
+      "seller": "FB Marketplace seller, Oakland, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "VIVO Black Artistic Easel 45\" to 65\" Studio TV Tripod Adjustable Floor Stand",
+      "priceCents": 8999,
+      "url": "https://www.ebay.com/itm/363914752575",
+      "seller": "eBay seller, 99.9% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "80\" Fireplace TV Stand w/ Electric Fireplace Insert,Storage Media ConsoleCabinet",
+      "priceCents": 50795,
+      "url": "https://www.ebay.com/itm/377550984052",
+      "seller": "eBay seller, 99.6% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "59\"Electric Fireplace TV Stand & 3 Sided Glass Entertainment Center w/Fireplace",
+      "priceCents": 36006,
+      "url": "https://www.ebay.com/itm/820116809985",
+      "seller": "eBay seller, 98.8% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "VIVO TV Display 13\" to 65\" Floor Stand, Height Adjustable Mount for Flat Screen",
+      "priceCents": 5999,
+      "url": "https://www.ebay.com/itm/364926364000",
+      "seller": "eBay seller, 99.9% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "82.7\" Modern TV Stand for TVs Up to 85\",2-Tier Entertainment Center with Storage",
+      "priceCents": 18999,
+      "url": "https://www.ebay.com/itm/198702612187",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-3 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    }
+  ]
+}

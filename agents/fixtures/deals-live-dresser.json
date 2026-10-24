@@ -1,0 +1,102 @@
+{
+  "_note": "Cached live Apify search (active listings) for the buy agent (#15), fetched with a real APIFY_TOKEN and trimmed to the fields we use. FB seller names and eBay seller handles removed (privacy). Served for the demo 'Dresser' shopping item (search text was 'Dresser'). Rows read back from this file are labeled as a cached replay.",
+  "query": "Dresser",
+  "fetchedAt": "2026-10-24T05:30:36.402Z",
+  "actors": {
+    "fb": "apify~facebook-marketplace-scraper",
+    "ebay": "automation-lab~ebay-scraper"
+  },
+  "errors": [],
+  "rows": [
+    {
+      "source": "fb",
+      "title": "Dresser",
+      "priceCents": 2000,
+      "url": "https://www.facebook.com/marketplace/item/2618820655229332/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Small 5 Drawer Dresser",
+      "priceCents": 3000,
+      "url": "https://www.facebook.com/marketplace/item/1574921894363684/",
+      "seller": "FB Marketplace seller, Berkeley, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Fabric Compartment Dresser",
+      "priceCents": 2000,
+      "url": "https://www.facebook.com/marketplace/item/1803903010854263/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Solid Wood Turquoise Dresser!",
+      "priceCents": 5000,
+      "url": "https://www.facebook.com/marketplace/item/920922824110748/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "WOODEN JEWELRY DRESSER",
+      "priceCents": 25000,
+      "url": "https://www.ebay.com/itm/800334628647",
+      "seller": "eBay seller, new seller",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "7 Drawers Dresser Wood Storage Chests with Curved Legs for Bedroom,3/6 Drawers",
+      "priceCents": 13888,
+      "url": "https://www.ebay.com/itm/388490079476",
+      "seller": "eBay seller, 99.4% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Dresser for Bedroom 4-Drawers Chest of Drawers Wood Nightstand Storage Organizer",
+      "priceCents": 13899,
+      "url": "https://www.ebay.com/itm/387635933343",
+      "seller": "eBay seller, 99.4% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Modern 8 Drawer Dresser ,Wood Dressers & Chests of Drawers with LED Lights",
+      "priceCents": 23399,
+      "url": "https://www.ebay.com/itm/388305677415",
+      "seller": "eBay seller, 99.4% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Black 5 Drawers Dresser for Bedroom Wood Top Organizer Fabric Storage Drawers",
+      "priceCents": 4488,
+      "url": "https://www.ebay.com/itm/365092594749",
+      "seller": "eBay seller, 99.7% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    }
+  ]
+}
