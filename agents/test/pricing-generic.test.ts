@@ -20,3 +20,24 @@ test('specific names without photos are still priced right away', () => {
   assert.equal(needsPricing(item({ name: 'bicycle', category: 'bicycle' })), true);
   assert.equal(needsPricing(item({ name: 'bicycle', pricingStatus: 'done' })), false);
 });
+
+test('a built-in fixture is marked done without a comps lookup', async () => {
+  const { pricingAgent, setCompsSource } = await import('../src/agents/pricing.js');
+  let lookups = 0;
+  setCompsSource(async () => { lookups++; return { comps: [], replayed: false }; });
+  const toilet = item({ id: 7n, name: 'white two-piece elongated toilet', category: 'appliance', detailsStatus: 'done' });
+  const stages: Record<string, unknown>[] = [];
+  const events: { message: string }[] = [];
+  const conn = {
+    db: { item: { iter: () => [toilet].values(), id: { find: () => toilet }, onInsert: () => {}, onUpdate: () => {} } },
+    reducers: {
+      setItemStage: async (a: Record<string, unknown>) => void stages.push(a),
+      logAgentEvent: async (e: { message: string }) => void events.push(e),
+    },
+  };
+  pricingAgent.start(conn as never);
+  await new Promise(r => setTimeout(r, 30));
+  assert.equal(lookups, 0);
+  assert.deepEqual(stages.at(-1), { itemId: 7n, stage: 'done', field: 'pricing' });
+  assert.ok(events.some(e => /built-in fixture/.test(e.message)));
+});

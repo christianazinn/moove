@@ -45,11 +45,25 @@ struct ItemDetailView: View {
                                 .accessibilityLabel("Possibly sentimental")
                         }
                     }
-                    Text(item.estValueCents == nil ? item.priceText.capitalizedFirst : item.priceText)
+                    let listings = store.snapshot.compCounts[item.id] ?? 0
+                    let rough = item.saleValueCents != nil && Item.isRoughEstimate(compCount: listings)
+                    Text(item.saleValueCents == nil ? item.priceText.capitalizedFirst : rough ? "≈\(item.priceText)" : item.priceText)
                         .monoText(32, weight: .bold, maxScale: 1.6)
                         .tracking(-0.3)
-                        .foregroundStyle(item.estValueCents == nil ? Theme.muted : Theme.text)
-                        .accessibilityLabel("Estimated value: \(item.priceText)")
+                        .foregroundStyle(item.saleValueCents == nil ? Theme.muted : Theme.text)
+                        .accessibilityLabel("Estimated value: \(rough ? "about " : "")\(item.priceText)")
+                    if rough {
+                        Text("Rough estimate: based on only \(listings) comparable listing\(listings == 1 ? "" : "s").")
+                            .monoMeta()
+                            .foregroundStyle(Theme.ochreInk)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("item.roughEstimate")
+                    }
+                    if item.priceState == .builtIn {
+                        Text("Part of the building, like a toilet, tub or radiator, so it isn't priced or counted in sales.")
+                            .monoMeta()
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     if item.priceState == .unpriced {
                         Text("The pricing agent couldn't price this one. It's still sorted by size, condition and category, and you can choose below.")
                             .monoMeta()

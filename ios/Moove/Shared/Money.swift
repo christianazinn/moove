@@ -21,6 +21,7 @@ extension Item {
         case .identifying: "identifying…"
         case .pricing: "pricing…"
         case .unpriced: "no price"
+        case .builtIn: "stays with the building"
         }
     }
 }
