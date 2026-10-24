@@ -55,7 +55,7 @@ extension RoomGeometry {
     }
 }
 
-extension Transform {
+extension RoomTransform {
     /// Inverse of `apply` for rigid transforms (rotation + translation).
     public func inverseApply(_ p: SIMD3<Float>) -> SIMD3<Float> {
         let d = p - position
