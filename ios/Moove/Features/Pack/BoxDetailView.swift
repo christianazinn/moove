@@ -1,12 +1,15 @@
 import SwiftUI
 import MooveKit
 
-/// One box opened up: the big drawing, its label and stamps, and a check-off list of what goes in.
+/// One box opened up: the big drawing with voxel models of what's inside peeking out of it, its
+/// label, stamps and reasons, a check-off list with a 3D thumbnail per line, and "Print label".
 /// When the last line is checked the box seals (tape runs across the top, a "Sealed" stamp lands).
 struct BoxDetailView: View {
     var box: MovingBox
     /// Checked lines across all boxes, keyed by `PackChecks.key(box:line:)`.
     @Binding var checked: Set<String>
+    /// Scanned items by id, for their own voxel models (lines without one get a generic model).
+    var items: [UInt64: Item] = [:]
     @Environment(\.dismiss) private var dismiss
 
     private var packedCount: Int { box.contents.indices.filter { checked.contains(PackChecks.key(box: box.id, line: $0)) }.count }
@@ -16,11 +19,14 @@ struct BoxDetailView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    BoxArt(box: box, sealed: sealed, large: true)
-                        .frame(maxWidth: 360)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 8)
-                        .padding(.bottom, 24)
+                    VStack(spacing: -34) {
+                        peeking
+                        BoxArt(box: box, sealed: sealed, large: true)
+                    }
+                    .frame(maxWidth: 360)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
                     header
                     contents
                 }
@@ -30,6 +36,12 @@ struct BoxDetailView: View {
             .navigationTitle("Box \(box.numberText)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    PrintLabelsMenu(boxes: [box], title: "Box \(box.numberText) label") {
+                        Label("Print label", systemImage: "printer")
+                    }
+                    .accessibilityIdentifier("pack.box.printLabel")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }.monoText(14, weight: .bold, maxScale: 1.5)
                 }
@@ -62,19 +74,54 @@ struct BoxDetailView: View {
                     .foregroundStyle(box.fragile ? Theme.danger : Theme.accentStrong)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let hint = hint {
-                Text(hint).sansText(15).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 4)
+            VStack(alignment: .leading, spacing: 6) {
+                if !box.reason.isEmpty { reasonLine(box.reason, symbol: "shippingbox") }
+                if !box.roomReason.isEmpty { reasonLine(box.roomReason, symbol: "arrow.right.circle") }
+                if let hint { reasonLine(hint, symbol: "lightbulb") }
             }
+            .padding(.top, 4)
         }
         .padding(.bottom, 28)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var hint: String? {
-        if box.keepWithYou { return "Valuables and papers. This one rides with you, not on the truck." }
-        if box.openFirst { return "The first-night box. Load it last so it comes off the truck first." }
-        if box.fragile { return "Wrap each piece, fill gaps with paper, and keep it light." }
+        if box.fragile { return "Fill gaps with paper." }
         return nil
+    }
+
+    private func reasonLine(_ text: String, symbol: String) -> some View {
+        Label {
+            Text(text).sansText(15).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: symbol).foregroundStyle(box.tapeColor).accessibilityHidden(true)
+        }
+    }
+
+    /// The model for a line: the scanned item's own, else a generic one for its kind. Bulk items
+    /// split into typical pieces ("Paperbacks" from "Box of paperbacks") draw the piece.
+    @ViewBuilder
+    private func thumbnail(_ line: BoxContent, size: CGFloat, tile: Bool = true) -> some View {
+        if let id = line.itemId, let item = items[id], line.name == item.name {
+            VoxelThumbnail(item, size: size, tile: tile)
+        } else {
+            VoxelThumbnail(spec: line.voxelSpec, size: size, tile: tile)
+        }
+    }
+
+    /// Up to five of the box's things, drawn in 3D, peeking out over the flaps.
+    private var peeking: some View {
+        let shown = Array(box.contents.prefix(5).enumerated())
+        return HStack(spacing: -14) {
+            ForEach(shown, id: \.offset) { i, line in
+                thumbnail(line, size: 72, tile: false)
+                    .offset(y: i.isMultiple(of: 2) ? 0 : 8)
+                    .zIndex(Double(-i))
+            }
+        }
+        .padding(.horizontal, 24)
+        .zIndex(-1)
+        .accessibilityHidden(true)
     }
 
     private var contents: some View {
@@ -91,7 +138,9 @@ struct BoxDetailView: View {
                     .padding(.top, 12)
             }
             ForEach(Array(box.contents.enumerated()), id: \.offset) { index, line in
-                ContentRow(line: line, done: isChecked(index)) { toggle(index) }
+                ContentRow(line: line, done: isChecked(index)) { toggle(index) } thumbnail: {
+                    thumbnail(line, size: 44)
+                }
             }
             if box.contents.contains(where: { $0.itemId == nil }) {
                 Text("Typical: usual contents, not from your scan.")
@@ -128,11 +177,13 @@ struct BoxDetailView: View {
     }
 }
 
-/// A check-off line: square checkbox, item name (with "typical" for lines not from the scan), quantity.
-private struct ContentRow: View {
+/// A check-off line: square checkbox, a 3D thumbnail, item name with why it's here (or "typical" for
+/// lines not from the scan), quantity.
+private struct ContentRow<Thumb: View>: View {
     var line: BoxContent
     var done: Bool
     var toggle: () -> Void
+    @ViewBuilder var thumbnail: Thumb
 
     var body: some View {
         Button(action: toggle) {
@@ -142,6 +193,7 @@ private struct ContentRow: View {
                     .foregroundStyle(done ? Theme.accentStrong : Theme.muted)
                     .frame(width: 24)
                     .accessibilityHidden(true)
+                thumbnail
                 VStack(alignment: .leading, spacing: 2) {
                     Text(line.name)
                         .monoText(14.5, weight: .bold)
@@ -151,6 +203,8 @@ private struct ContentRow: View {
                     if line.itemId == nil {
                         // "Faint" in spirit; `muted` so it still passes 4.5:1.
                         Text("typical").monoText(12.5).foregroundStyle(Theme.muted)
+                    } else if let reason = line.reason {
+                        Text(reason).monoText(12.5).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -165,7 +219,7 @@ private struct ContentRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(line.name)\(line.quantity > 1 ? ", \(line.quantity)" : "")\(line.itemId == nil ? ", typical" : "")")
+        .accessibilityLabel("\(line.name)\(line.quantity > 1 ? ", \(line.quantity)" : "")\(line.itemId == nil ? ", typical" : line.reason.map { ", \($0)" } ?? "")")
         .accessibilityValue(done ? "Packed" : "Not packed")
         .accessibilityAddTraits(done ? [.isButton, .isSelected] : .isButton)
     }

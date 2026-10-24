@@ -30,19 +30,29 @@ enum BoxPalette {
     static let paperInk = Theme.color(0x1E1B16)
     static let paperMuted = Theme.color(0x5E564A)
 
-    /// Room tape colors. Fixed (not adaptive) and light enough that `paperInk` on them passes 4.5:1,
-    /// so the number badges read in both modes.
-    static let tapes: [Color] = [0xA9B897, 0xD9B26A, 0x9FB0C0, 0xD99A82, 0xB9A3BF, 0x8FB8B0, 0xBFB4A3].map(Theme.color)
+    /// A stable tape color per destination room, from MooveKit's shared `PackingPalette` (the printed
+    /// labels and the 3D truck use the same one). Fixed, not adaptive, and light enough that
+    /// `paperInk` on it passes 4.5:1, so the number badges read in both modes.
+    static func tape(for room: String) -> Color { Theme.color(PackingPalette.color(forRoom: room)) }
 
-    /// A stable tape color per destination room (common rooms get a fixed one).
-    static func tape(for room: String) -> Color {
-        let name = room.lowercased()
-        let fixed: [(String, Int)] = [("kitchen", 1), ("bed", 2), ("living", 0), ("bath", 5), ("office", 4), ("dining", 3), ("study", 4), ("garage", 6)]
-        if let hit = fixed.first(where: { name.contains($0.0) }) { return tapes[hit.1] }
-        if name.isEmpty || name == "any room" { return tapes[6] }
-        // Not `hashValue`: that changes between launches.
-        let sum = name.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }
-        return tapes[sum % tapes.count]
+    /// An SF Symbol for what a box mostly holds.
+    static func symbol(for box: MovingBox) -> String {
+        if box.keepWithYou { return "heart.fill" }
+        if box.openFirst { return "moon.stars.fill" }
+        switch box.kinds.first ?? "" {
+        case "books": return "books.vertical.fill"
+        case "decor": return "photo.artframe"
+        case "lamps": return "lamp.table.fill"
+        case "desk": return "pencil.and.ruler.fill"
+        case "electronics": return "headphones"
+        case "clothes": return "tshirt.fill"
+        case "shoes": return "shoeprints.fill"
+        case "bedding": return "bed.double.fill"
+        case "kitchen": return "fork.knife"
+        case "bathroom": return "shower.fill"
+        case "hanging": return "hanger"
+        default: return "shippingbox.fill"
+        }
     }
 }
 
@@ -52,6 +62,7 @@ extension MovingBox {
     /// Destination room, or "Any room" when the plan has none.
     var roomName: String { room.isEmpty ? "Any room" : room }
     var tapeColor: Color { BoxPalette.tape(for: room) }
+    var symbol: String { BoxPalette.symbol(for: self) }
 
     /// Stamp texts in priority order.
     var stamps: [BoxStamp] {
@@ -89,12 +100,24 @@ struct MovingBoxCard: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
                 BoxArt(box: box, sealed: sealed)
-                Text(meta)
-                    .monoText(11.5, maxScale: 1.6)
-                    .foregroundStyle(sealed ? Theme.accentStrong : Theme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .center, spacing: 6) {
+                    Circle().fill(box.tapeColor).frame(width: 9, height: 9).accessibilityHidden(true)
+                    Text(meta)
+                        .monoText(11.5, maxScale: 1.6)
+                        .foregroundStyle(sealed ? Theme.accentStrong : Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .background(box.tapeColor.opacity(0.16), in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+            .overlay(alignment: .top) {
+                // A band of the room's color across the top of the card.
+                UnevenRoundedRectangle(topLeadingRadius: Theme.radiusMedium, topTrailingRadius: Theme.radiusMedium, style: .continuous)
+                    .fill(box.tapeColor)
+                    .frame(height: 5)
+                    .accessibilityHidden(true)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(BoxPressStyle())
@@ -106,11 +129,12 @@ struct MovingBoxCard: View {
 
     private var meta: String {
         let progress = sealed ? "sealed" : "\(packed)/\(box.contents.count) packed"
-        return "\(box.size.label) · \(Int(box.weightKg.rounded())) kg · \(progress)"
+        return "\(Int(box.weightKg.rounded())) kg · \(progress)"
     }
 
     private var accessibilityText: String {
         var parts = ["Box \(box.id)", box.title, box.roomName, box.size.label, "\(Int(box.weightKg.rounded())) kilograms"]
+        if !box.reason.isEmpty { parts.append(box.reason) }
         parts += box.stamps.map(\.rawValue)
         parts.append(sealed ? "sealed" : "\(packed) of \(box.contents.count) packed")
         return parts.joined(separator: ", ")
@@ -153,12 +177,14 @@ struct BoxArt: View {
             let w = geo.size.width
             let h = geo.size.height
             let flapH = h * (isTote ? 0.18 : 0.24)
-            let tapeW = max(8, w * 0.065)
+            let tapeW = max(10, w * 0.11)
             let tapeX = w * 0.1
             let shape = RoundedRectangle(cornerRadius: isTote ? 10 : 5, style: .continuous)
 
             ZStack(alignment: .topLeading) {
                 shape.fill(face)
+                // A wash of the room's color, so boxes for different rooms differ at a glance.
+                if !isTote { shape.fill(box.tapeColor.opacity(0.28)) }
                 // Flaps (or the tote's lid) and their seams.
                 Rectangle().fill(flap).frame(width: w, height: flapH)
                 Path { p in
@@ -192,6 +218,11 @@ struct BoxArt: View {
                 sealedStamp(size: large ? 16 : 11.5)
                     .position(x: w * 0.56, y: flapH)
             }
+            .overlay(alignment: .topTrailing) {
+                sizeGlyph(size: large ? 30 : 22)
+                    .padding(.top, flapH * 0.5 - (large ? 15 : 11))
+                    .padding(.trailing, large ? 10 : 6)
+            }
             .overlay(alignment: .bottomLeading) {
                 stampStack(size: large ? 12 : 9.5)
                     .padding(.leading, tapeX + tapeW + (large ? 12 : 7))
@@ -204,13 +235,28 @@ struct BoxArt: View {
         .accessibilityHidden(true)
     }
 
+    /// "M" in a circle: the box size at a glance.
+    private func sizeGlyph(size: CGFloat) -> some View {
+        Text(box.size.glyph)
+            .font(.mono(size * 0.55, weight: .bold))
+            .foregroundStyle(BoxPalette.paperInk)
+            .frame(width: size, height: size)
+            .background(Circle().fill(BoxPalette.paper))
+            .overlay(Circle().strokeBorder(box.tapeColor, lineWidth: 2.5))
+    }
+
     private func label(width: CGFloat, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("BOX \(box.numberText)")
-                .font(.mono(min(width * 0.18, large ? 26 : 18), weight: .bold))
-                .tracking(-0.3)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(box.numberText)
+                    .font(.mono(min(width * 0.3, large ? 40 : 24), weight: .bold))
+                    .tracking(-0.5)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Image(systemName: box.symbol)
+                    .font(.system(size: large ? 15 : 11, weight: .semibold))
+                    .foregroundStyle(BoxPalette.paperMuted)
+            }
             Text(box.title)
                 .font(.mono(large ? 13 : 10.5, weight: .medium))
                 .lineLimit(2)
@@ -224,11 +270,11 @@ struct BoxArt: View {
         }
         .foregroundStyle(BoxPalette.paperInk)
         .padding(.horizontal, large ? 10 : 7)
-        .padding(.top, large ? 9 : 7)
+        .padding(.top, large ? 14 : 10)
         .padding(.bottom, large ? 8 : 6)
         .frame(width: width, alignment: .leading)
         .background(BoxPalette.paper)
-        .overlay(alignment: .top) { Rectangle().fill(box.tapeColor).frame(height: 3) }
+        .overlay(alignment: .top) { Rectangle().fill(box.tapeColor).frame(height: large ? 8 : 6) }
         .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
         .shadow(color: .black.opacity(0.14), radius: 1.5, y: 1)
     }

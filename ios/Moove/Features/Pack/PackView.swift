@@ -2,8 +2,10 @@ import SwiftUI
 import MooveKit
 
 /// The packing plan (#19): which truck, how many movers and what it costs, every box drawn as a
-/// kraft moving box grouped by destination room, furniture take-apart notes, supplies, and a short
-/// schedule. Live: it re-plans whenever the kept items or the saved new-home layout change.
+/// kraft moving box in its room's color, grouped by destination room, with printable labels; things
+/// bought for the new home (delivered there, not packed); furniture take-apart notes; supplies; and a
+/// short schedule. Every placement says why. Live: it re-plans whenever the kept items (hidden rooms
+/// excluded), the purchases or the saved new-home layout change.
 struct PackView: View {
     @Environment(MooveStore.self) private var store
     @State private var plan: PackingPlan?
@@ -29,6 +31,7 @@ struct PackView: View {
                 if let plan {
                     truckCard(plan.truck, plan: plan, demo: input.demo)
                     boxes(plan.boxes)
+                    if !plan.delivered.isEmpty { delivered(plan.delivered) }
                     if !plan.furniture.isEmpty { furniture(plan.furniture) }
                     if !plan.supplies.isEmpty { supplies(plan.supplies) }
                     if !plan.schedule.isEmpty { schedule(plan.schedule, boxes: plan.boxes) }
@@ -43,11 +46,12 @@ struct PackView: View {
         .navigationBarTitleDisplayMode(.inline)
         .mooveScreen()
         .onChange(of: input, initial: true) { _, new in
-            plan = PackingPlanner.plan(items: new.items, destinationRoom: new.rooms)
+            plan = PackingPlanner.plan(items: new.items, destinationRoom: new.rooms, bought: new.bought)
         }
         .sheet(item: $openBox) { box in
             // Look the box up again so a re-plan while the sheet is open shows fresh contents.
-            BoxDetailView(box: plan?.boxes.first { $0.id == box.id } ?? box, checked: checkedBinding)
+            BoxDetailView(box: plan?.boxes.first { $0.id == box.id } ?? box, checked: checkedBinding,
+                          items: Dictionary(input.items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }))
                 .presentationDragIndicator(.visible)
         }
     }
@@ -57,11 +61,14 @@ struct PackView: View {
     private struct Inputs: Equatable {
         var items: [Item]
         var rooms: [UInt64: String]
+        var bought: [BoughtPiece]
         var demo: Bool
     }
 
-    /// Kept items plus undecided sentimental ones (those may well come along), with destination
-    /// rooms from the newest saved layout of the user's new home. Demo fixtures until anything is kept.
+    /// Kept items plus undecided sentimental ones (those may well come along) from visible rooms
+    /// (hidden rooms stay out, #271), plus what was bought for the new home (purchased only, not
+    /// still-shopping), with destination rooms from the newest saved layout of the user's new home.
+    /// Demo fixtures until anything is kept.
     private var inputs: Inputs {
         let snap = store.snapshot
         func packable(_ item: Item) -> Bool { item.disposition == .keep || (item.disposition == .undecided && item.maybeSentimental) }
@@ -73,7 +80,7 @@ struct PackView: View {
            let layout = snap.layouts(for: home.id).max(by: { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }) {
             for p in layout.placements { rooms[p.itemId] = p.room }
         }
-        return Inputs(items: items, rooms: rooms, demo: demo)
+        return Inputs(items: items, rooms: rooms, bought: snap.boughtPieces, demo: demo)
     }
 
     private var checked: Set<String> { PackChecks.decode(checkedRaw) }
@@ -182,6 +189,15 @@ struct PackView: View {
             ListHeader(title: "Boxes", count: "\(boxes.count)") {
                 Text("\(sealedCount) sealed").monoMeta()
             }
+            if !boxes.isEmpty {
+                PrintLabelsMenu(boxes: boxes) {
+                    Label("Print labels", systemImage: "printer")
+                }
+                .buttonStyle(.pill(.outline, compact: true))
+                .accessibilityHint("Makes a PDF of every box label to print or save")
+                .accessibilityIdentifier("pack.printLabels")
+                .padding(.top, 14)
+            }
             if boxes.isEmpty {
                 Text("No boxes needed. It's all furniture.")
                     .monoMeta()
@@ -226,9 +242,13 @@ struct PackView: View {
                     } label: {
                         LedgerRow(
                             title: note.name,
-                            meta: "\(note.room.isEmpty ? "Any room" : note.room) · \(note.steps.count) \(note.steps.count == 1 ? "step" : "steps")"
+                            meta: [note.reason, "\(note.room.isEmpty ? "Any room" : note.room) · \(note.steps.count) \(note.steps.count == 1 ? "step" : "steps")"]
+                                .filter { !$0.isEmpty }.joined(separator: "\n")
                         ) {
-                            IconTile(systemName: "wrench.and.screwdriver", size: 44)
+                            IconTile(systemName: note.room == "Keep with you" ? "car.fill" : "wrench.and.screwdriver", size: 44)
+                                .overlay(alignment: .bottom) {
+                                    Capsule().fill(BoxPalette.tape(for: note.room)).frame(width: 24, height: 4).padding(.bottom, 4)
+                                }
                         } trailing: {
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 12, weight: .regular))
@@ -242,6 +262,9 @@ struct PackView: View {
                     .accessibilityHint(open ? "Hides the steps" : "Shows the steps")
                     if open {
                         VStack(alignment: .leading, spacing: 10) {
+                            if !note.roomReason.isEmpty {
+                                Text(note.roomReason).monoMeta().fixedSize(horizontal: false, vertical: true)
+                            }
                             ForEach(Array(note.steps.enumerated()), id: \.offset) { i, step in
                                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                                     Text(i + 1 < 10 ? "0\(i + 1)" : "\(i + 1)")
@@ -260,6 +283,42 @@ struct PackView: View {
                         .transition(.opacity)
                     }
                 }
+            }
+        }
+        .padding(.top, 40)
+    }
+
+    // MARK: Delivered
+
+    /// Bought for the new home: it ships there, so it's not boxed and not on the truck.
+    private func delivered(_ pieces: [DeliveredItem]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ListHeader(title: "Delivered to your new home", count: "\(pieces.count)")
+            Label {
+                Text("Bought: ships straight to the new place, nothing to pack.")
+                    .sansText(15)
+                    .foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "shippingbox.and.arrow.backward").foregroundStyle(Theme.accentStrong).accessibilityHidden(true)
+            }
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+            ForEach(pieces) { piece in
+                LedgerRow(
+                    title: piece.title,
+                    meta: [piece.seller, "→ \(piece.room)"].filter { !$0.isEmpty }.joined(separator: " · ")
+                ) {
+                    VoxelThumbnail(spec: piece.voxelSpec, size: 56)
+                        .overlay(alignment: .bottom) {
+                            Capsule().fill(BoxPalette.tape(for: piece.room)).frame(width: 26, height: 4).padding(.bottom, 4)
+                        }
+                } trailing: {
+                    MonoTag(text: "Bought", tone: Theme.accentStrong)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel([piece.title, piece.seller, piece.reason, piece.roomReason].filter { !$0.isEmpty }.joined(separator: ", "))
+                .accessibilityIdentifier("pack.delivered.\(piece.id)")
             }
         }
         .padding(.top, 40)

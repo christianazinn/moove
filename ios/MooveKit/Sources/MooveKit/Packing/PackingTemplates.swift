@@ -30,6 +30,39 @@ enum PackKind: Int, CaseIterable, Comparable, Sendable {
         }
     }
 
+    /// Key for `MovingBox.kinds` (the app picks an icon from it).
+    var key: String {
+        switch self {
+        case .books: return "books"
+        case .decor: return "decor"
+        case .lamps: return "lamps"
+        case .desk: return "desk"
+        case .electronics: return "electronics"
+        case .clothes: return "clothes"
+        case .shoes: return "shoes"
+        case .bedding: return "bedding"
+        case .misc: return "misc"
+        case .kitchen: return "kitchen"
+        case .bathroom: return "bathroom"
+        case .hanging: return "hanging"
+        case .openFirst: return "openFirst"
+        case .keepWithYou: return "keepWithYou"
+        }
+    }
+
+    /// A voxel builder category for a generic thumbnail of a line of this kind.
+    var voxelCategory: String {
+        switch self {
+        case .books, .desk: return "books"
+        case .lamps: return "lamp"
+        case .electronics: return "electronics"
+        case .clothes, .shoes, .hanging, .bedding: return "clothes"
+        case .kitchen: return "kitchenware"
+        case .keepWithYou: return "photos"
+        case .decor, .misc, .bathroom, .openFirst: return "decor"
+        }
+    }
+
     /// Box sizes to try, best first. Heavy things go in small boxes.
     var sizes: [BoxSize] {
         switch self {
