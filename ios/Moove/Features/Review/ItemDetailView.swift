@@ -38,11 +38,16 @@ struct ItemDetailView: View {
                                 .accessibilityLabel("Possibly sentimental")
                         }
                     }
-                    Text(item.estValueCents?.usd ?? "Pricing…")
+                    Text(item.estValueCents == nil ? item.priceText.capitalizedFirst : item.priceText)
                         .monoText(32, weight: .bold, maxScale: 1.6)
                         .tracking(-0.3)
                         .foregroundStyle(item.estValueCents == nil ? Theme.muted : Theme.text)
-                        .accessibilityLabel("Estimated value \(item.estValueCents?.usd ?? "pricing")")
+                        .accessibilityLabel("Estimated value: \(item.priceText)")
+                    if item.priceState == .unpriced {
+                        Text("The pricing agent couldn't price this one. It's still sorted by size, condition and category, and you can choose below.")
+                            .monoMeta()
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     DispositionChip(disposition: item.disposition)
                 }
 

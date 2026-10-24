@@ -209,7 +209,8 @@ private extension Item {
             dispositionSource: DispositionSource(rawValue: r.dispositionSource) ?? .auto,
             dispositionReason: optional(r.dispositionReason),
             fragile: r.fragile, maybeSentimental: r.maybeSentimental, updatedAt: r.updatedAt.date,
-            attributes: Item.attributes(json: r.attributesJson), colors: ItemColors(json: r.colorsJson)
+            attributes: Item.attributes(json: r.attributesJson), colors: ItemColors(json: r.colorsJson),
+            detailsStatus: AgentStage(rawValue: r.detailsStatus), pricingStatus: AgentStage(rawValue: r.pricingStatus)
         )
     }
 
