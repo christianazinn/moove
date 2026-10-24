@@ -34,7 +34,6 @@ struct RootView: View {
                 .tabItem { Label("Summary", systemImage: "chart.bar.doc.horizontal") }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
-        .task { await store.connect(token: nil) }
     }
 
     private func screen(_ content: some View) -> some View {
@@ -51,5 +50,5 @@ struct RootView: View {
 }
 
 #Preview {
-    RootView().environment(MooveStore.preview())
+    RootView().environment(MooveStore.preview()).environment(AuthService())
 }

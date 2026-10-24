@@ -11,3 +11,4 @@ Lanes: ios-capture (capture, review, sync, auth), ios-newhome (new home, fly-in,
 - Per-developer config (signing team, bundle id, local server IP, Auth0 ids) goes in `Config/Local.xcconfig` (gitignored; copy `Local.xcconfig.example`).
 - Add your screen's tab in `Moove/App/RootView.swift` (one line) and keep the screen in your feature folder.
 - No secrets in the app bundle beyond public Auth0 client config.
+- Auth0 (#1): the app signs in with Auth0 Web Auth (custom URL scheme) and passes the **ID token** as the SpacetimeDB connection token, so `ctx.sender` is derived from the Auth0 user's `iss` + `sub`. If you change `MOOVE_BUNDLE_ID`, add `<bundle id>://dev-78lq8spq27b2bipk.us.auth0.com/ios/<bundle id>/callback` to the Moove iOS app's Allowed Callback and Logout URLs in the Auth0 dashboard. "Continue without an account" uses an anonymous SpacetimeDB identity saved in the Keychain.

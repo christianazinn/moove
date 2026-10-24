@@ -7,7 +7,7 @@ MOOVE_BUNDLE_ID = app.moove.Moove
 MOOVE_SPACETIME_HOST = https:/$()/maincloud.spacetimedb.com
 MOOVE_SPACETIME_DB = moove
 MOOVE_UPLOAD_BASE_URL = http:/$()/localhost:8787
-MOOVE_AUTH0_DOMAIN =
-MOOVE_AUTH0_CLIENT_ID =
+MOOVE_AUTH0_DOMAIN = dev-78lq8spq27b2bipk.us.auth0.com
+MOOVE_AUTH0_CLIENT_ID = B674uRd1BKSPe11boeGRMXd2UlJIuDur
 
 #include? "Local.xcconfig"
