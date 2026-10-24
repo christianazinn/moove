@@ -50,6 +50,14 @@ Status values:
 
 **Step 1 (now):** additive. Clients should subscribe with `SELECT * FROM my_room` / `SELECT * FROM my_user` instead of filtering the base tables. **Step 2 (after the iOS switch):** `room` and `user` become private, so join codes, emails and Auth0 subjects stop being world-readable, and the worker gets a worker-only users view for CIBA. One-off SQL queries against views return no rows (SDK behavior); use subscriptions.
 
+## Input limits (#146)
+Enforced in the module, so they hold for every client:
+- **Item sizes:** finite numbers, 0–30 m (`width_m`, `height_m`, `depth_m`) on every import, re-scan and `add_item`.
+- **Imports:** at most **200 objects** per `import_scan` / `import_scan_v2` / `create_scan` call.
+- **Lengths:** item `name` / `category` ≤ 120, `scan_object_id` ≤ 64, room names ≤ 80, scan and model URLs ≤ 2048 (a too-long photo URL is dropped, not fatal).
+- **`service_config.upload_base_url`:** a bare `https://host[:port]` origin (no userinfo, path or query), or `http://` only for localhost / 127.x / 10.x / 192.168.x / 172.16–31.x.
+- **Worker role:** pinned per database for maincloud `moove` and `moove-demo` (`PINNED_WORKERS`); every other database (local dev, e2e) keeps first-caller-wins.
+
 ## Reducers
 **App (owner), and the worker can call these too:**
 - **Users:** `register_user(auth0_sub, name, email)` (`auth0_sub`/`email` come from the token, see above), `set_approval_threshold(cents)` (`-1` = always ask, else `0..10000000` = $100,000)
