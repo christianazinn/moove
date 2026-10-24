@@ -5,14 +5,15 @@ import MooveKit
 
 /// SwiftUI wrapper for Apple's RoomPlan capture UI. Calls `onFinished` with the
 /// processed room, plus any everyday objects RoomPlan doesn't recognize that the
-/// extra detector (#73) found and measured in the same scan.
+/// extra detector (#73, #82) found and measured in the same scan, and the auto
+/// photographer holding keyframes to photograph every object from (#82).
 struct RoomCaptureContainer: UIViewRepresentable {
     @Binding var stopRequested: Bool
     /// Polls the capture's ARSession for color-sampling keyframes while it runs.
     var recorder: ScanFrameRecorder? = nil
     /// Live list of extra objects found so far (e.g. ["bicycle"]), for on-screen chips.
     var onFound: ([String]) -> Void = { _ in }
-    var onFinished: (Result<CapturedRoom, Error>, [RoomGeometry.Object]) -> Void
+    var onFinished: (Result<CapturedRoom, Error>, [RoomGeometry.Object], AutoPhotographer) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onFound: onFound, onFinished: onFinished) }
 
@@ -41,13 +42,14 @@ struct RoomCaptureContainer: UIViewRepresentable {
     @objc(MooveRoomCaptureCoordinator)
     final class Coordinator: NSObject, RoomCaptureViewDelegate {
         let onFound: ([String]) -> Void
-        let onFinished: (Result<CapturedRoom, Error>, [RoomGeometry.Object]) -> Void
+        let onFinished: (Result<CapturedRoom, Error>, [RoomGeometry.Object], AutoPhotographer) -> Void
         var stopped = false
         private let detector = ExtraObjectDetector()
+        private let photographer = AutoPhotographer()
         private var timer: Timer?
         private var lastFound: [String] = []
 
-        init(onFound: @escaping ([String]) -> Void, onFinished: @escaping (Result<CapturedRoom, Error>, [RoomGeometry.Object]) -> Void) {
+        init(onFound: @escaping ([String]) -> Void, onFinished: @escaping (Result<CapturedRoom, Error>, [RoomGeometry.Object], AutoPhotographer) -> Void) {
             self.onFound = onFound
             self.onFinished = onFinished
         }
@@ -56,8 +58,12 @@ struct RoomCaptureContainer: UIViewRepresentable {
         func encode(with coder: NSCoder) {}
 
         func startDetecting(on session: ARSession) {
-            guard let detector else { return }  // model not bundled: RoomPlan only
-            timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            let photographer = photographer, detector = detector
+            // ~3 frames a second: the detector takes ~12 ms per frame on an M5's Neural
+            // Engine, and busy frames are skipped, so this leaves RoomPlan room to work.
+            timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 3, repeats: true) { [weak self] _ in
+                photographer.offer(session)
+                guard let detector else { return }  // model not bundled: RoomPlan only (photos still work)
                 detector.offer(session)
                 let found = detector.foundSoFar
                 if found != self?.lastFound {
@@ -75,13 +81,14 @@ struct RoomCaptureContainer: UIViewRepresentable {
         func captureView(shouldPresent roomDataForProcessing: CapturedRoomData, error: Error?) -> Bool { true }
 
         func captureView(didPresent processedResult: CapturedRoom, error: Error?) {
-            if let error { return onFinished(.failure(error), []) }
+            if let error { return onFinished(.failure(error), [], photographer) }
             let roomPlan = RoomGeometry(processedResult)
             let extras = detector?.results(floorY: roomPlan.floorY, excluding: roomPlan.objects) ?? []
             if let detector {
-                print("[extra-objects] \(extras.map(\.category)) (depth frames \(detector.usedDepth), raycast frames \(detector.usedRaycast))")
+                print("[extra-objects] \(extras.map(\.category)) (frames \(detector.framesRun), depth \(detector.usedDepth), raycast \(detector.usedRaycast))")
             }
-            onFinished(.success(processedResult), extras)
+            print("[auto-photos] \(photographer.keyframeCount) keyframes")
+            onFinished(.success(processedResult), extras, photographer)
         }
     }
 }

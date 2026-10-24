@@ -4,48 +4,35 @@ import CoreML
 import Vision
 import MooveKit
 
-/// Finds everyday objects RoomPlan doesn't recognize (bikes, suitcases, plants...)
-/// during the RoomPlan scan (#73). About twice a second it takes RoomPlan's own
-/// ARKit frame, runs Apple's Core ML YOLOv3 (COCO) through Vision, and turns
-/// each detection's LiDAR depth into world-space points. MooveKit's
-/// `SightingMerger` clusters those into measured objects.
+/// Finds the everyday objects RoomPlan doesn't recognize (scooters, bikes, guitars,
+/// vacuums, lamps, boxes...) during the RoomPlan scan (#73, #82). About three times a
+/// second it takes RoomPlan's own ARKit frame and runs Moove's object detector through
+/// Vision. The detector is YOLOE-11L with 127 household text prompts baked in
+/// (`ObjectVocabulary`). Each detection's LiDAR depth becomes world-space points, and
+/// MooveKit's `SightingMerger` clusters those into measured objects.
 ///
 /// Off (nil) when the model isn't bundled: run ios/scripts/fetch-models.sh.
 final class ExtraObjectDetector: @unchecked Sendable {
-    /// COCO label → Moove category, for things RoomPlan doesn't cover and that are
-    /// worth moving or selling. People, pets and RoomPlan's own furniture are left out.
-    static let categories: [String: String] = [
-        "bicycle": "bicycle", "motorbike": "motorcycle", "bench": "bench", "suitcase": "suitcase",
-        "skis": "skis", "snowboard": "snowboard", "skateboard": "skateboard", "surfboard": "surfboard",
-        "pottedplant": "plant", "microwave": "microwave", "laptop": "laptop", "vase": "vase",
-        "teddy bear": "teddy bear", "backpack": "backpack",
-    ]
-    /// LiDAR mostly sees the near side, so thin objects come out too shallow from
-    /// one angle; these minimum depths (m) keep their footprints realistic.
-    static let minimumDepth: [String: Float] = [
-        "bicycle": 0.45, "motorcycle": 0.7, "bench": 0.35, "suitcase": 0.2, "plant": 0.25,
-        "microwave": 0.3, "laptop": 0.2, "skateboard": 0.2, "surfboard": 0.08, "skis": 0.08, "snowboard": 0.08,
-    ]
-    static let minimumConfidence: Float = 0.45
-
     private let request: VNCoreMLRequest
     private let queue = DispatchQueue(label: "moove.extra-objects", qos: .userInitiated)
     private let lock = NSLock()
     private var merger = SightingMerger()
     private var busy = false
-    private(set) var usedDepth = 0, usedRaycast = 0
+    private(set) var usedDepth = 0, usedRaycast = 0, framesRun = 0
 
     init?() {
-        guard let url = Bundle.main.url(forResource: "YOLOv3Int8LUT", withExtension: "mlmodelc"),
+        guard let url = Bundle.main.url(forResource: "MooveObjects", withExtension: "mlmodelc"),
               let model = try? MLModel(contentsOf: url),
               let vision = try? VNCoreMLModel(for: model) else { return nil }
         request = VNCoreMLRequest(model: vision)
-        request.imageCropAndScaleOption = .scaleFill
+        // Letterbox like the model was trained: on test photos this beat stretching
+        // (guitar 0.90 vs. read as a cello, a vacuum found at 0.77 vs. missed).
+        request.imageCropAndScaleOption = .scaleFit
     }
 
-    /// Labels found at least twice so far, for the live "Also found" chips.
+    /// Categories confirmed so far, for the live "Also found" chips.
     var foundSoFar: [String] {
-        lock.withLock { merger.tracks.filter { $0.sightings >= 2 }.map(\.label) }
+        lock.withLock { merger.results(refit: false).map(\.label) }
     }
 
     /// Call often (e.g. from a timer); frames are skipped while one is processing.
@@ -66,7 +53,7 @@ final class ExtraObjectDetector: @unchecked Sendable {
         }
     }
 
-    /// The measured objects, minus anything overlapping RoomPlan's own objects.
+    /// The measured objects, minus anything RoomPlan already found.
     func results(floorY: Float, excluding roomPlanObjects: [RoomGeometry.Object]) -> [RoomGeometry.Object] {
         let tracks = lock.withLock { () -> [SightingMerger.Track] in
             merger.floorY = floorY
@@ -74,7 +61,7 @@ final class ExtraObjectDetector: @unchecked Sendable {
         }
         return tracks.map { t in
             var size = t.box.size
-            size.z = max(size.z, Self.minimumDepth[t.label] ?? 0.05)
+            size.z = max(size.z, ObjectVocabulary.minimumDepth[t.label] ?? 0.05)
             return RoomGeometry.Object(id: UUID().uuidString, category: t.label, dimensions: size, transform: t.box.transform)
         }
     }
@@ -87,12 +74,20 @@ final class ExtraObjectDetector: @unchecked Sendable {
         let handler = VNImageRequestHandler(cvPixelBuffer: frame.capturedImage, orientation: .right)
         guard (try? handler.perform([request])) != nil,
               let observations = request.results as? [VNRecognizedObjectObservation] else { return }
-        for obs in observations {
-            guard let top = obs.labels.first, top.confidence >= Self.minimumConfidence,
-                  let category = Self.categories[top.identifier] else { continue }
-            let points = depthPoints(frame, box: obs.boundingBox) ?? raycastPoints(frame, session: session, box: obs.boundingBox)
+        lock.withLock { framesRun += 1 }
+        let raw = observations.compactMap { obs -> (label: String, confidence: Float, box: NormRect)? in
+            guard let top = obs.labels.first else { return nil }
+            // Vision rescales the class scores to sum to 1 and reports the sum as the
+            // observation's confidence. YOLOE's scores are independent sigmoids, so undo it.
+            let b = obs.boundingBox  // upright, normalized, bottom-left origin
+            return (top.identifier, top.confidence * obs.confidence,
+                    NormRect(x: Float(b.minX), y: Float(1 - b.maxY), width: Float(b.width), height: Float(b.height)))
+        }
+        for d in DetectionFilter.filter(raw) {
+            let box = CGRect(x: CGFloat(d.box.x), y: CGFloat(1 - d.box.maxY), width: CGFloat(d.box.width), height: CGFloat(d.box.height))
+            let points = depthPoints(frame, box: box) ?? raycastPoints(frame, session: session, box: box)
             guard points.count >= 12 else { continue }
-            lock.withLock { merger.add(Sighting(label: category, confidence: top.confidence, points: points)) }
+            lock.withLock { _ = merger.add(Sighting(label: d.category, confidence: d.confidence, points: points)) }
         }
     }
 
