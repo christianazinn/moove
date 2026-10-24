@@ -57,7 +57,8 @@ import Testing
                     #expect(g.nx <= 160 && g.ny <= 160 && g.nz <= 160)
                     #expect(g.cells.count == g.nx * g.ny * g.nz)
                     #expect(g.cells.allSatisfy { $0 == 0 || $0 & 0x1000000 != 0 })
-                    #expect(!r.surfaces.isEmpty, "\(v.name) \(size) has no surfaces")
+                    // a size no desk has (15 cm wide, 1.2 m tall) is drawn by its shape (a lamp, #shape sanity)
+                    if VoxelModels.kind(s) == .desk { #expect(!r.surfaces.isEmpty, "\(v.name) \(size) has no surfaces") }
                     for f in r.surfaces {
                         #expect(f.x0 >= 0 && f.z0 >= 0 && f.x1 <= g.nx && f.z1 <= g.nz && f.width > 0 && f.depth > 0, "\(v.name) \(size) surface \(f)")
                         #expect(f.y >= 0 && f.y <= g.ny, "\(v.name) \(size) surface y \(f.y)")

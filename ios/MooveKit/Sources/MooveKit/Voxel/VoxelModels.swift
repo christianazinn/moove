@@ -276,8 +276,16 @@ public enum VoxelModels {
     // MARK: routing
 
     /// Picks a builder from category + name keywords (models.js `route`, extended for Moove's
-    /// categories: bed, chair, table, storage, lamp, appliance, decor, sofa).
+    /// categories: bed, chair, table, storage, lamp, appliance, decor, sofa), then checks the
+    /// pick against the scanned size (`saneKind`, VoxelModels+Sanity.swift): a tall thin "pillow"
+    /// is drawn as a lamp, a table-shaped RoomPlan "storage" as a table.
     static func route(category cat: String, name n: VName, attrs: Set<String> = [], size: (Double, Double, Double)? = nil) -> Kind {
+        let named = routeByName(category: cat, name: n, attrs: attrs, size: size)
+        return saneKind(named, category: cat, name: n, attrs: attrs, size: size)
+    }
+
+    /// The builder the category, name and RoomPlan attributes ask for, before the size check.
+    static func routeByName(category cat: String, name n: VName, attrs: Set<String> = [], size: (Double, Double, Double)? = nil) -> Kind {
         // RoomPlan attributes first: they come from the scan itself
         if attrs.contains("storagetype.shelf") { return .bookshelf }
         if attrs.contains("storagetype.cabinet") { return .dresser }
@@ -286,6 +294,8 @@ public enum VoxelModels {
         if attrs.contains("tableshapetype.lshaped") && (cat == "table" || cat == "desk") { return .desk }
         if n.has("mattress") && !n.has("frame") { return .mattress }
         if n.has("bean bag", "beanbag", "bean-bag", "pouf", "floor cushion") { return .beanBag }
+        // throw pillows and cushions are soft decor (drawn as a pillow), whatever the category
+        if isPillow(n) { return .decor }
         if n.has("sectional", "sofa", "couch", "loveseat", "futon", "settee", "armchair") { return .sofa }
         if n.has("bookcase", "bookshelf", "book shelf", "shelving", "shelf unit", "étagère") { return .bookshelf }
         // the vision agent's specific names ("black standing desk") beat a broad category ("furniture"),
