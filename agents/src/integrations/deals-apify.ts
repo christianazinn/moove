@@ -145,13 +145,13 @@ const normalizeFb: Normalizer = (r, home) => {
   const state = str(pick(r, ['location.reverse_geocode.state', 'location.state']), 20);
   const where = [city, state].filter(Boolean).join(', ') || str(pick(r, ['locationText.text']), 60);
   const miles = distance(home, pick(r, ['location.latitude', 'location.lat']), pick(r, ['location.longitude', 'location.lng']));
-  const name = str(pick(r, ['marketplace_listing_seller.name']), 40);
+  // Privacy: FB sellers are private people, so their names are never read or stored.
   return {
     source: 'fb',
     title: str(pick(r, ['marketplace_listing_title', 'listingTitle', 'custom_title', 'customTitle'])),
     priceCents: toCents(pick(r, ['listing_price.amount', 'listingPrice.amount', 'listing_price.formatted_amount', 'listingPrice.formatted_amount'])),
     url: canonicalUrl('fb', pick(r, ['listingUrl', 'itemUrl'])),
-    seller: sellerText(name ? `FB Marketplace: ${name}` : 'FB Marketplace seller', where, miles),
+    seller: sellerText('FB Marketplace seller', where, miles),
     condition: mapCondition(r.condition),
     distanceMiles: miles ?? UNKNOWN_DISTANCE_MILES,
     checkout: 'seller_message',
@@ -186,12 +186,25 @@ const normalizeEbay: Normalizer = r => {
     title: str(r.title),
     priceCents: typeof r.price === 'number' ? toCents(r.price) : toCents(r.priceString),
     url: canonicalUrl('ebay', r.url),
-    seller: [name ? `eBay: ${name}` : 'eBay seller', fb && `${fb} positive`, ship].filter(Boolean).join(', '),
+    seller: [name ? `eBay: ${name}` : 'eBay seller', feedbackText(fb), ship].filter(Boolean).join(', '),
     condition: mapCondition(r.condition),
     distanceMiles: -1,
     checkout: 'seller_message',
   };
 };
+
+// "0%" means no feedback yet, not a 0% rating.
+function feedbackText(pct: string): string {
+  if (!pct) return '';
+  return Number.parseFloat(pct) > 0 ? `${pct.replace(/%?$/, '%')} positive` : 'new seller';
+}
+
+/** Rewrites any stored seller text that names a private person (older caches) to the anonymous form. */
+export function scrubSeller(source: string, seller: string): string {
+  let s = seller.replace(/\b0(\.0+)?% positive\b/, 'new seller');
+  if (source === 'fb') s = s.replace(/^FB Marketplace: [^,]*/, 'FB Marketplace seller');
+  return s;
+}
 
 function sellerText(who: string, where: string, miles: number | undefined): string {
   return [who, where, miles == null ? 'distance unknown' : ''].filter(Boolean).join(', ');
@@ -302,7 +315,8 @@ export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
     if (!existsSync(file)) return [];
     try {
       const parsed = JSON.parse(readFileSync(file, 'utf8')) as { rows?: unknown };
-      return Array.isArray(parsed.rows) ? (parsed.rows as RawDeal[]) : [];
+      const rows = Array.isArray(parsed.rows) ? (parsed.rows as RawDeal[]) : [];
+      return rows.map(r => ({ ...r, seller: scrubSeller(String(r.source ?? ''), String(r.seller ?? '')) }));
     } catch {
       return [];
     }
@@ -317,7 +331,7 @@ export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
         fetchedAt: now().toISOString(),
         actors: Object.fromEntries(sources.map(s => [s, ACTORS[s].actor])),
         errors,
-        rows,
+        rows: rows.map(r => ({ ...r, seller: scrubSeller(r.source, r.seller) })),
       };
       writeFileSync(cacheFile(q), JSON.stringify(body, null, 2) + '\n');
     } catch {
@@ -358,13 +372,14 @@ export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
 // ---------- selection ----------
 
 /**
- * Picks the buy agent's deal source from env. DEALS_SOURCE=apify|fixtures; when unset, apify if
- * APIFY_TOKEN is set, else fixtures. DEALS_SOURCE=apify without a token replays cached live searches
- * (then the curated fixtures), all labeled as replays.
+ * Picks the buy agent's deal source from env. DEALS_SOURCE=apify|fixtures, default apify. apify with
+ * APIFY_TOKEN searches live; without one it replays committed live searches (fixtures/deals-live-*.json,
+ * labeled "cached replay"), then the hand-made sample data (labeled "sample data").
  */
 export function createDealSource(env: Env = process.env, overrides: Partial<ApifyDealOptions> = {}): DealSource {
   const token = env.APIFY_TOKEN?.trim() || undefined;
-  const mode = (env.DEALS_SOURCE?.trim().toLowerCase() || (token ? 'apify' : 'fixtures')) as string;
+  // Default apify: live with a token, otherwise committed live replays, then the sample data.
+  const mode = (env.DEALS_SOURCE?.trim().toLowerCase() || 'apify') as string;
   if (mode !== 'apify') return overrides.fallback ?? fixtureDealSource();
   const num = (k: string) => {
     const v = env[k]?.trim();

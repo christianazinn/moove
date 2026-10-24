@@ -13,6 +13,7 @@ import {
   normalizeRows,
   toCents,
   UNKNOWN_DISTANCE_MILES,
+  scrubSeller,
 } from '../src/integrations/deals-apify.js';
 import { rankDeals, sellerInfo, type DealSource } from '../src/integrations/deals.js';
 
@@ -209,7 +210,10 @@ test('no token: never calls Apify, replays cache, then the curated fixtures', as
 });
 
 test('createDealSource: DEALS_SOURCE / APIFY_TOKEN selection', () => {
-  assert.equal(createDealSource({}).name, 'sample data (hand-made fixtures)');
+  // Default is apify: with no token it replays committed live searches, then the sample data.
+  assert.match(createDealSource({}).name, /^Apify live listings/);
+  assert.equal(createDealSource({}).replay, true);
+  assert.equal(createDealSource({ DEALS_SOURCE: 'fixtures' }).name, 'sample data (hand-made fixtures)');
   assert.equal(createDealSource({ DEALS_SOURCE: 'fixtures', APIFY_TOKEN: 'x' }).name, 'sample data (hand-made fixtures)');
   assert.match(createDealSource({ APIFY_TOKEN: 'x' }).name, /^Apify live listings \(fb, craigslist, ebay\)/);
   assert.match(createDealSource({ APIFY_TOKEN: 'x', DEALS_APIFY_SOURCES: 'ebay, bogus,fb' }).name, /\(ebay, fb\)/);
@@ -250,4 +254,45 @@ test('helpers', () => {
     { source: 'cl', title: 'B', priceCents: 1, url: 'u1' },
   ]);
   assert.equal(d.length, 1);
+});
+
+// ---------- privacy + committed live replay ----------
+
+test('FB seller names never reach a deal candidate, seller_info or the cache file', async () => {
+  const NAME = 'Jane Q. Privateperson';
+  const fbRow = {
+    listingUrl: 'https://www.facebook.com/marketplace/item/999999999999999/',
+    marketplace_listing_title: 'Queen mattress',
+    listing_price: { amount: '80.00', currency: 'USD' },
+    location: { reverse_geocode: { city: 'Oakland', state: 'CA' } },
+    marketplace_listing_seller: { name: NAME },
+    is_live: true,
+  };
+  const [raw] = normalizeRows('fb', [fbRow]);
+  assert.ok(raw && !JSON.stringify(raw).includes('Jane'));
+  const dir = tmp();
+  const only = Object.fromEntries(Object.keys(ACTORS).map(s => [ACTORS[s as keyof typeof ACTORS].actor, { rows: s === 'fb' ? [fbRow] : [] }]));
+  const src = createApifyDealSource({ token: 't', fetch: stubFetch(only), cacheDir: dir, sources: ['fb'], fallback: emptyFallback });
+  const deals = await src.search({ name: 'Queen mattress', category: 'mattress' });
+  assert.equal(deals.length, 1);
+  assert.ok(!sellerInfo(rankDeals(deals)[0]).includes('Jane'));
+  for (const f of readdirSync(dir)) assert.ok(!readFileSync(path.join(dir, f), 'utf8').includes('Jane'), f);
+  // Older caches that still carry a name are scrubbed on read.
+  assert.equal(scrubSeller('fb', `FB Marketplace: ${NAME}, Oakland, CA`), 'FB Marketplace seller, Oakland, CA');
+});
+
+test('eBay sellers with no feedback say "new seller", not "0% positive"', () => {
+  assert.equal(scrubSeller('ebay', 'eBay: shop, 0% positive, Free delivery'), 'eBay: shop, new seller, Free delivery');
+  const [r] = normalizeRows('ebay', [{ type: 'product', title: 'Mattress', price: 99, currency: 'USD', url: 'https://www.ebay.com/itm/1', sellerName: 'shop', sellerFeedbackPercent: '0%' }]);
+  assert.match(r.seller, /new seller/);
+  assert.doesNotMatch(r.seller, /0% positive/);
+});
+
+test('the committed live replay serves 3+ real, labeled deals for the demo Mattress item', async () => {
+  const src = createDealSource({}); // no token: committed replays first
+  const deals = await src.search({ name: 'Mattress', category: 'mattress' });
+  assert.ok(deals.length >= 3, `${deals.length}`);
+  assert.ok(deals.every(d => d.replay && !d.sample));
+  const infos = rankDeals(deals).map(sellerInfo);
+  assert.ok(infos.every(i => /cached replay/.test(i) && !/FB Marketplace:/.test(i) && !/(^|[^0-9.])0% positive/.test(i) && !/25 mi/.test(i)));
 });
