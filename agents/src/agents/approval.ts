@@ -1,7 +1,7 @@
 import type { Identity } from 'spacetimedb';
 import type { Agent } from './types.js';
 import type { Conn } from '../spacetime.js';
-import type { Approval } from '../module_bindings/types.js';
+import type { AgentEvent, Approval } from '../module_bindings/types.js';
 import { logEvent } from '../events.js';
 import { selectApprovalGateway, toBindingMessage, type ApprovalGateway } from '../integrations/auth0.js';
 
@@ -23,6 +23,27 @@ export function bindingFor(conn: Conn, a: Approval): string {
   let title = a.kind === 'listing' ? conn.db.listing.id.find(a.refId)?.title : conn.db.deal.id.find(a.refId)?.title;
   if (!title) title = /"([^"]+)"/.exec(a.summary)?.[1] ?? /\bfor:\s*(.+)$/.exec(a.summary)?.[1] ?? a.summary;
   return toBindingMessage(action, title, a.amountCents);
+}
+
+// The latest phone push this agent logged for an approval (its `tool_call` event carries
+// expiresInSec), so a restarted worker doesn't re-push approvals whose push already ran out.
+export function priorPush(
+  events: Iterable<Pick<AgentEvent, 'agent' | 'kind' | 'refTable' | 'refId' | 'dataJson' | 'createdAt'>>,
+  approvalId: bigint,
+  nowMs: number
+): 'none' | 'live' | 'expired' {
+  let expiresAt = -1;
+  for (const e of events) {
+    if (e.agent !== 'approval' || e.kind !== 'tool_call' || e.refTable !== 'approval' || e.refId !== approvalId) continue;
+    let sec: number;
+    try {
+      sec = Number((JSON.parse(e.dataJson) as { expiresInSec?: unknown }).expiresInSec);
+    } catch {
+      continue;
+    }
+    if (Number.isFinite(sec)) expiresAt = Math.max(expiresAt, Number(e.createdAt.toMillis()) + sec * 1000);
+  }
+  return expiresAt < 0 ? 'none' : nowMs < expiresAt ? 'live' : 'expired';
 }
 
 // Sends pending approvals (#12) to the owner's phone via Auth0 CIBA (Guardian push) and records
@@ -125,16 +146,17 @@ export const approvalAgent: Agent = {
           log(a, 'approval', `Decided in the Moove app first (${conn.db.approval.id.find(a.id)?.status ?? 'gone'}), ignoring the phone request${sim(g)}`);
           return;
         }
-        if (Date.now() >= req.expiresAt) {
-          // Don't decide and don't re-push: the row stays pending for the in-app inbox.
-          log(a, 'approval', `The phone request expired without an answer${sim(g)}, still waiting in the Moove app`);
-          return;
-        }
         let r;
         try {
           r = await g.poll(req.authReqId);
         } catch (err) {
           log(a, 'error', `Phone approval check failed${sim(g)}: ${errText(err)}. Still waiting for in-app approval.`);
+          return;
+        }
+        // Polled once more after expiry, so an answer given just before it still counts.
+        if ((r.status === 'pending' || r.status === 'slow_down') && Date.now() >= req.expiresAt) {
+          // Don't decide and don't re-push: the row stays pending for the in-app inbox.
+          log(a, 'approval', `The phone request expired without an answer${sim(g)}, still waiting in the Moove app`);
           return;
         }
         if (r.status === 'pending') continue;
@@ -167,6 +189,12 @@ export const approvalAgent: Agent = {
       finished.add(a.id);
       if (!gateway) {
         log(a, 'approval', 'Auth0 not configured, waiting for in-app approval');
+        return;
+      }
+      // A restart (supervisor, republish) must not re-push approvals whose push already ran out.
+      // A push still live when the worker died can't be polled any more, so that one is re-sent.
+      if (priorPush(conn.db.agentEvent.iter(), a.id, Date.now()) === 'expired') {
+        console.log(`[approval] approval ${a.id}: its phone request already expired, waiting for in-app approval`);
         return;
       }
       inFlight.add(a.id);

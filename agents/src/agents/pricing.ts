@@ -190,6 +190,14 @@ export const pricingAgent: Agent = {
         conn.reducers.setItemStage({ itemId: it.id, stage: 'pending', field: 'pricing' });
       }
     }
+    // A previous worker that died (supervisor restart, maincloud republish) mid-lookup left its items
+    // `running` forever: nothing else re-queues them. Only one worker runs, so put them back to pending
+    // (the comps cache usually makes the retry a free replay; a paid comps call may be bought again).
+    for (const it of conn.db.item.iter()) {
+      if (it.pricingStatus === 'running' && !inFlight.has(it.id)) {
+        conn.reducers.setItemStage({ itemId: it.id, stage: 'pending', field: 'pricing' });
+      }
+    }
     for (const it of conn.db.item.iter()) maybe(it);
     conn.db.item.onInsert((_ctx, it) => maybe(it));
     conn.db.item.onUpdate((_ctx, _old, it) => maybe(it));
