@@ -15,7 +15,10 @@ import Foundation
 // clothes, electronics, decor, box) and VoxelModels+Moove.swift (Moove-only pieces: fridge and
 // other appliances, fans, bean bag, mirror, quilt rack, framed photos), VoxelModels+Instruments.swift
 // (guitar, piano, keyboard, drums) and VoxelModels+Gear.swift (vacuum, monitor, scooter, bags,
-// fitness machines, boards) for the scan detector's extra categories (#183).
+// fitness machines, boards) for the scan detector's extra categories (#183), VoxelModels+Household.swift
+// (trunk, baskets / bins / hampers, trash can, toolbox, crib, ladder, clock, toys, coat / shoe /
+// clothes racks, pet crate, pet bed, cat tree) and VoxelModels+Outdoor.swift (motorcycle, stroller,
+// wheelchair, grill, lawn mower) for the rest of the detector's categories.
 
 /// A flat top where small props can sit, in a piece's voxel coords: the half-open rectangle
 /// [x0, x1) × [z0, z1), with `y` the first free voxel layer above the surface (so a prop's
@@ -141,6 +144,23 @@ public enum VoxelModels {
         case .bag: g.bag(X, NY, Z, name)
         case .fitness: g.fitness(X, NY, Z, name)
         case .board: g.board(X, NY, Z, name)
+        case .motorcycle: g.motorcycle(X, NY, Z, name)
+        case .stroller: g.stroller(X, NY, Z, name)
+        case .wheelchair: g.wheelchair(X, NY, Z, name)
+        case .grill: g.grill(X, NY, Z, name)
+        case .lawnMower: g.lawnMower(X, NY, Z, name)
+        case .crib: g.crib(X, NY, Z, name)
+        case .ladder: g.ladder(X, NY, Z, name)
+        case .trunk: g.trunk(X, NY, Z, name)
+        case .basket: g.basket(X, NY, Z, name)
+        case .trashCan: g.trashCan(X, NY, Z, name)
+        case .toolbox: g.toolbox(X, NY, Z, name)
+        case .petCrate: g.petCrate(X, NY, Z, name)
+        case .petBed: g.petBed(X, NY, Z, name)
+        case .catTree: g.catTree(X, NY, Z, name)
+        case .clock: g.clock(X, NY, Z, name)
+        case .toy: g.toy(X, NY, Z, name)
+        case .rack: g.rack(X, NY, Z, name)
         case .box: g.kraftBox(X, NY, Z, name)
         }
         return (g.output(), g.surfaces)
@@ -181,7 +201,9 @@ public enum VoxelModels {
         case sofa, bed, mattress, desk, chair, table, dresser, bookshelf, tv, lamp, books, art, photos, binder
         case kitchenware, plant, rug, clothes, electronics, decor, appliance, fan, beanBag, mirror, quiltRack
         case framedPhotos, stove, dishwasher, microwave, bench, ottoman, bike, suitcase
-        case guitar, piano, keyboard, drums, vacuum, monitor, scooter, bag, fitness, board, box
+        case guitar, piano, keyboard, drums, vacuum, monitor, scooter, bag, fitness, board
+        case motorcycle, stroller, wheelchair, grill, lawnMower, crib, ladder, trunk, basket, trashCan, toolbox
+        case petCrate, petBed, catTree, clock, toy, rack, box
 
         /// Default size (w, d, h) in meters when a dimension is missing or invalid.
         var defaultSize: (Double, Double, Double) {
@@ -229,6 +251,23 @@ public enum VoxelModels {
             case .bag: (0.32, 0.22, 0.45)
             case .fitness: (0.8, 1.8, 1.4)
             case .board: (0.8, 0.22, 0.12)
+            case .motorcycle: (2.1, 0.8, 1.15)
+            case .stroller: (0.6, 0.95, 1.05)
+            case .wheelchair: (0.65, 0.95, 0.95)
+            case .grill: (1.2, 0.6, 1.1)
+            case .lawnMower: (0.55, 1.4, 1.0)
+            case .crib: (1.35, 0.75, 1.0)
+            case .ladder: (0.5, 0.65, 1.5)
+            case .trunk: (0.9, 0.5, 0.5)
+            case .basket: (0.5, 0.4, 0.45)
+            case .trashCan: (0.4, 0.35, 0.65)
+            case .toolbox: (0.5, 0.25, 0.25)
+            case .petCrate: (0.9, 0.6, 0.65)
+            case .petBed: (0.8, 0.6, 0.2)
+            case .catTree: (0.55, 0.5, 1.5)
+            case .clock: (0.35, 0.05, 0.35)
+            case .toy: (0.35, 0.3, 0.4)
+            case .rack: (0.5, 0.5, 1.8)
             case .box: (0.5, 0.4, 0.4)
             }
         }
@@ -268,6 +307,22 @@ public enum VoxelModels {
             case .bag: (4, 4, 3)
             case .fitness: (8, 8, 8)
             case .board: (3, 2, 2)
+            case .motorcycle: (16, 10, 4)
+            case .stroller, .wheelchair: (7, 9, 7)
+            case .grill: (8, 10, 6)
+            case .lawnMower: (7, 8, 7)
+            case .crib: (8, 8, 6)
+            case .ladder: (4, 10, 2)
+            case .trunk: (6, 5, 4)
+            case .basket: (5, 4, 4)
+            case .trashCan: (4, 6, 4)
+            case .toolbox: (6, 4, 3)
+            case .petCrate: (7, 6, 6)
+            case .petBed: (6, 3, 5)
+            case .catTree: (6, 12, 6)
+            case .clock: (5, 5, 1)
+            case .toy: (6, 6, 5)
+            case .rack: (5, 8, 3)
             default: nil
             }
         }
@@ -303,6 +358,10 @@ public enum VoxelModels {
         // Order matters: a "desk lamp" is a lamp, a "desk chair" a chair, a "desk with drawers" a desk
         let small = smallCategories.contains(cat) || (cat == "electronics" && !isTV(n))
         if !small {
+            // the detector's remaining categories by name, before the furniture words: a "wheel
+            // chair" isn't a chair, a "dog bed" not a bed, a "desk clock" not a desk, a "dirt bike"
+            // not a bicycle, a "toy chest" not a dresser
+            if let k = householdKind(n) { return k }
             if n.word("lamp", "lamps", "sconce", "lantern") { return .lamp }
             if n.word("chair", "chairs", "stool", "stools", "recliner") { return .chair }
             if n.has("tv stand", "tv console", "tv cabinet", "tv unit", "media console", "entertainment center") { return .dresser }
@@ -365,6 +424,7 @@ public enum VoxelModels {
             if isTV(n) { return .tv }
             if isMonitor(n) { return .monitor }
             if let k = instrumentKind(n, loose: false, size: size), k != .electronics { return k } // "Casio keyboard"
+            if isClock(n) { return .clock } // an alarm clock
             return .electronics
         // #183: the detector's (#98, `ObjectVocabulary`) and vision's (#131) extra categories
         case "instrument", "instruments", "musical instrument", "musical_instrument", "music":
@@ -406,8 +466,32 @@ public enum VoxelModels {
         case "bike", "bicycle": return .bike
         case "suitcase", "luggage": return .suitcase
         case "box", "boxes": return .box
-        case "storage": return n.word("bin", "tote", "box", "crate", "basket", "container") ? .box : .bookshelf
+        case "storage":
+            if n.word("bin", "bins", "tote", "totes", "basket", "baskets", "hamper") { return .basket }
+            return n.word("box", "crate", "container") ? .box : .bookshelf
+        // the rest of the detector's categories (`ObjectVocabulary`) and their vision-agent synonyms
+        case "motorcycle", "motorbike", "dirt bike": return .motorcycle
+        case "stroller", "pram", "pushchair", "buggy": return .stroller
+        case "wheelchair": return .wheelchair
+        case "grill", "bbq", "barbecue", "smoker": return .grill
+        case "lawn mower", "mower", "lawnmower": return .lawnMower
+        case "crib", "bassinet", "playpen", "baby furniture": return .crib
+        case "ladder", "step ladder", "stepladder": return .ladder
+        case "trunk", "chest", "toy chest", "footlocker": return .trunk
+        case "bin", "bins", "basket", "baskets", "hamper", "laundry basket", "storage bin": return .basket
+        case "trash can", "trash", "garbage can", "trash bin", "wastebasket", "recycling bin", "garbage": return .trashCan
+        case "toolbox", "tool box", "tools", "tool chest": return .toolbox
+        case "pet crate", "crate", "kennel", "dog crate", "pet carrier": return .petCrate
+        case "pet bed", "dog bed", "cat bed": return .petBed
+        case "cat tree", "cat tower", "scratching post": return .catTree
+        case "clock", "clocks", "wall clock": return .clock
+        case "toy", "toys", "stuffed animal", "plush", "dollhouse", "rocking horse": return .toy
+        case "coat rack", "shoe rack", "clothes rack", "rack", "garment rack", "coat stand", "hat stand": return .rack
+        case "workbench", "work bench": return .desk
+        case "cart", "rolling cart", "utility cart": return n.has("bar cart", "tea cart") ? .table : .bookshelf
         case "decor":
+            // a wall clock, a basket, a cat bed, a plush: household things, but not a "toy motorcycle" figurine
+            if let k = householdKind(n), ![.motorcycle, .stroller, .wheelchair, .grill, .lawnMower, .desk].contains(k) { return k }
             if n.word("art", "artwork", "painting", "canvas", "poster", "print") { return .art }
             if n.word("plant", "plants", "succulent", "fern", "monstera") { return .plant }
             if n.word("photos") { return .photos }
@@ -435,6 +519,52 @@ public enum VoxelModels {
         if n.has("guitar", "ukulele", "double bass", "upright bass")
             || n.word("violin", "violins", "viola", "cello", "cellos", "fiddle", "uke", "banjo", "mandolin") { return .guitar }
         return nil
+    }
+
+    /// The detector's remaining categories (#183 follow-up) by name: vehicles, baby and pet gear,
+    /// household storage, clocks, toys, racks, outdoor gear. Checked before the furniture words.
+    static func householdKind(_ n: VName) -> Kind? {
+        if n.word("motorcycle", "motorcycles", "motorbike", "motorbikes", "motocross", "sportbike", "harley", "ducati")
+            || n.has("dirt bike", "pit bike", "harley-davidson") {
+            if !n.word("helmet", "jacket", "gloves", "glove", "boots", "cover", "battery", "jack", "lift", "gear", "toy") { return .motorcycle }
+        }
+        if n.word("wheelchair", "wheelchairs") || n.has("wheel chair", "transport chair") { return .wheelchair }
+        if n.word("stroller", "strollers", "pram", "pushchair", "pushchairs") || n.has("baby jogger", "jogging stroller")
+            || (n.word("buggy") && !n.has("golf", "beach", "dune")) { return .stroller }
+        if n.has("pet crate", "dog crate", "cat crate", "puppy crate", "dog cage", "pet cage", "pet carrier", "cat carrier",
+                 "dog carrier", "dog playpen", "pet playpen", "puppy pen", "dog pen") || n.word("kennel", "kennels") { return .petCrate }
+        if n.has("dog bed", "cat bed", "pet bed", "puppy bed", "dog sofa", "pet sofa", "pet cushion") { return .petBed }
+        if n.has("cat tree", "cat tower", "cat condo", "cat scratcher", "scratching post", "scratch post", "cat gym") { return .catTree }
+        if (n.word("crib", "cribs", "bassinet", "bassinets", "playpen", "playpens", "cradle")
+            || n.has("baby cot", "cot bed", "pack n play", "pack 'n play", "pack and play", "pack-n-play", "play yard", "play pen"))
+            && !n.word("sheet", "sheets", "bumper", "mobile", "mattress") { return .crib }
+        if n.word("toolbox", "toolboxes", "toolchest") || n.has("tool box", "tool chest", "tool cabinet", "tool case", "tool cart") { return .toolbox }
+        if n.word("trunk", "trunks", "footlocker") || n.has("foot locker", "toy chest", "toy box", "toybox", "hope chest", "blanket chest",
+                                                            "cedar chest", "storage chest", "treasure chest", "wooden chest") {
+            if !n.has("tree trunk", "trunk organizer") { return .trunk }
+        }
+        if n.has("trash can", "trashcan", "garbage can", "garbage bin", "trash bin", "waste bin", "wastebasket", "waste basket",
+                 "wastepaper", "recycling bin", "recycle bin", "dustbin", "rubbish bin", "pedal bin", "wheelie bin", "compost bin", "litter bin")
+            || (n.word("trash", "garbage", "rubbish") && !n.word("bag", "bags", "compactor")) { return .trashCan }
+        if n.word("basket", "baskets", "hamper", "hampers", "bin", "bins") || n.has("storage tote", "plastic tote") { return .basket }
+        if isClock(n) { return .clock }
+        if n.has("coat rack", "coat stand", "coat tree", "hat stand", "hat rack", "hall tree", "shoe rack", "shoe shelf", "shoe stand",
+                 "shoe organizer", "clothes rack", "clothing rack", "garment rack", "clothes rail", "clothes stand", "rolling rack") { return .rack }
+        if (n.word("ladder", "ladders", "stepladder", "stepladders") || n.has("step ladder", "step-ladder"))
+            && !n.has("blanket", "quilt", "towel", "shelf", "bookcase", "desk", "plant", "rack") { return .ladder }
+        if n.word("grill", "grills", "bbq", "barbecue", "barbeque", "smoker", "hibachi", "kamado", "traeger") || n.has("big green egg", "weber kettle") {
+            if !n.has("grill pan", "foreman", "panini", "griddle", "indoor", "brush", "cover", "grill tool", "grill mat") { return .grill }
+        }
+        if n.word("mower", "mowers", "lawnmower", "lawnmowers") || n.has("lawn mower", "lawn tractor") { return .lawnMower }
+        if n.word("workbench", "workbenches") { return .desk }
+        return toyKind(n)
+    }
+
+    static func isClock(_ n: VName) -> Bool { n.word("clock", "clocks") }
+
+    static func toyKind(_ n: VName) -> Kind? {
+        n.word("toy", "toys", "teddy", "plush", "plushie", "plushies", "dollhouse", "doll", "dolls", "lego")
+            || n.has("stuffed animal", "stuffed toy", "soft toy", "doll house", "rocking horse", "play kitchen") ? .toy : nil
     }
 
     /// A computer monitor / display (TV words are checked first by the callers).

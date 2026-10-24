@@ -56,7 +56,7 @@ import Testing
         #expect(VoxelModels.kind(spec("decor", "Framed photos", 0.4, 0.05, 0.5)) == .framedPhotos)
         #expect(VoxelModels.kind(spec("television", "Samsung 55 inch", 1.2, 0.2, 0.7)) == .tv)
         #expect(VoxelModels.kind(spec("sofa", "Grey velvet 3-seat sofa", 2.2, 0.9, 0.85)) == .sofa)
-        #expect(VoxelModels.kind(spec("storage", "Plastic storage bin", 0.6, 0.4, 0.35)) == .box)
+        #expect(VoxelModels.kind(spec("storage", "Plastic storage bin", 0.6, 0.4, 0.35)) == .basket)
         #expect(VoxelModels.kind(spec("decor", "Monstera plant", 0.5, 0.5, 1)) == .plant)
         #expect(VoxelModels.kind(spec("appliance", "Samsung TV", 1.2, 0.2, 0.7)) == .tv)
         #expect(VoxelModels.kind(spec("chair", "Pine dining chair", 0.45, 0.5, 0.9)) == .chair)
