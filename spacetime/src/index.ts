@@ -16,7 +16,8 @@ const DISPOSITION_SOURCE = ['auto', 'user'] as const;
 const STAGE = ['pending', 'running', 'done', 'failed'] as const;
 const SWEEP_STATUS = ['none', 'pending', 'running', 'done', 'failed'] as const;
 const MODEL_SOURCE = ['capture', 'sam3d'] as const; // Object Capture on the phone, or SAM 3D from a photo (#65)
-const LISTING_STATUS = ['draft', 'awaiting_approval', 'rejected', 'posted', 'sold', 'failed'] as const;
+// `posting`: the worker is publishing it right now (#144), so a restarted worker doesn't post it twice.
+const LISTING_STATUS = ['draft', 'awaiting_approval', 'rejected', 'posting', 'posted', 'sold', 'failed'] as const;
 const APPROVAL_KIND = ['listing', 'purchase'] as const;
 const APPROVAL_STATUS = ['pending', 'approved', 'denied', 'expired'] as const;
 const APPROVAL_DECISION = ['approved', 'denied'] as const; // what decide_approval / record_ciba_decision accept
@@ -1233,6 +1234,10 @@ export const updateListing = spacetimedb.reducer(
     requireWorker(ctx);
     const l = ctx.db.listing.id.find(listingId);
     if (!l) throw new SenderError(`no listing ${listingId}`);
+    // Claiming a post: only an unposted listing can start one, and only once.
+    if (status === 'posting' && l.status !== 'draft' && l.status !== 'awaiting_approval') {
+      throw new SenderError(`listing ${listingId} is ${l.status}, can't start posting`);
+    }
     ctx.db.listing.id.update({
       ...l,
       status: oneOf('status', status, LISTING_STATUS),

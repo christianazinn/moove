@@ -39,7 +39,7 @@
 Status values:
 - `details_status` / `pricing_status` / `model_status`: `pending`\|`running`\|`done`\|`failed`. The worker picks up `pending` rows. The SAM 3D agent only takes items that have a photo.
 - `disposition`: `undecided`\|`keep`\|`sell`\|`donate`\|`trash`
-- `listing.status`: `draft`\|`awaiting_approval`\|`rejected`\|`posted`\|`sold`\|`failed`
+- `listing.status`: `draft`\|`awaiting_approval`\|`rejected`\|`posting`\|`posted`\|`sold`\|`failed`. `posting` (#144) means the worker is publishing it. `update_listing` only allows it from `draft` or `awaiting_approval`, so a restarted worker that finds `posting` knows not to post again.
 - `approval.status`: `pending`\|`approved`\|`denied`\|`expired`. Since #42 nothing sets `expired`; decisions are only `approved`\|`denied`.
 - `shopping_item.status`: `open`\|`searching`\|`found`\|`bought`
 - `payment.status`: `pending`\|`settled`\|`failed`
