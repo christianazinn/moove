@@ -7,6 +7,9 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         case notConnected
         case noSuchItem
         case noSuchNewHome
+        case noSuchApproval
+        case alreadyDecided
+        case invalidStatus
         case unauthorized
     }
 
@@ -22,7 +25,7 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         self.state = seed
         let ids: [[UInt64]] = [
             seed.rooms.map(\.id), seed.scans.map(\.id), seed.items.map(\.id), seed.comps.map(\.id),
-            seed.newHomes.map(\.id), seed.layouts.map(\.id), seed.listings.map(\.id),
+            seed.newHomes.map(\.id), seed.layouts.map(\.id), seed.listings.map(\.id), seed.approvals.map(\.id),
         ]
         let maxId = ids.joined().max() ?? 0
         self.nextId = maxId + 1
@@ -129,6 +132,30 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
             guard let home = s.newHomes.first(where: { $0.id == newHomeId }) else { throw Failure.noSuchNewHome }
             guard home.owner == me else { throw Failure.unauthorized }
             s.layouts.append(Layout(id: takeId(), owner: me, newHomeId: newHomeId, name: name, placementsJson: placementsJson))
+        }
+    }
+
+    public func decideApproval(approvalId: UInt64, status: ApprovalStatus) async throws {
+        try mutateAuthed { s, me in
+            guard let i = s.approvals.firstIndex(where: { $0.id == approvalId }) else { throw Failure.noSuchApproval }
+            guard s.approvals[i].owner == me else { throw Failure.unauthorized }
+            guard s.approvals[i].isPending else { throw Failure.alreadyDecided }
+            guard ApprovalStatus.decisions.contains(status) else { throw Failure.invalidStatus }
+            let now = Date.now
+            s.approvals[i].status = status
+            s.approvals[i].updatedAt = now
+            // Stand-in for the listing agent (#11): post on approval if the price
+            // still matches, otherwise reject. Fixture listings are all simulated.
+            let a = s.approvals[i]
+            if a.kind == .listing, let l = s.listings.firstIndex(where: { $0.id == a.refId && $0.status == .awaitingApproval }) {
+                if status == .approved, s.listings[l].priceCents == a.amountCents {
+                    s.listings[l].status = .posted
+                    s.listings[l].externalId = String(395_718_200_000 + a.refId)
+                } else {
+                    s.listings[l].status = .rejected
+                }
+                s.listings[l].updatedAt = now
+            }
         }
     }
 

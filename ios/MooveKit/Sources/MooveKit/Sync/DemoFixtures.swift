@@ -52,6 +52,23 @@ public enum DemoFixtures {
                     description: "Quiet compact fridge with a small freezer section. Clean inside, adjustable thermostat.\n\nPerfect for a dorm or office.",
                     priceCents: 7_000, status: .draft),
         ]
+        // Approval gate (#12): the Aeron listing is over the $100 default threshold.
+        // Purchase approvals point at deals (#15) that the demo doesn't seed.
+        let now = Date.now
+        s.approvals = [
+            Approval(id: 300, owner: owner, kind: .listing, refId: 200, amountCents: 41_000,
+                     summary: "Sell \"Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition\" for $410",
+                     requestedAt: now.addingTimeInterval(-6 * 60)),
+            Approval(id: 301, owner: owner, kind: .purchase, refId: 310, amountCents: 24_000,
+                     summary: "Buy a queen mattress (Casper, like new) from Craigslist for $240",
+                     requestedAt: now.addingTimeInterval(-2 * 60)),
+            Approval(id: 302, owner: owner, kind: .purchase, refId: 311, amountCents: 18_900,
+                     summary: "Buy a 3-seat sofa from FB Marketplace for $189", status: .denied,
+                     requestedAt: now.addingTimeInterval(-3 * 3600), updatedAt: now.addingTimeInterval(-170 * 60)),
+            Approval(id: 303, owner: owner, kind: .purchase, refId: 312, amountCents: 12_500,
+                     summary: "Buy a dresser from Craigslist for $125", status: .approved,
+                     requestedAt: now.addingTimeInterval(-26 * 3600), updatedAt: now.addingTimeInterval(-25 * 3600)),
+        ]
         return s
     }
 }

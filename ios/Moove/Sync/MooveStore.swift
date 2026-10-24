@@ -139,6 +139,18 @@ final class MooveStore {
         await run { try await $0.saveLayout(newHomeId: home.id, name: name, placementsJson: Layout.encode(placements)) }
     }
 
+    // MARK: Approvals (#12)
+
+    /// The signed-in user's undecided approvals, oldest first.
+    var pendingApprovals: [Approval] { snapshot.pendingApprovals }
+
+    /// Approve or deny through `decide_approval`. The listing agent posts or
+    /// rejects once it sees the decision. Returns false if the write failed.
+    @discardableResult
+    func decide(_ approval: Approval, approve: Bool) async -> Bool {
+        await run { try await $0.decideApproval(approvalId: approval.id, status: approve ? .approved : .denied) }
+    }
+
     @discardableResult
     private func run(_ op: (SyncBackend) async throws -> Void) async -> Bool {
         do {
