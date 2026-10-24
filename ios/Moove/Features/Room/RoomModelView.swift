@@ -107,7 +107,8 @@ struct RoomModelView: View {
             let id = String(container.name.dropFirst(RoomScene.objectPrefix.count))
             guard let object = geometry.objects.first(where: { $0.id == id }),
                   let block = container.findEntity(named: "block") as? ModelEntity,
-                  let base = container.findEntity(named: "base") as? ModelEntity else { continue }
+                  let base = container.findEntity(named: "base") as? ModelEntity,
+                  let placeholder = container.findEntity(named: "placeholder") else { continue }
             let item = items[id]
             let selected = id == selection
             let color = RoomPalette.color(for: object, item: item, mode: mode)
@@ -121,6 +122,7 @@ struct RoomModelView: View {
                     RoomScene.attachModel(prototype, to: container, object: object, extraQuarterTurns: turns)
                     container.findEntity(named: "model")?.components.set(ModelSourceComponent(source: prototype.name, turns: turns))
                 }
+                placeholder.isEnabled = false
                 base.isEnabled = true
                 base.model?.materials = [RoomScene.material(color, roughness: 0.6, glow: selected)]
                 block.isEnabled = selected
@@ -131,9 +133,12 @@ struct RoomModelView: View {
             } else {
                 container.children.filter { $0.name == "model" }.forEach { $0.removeFromParent() }
                 base.isEnabled = false
-                block.isEnabled = true
-                block.model?.materials = [RoomScene.material(color, roughness: 0.5, glow: selected)]
-                block.scale = selected ? SIMD3(repeating: 1.06) : .one
+                block.isEnabled = false
+                placeholder.isEnabled = true
+                let look = RoomScene.material(color, roughness: 0.65, glow: selected)
+                for case let piece as ModelEntity in placeholder.children { piece.model?.materials = [look] }
+                // Grow sideways only, so a selected piece never sinks into the floor.
+                placeholder.scale = selected ? SIMD3(1.05, 1, 1.05) : .one
             }
 
             var text = item?.name ?? object.category.capitalized
