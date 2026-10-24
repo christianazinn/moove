@@ -71,6 +71,8 @@ struct ScanFinishedScreen: View {
     var isDemo = false
     /// Set when the room files or photos couldn't be uploaded.
     var uploadProblem: String? = nil
+    /// Item photos still queued for upload (#222); they attach to their items once they land.
+    var pendingPhotos = 0
     /// How many items the import sent, for the title before the rows sync back.
     var importedCount: Int? = nil
     var onDone: () -> Void
@@ -119,6 +121,10 @@ struct ScanFinishedScreen: View {
     }
 
     private var lede: String {
+        if pendingPhotos > 0 {
+            let why = uploadProblem.map { " (\($0))" } ?? ""
+            return "\(pendingPhotos) photo\(pendingPhotos == 1 ? "" : "s") waiting to upload\(why). Moove keeps trying for 15 minutes and adds them to their items; the room is already saved."
+        }
         if let uploadProblem {
             return "Photos couldn't be uploaded (\(uploadProblem)), so agents can't identify items yet. The room is saved, and the 3D view works on this device."
         }
