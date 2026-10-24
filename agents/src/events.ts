@@ -16,14 +16,10 @@ export function logEvent(
     data?: unknown;
   }
 ): void {
-  conn.reducers.logAgentEvent({
-    owner: e.owner,
-    agent: e.agent,
-    kind: e.kind,
-    message: e.message,
-    refTable: e.refTable ?? '',
-    refId: e.refId ?? 0n,
-    dataJson: e.data === undefined ? '' : JSON.stringify(e.data, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)),
-  });
+  const dataJson = e.data === undefined ? '' : JSON.stringify(e.data, (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
+  conn.reducers
+    .logAgentEvent({ owner: e.owner, agent: e.agent, kind: e.kind, message: e.message, refTable: e.refTable ?? '', refId: e.refId ?? 0n, dataJson })
+    // A failed log write (e.g. while reconnecting) must never crash the worker.
+    .catch(err => console.warn(`[${e.agent}] could not log event: ${String(err)}`));
   console.log(`[${e.agent}] ${e.kind}: ${e.message}`);
 }

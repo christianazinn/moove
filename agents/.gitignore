@@ -1,0 +1,2 @@
+# Runtime caches (live deal searches). Committed replays live in fixtures/.
+.cache/

@@ -119,7 +119,8 @@ import Testing
         #expect(pricing.remainingUsdMicros == 4_985_000)
         #expect(pricing.refusals == 0)
         #expect(log.budgets[1].refusals == 1)
-        #expect(log.budgets[1].remainingUsdMicros == 3_000_000)
+        // Card (Visa) spend has its own caps, so it doesn't use up the x402 budget (#15).
+        #expect(log.budgets[1].remainingUsdMicros == 5_000_000)
         #expect(pricing.isEstimate)
         #expect(log.budgets[1].isEstimate)
     }
