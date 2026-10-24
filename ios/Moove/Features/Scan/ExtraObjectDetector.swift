@@ -53,17 +53,24 @@ final class ExtraObjectDetector: @unchecked Sendable {
         }
     }
 
-    /// The measured objects, minus anything RoomPlan already found.
-    func results(floorY: Float, excluding roomPlanObjects: [RoomGeometry.Object]) -> [RoomGeometry.Object] {
+    /// The measured objects, minus anything RoomPlan already found and anything that
+    /// is really room structure (walls, door frames, views through windows), see
+    /// `StructureCheck`. Checked on the measured boxes, before the minimum-depth padding.
+    func results(room: RoomGeometry) -> (objects: [RoomGeometry.Object], dropped: [String]) {
         let tracks = lock.withLock { () -> [SightingMerger.Track] in
-            merger.floorY = floorY
-            return merger.results(excluding: roomPlanObjects)
+            merger.floorY = room.floorY
+            return merger.results(excluding: room.objects)
         }
-        return tracks.map { t in
-            var size = t.box.size
-            size.z = max(size.z, ObjectVocabulary.minimumDepth[t.label] ?? 0.05)
-            return RoomGeometry.Object(id: UUID().uuidString, category: t.label, dimensions: size, transform: t.box.transform)
+        let measured = tracks.map {
+            RoomGeometry.Object(id: UUID().uuidString, category: $0.label, dimensions: $0.box.size, transform: $0.box.transform)
         }
+        let (kept, dropped) = StructureCheck.apply(measured, in: room)
+        let objects = kept.map { o -> RoomGeometry.Object in
+            var o = o
+            o.dimensions.z = max(o.dimensions.z, ObjectVocabulary.minimumDepth[o.category] ?? 0.05)
+            return o
+        }
+        return (objects, dropped.map { "\($0.0.category): \($0.1)" })
     }
 
     // MARK: Frames

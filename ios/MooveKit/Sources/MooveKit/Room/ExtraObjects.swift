@@ -102,7 +102,7 @@ public struct SightingMerger: Sendable {
     /// Caps memory: keep an even sample of at most this many points per object.
     public var maxPointsPerTrack = 4000
     /// A single sighting counts when the detector was at least this sure...
-    public var singleSightingConfidence: Float = 0.6
+    public var singleSightingConfidence: Float = 0.7  // 0.6 let big false positives (walls, windows) in from one glance
     /// ...and the object's longest side is at least this long (m). Small one-offs are
     /// mostly misfires; big things are often seen only briefly from one side.
     public var singleSightingMinSize: Float = 0.5

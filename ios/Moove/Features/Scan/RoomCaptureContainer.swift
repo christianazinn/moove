@@ -83,9 +83,11 @@ struct RoomCaptureContainer: UIViewRepresentable {
         func captureView(didPresent processedResult: CapturedRoom, error: Error?) {
             if let error { return onFinished(.failure(error), [], photographer) }
             let roomPlan = RoomGeometry(processedResult)
-            let extras = detector?.results(floorY: roomPlan.floorY, excluding: roomPlan.objects) ?? []
+            let found: (objects: [RoomGeometry.Object], dropped: [String]) = detector?.results(room: roomPlan) ?? ([], [])
+            let extras = found.objects
             if let detector {
                 print("[extra-objects] \(extras.map(\.category)) (frames \(detector.framesRun), depth \(detector.usedDepth), raycast \(detector.usedRaycast))")
+                print("[extra-objects] dropped: \(found.dropped)")
             }
             print("[auto-photos] \(photographer.keyframeCount) keyframes")
             onFinished(.success(processedResult), extras, photographer)
