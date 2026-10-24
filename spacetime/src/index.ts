@@ -17,6 +17,7 @@ const STAGE = ['pending', 'running', 'done', 'failed'] as const;
 const LISTING_STATUS = ['draft', 'awaiting_approval', 'rejected', 'posted', 'sold', 'failed'] as const;
 const APPROVAL_KIND = ['listing', 'purchase'] as const;
 const APPROVAL_STATUS = ['pending', 'approved', 'denied', 'expired'] as const;
+const APPROVAL_DECISION = ['approved', 'denied'] as const; // what decide_approval / record_ciba_decision accept
 const SHOPPING_STATUS = ['open', 'searching', 'found', 'bought'] as const;
 const RAIL = ['x402', 'visa'] as const;
 const PAYMENT_STATUS = ['pending', 'settled', 'failed'] as const;
@@ -168,6 +169,9 @@ const approval = table(
     status: t.string(), // APPROVAL_STATUS
     requestedAt: t.timestamp(),
     updatedAt: t.timestamp(),
+    // #42, appended last with defaults so existing rows migrate
+    decidedVia: t.string().default(''), // '' while pending | 'app' (owner in the app) | 'ciba' (worker relayed Auth0)
+    cibaSubject: t.string().default(''), // Auth0 `sub` the worker reported from the CIBA id_token
   }
 );
 
@@ -284,9 +288,42 @@ export default spacetimedb;
 
 type Ctx = ReducerCtx<typeof spacetimedb.schemaType>;
 
+// ---------- identity constants (security pass #41, #44) ----------
+// Not secrets: the issuer and client id are in every Auth0 ID token the app holds.
+const AUTH0_ISSUER = 'https://dev-78lq8spq27b2bipk.us.auth0.com/'; // exactly as in the token's `iss`
+const AUTH0_IOS_CLIENT_ID = 'B674uRd1BKSPe11boeGRMXd2UlJIuDur'; // ID token `aud` (iOS native app)
+// Connection gate (#41 part A). Off until Auth0 login (#1) merges: the app still falls back to an
+// anonymous SpacetimeDB token. Setting it back to false is the demo escape hatch if login breaks on stage.
+const REQUIRE_AUTH0 = false;
+// On maincloud only the pinned worker identity may hold the worker role (#44). Every other database
+// (local dev) keeps first-caller-wins so teammates can run their own worker.
+const MAINCLOUD_DATABASE_IDENTITY = 'c200b33aa2dc4fda37db755875072992ffdf560c733f43b9faec5c1b116793aa';
+const MAINCLOUD_WORKER_IDENTITIES: readonly string[] = [
+  'c2002442bb9baf2130801c9162964a627e601a60fde9d30f0da5d4a9b8fa09f7', // printed by agents on connect
+];
+
+function hex(id: Identity): string {
+  return id.toHexString().replace(/^0x/i, '').toLowerCase();
+}
+
+// The pinned worker list for this database, or null when any first caller may become the worker.
+function pinnedWorkers(ctx: Ctx): readonly string[] | null {
+  return hex(ctx.databaseIdentity) === MAINCLOUD_DATABASE_IDENTITY ? MAINCLOUD_WORKER_IDENTITIES : null;
+}
+
+// The caller's Auth0 token claims (SpacetimeDB has verified the signature), or null for
+// anonymous SpacetimeDB tokens and other issuers.
+function auth0Claims(ctx: Ctx) {
+  const jwt = ctx.senderAuth.jwt;
+  return jwt && jwt.issuer === AUTH0_ISSUER ? jwt : null;
+}
+
 // ---------- auth helpers ----------
+// On maincloud a worker row only counts for a pinned identity, so a stale row can't keep the role.
 function isWorker(ctx: Ctx): boolean {
-  return ctx.db.worker.identity.find(ctx.sender) != null;
+  if (ctx.db.worker.identity.find(ctx.sender) == null) return false;
+  const pinned = pinnedWorkers(ctx);
+  return pinned == null || pinned.includes(hex(ctx.sender));
 }
 
 function requireWorker(ctx: Ctx): void {
@@ -318,10 +355,30 @@ function getItem(ctx: Ctx, id: bigint) {
   return row;
 }
 
+// ---------- connection gate (#41 part A) ----------
+export const onConnect = spacetimedb.clientConnected(ctx => {
+  if (!REQUIRE_AUTH0 || ctx.senderAuth.isInternal) return;
+  // The worker connects with a SpacetimeDB-minted token, not Auth0.
+  if (pinnedWorkers(ctx)?.includes(hex(ctx.sender)) || isWorker(ctx)) return;
+  const jwt = auth0Claims(ctx);
+  if (!jwt || !jwt.audience.includes(AUTH0_IOS_CLIENT_ID)) {
+    throw new SenderError('sign in with Auth0 to use Moove');
+  }
+});
+
 // ---------- users & workers ----------
+// auth0Sub and email come from the caller's verified Auth0 token (#44), never from the args: CIBA
+// pushes go to user.auth0Sub, so a client must not be able to point its row at someone else's account.
+// Anonymous/demo tokens get auth0Sub ''. The auth0Sub arg is ignored (kept for binding compatibility);
+// email falls back to the arg only when the token has no email claim.
 export const registerUser = spacetimedb.reducer(
   { auth0Sub: t.string(), name: t.string(), email: t.string() },
-  (ctx, { auth0Sub, name, email }) => {
+  (ctx, args) => {
+    const jwt = auth0Claims(ctx);
+    const auth0Sub = jwt ? jwt.subject : '';
+    const claimedEmail = jwt ? jwt.fullPayload['email'] : undefined;
+    const email = typeof claimedEmail === 'string' ? claimedEmail : args.email;
+    const name = args.name;
     const existing = ctx.db.user.identity.find(ctx.sender);
     if (existing) {
       ctx.db.user.identity.update({ ...existing, auth0Sub, name, email });
@@ -338,19 +395,28 @@ export const registerUser = spacetimedb.reducer(
   }
 );
 
+const MAX_APPROVAL_THRESHOLD_CENTS = 10_000_000n; // $100,000
+
+// -1 = always ask (#44 bounds it).
 export const setApprovalThreshold = spacetimedb.reducer(
   { cents: t.i64() },
   (ctx, { cents }) => {
     const u = ctx.db.user.identity.find(ctx.sender);
     if (!u) throw new SenderError('register first');
+    if (cents < -1n || cents > MAX_APPROVAL_THRESHOLD_CENTS) {
+      throw new SenderError(`cents must be -1 (always ask) or 0..${MAX_APPROVAL_THRESHOLD_CENTS}`);
+    }
     ctx.db.user.identity.update({ ...u, approvalThresholdCents: cents });
   }
 );
 
-// First caller becomes the worker; after that only existing workers can add more.
-// To reset, republish with --delete-data (dev) or clear the table.
+// On maincloud only the pinned identity can register (#44). Elsewhere the first caller becomes the
+// worker and after that only existing workers can add more; to reset, republish with --delete-data.
 export const registerWorker = spacetimedb.reducer({ label: t.string() }, (ctx, { label }) => {
-  if (ctx.db.worker.count() > 0n && !isWorker(ctx)) {
+  const pinned = pinnedWorkers(ctx);
+  if (pinned) {
+    if (!pinned.includes(hex(ctx.sender))) throw new SenderError('not an allowed worker identity');
+  } else if (ctx.db.worker.count() > 0n && !isWorker(ctx)) {
     throw new SenderError('a worker is already registered');
   }
   if (!ctx.db.worker.identity.find(ctx.sender)) {
@@ -388,6 +454,29 @@ export const joinRoom = spacetimedb.reducer({ code: t.string() }, (ctx, { code }
   if (canAccessRoom(ctx, r.id)) return;
   ctx.db.roomMember.insert({ id: 0n, roomId: r.id, member: ctx.sender, joinedAt: ctx.timestamp });
 });
+
+function requireRoomOwner(ctx: Ctx, roomId: bigint) {
+  const r = ctx.db.room.id.find(roomId);
+  if (!r) throw new SenderError(`no room ${roomId}`);
+  if (!ctx.sender.isEqual(r.owner)) throw new SenderError('only the room owner can do that');
+  return r;
+}
+
+// Contain a leaked join code (#41): the old code stops working; existing members stay.
+export const rotateJoinCode = spacetimedb.reducer({ roomId: t.u64() }, (ctx, { roomId }) => {
+  const r = requireRoomOwner(ctx, roomId);
+  ctx.db.room.id.update({ ...r, joinCode: newJoinCode(ctx) });
+});
+
+export const removeMember = spacetimedb.reducer(
+  { roomId: t.u64(), member: t.identity() },
+  (ctx, { roomId, member }) => {
+    requireRoomOwner(ctx, roomId);
+    const rows = Array.from(ctx.db.roomMember.roomId.filter(roomId)).filter(m => m.member.isEqual(member));
+    if (rows.length === 0) throw new SenderError('not a member of that room');
+    for (const m of rows) ctx.db.roomMember.id.delete(m.id);
+  }
+);
 
 const ScanObjectInput = t.object('ScanObjectInput', {
   scanObjectId: t.string(),
@@ -471,6 +560,12 @@ export const createScan = spacetimedb.reducer(
   }
 );
 
+// The worker fetches photo URLs, so keep junk like file: and data: out of the table (#44). The
+// worker has its own allowlist (agents/src/integrations/anthropic.ts); this is only a first filter.
+function isHttpUrl(url: string): boolean {
+  return /^https?:\/\/\S+$/i.test(url);
+}
+
 function insertItem(
   ctx: Ctx,
   owner: Identity,
@@ -497,7 +592,7 @@ function insertItem(
     widthM: o.widthM,
     heightM: o.heightM,
     depthM: o.depthM,
-    photoUrls: o.photoUrl ? [o.photoUrl] : [],
+    photoUrls: isHttpUrl(o.photoUrl) ? [o.photoUrl] : [], // a bad URL drops the photo, not the import
     material: '',
     brand: '',
     condition: '',
@@ -530,6 +625,7 @@ export const addItemPhoto = spacetimedb.reducer(
   (ctx, { itemId, url }) => {
     const it = getItem(ctx, itemId);
     requireRoomAccess(ctx, it.roomId);
+    if (!isHttpUrl(url)) throw new SenderError('photo URL must be http(s)');
     ctx.db.item.id.update({
       ...it,
       photoUrls: [...it.photoUrls, url],
@@ -714,6 +810,7 @@ export const createListingDraft = spacetimedb.reducer(
   }
 );
 
+// Worker-only (#44): listing state (posted/sold, eBay id and url, price) only comes from the worker.
 export const updateListing = spacetimedb.reducer(
   {
     listingId: t.u64(),
@@ -723,9 +820,9 @@ export const updateListing = spacetimedb.reducer(
     priceCents: t.i64(),
   },
   (ctx, { listingId, status, externalId, url, priceCents }) => {
+    requireWorker(ctx);
     const l = ctx.db.listing.id.find(listingId);
     if (!l) throw new SenderError(`no listing ${listingId}`);
-    requireOwnerOrWorker(ctx, l.owner);
     ctx.db.listing.id.update({
       ...l,
       status: oneOf('status', status, LISTING_STATUS),
@@ -737,36 +834,69 @@ export const updateListing = spacetimedb.reducer(
   }
 );
 
-// ---------- approvals (#12) ----------
+// ---------- approvals (#12, #42) ----------
+// Only the worker asks, and only about the owner's own listing/deal at its real price.
 export const requestApproval = spacetimedb.reducer(
   { owner: t.identity(), kind: t.string(), refId: t.u64(), amountCents: t.i64(), summary: t.string() },
   (ctx, { owner, kind, refId, amountCents, summary }) => {
     requireWorker(ctx);
+    oneOf('kind', kind, APPROVAL_KIND);
+    const ref = kind === 'listing' ? ctx.db.listing.id.find(refId) : ctx.db.deal.id.find(refId);
+    if (!ref || !ref.owner.isEqual(owner)) throw new SenderError(`${kind} ${refId} does not belong to that owner`);
+    // If purchases (#15) add tax/shipping on top of the deal price, relax this for kind === 'purchase'.
+    if (ref.priceCents !== amountCents) throw new SenderError(`amount must equal the ${kind} price`);
     ctx.db.approval.insert({
       id: 0n,
       owner,
-      kind: oneOf('kind', kind, APPROVAL_KIND),
+      kind,
       refId,
       amountCents,
       summary,
       status: 'pending',
       requestedAt: ctx.timestamp,
       updatedAt: ctx.timestamp,
+      decidedVia: '',
+      cibaSubject: '',
     });
   }
 );
 
-// Called by the app (in-app approve/deny) or by the worker after an Auth0 CIBA response.
+// In-app approve/deny. Owner only: the worker asks for approvals, so it must not grant them (#42).
 export const decideApproval = spacetimedb.reducer(
   { approvalId: t.u64(), status: t.string() },
   (ctx, { approvalId, status }) => {
     const a = ctx.db.approval.id.find(approvalId);
     if (!a) throw new SenderError(`no approval ${approvalId}`);
-    requireOwnerOrWorker(ctx, a.owner);
+    if (!ctx.sender.isEqual(a.owner)) throw new SenderError('not your approval');
     if (a.status !== 'pending') throw new SenderError(`approval already ${a.status}`);
     ctx.db.approval.id.update({
       ...a,
-      status: oneOf('status', status, APPROVAL_STATUS),
+      status: oneOf('status', status, APPROVAL_DECISION),
+      decidedVia: 'app',
+      updatedAt: ctx.timestamp,
+    });
+  }
+);
+
+// The worker relays an Auth0 CIBA result (#12, #42). Reducers can't do network I/O, so the module does
+// NOT verify the CIBA id_token: it trusts the worker to have checked it. It does pin the reported subject
+// to the owner's Auth0 account (taken from their verified token by register_user) and records the path.
+export const recordCibaDecision = spacetimedb.reducer(
+  { approvalId: t.u64(), status: t.string(), cibaSubject: t.string() },
+  (ctx, { approvalId, status, cibaSubject }) => {
+    requireWorker(ctx);
+    const a = ctx.db.approval.id.find(approvalId);
+    if (!a) throw new SenderError(`no approval ${approvalId}`);
+    if (a.status !== 'pending') throw new SenderError(`approval already ${a.status}`);
+    const u = ctx.db.user.identity.find(a.owner);
+    if (!u || !u.auth0Sub || u.auth0Sub !== cibaSubject) {
+      throw new SenderError("CIBA subject doesn't match the approval owner's Auth0 account");
+    }
+    ctx.db.approval.id.update({
+      ...a,
+      status: oneOf('status', status, APPROVAL_DECISION),
+      decidedVia: 'ciba',
+      cibaSubject,
       updatedAt: ctx.timestamp,
     });
   }
