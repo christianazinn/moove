@@ -14,6 +14,8 @@ struct RoomVisualizationView: View {
     /// Inventory items keyed by `scanObjectId`.
     var items: [String: Item] = [:]
     var initialMode: RoomPalette.Mode = .category
+    /// Memoized `centered()` / `cutaway(at:)`, recomputed only when `geometry` changes.
+    @State private var display = RoomDisplayGeometry()
 
     @State private var style: Style = .model
     @State private var mode: RoomPalette.Mode = .category
@@ -22,8 +24,8 @@ struct RoomVisualizationView: View {
     @State private var selection: String?
 
     var body: some View {
-        let centered = geometry.centered()
-        let shown = fullWalls ? centered : centered.cutaway(at: 1.2)
+        let centered = display.centered(geometry)
+        let shown = fullWalls ? centered : display.cutaway(geometry, at: 1.2)
         ZStack(alignment: .bottom) {
             LinearGradient(colors: [Color(white: 0.97), Color(red: 0.88, green: 0.91, blue: 0.97)], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
