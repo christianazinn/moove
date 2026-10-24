@@ -94,7 +94,7 @@ import Testing
         let hold = VisaPaymentBadge(visa(1, deal: 1, .pending))
         #expect(hold.state == .hold && hold.simulated && hold.railLabel == "SIMULATED")
         let paid = VisaPaymentBadge(visa(2, deal: 1, .settled, simulated: false))
-        #expect(paid.state == .paid && paid.railLabel == "SANDBOX")
+        #expect(paid.state == .paid && paid.railLabel == "VISA SANDBOX")
         #expect(VisaPaymentBadge(visa(3, deal: 1, .failed)).state == .failed)
     }
 
@@ -145,6 +145,7 @@ import Testing
         #expect(s.pendingPurchaseApprovals.isEmpty) // item not on the list yet
         s.shoppingItems = [item]
         #expect(s.checkout(for: item) == .needsApproval(approval))
+        #expect(s.isCheckoutLocked(item)) // Choose is locked while the approval is pending
         #expect(s.pendingPurchaseApprovals.map(\.id) == [5])
         approval.status = .denied
         s.approvals[0] = approval
@@ -166,6 +167,19 @@ import Testing
         #expect(s.hasPendingVisaPayment(for: item))
         s.payments = [visa(21, deal: 10, .failed)]
         #expect(!s.hasPendingVisaPayment(for: item))
+    }
+
+    @Test func visaSpendDoesNotCountAgainstTheX402Budget() {
+        let card = visa(1, deal: 10, .settled)
+        let x402 = Payment(id: 2, owner: "me", agent: "buy", rail: .x402, purpose: "comps", payee: "p",
+                           amountUsdMicros: 10_000, status: .settled, simulated: true, refTable: "", refId: 0,
+                           createdAt: Date(timeIntervalSince1970: 1_000))
+        let log = SpendingLog(payments: [card, x402], events: [])
+        #expect(log.budgets.map(\.agent) == ["buy"])
+        #expect(log.budgets.first?.spentUsdMicros == 10_000)
+        #expect(log.totalsByRail[.visa] == card.amountUsdMicros)
+        // A card-only agent gets no x402 budget row at all.
+        #expect(SpendingLog(payments: [card], events: []).budgets.isEmpty)
     }
 
     @Test func sampleBadgeIsSeparateFromReplay() {

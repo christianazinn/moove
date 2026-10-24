@@ -38,6 +38,45 @@ const busyItems = new Set<bigint>(); // shopping item ids in checkout
 const settled = new Set<string>(); // keys that reached a final outcome this session
 const approvalRequested = new Set<string>();
 const ignoredChoice = new Set<string>();
+
+/**
+ * Requests an approval at most once per key, but only remembers the key once the request went
+ * through, so a transient failure doesn't leave the purchase waiting on an approval that never existed.
+ */
+export async function requestOnce(requested: Set<string>, key: string, request: () => Promise<void>): Promise<boolean> {
+  if (requested.has(key)) return false;
+  requested.add(key); // claim it now so concurrent callbacks don't double-request
+  try {
+    await request();
+    return true;
+  } catch (err) {
+    requested.delete(key);
+    throw err;
+  }
+}
+
+/** Top `n` by rank, but always including the best card-checkout deal if there is one. */
+export function pickDealsToWrite(ranked: RankedDeal[], n: number): RankedDeal[] {
+  const top = ranked.slice(0, n);
+  const card = ranked.find(d => d.checkout === 'visa');
+  if (card && !top.includes(card)) top[top.length - 1] = card;
+  return top;
+}
+
+// At most this many deal searches run at once (each one starts paid Apify actor runs).
+const SEARCH_CONCURRENCY = Math.max(1, Number(process.env.DEALS_SEARCH_CONCURRENCY ?? '2'));
+let activeSearches = 0;
+const searchQueue: (() => void)[] = [];
+async function withSearchSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (activeSearches >= SEARCH_CONCURRENCY) await new Promise<void>(r => searchQueue.push(r));
+  activeSearches++;
+  try {
+    return await fn();
+  } finally {
+    activeSearches--;
+    searchQueue.shift()?.();
+  }
+}
 const retries = new Map<string, number>(); // key -> transient failures so far
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = Number(process.env.BUY_RETRY_DELAY_MS ?? '60000');
@@ -97,7 +136,7 @@ async function search(conn: Conn, s: ShoppingItem): Promise<void> {
     await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'searching' });
     logEvent(conn, { ...ref, kind: 'plan', message: `Looking for deals on "${s.name}"` });
     logEvent(conn, { ...ref, kind: 'tool_call', message: `Searching ${dealSource.name}${dealSource.replay ? ' (not live)' : ''} for "${s.name}"`, data: { source: dealSource.name, replay: dealSource.replay, query: { name: s.name, category: s.category } } });
-    const ranked = rankDeals(await dealSource.search({ name: s.name, category: s.category })).slice(0, MAX_DEALS);
+    const ranked = pickDealsToWrite(rankDeals(await withSearchSlot(() => dealSource.search({ name: s.name, category: s.category }))), MAX_DEALS);
     if (!ranked.length) {
       await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'open' });
       logEvent(conn, { ...ref, kind: 'result', message: `No deals found for "${s.name}"` });
@@ -115,6 +154,11 @@ async function search(conn: Conn, s: ShoppingItem): Promise<void> {
     await recommend(conn, s, ranked);
   } catch (err) {
     logEvent(conn, { ...ref, kind: 'error', message: `Deal search failed: ${String(err)}` });
+    // Don't leave the item stuck in "searching": reopen it so a later update can retry.
+    searching.delete(s.id);
+    if (dealsFor(conn, s.id).length === 0) {
+      await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'open' }).catch(() => undefined);
+    }
   }
 }
 
@@ -209,12 +253,12 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
   const gate = approvalGate(d.priceCents, threshold, latestApproval(conn, d.id));
   if (!gate.ok) {
     if (gate.needsApproval) {
-      if (approvalRequested.has(key)) return;
-      approvalRequested.add(key);
       // Amount first, and no quotes or $ from scraped text, so a title can't fake the price.
       const title = sanitizeText(d.title, 80).replace(/["$]/g, '');
-      await conn.reducers.requestApproval({ owner: s.owner, kind: 'purchase', refId: d.id, amountCents: d.priceCents, summary: `Pay ${dollars(d.priceCents)} to ${d.source} for: ${title}` });
-      logEvent(conn, { ...ref, kind: 'approval', message: `${gate.reason}, asking for approval` });
+      const asked = await requestOnce(approvalRequested, key, () =>
+        conn.reducers.requestApproval({ owner: s.owner, kind: 'purchase', refId: d.id, amountCents: d.priceCents, summary: `Pay ${dollars(d.priceCents)} to ${d.source} for: ${title}` })
+      );
+      if (asked) logEvent(conn, { ...ref, kind: 'approval', message: `${gate.reason}, asking for approval` });
     } else if (gate.reason !== 'waiting for approval') {
       settled.add(key);
       logEvent(conn, { ...ref, kind: 'approval', message: `Not buying "${d.title}": ${gate.reason}` });

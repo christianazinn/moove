@@ -150,11 +150,11 @@ struct DealRow: View {
                 if isChosen {
                     Text("Chosen").font(.caption.weight(.semibold)).foregroundStyle(.green)
                 } else if item.status != .bought {
-                    // Disabled while a hold is in flight: the agent finishes (or releases) it first.
+                    // Disabled while a hold or a purchase approval is pending: that one finishes (or is denied) first.
                     Button("Choose") { choose() }
                         .font(.caption.weight(.semibold))
                         .buttonStyle(.bordered)
-                        .disabled(working || store.snapshot.hasPendingVisaPayment(for: item))
+                        .disabled(working || store.snapshot.isCheckoutLocked(item))
                 }
             }
         }

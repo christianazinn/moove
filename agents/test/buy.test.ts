@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fixtureDealSource, rankDeals, sanitizeText, sellerInfo, toCandidate, type DealCandidate } from '../src/integrations/deals.js';
-import { pickRecommendation } from '../src/agents/buy.js';
+import { pickDealsToWrite, pickRecommendation, requestOnce } from '../src/agents/buy.js';
 import { DEMO_ROOMS, parseRooms, ruleBasedList } from '../src/agents/shopping.js';
 
 const cand = (o: Partial<DealCandidate>): DealCandidate => ({
@@ -97,4 +97,26 @@ test('floor plan parsing falls back to the demo house', () => {
     { name: 'Study', kind: 'other' },
     { name: 'Main Bedroom', kind: 'bedroom' },
   ]);
+});
+
+test('an approval request that fails is not remembered, so the next pass asks again', async () => {
+  const requested = new Set<string>();
+  let calls = 0;
+  await assert.rejects(requestOnce(requested, '1:2', async () => { calls++; throw new Error('disconnected'); }));
+  assert.equal(requested.has('1:2'), false);
+  assert.equal(await requestOnce(requested, '1:2', async () => { calls++; }), true);
+  assert.equal(await requestOnce(requested, '1:2', async () => { calls++; }), false); // only once after success
+  assert.equal(calls, 2);
+});
+
+test('the written deals always include the best card-checkout option', () => {
+  const ranked = rankDeals([
+    ...[1, 2, 3, 4, 5, 6].map(i => cand({ title: `fb ${i}`, source: 'fb', checkout: 'seller_message', priceCents: BigInt(1000 + i), condition: 'like_new', distanceMiles: 1 })),
+    cand({ title: 'ikea', source: 'ikea', priceCents: 50_000n }),
+  ]);
+  assert.notEqual(ranked.slice(0, 5).some(d => d.checkout === 'visa'), true);
+  const picked = pickDealsToWrite(ranked, 5);
+  assert.equal(picked.length, 5);
+  assert.ok(picked.some(d => d.title === 'ikea'));
+  assert.equal(pickRecommendation(picked)?.title, 'ikea');
 });

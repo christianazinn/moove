@@ -1,5 +1,5 @@
 {
-  "_note": "Hand-curated demo replay for the buy agent (#15), not live listings. Prices are typical of each retailer/marketplace in Oct 2026; URLs are search pages, not specific products. Replace with cached Apify results once the shared Apify client (#6) lands. Rows from this file are always labeled as a replay.",
+  "_note": "Hand-made sample deals for the buy agent (#15), not from any real search. Prices are typical of each retailer/marketplace in Oct 2026; URLs are search pages, not specific products. Every row from this file is labeled \"sample data\" (SAMPLE badge). Real cached Apify searches live in deals-live-*.json and are labeled \"cached replay\".",
   "deals": [
     { "keywords": ["bed", "bed frame", "twin", "full", "queen"], "source": "ikea", "title": "MALM bed frame, high, white, Full", "priceCents": 22900, "url": "https://www.ikea.com/us/en/search/?q=malm%20bed%20frame", "seller": "IKEA", "condition": "new", "distanceMiles": -1, "checkout": "visa" },
     { "keywords": ["bed", "bed frame", "twin", "full", "queen"], "source": "target", "title": "Metal platform bed frame, Full, black", "priceCents": 8999, "url": "https://www.target.com/s?searchTerm=platform+bed+frame", "seller": "Target", "condition": "new", "distanceMiles": -1, "checkout": "visa" },

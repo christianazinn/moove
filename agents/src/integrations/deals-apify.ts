@@ -47,8 +47,10 @@ export interface ApifyDealOptions {
   city?: { fb: string; craigslist: string };
   /** Buyer's location, for distances when a listing has coordinates. */
   home?: { lat: number; lng: number };
-  /** Directory for deals-live-*.json caches. Default: agents/fixtures. */
+  /** Where live searches are cached at runtime (gitignored). Default: agents/.cache/deals. */
   cacheDir?: string;
+  /** Committed live replays, read after the runtime cache. Default: agents/fixtures (or cacheDir if only that is given). */
+  replayDir?: string;
   fetch?: typeof fetch;
   /** Used when live and cache both come back empty. Default: fixtureDealSource(). */
   fallback?: DealSource;
@@ -178,7 +180,7 @@ const normalizeEbay: Normalizer = r => {
   const lt = String(r.listingType ?? '').toLowerCase();
   if (lt.includes('auction') || Number(r.bidCount) > 0) return undefined; // active, but not a fixed price
   if (!isUsd(r.currency)) return undefined;
-  const name = str(r.sellerName, 40);
+  // eBay handles can be personal accounts, so like FB sellers they aren't stored.
   const fb = str(r.sellerFeedbackPercent, 8);
   const ship = str(r.shippingCost, 30);
   return {
@@ -186,7 +188,7 @@ const normalizeEbay: Normalizer = r => {
     title: str(r.title),
     priceCents: typeof r.price === 'number' ? toCents(r.price) : toCents(r.priceString),
     url: canonicalUrl('ebay', r.url),
-    seller: [name ? `eBay: ${name}` : 'eBay seller', feedbackText(fb), ship].filter(Boolean).join(', '),
+    seller: ['eBay seller', feedbackText(fb), ship].filter(Boolean).join(', '),
     condition: mapCondition(r.condition),
     distanceMiles: -1,
     checkout: 'seller_message',
@@ -203,6 +205,7 @@ function feedbackText(pct: string): string {
 export function scrubSeller(source: string, seller: string): string {
   let s = seller.replace(/\b0(\.0+)?% positive\b/, 'new seller');
   if (source === 'fb') s = s.replace(/^FB Marketplace: [^,]*/, 'FB Marketplace seller');
+  if (source === 'ebay') s = s.replace(/^eBay: [^,]*/, 'eBay seller');
   return s;
 }
 
@@ -282,17 +285,19 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 // ---------- the source ----------
 
 export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
-  const sources = (opts.sources?.length ? opts.sources : (['fb', 'craigslist', 'ebay'] as ApifySourceName[])).filter(isSource);
+  // Craigslist is off by default (as in pricing, #6): its actor is slow and often blocked.
+  const sources = (opts.sources?.length ? opts.sources : (['fb', 'ebay'] as ApifySourceName[])).filter(isSource);
   const perSource = Math.max(1, Math.min(opts.perSource ?? 6, 20));
   const maxUsd = opts.maxUsdPerRun ?? 0.1;
   const city = opts.city ?? { fb: 'sanfrancisco', craigslist: 'sfbay' };
-  const cacheDir = opts.cacheDir ?? fileURLToPath(new URL('../../fixtures/', import.meta.url));
+  const cacheDir = opts.cacheDir ?? fileURLToPath(new URL('../../.cache/deals/', import.meta.url));
+  const replayDir = opts.replayDir ?? opts.cacheDir ?? fileURLToPath(new URL('../../fixtures/', import.meta.url));
   const doFetch = opts.fetch ?? fetch;
   const now = opts.now ?? (() => new Date());
   let fallback = opts.fallback;
   let lastReplay = !opts.token;
 
-  const cacheFile = (q: string) => path.join(cacheDir, `deals-live-${slug(q)}.json`);
+  const cacheFile = (q: string, dir = cacheDir) => path.join(dir, `deals-live-${slug(q)}.json`);
 
   async function runActor(source: ApifySourceName, q: string): Promise<RawDeal[]> {
     const spec = ACTORS[source];
@@ -311,8 +316,9 @@ export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
   }
 
   function readCache(q: string): RawDeal[] {
-    const file = cacheFile(q);
-    if (!existsSync(file)) return [];
+    // Runtime cache first, then the replays committed to fixtures/ (never overwritten by live runs).
+    const file = [cacheFile(q), cacheFile(q, replayDir)].find(f => existsSync(f));
+    if (!file) return [];
     try {
       const parsed = JSON.parse(readFileSync(file, 'utf8')) as { rows?: unknown };
       const rows = Array.isArray(parsed.rows) ? (parsed.rows as RawDeal[]) : [];
@@ -350,6 +356,10 @@ export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
     },
     async search(dq) {
       const q = queryText(dq);
+      fallback ??= fixtureDealSource();
+      // Marketplace listings can't be paid through an API, so the matching sample retail rows (still
+      // labeled "sample data") ride along: every item keeps at least one card-checkout option.
+      const withRetail = async (found: DealCandidate[]) => [...found, ...(await fallback!.search(dq)).filter(c => c.checkout === 'visa')];
       if (q && opts.token) {
         const settled = await Promise.allSettled(sources.map(s => runActor(s, q)));
         const rows = dedupe(settled.flatMap(r => (r.status === 'fulfilled' ? r.value : [])));
@@ -357,13 +367,12 @@ export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
         if (rows.length) {
           writeCache(q, rows, errors);
           lastReplay = false;
-          return toCands(rows, false);
+          return withRetail(toCands(rows, false));
         }
       }
       const cached = q ? readCache(q) : [];
       lastReplay = true;
-      if (cached.length) return toCands(cached, true);
-      fallback ??= fixtureDealSource();
+      if (cached.length) return withRetail(toCands(cached, true));
       return fallback.search(dq);
     },
   };

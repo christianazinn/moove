@@ -49,11 +49,13 @@ let checkout: VisaCheckout | undefined;
 export function visaCheckout(conn: Conn): VisaCheckout {
   if (!checkout) {
     checkout = createVisaCheckout(visaSink(conn));
-    // The card budget is per process; count earlier pending/settled card payments so a restart
-    // doesn't hand the agents a fresh cap.
+    // The card budget is per process; count the last 24h of pending/settled card payments so a
+    // restart doesn't hand the agents a fresh cap. Simulated rows never count, so rehearsals don't use
+    // up the demo budget (same idea as x402's seeding). VISA_SEED_BUDGETS=0 turns this off.
+    const since = Date.now() - 24 * 3600 * 1000;
     const prior = new Map<string, bigint>();
-    for (const p of conn.db.payment.iter()) {
-      if (p.rail === 'visa' && (p.status === 'pending' || p.status === 'settled')) {
+    for (const p of process.env.VISA_SEED_BUDGETS === '0' ? [] : conn.db.payment.iter()) {
+      if (p.rail === 'visa' && !p.simulated && (p.status === 'pending' || p.status === 'settled') && p.createdAt.toMillis() >= since) {
         prior.set(p.agent, (prior.get(p.agent) ?? 0n) + p.amountUsdMicros / 10_000n);
       }
     }

@@ -145,7 +145,7 @@ public struct VisaPaymentBadge: Sendable, Hashable {
 
     /// Simulated payments are never presented as real (CLAUDE.md hard rule).
     /// Real CyberSource sandbox calls say SANDBOX: a test card, no real money.
-    public var railLabel: String { simulated ? "SIMULATED" : "SANDBOX" }
+    public var railLabel: String { simulated ? "SIMULATED" : "VISA SANDBOX" }
 }
 
 /// Where one shopping item is in the find -> choose -> approve -> pay flow.
@@ -210,6 +210,13 @@ extension SyncSnapshot {
     /// A Visa hold is in flight on one of the item's deals; choosing another deal now would be ignored.
     public func hasPendingVisaPayment(for item: ShoppingItem) -> Bool {
         deals(for: item.id).contains { deal in visaPayments(for: deal.id).contains { $0.status == .pending } }
+    }
+
+    /// Choosing another deal is locked while a hold is in flight or a purchase approval is pending.
+    public func isCheckoutLocked(_ item: ShoppingItem) -> Bool {
+        if hasPendingVisaPayment(for: item) { return true }
+        if case .needsApproval = checkout(for: item) { return true }
+        return false
     }
 
     public func checkout(for item: ShoppingItem) -> ShoppingCheckout {
