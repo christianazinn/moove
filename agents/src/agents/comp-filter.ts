@@ -13,6 +13,7 @@ import { z } from 'zod';
 import type { Item } from '../module_bindings/types.js';
 import type { Comp } from '../integrations/apify.js';
 import { config } from '../config.js';
+import { cleanUntrusted, untrustedBlock, UNTRUSTED_RULE } from '../untrusted.js';
 
 export type CompFilterMode = 'claude' | 'rules' | 'off';
 
@@ -71,12 +72,16 @@ const VerdictSchema = z.object({
 const SYSTEM = `You screen marketplace listings that will be used as price comparables for a used household item.
 Keep a listing only if it sells the same kind of product as the item: the same product line or model when the item names one, as a complete unit.
 Drop accessories, parts, inserts and add-ons sold alone, bundles and lots, for-parts or broken units, wanted/ISO ads, and different products.
-Keep size or configuration variants of the same product unless they clearly differ from the item's dimensions.`;
+Keep size or configuration variants of the same product unless they clearly differ from the item's dimensions.
+${UNTRUSTED_RULE}`;
 
+// Titles are scraped (untrusted, #17): cleaned and fenced like the listing agent's comps. The
+// verdict is still checked in code (indices in range, never keep nothing).
 export const compsPrompt = (itemDesc: string, comps: Comp[]) =>
-  `Item: ${itemDesc}\n\nListings:\n${comps
-    .map((c, i) => `${i + 1}. [${c.source}] $${(c.priceCents / 100).toFixed(2)} ${c.title.replace(/\s+/g, ' ').trim()}`)
-    .join('\n')}`;
+  `Item: ${cleanUntrusted(itemDesc)}\n\nListings (scraped, untrusted):\n${untrustedBlock(
+    'comps',
+    comps.map((c, i) => `${i + 1}. [${cleanUntrusted(c.source, 20)}] $${(c.priceCents / 100).toFixed(2)} ${cleanUntrusted(c.title, 120)}`)
+  )}`;
 
 /** Stage 2 via MODEL_FAST. Haiku has no server-side fallback, so none is requested. */
 export const claudeJudge: Judge = async (itemDesc, comps) => {
@@ -159,13 +164,15 @@ export async function filterComps(it: ItemDesc, comps: Comp[], deps: FilterDeps 
   }
 
   const keep = new Set(verdict.keep.filter(i => Number.isInteger(i) && i >= 1 && i <= judged.length));
+  // The reason goes into event messages; it was written from scraped text, so keep it plain and short.
+  const reason = cleanUntrusted(String(verdict.reason ?? ''), 200);
   if (keep.size === 0) {
-    return { ...base, comps: candidates, droppedByRules, claude: 'failed', error: `kept none (${verdict.reason})` };
+    return { ...base, comps: candidates, droppedByRules, claude: 'failed', error: `kept none (${reason})` };
   }
   if (claude === 'ok' && file) {
     try {
       const cache = readCache(file);
-      cache[key] = { item: desc, n: judged.length, keep: [...keep].sort((a, b) => a - b), reason: verdict.reason, model: config.models.fast };
+      cache[key] = { item: desc, n: judged.length, keep: [...keep].sort((a, b) => a - b), reason, model: config.models.fast };
       mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(file, JSON.stringify(cache, null, 2));
     } catch (err) {
@@ -176,8 +183,8 @@ export async function filterComps(it: ItemDesc, comps: Comp[], deps: FilterDeps 
     ...base,
     comps: [...judged.filter((_c, i) => keep.has(i + 1)), ...candidates.slice(MAX_JUDGED)],
     droppedByRules,
-    droppedByClaude: judged.filter((_c, i) => !keep.has(i + 1)).map(comp => ({ comp, why: verdict.reason })),
+    droppedByClaude: judged.filter((_c, i) => !keep.has(i + 1)).map(comp => ({ comp, why: reason })),
     claude,
-    reason: verdict.reason,
+    reason,
   };
 }

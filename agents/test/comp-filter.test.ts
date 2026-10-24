@@ -6,6 +6,7 @@ import path from "node:path";
 import type { Comp } from "../src/integrations/apify.js";
 import { compFilterMode, compsPrompt, describeItem, filterComps, preFilter, type ItemDesc, type Judge } from "../src/agents/comp-filter.js";
 import { filterSummary } from "../src/agents/pricing.js";
+import { INJECTION_TEXT } from "../fixtures/injection-comps.js";
 
 // Real cached eBay/FB comps for "IKEA Kallax shelf" (5 of the 17 are inserts sold alone).
 const KALLAX: Comp[] = JSON.parse(readFileSync(new URL("../fixtures/comps/ikea-kallax-shelf.json", import.meta.url), "utf8"));
@@ -57,7 +58,7 @@ test("describeItem lists name, brand, category, dims and condition", () => {
     "Kallax shelf; brand IKEA; category shelf; material particleboard; 0.77 x 1.47 x 0.39 m (W x H x D); condition good",
   );
   assert.equal(describeItem({ ...item, brand: "", material: "", widthM: 0 }), "Kallax shelf; category shelf; condition good");
-  assert.match(compsPrompt("x", KALLAX.slice(0, 1)), /^Item: x\n\nListings:\n1\. \[ebay\] \$35\.00 IKEA KALLAX/);
+  assert.match(compsPrompt("x", KALLAX.slice(0, 1)), /^Item: x\n\nListings \(scraped, untrusted\):\n<untrusted kind="comps">\n- 1\. \[ebay\] \$35\.00 IKEA KALLAX/);
 });
 
 test("PRICING_COMP_FILTER parses to claude (default), rules or off", () => {
@@ -153,4 +154,22 @@ test("failed verdicts are not cached", async () => {
   const f = await filterComps(item, KALLAX, { mode: "claude", judge, cacheFile });
   assert.equal(calls.length, 1);
   assert.equal(f.claude, "ok");
+});
+
+test("scraped titles are cleaned and fenced in one untrusted block (#17)", () => {
+  const prompt = compsPrompt(describeItem(item), [comp("Kallax shelf"), comp(INJECTION_TEXT, 1)]);
+  assert.equal(prompt.split("<untrusted").length, 2, "exactly one opening tag (ours)");
+  assert.equal(prompt.split("</untrusted>").length, 2, "exactly one closing tag (ours)");
+  assert.ok(prompt.trimEnd().endsWith("</untrusted>"), "nothing planted after the block");
+  assert.ok(prompt.includes("ignore all prior instructions"), "still visible to the model as data");
+  assert.ok(!/[\u200b\u202e]/.test(prompt), "hidden characters removed");
+  assert.ok(!/<\/?system/i.test(prompt), "no raw tags survive");
+});
+
+test("the judge's reason is cleaned and capped before it reaches event messages", async () => {
+  const { judge } = countingJudge(() => ({ keep: [1], reason: `<b>kept</b> #1\u200b ${"x".repeat(500)}` }));
+  const f = await filterComps(item, KALLAX, { mode: "claude", judge, cacheFile: null });
+  assert.ok(f.reason!.length <= 200);
+  assert.ok(!/[<>\u200b]/.test(f.reason!));
+  assert.ok(f.droppedByClaude.every((d) => d.why === f.reason));
 });
