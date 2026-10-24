@@ -263,7 +263,9 @@ struct ScanFlowView: View {
     private var uploader: Uploader {
         if store.backendKind == .fixture { return LocalUploader() }
         guard store.uploadBaseURL != nil else { return LocalUploader() }
-        return HTTPUploader()
+        // Two quick tries while the user waits on "Uploading…"; photos that still fail are
+        // queued and retried in the background for 15 minutes (ScanSession.pendingPhotos).
+        return HTTPUploader(policy: UploadRetryPolicy(maxAttempts: 2))
     }
 
     private func photoThumb(_ object: ScanSession.DetectedObject) -> some View {
