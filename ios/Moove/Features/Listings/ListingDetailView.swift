@@ -56,6 +56,11 @@ struct ListingDetailView: View {
                 .accessibilityLabel(listing.accessibilitySummary + (listing.displayExternalId.map { ", eBay item \($0)" } ?? ""))
                 .accessibilityAddTraits(.isHeader)
                 switch listing.status {
+                case .awaitingApproval where store.snapshot.isShared(listing):
+                    // Shared-room item someone else owns (#195): only they can approve it for now.
+                    notice("Over the owner's approval limit. Waiting for \(store.snapshot.approverName(owner: listing.owner)) to approve it.",
+                           systemImage: "hourglass", tint: Theme.ochre)
+                        .padding(.top, 20)
                 case .awaitingApproval:
                     notice("Over your approval limit. Approve it in Approvals, or on your phone if Auth0 Guardian is set up, to post it.",
                            systemImage: "hand.raised", tint: Theme.ochre)

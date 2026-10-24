@@ -11,7 +11,8 @@ struct ApprovalsView: View {
     var body: some View {
         let pending = store.snapshot.pendingApprovals
         let decided = store.snapshot.decidedApprovals
-        let state = store.commerceState(hasRows: !(pending.isEmpty && decided.isEmpty))
+        let shared = store.snapshot.sharedPendingApprovals
+        let state = store.commerceState(hasRows: !(pending.isEmpty && decided.isEmpty && shared.isEmpty))
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 PageHeader(
@@ -51,6 +52,15 @@ struct ApprovalsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .ruled()
                 }
+                if !shared.isEmpty {
+                    // Shared rooms (#195): the item's owner decides; members see who it's waiting on.
+                    ListHeader(title: "Shared rooms", count: "\(shared.count)").padding(.top, 40)
+                    ForEach(shared) { approval in
+                        SharedApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
+                                          item: item(for: approval),
+                                          approver: store.snapshot.approverName(for: approval))
+                    }
+                }
                 if !decided.isEmpty {
                     ListHeader(title: "History", count: "\(decided.count)").padding(.top, 40)
                     ForEach(decided) { approval in
@@ -68,6 +78,7 @@ struct ApprovalsView: View {
         .mooveScreen()
         .animation(.default, value: pending)
         .animation(.default, value: decided)
+        .animation(.default, value: shared)
     }
 
     private func item(for approval: Approval) -> Item? {
@@ -172,6 +183,41 @@ struct PendingApprovalRow: View {
             failed = !ok
             working = false
         }
+    }
+}
+
+/// A pending listing approval for a shared-room item that someone else owns
+/// (#195). Read-only: `decide_approval` is owner-only until proposal #200.
+struct SharedApprovalRow: View {
+    let approval: Approval
+    let listing: Listing?
+    let item: Item?
+    let approver: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            ApprovalThumbnail(approval: approval, item: item, size: 44)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    ApprovalKindTag(kind: approval.kind)
+                    Spacer(minLength: 8)
+                    if listing?.simulated == true { SimulatedTag() }
+                }
+                Text(listing?.title ?? approval.summary)
+                    .blockTitle()
+                    .lineLimit(3)
+                Label("Waiting for \(approver)", systemImage: "hourglass")
+                    .monoMeta()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(approval.formattedAmount).rowValue().amountText()
+        }
+        .padding(.vertical, 16)
+        .frame(minHeight: 44)
+        .ruled()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(approval.accessibilitySummary + ". Waiting for \(approver)")
     }
 }
 
