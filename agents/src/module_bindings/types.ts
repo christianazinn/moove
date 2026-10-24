@@ -137,11 +137,17 @@ export const Listing = __t.object("Listing", {
 });
 export type Listing = __Infer<typeof Listing>;
 
+export const MyAgentEvent = __t.object("MyAgentEvent", {});
+export type MyAgentEvent = __Infer<typeof MyAgentEvent>;
+
 export const MyApproval = __t.object("MyApproval", {});
 export type MyApproval = __Infer<typeof MyApproval>;
 
 export const MyListing = __t.object("MyListing", {});
 export type MyListing = __Infer<typeof MyListing>;
+
+export const MyPayment = __t.object("MyPayment", {});
+export type MyPayment = __Infer<typeof MyPayment>;
 
 export const MyRoom = __t.object("MyRoom", {});
 export type MyRoom = __Infer<typeof MyRoom>;
