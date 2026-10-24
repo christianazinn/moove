@@ -59,20 +59,39 @@ public struct Room: Codable, Sendable, Hashable, Identifiable {
 }
 
 public struct Scan: Codable, Sendable, Hashable, Identifiable {
+    /// The worker's room photo sweep (#92) for this scan.
+    public enum SweepStatus: String, Codable, Sendable {
+        case none, pending, running, done, failed
+
+        /// Photos are in and the worker hasn't finished with them yet.
+        public var isActive: Bool { self == .pending || self == .running }
+    }
+
     public var id: UInt64
     public var owner: IdentityHex
     public var roomId: UInt64
     public var usdzUrl: String?
     public var capturedRoomJsonUrl: String?
     public var createdAt: Date
+    /// nil = `none` (also what older encoded scans decode to).
+    public var sweepStatus: SweepStatus?
 
-    public init(id: UInt64, owner: IdentityHex, roomId: UInt64, usdzUrl: String? = nil, capturedRoomJsonUrl: String? = nil, createdAt: Date = .now) {
+    public init(id: UInt64, owner: IdentityHex, roomId: UInt64, usdzUrl: String? = nil, capturedRoomJsonUrl: String? = nil,
+                createdAt: Date = .now, sweepStatus: SweepStatus? = nil) {
         self.id = id
         self.owner = owner
         self.roomId = roomId
         self.usdzUrl = usdzUrl
         self.capturedRoomJsonUrl = capturedRoomJsonUrl
         self.createdAt = createdAt
+        self.sweepStatus = sweepStatus
+    }
+}
+
+extension SyncSnapshot {
+    /// The newest scan of a room, i.e. the one whose sweep the room's items reflect.
+    public func latestScan(ofRoom roomId: UInt64) -> Scan? {
+        scans.filter { $0.roomId == roomId }.max { $0.id < $1.id }
     }
 }
 
