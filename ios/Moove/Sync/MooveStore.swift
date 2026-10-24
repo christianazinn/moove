@@ -283,8 +283,19 @@ final class MooveStore {
             try await op(backend)
             return true
         } catch {
-            lastError = String(describing: error)
+            lastError = Self.describe(error, status: status)
             return false
+        }
+    }
+
+    /// Write errors as a person would say them. A write while the connection is down
+    /// fails with a bare "disconnected"; module errors (`SenderError`) are already sentences.
+    static func describe(_ error: Error, status: SyncStatus) -> String {
+        let raw = String(describing: error)
+        switch status {
+        case .connected: return raw
+        case .connecting, .reconnecting: return "Not saved: still connecting to the server. Try again in a moment."
+        case .disconnected, .failed: return "Not saved: not connected to the server."
         }
     }
 }
