@@ -40,4 +40,6 @@ export default __t.row({
   modelUrl: __t.string().name("model_url"),
   modelSource: __t.string().name("model_source"),
   modelStatus: __t.string().name("model_status"),
+  attributesJson: __t.string().name("attributes_json"),
+  colorsJson: __t.string().name("colors_json"),
 });
