@@ -54,6 +54,6 @@ The kickoff plan is a starting point, not a mandate. After kickoff, **agents coo
 
 ## Commands
 Each lane fills these in as it initializes its directory. Keep this section current.
-- `spacetime/`: _TBD by #2 (e.g. `spacetime build`, `spacetime publish`, `spacetime generate`)_
-- `agents/`: _TBD (e.g. `npm run dev`, `npm run typecheck`, `npm test`)_
+- `spacetime/` (needs the CLI: `curl -sSf https://install.spacetimedb.com | sh`): `npm install`, then `npm run typecheck`, `npm run build`, `spacetime start` (local server on :3000), `npm run publish:local` (or `publish:local:reset` to wipe data), `npm run generate` (regenerates `agents/src/module_bindings`, which are committed; never hand-edit them), and `npm run publish:cloud` (maincloud). Poke at it with `spacetime call -s local moove create_room '"Bedroom"' '"old"'` or `spacetime sql -s local moove "SELECT * FROM item"`.
+- `agents/`: `npm install`, `npm run dev` (watch mode) or `npm start`, and `npm run typecheck`. It connects to `SPACETIME_URI` (default `ws://localhost:3000`) and DB `moove`. Its identity is stored in `agents/.worker-token` (gitignored). The first identity to call `register_worker` owns the worker role, so keep that token, or `npm run publish:local:reset` in `spacetime/` to start over. Add agents to the array in `src/index.ts` (see the `Agent` interface in `src/agents/types.ts`). Log every step with `logEvent()` from `src/events.ts`.
 - `ios/`: `cd ios && xcodegen && open Moove.xcodeproj`. `cd ios/MooveKit && swift test` (also works on Linux).
