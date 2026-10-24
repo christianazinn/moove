@@ -137,7 +137,12 @@ public struct PropPlacer: Sendable {
         // Scanned props first, so the others make room around them.
         for i in propIdx where scanned.contains(out[i].itemId) {
             guard let m = model(out[i].itemId) else { continue }
-            if let q = scannedSpot(out[i], grid: m.grid, surfaces: &surfaces) { out[i] = q }
+            if let q = scannedSpot(out[i], grid: m.grid, surfaces: &surfaces) {
+                out[i] = q
+            } else {
+                // On the floor: square to the room, so small things don't sit slanted.
+                out[i].rotationDeg = Self.squared(out[i].rotationDeg, to: 0)
+            }
         }
         for i in propIdx where !scanned.contains(out[i].itemId) {
             let p = out[i]
@@ -317,7 +322,16 @@ public struct PropPlacer: Sendable {
         q.elevationM = Self.mm(best.height)
         q.onTopOf = surfaces[best.j].parent.itemId
         q.wallMounted = nil
+        // Square to the piece it sits on (a lamp on a nightstand faces the way the nightstand does).
+        q.rotationDeg = Self.squared(p.rotationDeg, to: surfaces[best.j].parent.rotationDeg)
         return q
+    }
+
+    /// `deg` turned to the nearest multiple of 90° relative to `base`, in [0, 360).
+    static func squared(_ deg: Double, to base: Double) -> Double {
+        let turned = base + ((deg - base) / 90).rounded() * 90
+        let r = turned.truncatingRemainder(dividingBy: 360)
+        return r < 0 ? r + 360 : r
     }
 
     // MARK: Wall items
