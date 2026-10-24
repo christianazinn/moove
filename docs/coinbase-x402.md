@@ -17,7 +17,7 @@ Submission notes for the Coinbase **Best Use of x402 / Payment Agents** track (C
 - The CDP facilitator verifies and settles payments on **Base Sepolia** (`eip155:84532`) in USDC (`0x036CbD53842c5426634e7929541eC2318f3dCF7e`).
 
 ## How it works
-1. An agent (the pricing agent today, the buy agent later) calls `rail.paidFetch({ owner, agent, purpose, refTable, refId }, url)`.
+1. An agent (the pricing agent today, via `agents/src/integrations/paid-comps.ts`; the buy agent later) calls `rail.paidFetch({ owner, agent, purpose, refTable, refId }, url)`.
 2. The rail makes the request. If the server answers `402 Payment Required`, it decodes the payment requirements with `x402HTTPClient.getPaymentRequiredResponse`.
 3. It keeps only options that pay **Base Sepolia USDC**, and picks the cheapest. A server offering anything else is refused and the refusal is logged.
 4. **Before signing**, it reserves the amount in the agent's budget. The reservation fails if the amount is over the per-call max (`X402_MAX_PER_CALL_USDC`, default $0.10) or would push the agent past its cap (`AGENT_SPEND_CAP_USDC`, default $5). A refusal throws `SpendRefusedError` and writes an `agent_event` row with `refused: true`, and nothing is signed.
