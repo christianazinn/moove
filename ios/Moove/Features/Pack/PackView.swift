@@ -95,7 +95,7 @@ struct PackView: View {
             Text("Nothing kept yet. This plan uses demo items.")
                 .sansText(15)
                 .fixedSize(horizontal: false, vertical: true)
-            Button("Choose what to keep") { tab = "inventory" }
+            Button("Choose what to keep") { tab = "review" }
                 .buttonStyle(.pill(.outline, compact: true))
         }
         .padding(.vertical, 16)
