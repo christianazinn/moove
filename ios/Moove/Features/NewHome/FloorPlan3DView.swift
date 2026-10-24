@@ -18,6 +18,10 @@ struct FloorPlan3DView: UIViewRepresentable {
     /// Measured from the scan's photos (scan results); nil keeps the default palette.
     var wallColor: VoxelColor? = nil
     var floorColor: VoxelColor? = nil
+    /// Turn slowly around the home (Scan home hero). Off with Reduce Motion.
+    var autoOrbit = false
+    /// False: no gestures, so a scroll view around it still scrolls (taps pass through).
+    var interactive = true
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -27,9 +31,10 @@ struct FloorPlan3DView: UIViewRepresentable {
     func makeUIView(context: Context) -> ARView {
         let view = ARView(frame: .zero, cameraMode: .nonAR, automaticallyConfigureSession: false)
         view.environment.background = .color(Self.sceneBackground.resolvedColor(with: view.traitCollection))
-        context.coordinator.attach(to: view)
+        context.coordinator.attach(to: view, interactive: interactive)
         context.coordinator.show(plan, focusRoom: focusRoom, animated: false, wallColor: wallColor, floorColor: floorColor)
         context.coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken, starts: flyInStarts)
+        context.coordinator.setAutoOrbit(autoOrbit)
         return view
     }
 
@@ -37,6 +42,7 @@ struct FloorPlan3DView: UIViewRepresentable {
         view.environment.background = .color(Self.sceneBackground.resolvedColor(with: view.traitCollection))
         context.coordinator.show(plan, focusRoom: focusRoom, animated: true, wallColor: wallColor, floorColor: floorColor)
         context.coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken, starts: flyInStarts)
+        context.coordinator.setAutoOrbit(autoOrbit)
     }
 
     @MainActor
@@ -61,8 +67,9 @@ struct FloorPlan3DView: UIViewRepresentable {
         private var shownFocus: String??
         /// Back to the house after a fly-in that framed the old room too.
         private var reframe: Task<Void, Never>?
+        private var orbitLoop: Task<Void, Never>?
 
-        func attach(to view: ARView) {
+        func attach(to view: ARView, interactive: Bool = true) {
             self.view = view
             camera.camera.fieldOfViewInDegrees = Self.fieldOfView
             anchor.addChild(camera)
@@ -82,6 +89,7 @@ struct FloorPlan3DView: UIViewRepresentable {
             anchor.addChild(fill)
             view.scene.addAnchor(anchor)
 
+            guard interactive else { return }
             let orbit = UIPanGestureRecognizer(target: self, action: #selector(orbit(_:)))
             orbit.maximumNumberOfTouches = 1
             let pan = UIPanGestureRecognizer(target: self, action: #selector(pan(_:)))
@@ -123,6 +131,27 @@ struct FloorPlan3DView: UIViewRepresentable {
                 guard let self, !Task.isCancelled, self.shownFocus == .some(nil), let plan = self.scene.plan else { return }
                 self.frame(on: plan.bounds, animated: true)
             }
+        }
+
+        /// About one turn a minute. Stops for good once the user drags the view.
+        func setAutoOrbit(_ on: Bool) {
+            let on = on && !UIAccessibility.isReduceMotionEnabled
+            guard on != (orbitLoop != nil) else { return }
+            orbitLoop?.cancel()
+            orbitLoop = nil
+            guard on else { return }
+            orbitLoop = Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(33))
+                    guard let self, !Task.isCancelled else { return }
+                    self.yaw += 2 * .pi / (60 * 30)
+                    self.updateCamera()
+                }
+            }
+        }
+
+        private func stopAutoOrbit() {
+            orbitLoop?.cancel()
         }
 
         private func frame(on bounds: PlanBounds, animated: Bool) {
@@ -168,6 +197,7 @@ struct FloorPlan3DView: UIViewRepresentable {
 
         @objc private func orbit(_ g: UIPanGestureRecognizer) {
             reframe?.cancel()
+            stopAutoOrbit()
             let d = g.translation(in: g.view)
             g.setTranslation(.zero, in: g.view)
             yaw -= Float(d.x) * 0.008
@@ -177,6 +207,7 @@ struct FloorPlan3DView: UIViewRepresentable {
 
         @objc private func pan(_ g: UIPanGestureRecognizer) {
             reframe?.cancel()
+            stopAutoOrbit()
             let d = g.translation(in: g.view)
             g.setTranslation(.zero, in: g.view)
             // Move the target in the ground plane, relative to where the camera faces.
@@ -189,6 +220,7 @@ struct FloorPlan3DView: UIViewRepresentable {
 
         @objc private func pinch(_ g: UIPinchGestureRecognizer) {
             reframe?.cancel()
+            stopAutoOrbit()
             distance /= Float(g.scale)
             g.scale = 1
             updateCamera()
