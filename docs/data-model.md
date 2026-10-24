@@ -1,39 +1,56 @@
-# Data model (draft contract)
+# Data model (the contract)
 
-This is the draft. **Task #2** turns it into `spacetime/src/` and keeps this file in sync. Changes after the freeze (~Fri 11 PM) go in their own PR and must be announced to the team.
+**Source of truth: `spacetime/src/index.ts`.** This file summarizes it. Change both in the same PR, run `npm run generate` in `spacetime/` to refresh `agents/src/module_bindings/`, update the `ios/MooveKit` models, and announce the change (label: `contract-change`).
 
-Conventions:
-- IDs are `u64` auto-inc unless noted.
-- Money is stored as integer **cents** (`priceCents`), with USDC amounts in its smallest unit (`amountAtomic`, 6 decimals).
-- Dimensions are in meters.
-- Timestamps use SpacetimeDB `Timestamp`.
-- Every row a user owns has `owner: Identity`.
+## Conventions
+- **Names:** TS code uses camelCase (`ctx.db.shoppingItem`, `photoUrls`). On the wire, in SQL and in generated clients, names are **snake_case**: tables `shopping_item`, `agent_event`, `new_home`; columns `photo_urls`; reducers `create_scan`, `set_auto_disposition`.
+- **"Enums" are plain strings**, validated in reducers. We avoid sum types and options so the community Swift SDK only has to decode primitives, strings, arrays and products. Allowed values are listed below.
+- **Unknown values use sentinels:** `''` for strings, `-1` for numbers (`est_value_cents`, `fraud_score`, `ai_text_score`), `0` for ids (`scan_id`, `chosen_deal_id`).
+- **Money:** prices are `i64` cents. Payments use `amount_usd_micros` (`i64`, USD × 1e6), so x402 USDC (6 decimals) and card amounts share one column.
+- **Types:** ids are `u64` auto-inc (pass `0` on insert). Dimensions are `f64` meters. Times are `Timestamp`. Ownership is `owner: Identity`.
+- **Room access:** room items are readable and editable by the owner, by `room_member`s (who join with `join_room(code)`), and by the worker. Other tables are owner-only.
+- **All tables are public** for now, so clients subscribe with `WHERE owner = ...`. Tightening this is part of the security pass (#17).
+- **Worker auth:** the agent worker calls `register_worker` once. The first caller wins, and after that only registered workers can add more. Worker-only reducers reject everyone else.
 
-| Table | Key fields |
+## Tables
+| Table | Columns (beyond `id`, `owner`, timestamps) |
 |---|---|
-| `users` | identity (pk), auth0Sub, name, email, approvalThresholdCents, createdAt |
-| `rooms` | id, owner, name, home: `old`\|`new` |
-| `scans` | id, owner, roomId, usdzUrl, capturedRoomJsonUrl, createdAt |
-| `items` | id, owner, roomId, scanObjectId?, name, category, widthM, heightM, depthM, photoUrls[], material?, brand?, condition?, estValueCents?, disposition: `keep`\|`sell`\|`donate`\|`trash`\|`undecided`, dispositionSource: `auto`\|`user`, dispositionReason?, fragile, maybeSentimental, updatedAt |
-| `comps` | id, itemId, source: `fb`\|`craigslist`\|`ebay`\|other, title, priceCents, url, fetchedAt |
-| `listings` | id, itemId, platform: `ebay`, title, description, priceCents, status: `draft`\|`awaiting_approval`\|`posted`\|`sold`\|`failed`, externalId?, url?, simulated |
-| `approvals` | id, owner, kind: `listing`\|`purchase`, refId, amountCents, status: `pending`\|`approved`\|`denied`\|`expired`, requestedAt, decidedAt? |
-| `shoppingList` | id, owner, name, category, reason?, status: `open`\|`searching`\|`found`\|`bought`, chosenDealId? |
-| `deals` | id, shoppingItemId, source, title, priceCents, url, sellerInfo?, fraudScore?, fraudReasons[] |
-| `payments` | id, owner, agent, rail: `x402`\|`visa`, purpose, payee, amountAtomic or amountCents, txHash?, status, simulated, createdAt |
-| `newHome` | id, owner, name, source: `demo`\|`zillow`\|`manual`, floorPlanJson (rooms: polygon + dims) |
-| `layouts` | id, newHomeId, name, placementsJson (itemId → room, x, y, rotation) |
-| `agentEvents` | id, owner, agent, kind: `plan`\|`tool_call`\|`result`\|`payment`\|`approval`\|`error`, message, refTable?, refId?, dataJson?, createdAt |
+| `user` (pk `identity`) | auth0_sub, name, email, approval_threshold_cents (default 10000 = $100) |
+| `worker` (pk `identity`) | label |
+| `room` | name, home: `old`\|`new`, join_code (6 chars, unique) |
+| `room_member` | room_id, member (Identity), for shared access (#10) |
+| `scan` | room_id, usdz_url, captured_room_json_url |
+| `item` | room_id, scan_id, scan_object_id, name, category, width_m, height_m, depth_m, photo_urls[], material, brand, condition, **details_status**, est_value_cents, est_low_cents, est_high_cents, **pricing_status**, **disposition**, **disposition_source**: `auto`\|`user`, disposition_reason, fragile, maybe_sentimental |
+| `comp` | item_id, source (`fb`\|`craigslist`\|`ebay`\|…), title, price_cents, url |
+| `listing` | item_id, platform (`ebay`), title, description, price_cents, status, external_id, url, simulated |
+| `approval` | kind: `listing`\|`purchase`, ref_id, amount_cents, summary, status |
+| `shopping_item` | name, category, reason, status, chosen_deal_id |
+| `deal` | shopping_item_id, source, title, price_cents, url, seller_info, fraud_score (0-1), ai_text_score (0-1), fraud_reasons[] |
+| `payment` | agent, rail: `x402`\|`visa`, purpose, payee, amount_usd_micros, tx_hash, status, simulated, ref_table, ref_id |
+| `new_home` | name, source: `demo`\|`zillow`\|`manual`, floor_plan_json |
+| `layout` | new_home_id, name, placements_json |
+| `agent_event` | agent, kind: `plan`\|`tool_call`\|`result`\|`payment`\|`approval`\|`error`, message, ref_table, ref_id, data_json |
 
-## Reducers (first pass)
-- **Users:** `registerUser`, `setApprovalThreshold`
-- **Capture:** `createRoom`, `createScan`, `upsertItemsFromScan`, `addItemPhoto`
-- **Items, user side:** `setDisposition` (user sets `dispositionSource=user`), `toggleSentimental`
-- **Items, worker side:** `setItemDetails` (vision), `addComps`, `setEstValue`, `setAutoDisposition` (must no-op if `dispositionSource=user` or `maybeSentimental`)
-- **Listings:** `createListingDraft`, `updateListingStatus`
-- **Approvals:** `requestApproval`, `decideApproval`
-- **Shopping:** `addShoppingItem`, `addDeal`, `chooseDeal`
-- **Records:** `recordPayment`, `logAgentEvent`
-- **New home:** `createNewHome`, `saveLayout`
+Status values:
+- `details_status` / `pricing_status`: `pending`\|`running`\|`done`\|`failed`. The worker picks up `pending` rows.
+- `disposition`: `undecided`\|`keep`\|`sell`\|`donate`\|`trash`
+- `listing.status`: `draft`\|`awaiting_approval`\|`rejected`\|`posted`\|`sold`\|`failed`
+- `approval.status`: `pending`\|`approved`\|`denied`\|`expired`
+- `shopping_item.status`: `open`\|`searching`\|`found`\|`bought`
+- `payment.status`: `pending`\|`settled`\|`failed`
 
-Worker-only reducers should check `ctx.sender` against the worker's identity.
+## Reducers
+**App (owner), and the worker can call these too:**
+- **Users:** `register_user(auth0_sub, name, email)`, `set_approval_threshold(cents)`
+- **Capture:** **`import_scan(room_name, home, usdz_url, captured_room_json_url, objects[])`**: the app's one-shot import that creates room, scan and items atomically. `objects[]` = {scan_object_id, name ('' means use category), category, width_m, height_m, depth_m, photo_url ('' if none)}. Also `create_room(name, home)`, `join_room(code)`, and `create_scan(room_id, ...)` to re-scan (it updates items by `scan_object_id`), `add_item(room_id, object)`, `add_item_photo(item_id, url)` (re-queues vision), `delete_item`
+- **Review:** `set_disposition(item_id, disposition)` (marks it `user`; auto-sort never overrides it), `set_sentimental(item_id, value)`, `set_fragile(item_id, value)` (absolute setters, not toggles), `rename_item`
+- **Listings and approvals:** `update_listing(listing_id, status, external_id, url, price_cents)` (`''`/`-1` keep the current value), `decide_approval(approval_id, status)`
+- **Shopping:** `add_shopping_item(owner, name, category, reason)`, `set_shopping_status`, `remove_shopping_item`, `choose_deal(shopping_item_id, deal_id)`
+- **New home:** `create_new_home(name, source, floor_plan_json)`, `save_layout(new_home_id, name, placements_json)`
+
+**Worker only:**
+- `register_worker(label)`
+- **Item enrichment:** `set_item_stage(item_id, stage, field: details|pricing)`, `set_item_details(...)`, `add_comps(item_id, comps[])`, `set_est_value(item_id, est_value_cents, est_low_cents, est_high_cents)`
+- **Sorting:** `set_auto_disposition(item_id, disposition, reason)`. It no-ops on user-set items and forces `undecided` on `maybe_sentimental` ones.
+- **Listings, approvals, deals:** `create_listing_draft(...)`, `request_approval(owner, kind, ref_id, amount_cents, summary)`, `add_deal(...)`, `set_deal_fraud(deal_id, fraud_score, ai_text_score, reasons[])`
+- **Payments and logging:** `record_payment(...)`, `update_payment(payment_id, status, tx_hash)`, `log_agent_event(owner, agent, kind, message, ref_table, ref_id, data_json)`
