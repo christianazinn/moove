@@ -53,7 +53,7 @@ Status values:
 ## Input limits (#146)
 Enforced in the module, so they hold for every client:
 - **Item sizes:** finite numbers, 0–30 m (`width_m`, `height_m`, `depth_m`) on every import, re-scan and `add_item`.
-- **Imports:** at most **200 objects** per `import_scan` / `import_scan_v2` / `create_scan` call.
+- **Imports:** at most **200 objects** per `import_scan` / `import_scan_v2` / `create_scan` call. On those import paths, an object that breaks a size or length limit is **skipped** rather than failing the whole scan, and one `agent_event` (agent `scan`, kind `error`) lists what was skipped. `add_item` still rejects outright.
 - **Lengths:** item `name` / `category` ≤ 120, `scan_object_id` ≤ 64, room names ≤ 80, scan and model URLs ≤ 2048 (a too-long photo URL is dropped, not fatal).
 - **`service_config.upload_base_url`:** a bare `https://host[:port]` origin (no userinfo, path or query), or `http://` only for localhost / 127.x / 10.x / 192.168.x / 172.16–31.x.
 - **Worker role:** pinned per database for maincloud `moove` and `moove-demo` (`PINNED_WORKERS`); every other database (local dev, e2e) keeps first-caller-wins.
