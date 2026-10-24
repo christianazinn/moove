@@ -134,6 +134,31 @@ export function stripPng(buf: Buffer): Buffer {
   return Buffer.concat(out);
 }
 
+// ---------- WebP ----------
+// RIFF container: drop the EXIF and "XMP " chunks, clear their VP8X flag bits, fix the RIFF size.
+export function stripWebp(buf: Buffer): Buffer {
+  if (sniffType(buf) !== 'image/webp') throw new BadImageError('not a WebP');
+  const out: Buffer[] = [];
+  let i = 12;
+  while (i < buf.length) {
+    if (i + 8 > buf.length) throw new BadImageError('truncated WebP chunk');
+    const fourcc = buf.toString('latin1', i, i + 4);
+    const size = buf.readUInt32LE(i + 4);
+    const end = i + 8 + size + (size & 1);
+    if (i + 8 + size > buf.length) throw new BadImageError('bad WebP chunk length');
+    if (fourcc !== 'EXIF' && fourcc !== 'XMP ') {
+      const chunk = Buffer.from(buf.subarray(i, Math.min(end, buf.length)));
+      if (fourcc === 'VP8X' && size >= 1) chunk[8] &= ~(0x08 | 0x04); // EXIF and XMP present flags
+      out.push(chunk);
+    }
+    i = end;
+  }
+  const body = Buffer.concat(out);
+  const head = Buffer.from(buf.subarray(0, 12));
+  head.writeUInt32LE(4 + body.length, 4);
+  return Buffer.concat([head, body]);
+}
+
 // ---------- entry point ----------
 /** Returns the bytes to store. Throws BadImageError if the body doesn't match `type`. */
 export function sanitizeUpload(type: string, buf: Buffer): Buffer {
@@ -149,7 +174,8 @@ export function sanitizeUpload(type: string, buf: Buffer): Buffer {
   if (sniffed !== type) throw new BadImageError(`body looks like ${sniffed ?? 'unknown data'}, not ${type}`);
   if (type === 'image/jpeg') return stripJpeg(buf);
   if (type === 'image/png') return stripPng(buf);
-  // HEIC/WebP metadata isn't stripped server-side (no cheap parser). The iOS app re-encodes
-  // camera photos to JPEG before upload, which drops location. USDZ holds geometry, not EXIF.
+  if (type === 'image/webp') return stripWebp(buf);
+  // HEIC is refused before we get here (upload.ts): its metadata can't be stripped cheaply.
+  // USDZ holds geometry, not EXIF.
   return buf;
 }

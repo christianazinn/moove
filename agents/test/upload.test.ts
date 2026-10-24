@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { sanitizeUpload, stripJpeg, stripPng, BadImageError } from '../src/imagemeta.js';
+import { sanitizeUpload, stripJpeg, stripPng, stripWebp, BadImageError } from '../src/imagemeta.js';
 
 // ---------- fixtures ----------
 const seg = (marker: number, payload: Buffer) => {
@@ -94,6 +94,34 @@ test('PNG: eXIf and text chunks are removed', () => {
   assert.ok(out.includes('IHDR') && out.includes('pixels') && out.includes('IEND'));
 });
 
+test('WebP: EXIF and XMP chunks are removed, flags and RIFF size fixed', () => {
+  const chunk = (fourcc: string, data: Buffer) => {
+    const h = Buffer.alloc(8);
+    h.write(fourcc, 0, 'latin1');
+    h.writeUInt32LE(data.length, 4);
+    return Buffer.concat([h, data, data.length & 1 ? Buffer.alloc(1) : Buffer.alloc(0)]);
+  };
+  const vp8x = Buffer.alloc(10);
+  vp8x[0] = 0x08 | 0x04 | 0x10; // EXIF + XMP + alpha
+  const body = Buffer.concat([
+    chunk('VP8X', vp8x),
+    chunk('VP8L', Buffer.from('pixels!', 'latin1')), // odd length -> padded
+    chunk('EXIF', Buffer.from('GPS 37.8719N 122.2585W', 'latin1')),
+    chunk('XMP ', Buffer.from('<x:xmpmeta>Berkeley</x:xmpmeta>', 'latin1')),
+  ]);
+  const head = Buffer.alloc(12);
+  head.write('RIFF', 0, 'latin1');
+  head.writeUInt32LE(4 + body.length, 4);
+  head.write('WEBP', 8, 'latin1');
+  const out = stripWebp(Buffer.concat([head, body]));
+  const str = out.toString('latin1');
+  assert.ok(!str.includes('GPS') && !str.includes('Berkeley') && !str.includes('EXIF'));
+  assert.ok(str.includes('pixels!'));
+  assert.equal(out.readUInt32LE(4), out.length - 8, 'RIFF size matches');
+  assert.equal(out[12 + 8], 0x10, 'only the alpha flag is left in VP8X');
+  assert.deepEqual(sanitizeUpload('image/webp', Buffer.concat([head, body])), out);
+});
+
 test('declared type must match the bytes', () => {
   assert.throws(() => sanitizeUpload('image/jpeg', Buffer.from('<html><script>alert(1)</script>')), BadImageError);
   assert.throws(() => sanitizeUpload('image/png', jpeg()), BadImageError);
@@ -141,6 +169,9 @@ test('upload: stored under a random name with metadata stripped (client ?name ig
 
 test('upload: rejects bad types, mismatched bytes, html and oversize bodies', async () => {
   assert.equal((await post(Buffer.from('<h1>hi</h1>'), 'text/html')).status, 415);
+  const heic = await post(Buffer.from('\0\0\0\x18ftypheic\0\0\0\0', 'latin1'), 'image/heic');
+  assert.equal(heic.status, 415);
+  assert.match(((await heic.json()) as { error: string }).error, /image\/jpeg/);
   assert.equal((await post(Buffer.from('<h1>hi</h1>'), 'image/jpeg')).status, 422);
   assert.equal((await post(Buffer.alloc(0), 'image/jpeg')).status, 400);
   const big = await post(Buffer.alloc(5000, 1), 'application/json').catch(() => undefined);

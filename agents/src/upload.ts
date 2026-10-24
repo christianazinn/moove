@@ -37,6 +37,8 @@ export function startUploadServer(port = config.uploadPort): Server {
       const pathname = new URL(req.url ?? '/', 'http://x').pathname;
       if (req.method === 'POST' && pathname === '/upload') {
         const type = (req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
+        // HEIC can carry EXIF/GPS we can't strip cheaply, so it's refused rather than stored as-is.
+        if (type === 'image/heic') return send(res, 415, { error: 'HEIC is not accepted (location metadata can\'t be stripped); send image/jpeg' });
         const ext = EXT[type];
         if (!ext) return send(res, 415, { error: `unsupported content-type ${type}` });
         const declared = Number(req.headers['content-length'] ?? '0');

@@ -38,15 +38,14 @@ Out of scope for a hackathon: DoS against maincloud, a compromised laptop, an Au
 - **If a key is ever committed: rotate it first**, then remove it from history. Rotation is what matters once a key has been pushed.
 
 ### Uploads (photos, USDZ scans, room JSON): `agents/src/upload.ts`, `agents/src/imagemeta.ts`
-- **EXIF/GPS stripped** from JPEG (APP1 EXIF/XMP, APP13 IPTC, comments, MPF trailers with their own EXIF) and PNG (`eXIf`, `tEXt`/`zTXt`/`iTXt`, `tIME`) before anything touches disk. Only the orientation tag is kept, so photos aren't rotated. Pure TypeScript, no native deps. ⏳ Belt and braces once #28 merges: the iOS camera path re-encodes photos to JPEG before upload, which drops location on the device too.
-- **Body must match the declared type** (magic bytes). The allowlist is jpeg/png/heic/webp/usdz/json; html is never accepted, so nobody can host a phishing page on our origin.
+- **EXIF/GPS stripped** from JPEG (APP1 EXIF/XMP, APP13 IPTC, comments, MPF trailers with their own EXIF) PNG (`eXIf`, `tEXt`/`zTXt`/`iTXt`, `tIME`) and WebP (`EXIF`/`XMP ` chunks, VP8X flags fixed) before anything touches disk. **HEIC is refused** (415, "send image/jpeg"), because its metadata can't be stripped cheaply. Only the orientation tag is kept, so photos aren't rotated. Pure TypeScript, no native deps. ⏳ Belt and braces once #28 merges: the iOS camera path re-encodes photos to JPEG before upload, which drops location on the device too.
+- **Body must match the declared type** (magic bytes). The allowlist is jpeg/png/webp/usdz/json; html is never accepted, so nobody can host a phishing page on our origin.
 - **Size cap** `UPLOAD_MAX_BYTES` (default 50 MB), enforced while streaming.
 - **Unguessable names**: `crypto.randomUUID()` + extension. The client's `?name=` is ignored.
 - **No directory listing or traversal**: only `/files/<flat-name>.<known-ext>` is served. Dotfiles, `..` and directories all return 404.
 - `X-Content-Type-Options: nosniff` on everything, and a strict CSP (`default-src 'none'`) on the simulated eBay listing pages we serve. Those pages HTML-escape all model-written text.
 - Errors don't echo paths or stack traces.
 - Tests: `agents/test/upload.test.ts`.
-- HEIC/WebP metadata isn't stripped server-side, because there's no cheap parser. The app sends JPEG.
 
 ### Agent spending guardrails (x402 / CDP): `agents/src/integrations/x402.ts`, `agents/src/payments.ts`
 - **Code-enforced limits, not LLM judgment.** Before anything is signed, the rail checks:
