@@ -125,3 +125,76 @@ test("a module without set_item_identify still gets the details", async () => {
   assert.ok(calls.some(c => c.name === "setItemDetails"));
   assert.equal(events.at(-1)!.kind, "result");
 });
+
+// #292: Google Lens refinement for unsure items where the model matters.
+const laptopFirst = { ...details, name: "silver laptop", category: "electronics", identifyConfidence: "low" as const, closeupHint: "model number on the bottom" };
+const laptopBox = { category: "other", widthM: 0.32, heightM: 0.02, depthM: 0.22 };
+const lensMatches = { matches: [{ title: "Apple MacBook Pro 14-inch M1 Pro 2021", source: "eBay", price: "$849.00" }], replayed: false, costUsd: 0.02 };
+
+test("an unsure laptop gets a Google Lens look and a sharper name", async () => {
+  const prompts: string[] = [];
+  setVisionDeps({
+    load: async u => ({ mediaType: "image/jpeg", data: u }),
+    call: async o => {
+      prompts.push(o.text);
+      return prompts.length === 1 ? laptopFirst : { ...laptopFirst, name: "Apple MacBook Pro 14-inch M1 Pro (2021)", brand: "Apple", identifyConfidence: "high" as const, closeupHint: "", fragile: false };
+    },
+    lens: async () => lensMatches,
+  });
+  const { conn, calls, events } = fakeConn([item({ id: 20n, photoUrls: ["https://t.trycloudflare.com/files/l.jpg"], ...laptopBox })]);
+  visionAgent.start(conn);
+  await sleep(30);
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[1], /<untrusted kind="lens-matches">[\s\S]*MacBook Pro 14-inch M1 Pro 2021 \| eBay \| \$849\.00/);
+  const det = calls.find(c => c.name === "setItemDetails")!;
+  assert.equal(det.args.name, "Apple MacBook Pro 14-inch M1 Pro (2021)");
+  assert.equal(det.args.brand, "Apple");
+  assert.equal(calls.find(c => c.name === "setItemIdentify")!.args.confidence, "high");
+  assert.ok(events.some(e => e.kind === "tool_call" && /Google Lens/.test(e.message)));
+});
+
+test("no Lens for sure answers, generic furniture or LAN photos", async () => {
+  for (const [first, url] of [
+    [{ ...laptopFirst, identifyConfidence: "high" as const }, "https://t.trycloudflare.com/files/a.jpg"],
+    [details, "https://t.trycloudflare.com/files/a.jpg"],
+    [laptopFirst, "http://192.168.1.5:8787/files/a.jpg"],
+  ] as const) {
+    let lensCalls = 0;
+    setVisionDeps({ load: async u => ({ mediaType: "image/jpeg", data: u }), call: async () => first, lens: async () => { lensCalls++; return lensMatches; } });
+    const { conn } = fakeConn([item({ id: 21n, photoUrls: [url] })]);
+    visionAgent.start(conn);
+    await sleep(30);
+    assert.equal(lensCalls, 0, `${first.name} ${url}`);
+  }
+});
+
+test("a Lens failure, an empty result or the cap keeps the first answer", async () => {
+  for (const lens of [
+    async () => { throw new Error("apify 502"); },
+    async () => ({ matches: [], replayed: false, costUsd: 0.02 }),
+    async () => ({ matches: [], replayed: false, costUsd: 0, refused: true }),
+  ]) {
+    let modelCalls = 0;
+    setVisionDeps({ load: async u => ({ mediaType: "image/jpeg", data: u }), call: async () => { modelCalls++; return laptopFirst; }, lens });
+    const { conn, calls } = fakeConn([item({ id: 22n, photoUrls: ["https://t.trycloudflare.com/files/l.jpg"], ...laptopBox })]);
+    visionAgent.start(conn);
+    await sleep(30);
+    assert.equal(modelCalls, 1);
+    assert.equal(calls.find(c => c.name === "setItemDetails")?.args.name, "silver laptop");
+  }
+});
+
+test("the second look never clears fragile or sentimental", async () => {
+  let n = 0;
+  setVisionDeps({
+    load: async u => ({ mediaType: "image/jpeg", data: u }),
+    call: async () => (++n === 1 ? { ...laptopFirst, fragile: true, maybeSentimental: true } : { ...laptopFirst, fragile: false, maybeSentimental: false }),
+    lens: async () => lensMatches,
+  });
+  const { conn, calls } = fakeConn([item({ id: 23n, photoUrls: ["https://t.trycloudflare.com/files/l.jpg"], ...laptopBox })]);
+  visionAgent.start(conn);
+  await sleep(30);
+  const det = calls.find(c => c.name === "setItemDetails")!;
+  assert.equal(det.args.fragile, true);
+  assert.equal(det.args.maybeSentimental, true);
+});
