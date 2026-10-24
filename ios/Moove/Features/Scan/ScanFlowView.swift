@@ -34,7 +34,7 @@ struct ScanFlowView: View {
     @ViewBuilder private var content: some View {
         switch session.phase {
         case .capturing:
-            RoomCaptureContainer(stopRequested: $stopRequested) { result in
+            RoomCaptureContainer(stopRequested: $stopRequested, rawDataURL: session.capturedRoomDataJSON) { result in
                 switch result {
                 case .success(let room): session.captured(room)
                 case .failure(let error): session.phase = .failed(error.localizedDescription)
