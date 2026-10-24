@@ -5,7 +5,8 @@ import Foundation
 public enum DemoFixtures {
     public static func inventory(owner: IdentityHex) -> SyncSnapshot {
         var s = SyncSnapshot(me: owner)
-        s.users = [User(identity: owner, name: "Demo Mover", email: "demo@moove.app")]
+        // $100 approval threshold, the module default (docs/data-model.md); the docs and screens quote it.
+        s.users = [User(identity: owner, name: "Demo Mover", email: "demo@moove.app", approvalThresholdCents: 10_000)]
         s.rooms = [Room(id: 1, owner: owner, name: "Bedroom")]
         s.scans = [Scan(id: 2, owner: owner, roomId: 1)]
 
@@ -66,7 +67,7 @@ public enum DemoFixtures {
                     priceCents: 7_000, status: .draft),
         ]
         // Approval gate (#12): the Aeron listing is over the $100 default threshold.
-        // Purchase approvals point at deals (#15) that the demo doesn't seed.
+        // Purchase approvals point at deals, so they're seeded with the shopping rows (`addShopping`).
         let now = Date.now
         s.approvals = [
             Approval(id: 300, owner: owner, kind: .listing, refId: 200, amountCents: 41_000,
@@ -76,12 +77,6 @@ public enum DemoFixtures {
             Approval(id: 301, owner: owner, kind: .listing, refId: 198, amountCents: 48_000,
                      summary: "Sell \"Herman Miller Aeron Chair Size B - Excellent\" for $480", status: .denied,
                      requestedAt: now.addingTimeInterval(-55 * 60), updatedAt: now.addingTimeInterval(-50 * 60)),
-            Approval(id: 302, owner: owner, kind: .purchase, refId: 311, amountCents: 18_900,
-                     summary: "Buy a 3-seat sofa from FB Marketplace for $189", status: .denied,
-                     requestedAt: now.addingTimeInterval(-3 * 3600), updatedAt: now.addingTimeInterval(-170 * 60)),
-            Approval(id: 303, owner: owner, kind: .purchase, refId: 312, amountCents: 12_500,
-                     summary: "Buy a dresser from Craigslist for $125", status: .approved,
-                     requestedAt: now.addingTimeInterval(-26 * 3600), updatedAt: now.addingTimeInterval(-25 * 3600)),
         ]
         s.payments = payments(owner: owner)
         s.agentEvents = paymentEvents(owner: owner) + listingEvents(owner: owner)
@@ -93,7 +88,8 @@ public enum DemoFixtures {
     public static let realX402Payee = "0x6644b110fd0b1671599e36db749d09b1eaeef952"
 
     /// As if the pricing and shopping agents had paid for data over x402 (#7):
-    /// one real settled testnet payment, simulated ones (labeled), and a failure.
+    /// one real settled testnet payment, simulated ones (labeled), and a simulated failure.
+    /// Row 500 is the only non-simulated payment in the whole offline demo.
     public static func payments(owner: IdentityHex, now: Date = .now) -> [Payment] {
         func ago(_ minutes: Double) -> Date { now.addingTimeInterval(-minutes * 60) }
         return [
@@ -107,7 +103,7 @@ public enum DemoFixtures {
                     payee: "simulated", amountUsdMicros: 5_000, status: .settled, simulated: true,
                     refTable: "item", refId: 21, createdAt: ago(12)),
             Payment(id: 503, owner: owner, agent: "shopping", purpose: "Seller report for a used dresser",
-                    payee: realX402Payee, amountUsdMicros: 20_000, status: .failed, simulated: false,
+                    payee: "simulated", amountUsdMicros: 20_000, status: .failed, simulated: true,
                     createdAt: ago(6)),
         ]
     }
@@ -141,7 +137,7 @@ public enum DemoFixtures {
             // Failed after the 402 round-trip: comes with failed payment 503, so the log shows it once.
             AgentEvent(id: 603, owner: owner, agent: "shopping", kind: .error,
                        message: "x402 payment for seller report for a used dresser failed (HTTP 402, insufficient_funds)",
-                       dataJson: #"{\#(rail("failed", remaining: 5_000_000)),"payee":"\#(realX402Payee)","amountUsdMicros":"20000","url":"https://moove.example/x402/seller-report"}"#,
+                       dataJson: #"{\#(rail("failed", remaining: 5_000_000, simulated: true)),"payee":"simulated","amountUsdMicros":"20000","url":"https://moove.example/x402/seller-report"}"#,
                        createdAt: ago(6)),
             AgentEvent(id: 604, owner: owner, agent: "shopping", kind: .error,
                        message: "Refused x402 payment for a premium deal scan: $0.25 is over the per-call max of $0.10",
