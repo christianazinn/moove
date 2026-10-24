@@ -41,6 +41,7 @@ struct RootView: View {
                 .tag("summary")
                 .tabItem { Label("Summary", systemImage: "chart.bar.doc.horizontal") }
         }
+        .tint(Theme.accentStrong)
         .sheet(isPresented: $showSettings) { SettingsView() }
     }
 
@@ -48,6 +49,9 @@ struct RootView: View {
         content
             .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
             .toolbar { settingsButton }
+            // Tab bar styling has to be set from inside each tab.
+            .toolbarBackground(Theme.bg, for: .tabBar)
+            .toolbarBackground(.visible, for: .tabBar)
     }
 
     private var settingsButton: some ToolbarContent {

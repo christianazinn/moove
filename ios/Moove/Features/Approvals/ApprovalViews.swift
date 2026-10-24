@@ -22,10 +22,10 @@ extension ApprovalStatus {
 
     var tint: Color {
         switch self {
-        case .pending: .orange
-        case .approved: .green
-        case .denied: .red
-        case .expired: .secondary
+        case .pending: Theme.ochreInk
+        case .approved: Theme.accentStrong
+        case .denied: Theme.danger
+        case .expired: Theme.muted
         }
     }
 }
@@ -35,16 +35,20 @@ extension ApprovalKind {
     var systemImage: String { self == .listing ? "tag" : "cart" }
 }
 
+/// Status as a colored dot and mono label; the dot pulses while it waits on you.
 struct ApprovalStatusChip: View {
     let status: ApprovalStatus
 
     var body: some View {
-        Label(status.label, systemImage: status.systemImage)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .foregroundStyle(status.tint)
-            .background(status.tint.opacity(0.12), in: .capsule)
+        HStack(spacing: 6) {
+            Image(systemName: "circle.fill")
+                .font(.system(size: 7))
+                .symbolEffect(.pulse, isActive: status == .pending)
+                .accessibilityHidden(true)
+            Text(status.label).monoText(12.5)
+        }
+        .foregroundStyle(status.tint)
+        .lineLimit(1)
     }
 }
 
@@ -52,10 +56,14 @@ struct ApprovalKindTag: View {
     let kind: ApprovalKind
 
     var body: some View {
-        Label(kind.label, systemImage: kind.systemImage)
-            .font(.caption2.weight(.bold))
-            .textCase(.uppercase)
-            .foregroundStyle(.secondary)
+        Label {
+            Text(kind.label).monoText(11.5, weight: .bold, maxScale: 1.6).tracking(0.5)
+        } icon: {
+            Image(systemName: kind.systemImage).font(.system(size: 10))
+        }
+        .labelStyle(.titleAndIcon)
+        .textCase(.uppercase)
+        .foregroundStyle(Theme.muted)
     }
 }
 
@@ -69,11 +77,7 @@ struct ApprovalThumbnail: View {
         if let item {
             ItemThumbnail(item: item, size: size)
         } else {
-            Image(systemName: approval.kind.systemImage)
-                .font(.system(size: size * 0.4))
-                .foregroundStyle(.secondary)
-                .frame(width: size, height: size)
-                .background(.quaternary, in: .rect(cornerRadius: 8))
+            IconTile(systemName: approval.kind.systemImage, size: size)
         }
     }
 }

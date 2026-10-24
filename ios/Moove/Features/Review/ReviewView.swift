@@ -9,34 +9,54 @@ struct ReviewView: View {
 
     var body: some View {
         let sections = Review.sections(store.items)
+        // A plain List (not a ScrollView) so rows keep their swipe actions; the theme comes from
+        // clear row backgrounds, gutter insets and rule-colored separators.
         List {
-            if !store.items.isEmpty {
-                Section { ReviewTotalsHeader(totals: Review.totals(store.items)) }
+            Section {
+                PageHeader(
+                    eyebrow: "03 — Review",
+                    title: "Decide what goes.",
+                    lede: "Keep, sell, donate or trash. Swipe a row to change it. Your calls always win over the agents'."
+                )
+                .padding(.top, 16)
+                .padding(.bottom, store.items.isEmpty ? 28 : 24)
+                .chromeRow()
+                if store.items.isEmpty {
+                    ReviewEmptyState().chromeRow()
+                } else {
+                    ReviewTotalsHeader(totals: Review.totals(store.items)).chromeRow()
+                }
             }
+            .listSectionSeparator(.hidden)
             ForEach(sections, id: \.section) { group in
                 Section {
+                    ListHeader(title: group.section.title, count: "\(group.items.count)")
+                        .padding(.top, 40)
+                        .chromeRow()
                     ForEach(group.items) { item in
                         NavigationLink(value: item.id) { ReviewRow(item: item) }
                             .swipeActions(edge: .leading) { swipe(item, .keep); swipe(item, .sell) }
                             .swipeActions(edge: .trailing) { swipe(item, .trash); swipe(item, .donate) }
                             .contextMenu { DispositionMenu(item: item) }
+                            .ledgerListRow()
                     }
-                } header: {
-                    Text("\(group.section.title) · \(group.items.count)")
-                } footer: {
                     if group.section == .needsYou {
                         Text("Moove never decides possibly sentimental items for you.")
+                            .monoMeta()
+                            .padding(.top, 12)
+                            .chromeRow()
                     }
                 }
+                .listSectionSeparator(.hidden)
             }
+            Color.clear.frame(height: 32).chromeRow()
         }
+        .listStyle(.plain)
+        .environment(\.defaultMinListRowHeight, 0)
         .navigationTitle("Review")
+        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: UInt64.self) { ItemDetailView(itemId: $0) }
-        .overlay {
-            if store.items.isEmpty {
-                ContentUnavailableView("Nothing to review", systemImage: "checklist", description: Text("Scan a room first."))
-            }
-        }
+        .mooveScreen()
         .animation(.default, value: store.items)
     }
 
@@ -44,7 +64,63 @@ struct ReviewView: View {
         Button(disposition.label, systemImage: disposition.systemImage) {
             Task { await store.setDisposition(disposition, for: item) }
         }
-        .tint(disposition.tint)
+        .tint(ReviewPalette.swipe(disposition))
+    }
+}
+
+/// Theme colors for dispositions on this screen (the shared `Disposition.tint` lives in ItemViews).
+enum ReviewPalette {
+    /// Swatch for the small dot beside a disposition, as in the summary's breakdown.
+    static func dot(_ d: Disposition) -> Color {
+        switch d {
+        case .keep: Theme.accent
+        case .sell: Theme.ochre
+        case .donate: Theme.slate
+        case .trash: Theme.stone
+        case .undecided: Theme.danger
+        }
+    }
+
+    /// Swipe buttons draw white labels in both modes, so these stay dark and fixed.
+    static func swipe(_ d: Disposition) -> Color {
+        switch d {
+        case .keep: Theme.color(0x5E6D50)
+        case .sell: Theme.color(0x86621F)
+        case .donate: Theme.color(0x55657A)
+        case .trash: Theme.color(0x665E52)
+        case .undecided: Theme.color(0xA24D35)
+        }
+    }
+}
+
+private extension View {
+    /// A non-interactive row (heading, note, stats): no separator, page background, gutter insets.
+    func chromeRow() -> some View {
+        listRowInsets(EdgeInsets(top: 0, leading: Theme.gutter, bottom: 0, trailing: Theme.gutter))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Theme.bg)
+    }
+
+    /// An item row: page background and a full-width rule-colored separator.
+    func ledgerListRow() -> some View {
+        listRowInsets(EdgeInsets(top: 0, leading: Theme.gutter, bottom: 0, trailing: Theme.gutter))
+            .listRowBackground(Theme.bg)
+            .listRowSeparatorTint(Theme.line)
+            .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+    }
+}
+
+private struct ReviewEmptyState: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Nothing to review").blockTitle()
+            Text("Scan a room first.").monoMeta()
+        }
+        .padding(.vertical, 28)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .ruled(.top)
+        .ruled()
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -52,31 +128,41 @@ struct ReviewRow: View {
     let item: Item
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            ItemThumbnail(item: item)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(item.name).font(.headline).lineLimit(1)
+        HStack(alignment: .top, spacing: 16) {
+            ItemThumbnail(item: item, size: 56)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(item.name).blockTitle().lineLimit(2)
                     if item.maybeSentimental {
-                        Image(systemName: "heart.fill").foregroundStyle(.pink).font(.caption)
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.danger)
                             .accessibilityLabel("Possibly sentimental")
                     }
-                    Spacer()
-                    Text(item.estValueCents?.usd ?? "—").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Text(item.estValueCents?.usd ?? "—").rowValue()
                 }
-                HStack(spacing: 6) {
-                    DispositionChip(disposition: item.disposition)
+                HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        Circle().fill(ReviewPalette.dot(item.disposition)).frame(width: 7, height: 7)
+                            .accessibilityHidden(true)
+                        Text(item.disposition.label).monoText(12.5).foregroundStyle(Theme.text)
+                    }
                     if item.dispositionSource == .user || item.disposition != .undecided {
-                        Text(item.dispositionSource == .user ? "You decided" : "Auto")
-                            .font(.caption2).foregroundStyle(.secondary)
+                        Text("·").monoText(12.5).foregroundStyle(Theme.faint).accessibilityHidden(true)
+                        Text(item.dispositionSource == .user ? "You decided" : "Auto").monoMeta()
                     }
                 }
                 if let reason = item.dispositionReason, item.dispositionSource == .auto {
-                    Text(reason).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    Text(reason)
+                        .sansText(14)
+                        .foregroundStyle(Theme.muted)
+                        .lineLimit(2)
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 16)
+        .frame(minHeight: 44)
     }
 }
 
@@ -100,26 +186,29 @@ struct ReviewTotalsHeader: View {
     let totals: ReviewTotals
 
     var body: some View {
-        HStack {
-            stat(totals.expectedSaleCents.usd, "expected sales")
-            Divider()
-            stat("\(totals.itemsToMove)", "items to move")
-            Divider()
-            stat(totals.volumeToMoveM3.formatted(.number.precision(.fractionLength(1))) + " m³", "to move")
-            if totals.needsYou > 0 {
-                Divider()
-                stat("\(totals.needsYou)", "need you", tint: .orange)
+        Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 0) {
+            GridRow {
+                StatFigure(label: "Expected sales", value: totals.expectedSaleCents.usd, tint: Theme.accentStrong)
+                    .padding(.vertical, 18)
+                StatFigure(label: "Items to move", value: "\(totals.itemsToMove)")
+                    .padding(.vertical, 18)
+            }
+            Rectangle().fill(Theme.line).frame(height: 1).gridCellUnsizedAxes(.horizontal)
+            GridRow {
+                StatFigure(label: "Volume to move",
+                           value: totals.volumeToMoveM3.formatted(.number.precision(.fractionLength(1))) + " m³")
+                    .padding(.vertical, 18)
+                if totals.needsYou > 0 {
+                    StatFigure(label: "Need you", value: "\(totals.needsYou)", tint: Theme.danger)
+                        .padding(.vertical, 18)
+                } else {
+                    StatFigure(label: "Need you", value: "0")
+                        .padding(.vertical, 18)
+                }
             }
         }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func stat(_ value: String, _ label: String, tint: Color = .primary) -> some View {
-        VStack(spacing: 2) {
-            Text(value).font(.title3.weight(.semibold).monospacedDigit()).foregroundStyle(tint)
-            Text(label).font(.caption2).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
+        .ruled(.top)
+        .ruled()
     }
 }
 
