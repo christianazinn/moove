@@ -146,16 +146,18 @@ export function auth0CibaGateway(cfg: Auth0Config): ApprovalGateway {
       const r = await fetch(`${base}/oauth/token`, { method: 'POST', body });
       const j = await readJson(r);
       if (r.ok) {
-        // Tokens are never stored or logged; we only check who approved.
+        // Tokens are never stored or logged; we only check who approved. We ask for scope
+        // openid, so a real approval always carries an id_token: fail closed without one.
         const expected = subByReq.get(authReqId);
-        if (typeof j.id_token === 'string') {
-          const sub = jwtPayload(j.id_token)?.sub;
-          if (!expected || sub !== expected) {
-            subByReq.delete(authReqId);
-            throw new Error('Auth0 approval came back for a different user than requested, ignoring it');
-          }
-        }
         subByReq.delete(authReqId);
+        const sub = typeof j.id_token === 'string' ? jwtPayload(j.id_token)?.sub : undefined;
+        if (!expected || sub !== expected) {
+          throw new Error(
+            sub === undefined
+              ? 'Auth0 approval came back without a readable id_token, ignoring it'
+              : 'Auth0 approval came back for a different user than requested, ignoring it'
+          );
+        }
         return { status: 'approved' };
       }
       const e = j as OAuthError;
