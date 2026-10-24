@@ -15,6 +15,12 @@ struct InventoryView: View {
     @State private var newName = ""
     /// Row whose "Delete item" is waiting on the confirm.
     @State private var deleting: Item?
+    /// **+ Add item**: camera first, then the sheet (`AddItemSheet`).
+    @State private var takingPhoto = false
+    @State private var addInto: UInt64?
+    @State private var photo: Data?
+    @State private var addDraft: AddItemDraft?
+    private var addedPhotos: AddedItemPhotos { .shared }
 
     var body: some View {
         let rooms = store.snapshot.roomsNewestFirst(store.visibleRooms)
@@ -25,6 +31,14 @@ struct InventoryView: View {
                     title: "Everything you own.",
                     lede: "Every item Moove found, room by room. Prices fill in as the agents finish."
                 )
+                Button { startAdd(into: nil) } label: {
+                    Label("Add item", systemImage: "plus")
+                }
+                .buttonStyle(.pill(.outline, compact: true))
+                .accessibilityLabel("Add item")
+                .accessibilityHint("Take a photo of something to add. Moove names and prices it.")
+                .accessibilityIdentifier("inventory.addItem")
+                .padding(.top, 16)
                 if store.visibleItems.isEmpty {
                     emptyState.padding(.top, 32)
                 } else {
@@ -49,6 +63,17 @@ struct InventoryView: View {
         }
         .sheet(item: $sharing) { ShareRoomView(room: $0) }
         .sheet(isPresented: $showJoin) { JoinRoomView() }
+        .fullScreenCover(isPresented: $takingPhoto, onDismiss: {
+            if let photo { addDraft = AddItemDraft(jpeg: photo, preferredRoomId: addInto) }
+            photo = nil
+        }) {
+            CameraPicker { jpeg in
+                photo = jpeg
+                takingPhoto = false
+            }
+            .ignoresSafeArea()
+        }
+        .sheet(item: $addDraft) { AddItemSheet(draft: $0) }
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }), presenting: renaming) { item in
             TextField("Name", text: $newName)
             Button("Save") { Task { await store.renameItem(item, to: newName) } }
@@ -75,6 +100,7 @@ struct InventoryView: View {
         }
         #endif
         .task(id: geometryKey) { await loadScannedCategories() }
+        .task { addedPhotos.resume(store: store) }
         .mooveScreen()
         .animation(.default, value: store.items)
         .animation(.default, value: store.hiddenRoomIds)
@@ -88,6 +114,12 @@ struct InventoryView: View {
         let shared = !isMine(room)
         ListHeader(title: room.name, count: "\(items.count)") {
             HStack(spacing: 8) {
+                Button { startAdd(into: room.id) } label: {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.pill(.outline, compact: true))
+                .accessibilityLabel("Add item to \(room.name)")
+                .accessibilityIdentifier("inventory.room.\(room.id).addItem")
                 if !shared {
                     Button { sharing = room } label: {
                         Image(systemName: "person.badge.plus")
@@ -133,15 +165,16 @@ struct InventoryView: View {
             let tag = item.originTag(inSharedRoom: shared)
             // "≈" marks an estimate from only one or two comparable listings
             let rough = item.saleValueCents != nil && Item.isRoughEstimate(compCount: compCounts[item.id] ?? 0)
+            let waiting = addedPhotos.isWaiting(item)
             LedgerRow(
                 title: item.name,
-                meta: meta(for: item),
-                value: rough ? "≈\(item.priceText)" : item.priceText,
+                meta: waiting ? "Will be identified when online" : meta(for: item),
+                value: waiting ? "waiting…" : rough ? "≈\(item.priceText)" : item.priceText,
                 valueTint: item.saleValueCents == nil ? Theme.muted : Theme.text,
                 tag: tag.label,
                 tagAccessibilityLabel: tag.accessibilityLabel
             ) {
-                ItemThumbnail(item: item, size: 56)
+                ItemThumbnail(item: waiting ? withLocalPhoto(item) : item, size: 56)
             }
             .accessibilityElement(children: .combine)
             // Fix-it (long press): rename, what is it, turn, remove a misread scan item. Delete asks first.
@@ -156,6 +189,20 @@ struct InventoryView: View {
             .accessibilityAction(named: "Delete") { deleting = item }
             .accessibilityIdentifier("inventory.item.\(item.id)")
         }
+    }
+
+    private func startAdd(into roomId: UInt64?) {
+        addInto = roomId
+        photo = nil
+        takingPhoto = true
+    }
+
+    /// A waiting item's thumbnail shows the photo still on this phone.
+    private func withLocalPhoto(_ item: Item) -> Item {
+        guard item.photoUrls.isEmpty, let file = addedPhotos.localPhoto(for: item) else { return item }
+        var copy = item
+        copy.photoUrls = [file.absoluteString]
+        return copy
     }
 
     private func startRename(_ item: Item) {
@@ -255,7 +302,7 @@ struct InventoryView: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("No items yet").blockTitle()
-            Text("Scan a room to build your inventory, or join a shared one with its code.").monoMeta()
+            Text("Scan a room, add an item by photo, or join a shared room with its code.").monoMeta()
             Button("Join a room") { showJoin = true }
                 .buttonStyle(.pill(.outline, compact: true))
                 .padding(.top, 12)

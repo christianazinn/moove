@@ -20,6 +20,8 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         case invalidUrl
         case tooManyPhotos
         case nameTooLong
+        case noSuchRoom
+        case invalidObject
     }
 
     private let lock = NSLock()
@@ -201,8 +203,84 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         item.maybeSentimental = t.maybeSentimental
     }
 
+    /// Like the module: adding a photo re-queues vision (`details_status = pending`).
+    /// Offline there's no vision agent, so `simulateIdentify` plays it.
     public func addItemPhoto(itemId: UInt64, url: String) async throws {
-        try updateOwnedItem(itemId) { $0.photoUrls.append(url) }
+        try updateOwnedItem(itemId) {
+            $0.photoUrls.append(url)
+            $0.detailsStatus = .pending
+        }
+    }
+
+    /// `add_item`: room access required, sizes 0-30 m and names ≤120 or it throws (no skipping,
+    /// unlike the imports). Vision and pricing start `pending`. Like the fixture's `importScan`,
+    /// any photo URL is kept (offline photos are file URLs); the module keeps only http(s).
+    public func addItem(roomId: UInt64, name: String, object: ScanObject) async throws {
+        guard Self.unimportable(object) == nil else { throw Failure.invalidObject }
+        guard name.count <= Self.maxNameLength else { throw Failure.nameTooLong }
+        try mutateAuthed { s, me in
+            guard let room = s.rooms.first(where: { $0.id == roomId }) else { throw Failure.noSuchRoom }
+            guard room.owner == me || memberRoomIds.contains(roomId) else { throw Failure.unauthorized }
+            let photo = object.photoUrl.flatMap { $0.isEmpty ? nil : $0 }
+            s.items.append(Item(
+                id: takeId(), owner: room.owner, roomId: roomId, scanObjectId: object.scanObjectId,
+                name: name.isEmpty ? object.category : name, category: object.category,
+                widthM: object.widthM, heightM: object.heightM, depthM: object.depthM,
+                photoUrls: photo.map { [$0] } ?? [], attributes: object.attributes,
+                detailsStatus: .pending, pricingStatus: .pending))
+        }
+    }
+
+    /// `create_room(name, "old")`.
+    public func createRoom(name: String) async throws {
+        guard name.count <= AddedItem.maxRoomNameLength else { throw Failure.nameTooLong }
+        try mutateAuthed { s, me in
+            let id = takeId()
+            s.rooms.append(Room(id: id, owner: me, name: name, joinCode: Self.joinCode(forRoomId: id)))
+        }
+    }
+
+    /// Offline stand-in for the worker's vision + pricing agents on a photo (Add item, Add photo):
+    /// `details_status` pending → running → done. **Fixture only, not read from the photo:** an
+    /// item still called "New item" gets a sample name from `DemoFixtures.photoAddSamples`, an
+    /// unpriced one a sample price, and an `agent_event` says it's a sample. `step` paces it.
+    public func simulateIdentify(itemId: UInt64, step: Duration = .milliseconds(1200)) async throws {
+        func update(_ change: @escaping (inout Item) -> Void) throws {
+            try mutateAuthed { s, _ in
+                guard let i = s.items.firstIndex(where: { $0.id == itemId }) else { throw Failure.noSuchItem }
+                change(&s.items[i])
+                s.items[i].updatedAt = .now
+            }
+        }
+        try await Task.sleep(for: step)
+        try update { $0.detailsStatus = .running }
+        try await Task.sleep(for: step * 2)
+        try mutateAuthed { s, me in
+            guard let i = s.items.firstIndex(where: { $0.id == itemId }) else { throw Failure.noSuchItem }
+            var item = s.items[i]
+            let sample = DemoFixtures.photoAddSample(for: item.id)
+            let renamed = AddedItem.isUnnamed(item)
+            if renamed {
+                item.name = sample.name
+                item.category = sample.category
+                item.material = sample.material
+                item.brand = sample.brand
+                item.condition = sample.condition
+                item.fragile = item.fragile || sample.fragile
+            }
+            if item.estValueCents == nil {
+                item.estValueCents = sample.estValueCents
+                item.pricingStatus = .done
+                if item.dispositionReason == nil { item.dispositionReason = DemoFixtures.photoAddSampleNote }
+            }
+            item.detailsStatus = .done
+            item.updatedAt = .now
+            s.items[i] = item
+            s.agentEvents.append(AgentEvent(
+                id: takeId(), owner: item.owner, agent: "vision", kind: .result,
+                message: renamed ? "\(DemoFixtures.photoAddSampleNote) Named it \"\(item.name)\"." : DemoFixtures.photoAddSampleNote,
+                refTable: "item", refId: item.id))
+        }
     }
 
     /// Same checks and status change as `add_scan_photo`. There's no sweep agent

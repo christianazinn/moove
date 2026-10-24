@@ -201,6 +201,15 @@ final class MooveSmokeTests: XCTestCase {
         snap("06-inventory-deleted")
     }
 
+    func testAddItemButtonsExist() {
+        launch()
+        open(tab: "Items", segment: "Inventory")
+        XCTAssertTrue(app.buttons["inventory.addItem"].firstMatch.waitForExistence(timeout: slow), "Add item in the header")
+        let perRoom = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'inventory.room.' AND identifier ENDSWITH '.addItem'"))
+        XCTAssertTrue(perRoom.firstMatch.waitForExistence(timeout: slow), "+ on a room header")
+        snap("07-inventory-add-item")
+    }
+
     func testSettingsShowsDataSourceAndSignsOut() {
         launch()
         let settings = app.navigationBars.buttons["Settings"].firstMatch

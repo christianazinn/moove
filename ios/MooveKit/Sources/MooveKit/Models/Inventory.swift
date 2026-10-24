@@ -336,12 +336,14 @@ extension Item {
         case scan
         /// Added by the room photo sweep (`scan_object_id = "photo:<scan id>"`, #92): size estimated.
         case roomPhotos
-        /// Added by its photo during the scan review: no size at all.
+        /// Added by its photo (scan review, or Inventory's **+ Add item**, `added:<uuid>`): no
+        /// measured size, at most a rough size chip.
         case photo
     }
 
     public var origin: Origin {
         if scanObjectId?.hasPrefix("photo:") == true { return .roomPhotos }
+        if scanObjectId?.hasPrefix(AddedItem.scanObjectIdPrefix) == true { return .photo }
         if widthM <= 0 && heightM <= 0 && depthM <= 0 { return .photo }
         return .scan
     }

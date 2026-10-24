@@ -62,8 +62,9 @@ export function isTransientPricingError(err: unknown): boolean {
 
 // Price after vision has had its chance: details done/failed, or no photos to look at.
 // RoomPlan's catch-all categories. "other" or "storage" alone buys junk comps, so items named only
-// that wait until vision (or the user, via rename_item) gives them a real name.
-const GENERIC_NAMES = new Set(['', 'other', 'unknown', 'object', 'item', 'storage']);
+// that wait until vision (or the user, via rename_item) gives them a real name. "new item" is the
+// app's placeholder for an item added by photo (Inventory's + Add item) whose photo is still uploading.
+const GENERIC_NAMES = new Set(['', 'other', 'unknown', 'object', 'item', 'storage', 'new item']);
 
 export function isGenericQuery(it: Item): boolean {
   return !it.brand && GENERIC_NAMES.has((it.name || it.category).trim().toLowerCase());
