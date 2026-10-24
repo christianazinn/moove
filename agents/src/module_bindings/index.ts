@@ -75,6 +75,7 @@ import SetItemDetailsReducer from "./set_item_details_reducer";
 import SetItemModelReducer from "./set_item_model_reducer";
 import SetItemStageReducer from "./set_item_stage_reducer";
 import SetSentimentalReducer from "./set_sentimental_reducer";
+import SetServiceConfigReducer from "./set_service_config_reducer";
 import SetShoppingStatusReducer from "./set_shopping_status_reducer";
 import SetSweepStatusReducer from "./set_sweep_status_reducer";
 import UpdateListingReducer from "./update_listing_reducer";
@@ -98,6 +99,7 @@ import RoomRow from "./room_table";
 import RoomMemberRow from "./room_member_table";
 import ScanRow from "./scan_table";
 import ScanPhotoRow from "./scan_photo_table";
+import ServiceConfigRow from "./service_config_table";
 import ShoppingItemRow from "./shopping_item_table";
 import UserRow from "./user_table";
 import WorkerRow from "./worker_table";
@@ -313,6 +315,17 @@ const tablesSchema = __schema({
       { name: 'scan_photo_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, ScanPhotoRow),
+  serviceConfig: __table({
+    name: 'service_config',
+    indexes: [
+      { accessor: 'key', name: 'service_config_key_idx_btree', algorithm: 'btree', columns: [
+        'key',
+      ] },
+    ],
+    constraints: [
+      { name: 'service_config_key_key', constraint: 'unique', columns: ['key'] },
+    ],
+  }, ServiceConfigRow),
   shoppingItem: __table({
     name: 'shopping_item',
     indexes: [
@@ -408,6 +421,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_item_model", SetItemModelReducer),
   __reducerSchema("set_item_stage", SetItemStageReducer),
   __reducerSchema("set_sentimental", SetSentimentalReducer),
+  __reducerSchema("set_service_config", SetServiceConfigReducer),
   __reducerSchema("set_shopping_status", SetShoppingStatusReducer),
   __reducerSchema("set_sweep_status", SetSweepStatusReducer),
   __reducerSchema("update_listing", UpdateListingReducer),
