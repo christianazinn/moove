@@ -4,7 +4,9 @@ Submission notes for the Visa **Reimagining Shopping** track (Cal Hacks 13.0). S
 
 > **Status.** The shopping list, buy agent, Visa checkout and iOS Shopping screen are merged (PR #40). So are the approval flow (Auth0 CIBA + in-app inbox, PR #35), the x402 spend caps (PR #23), the fraud screen for deals (PR #64) and live sync for the app (PR #28). `npm run e2e` (PR #120) runs the whole worker pipeline on a local SpacetimeDB, including shopping list, deals, fraud and a purchase with approval on the simulated Visa rail.
 >
-> **The demo checkout is a labeled simulation.** We tried a real CyberSource sandbox charge with real sandbox keys (`npm run visa:demo -- 1.00`, Oct 24). Every attempt got **HTTP 502** (`status: SERVER_ERROR`, `reason: SYSTEM_ERROR`; latest CyberSource request ids `7928329698276400003813` and `7928175635416253203813`). Nothing was authorized or captured. The HTTP Signature was accepted (a bad signature returns 401), so this is a merchant-side setup problem in our sandbox account (most likely no card processor enabled). It needs a human in the CyberSource sandbox Business Center, not a code change. Until then the demo runs `VISA_PROVIDER=simulated`, and every purchase is labeled SIMULATED.
+> **The hosted worker checks out in the Authorize.net sandbox** (PR #302, since Sat Oct 24 ~1:50 PM PDT). Authorize.net is a Visa Acceptance product. Each purchase is a real sandbox authorization hold on the public Visa test card, then a capture, with no real money. The hosted workers announce `visa_checkout=sandbox`, so purchase approvals say VISA SANDBOX. First one on Live: payment #97, a $89.99 Target bed frame, sandbox transaction `120092631489`, `simulated: false`. Purchases from before then stay labeled SIMULATED.
+>
+> **CyberSource is a dead end for now.** We tried a real CyberSource sandbox charge with real sandbox keys (`npm run visa:demo -- 1.00`, Oct 24). Every attempt got **HTTP 502** (`status: SERVER_ERROR`, `reason: SYSTEM_ERROR`; latest CyberSource request ids `7928329698276400003813` and `7928175635416253203813`). Nothing was authorized or captured. The HTTP Signature was accepted (a bad signature returns 401), so this is a merchant-side setup problem in our sandbox account (most likely no card processor enabled). It needs a human in the CyberSource sandbox Business Center, not a code change. That's why the hosted worker uses Authorize.net.
 
 ## Summary
 **Who it's for.** People moving into a new place. You arrive needing a mattress, a sofa and a desk chair, and you have no time to compare listings.
@@ -12,7 +14,8 @@ Submission notes for the Visa **Reimagining Shopping** track (Cal Hacks 13.0). S
 **What it does.** When you add your new home, an agent writes a "still need to buy" list: what the rooms need, minus the things you are keeping. A buy agent searches deals for each item, ranks them and recommends one. You choose a deal in the app (or let the agent choose, with `BUY_AUTO_CHOOSE=1`) and the agent checks out by card. At or under your approval threshold it buys right away. Above it, it asks you first, on your phone. Every step is logged and shown in the app, and nothing simulated is ever shown as real.
 
 **Visa tools used.**
-- **Visa Acceptance (CyberSource) REST sandbox**, called directly with HTTP Signature auth (no SDK dependency). It places an authorization hold on the public Visa test card, then captures it or reverses it. The real sandbox charge has not succeeded yet (502, see above).
+- **Authorize.net sandbox** (a Visa Acceptance product), called directly through its JSON API (no SDK dependency). This is what the hosted worker uses: an `authOnlyTransaction` hold on the public Visa test card, then `priorAuthCaptureTransaction`, or `voidTransaction` if anything changed. See "Authorize.net sandbox backend" below.
+- **Visa Acceptance (CyberSource) REST sandbox**, called directly with HTTP Signature auth (no SDK dependency). It places an authorization hold on the public Visa test card, then captures it or reverses it. Built and tested against a fake server, but the real sandbox charge has not succeeded (502, see above).
 - **Visa Intelligent Commerce (VIC)** was not available to us. Its credentials (API key, MLE keys, VTS token requestor, consumer and enrollment IDs) come only through Visa onboarding. So `VISA_PROVIDER=vic` is a documented seam: `createVicBackend` throws, and the checkout falls back to simulated. Each purchase still records a VIC-shaped mandate (see Trust).
 
 ## How it works
@@ -49,7 +52,8 @@ flowchart LR
     CIBA["Approval worker<br/>Auth0 CIBA"]
   end
   Apify["Apify<br/>FB Marketplace, eBay<br/>(else replay / sample data)"]
-  CS["CyberSource REST sandbox<br/>apitest.cybersource.com<br/>(only if keys set)"]
+  AN["Authorize.net sandbox<br/>apitest.authorize.net<br/>(hosted worker)"]
+  CS["CyberSource REST sandbox<br/>apitest.cybersource.com<br/>(502 on every charge)"]
   Sim["Simulated backend<br/>(default)"]
   Auth0["Auth0 Guardian push"]
 
@@ -59,7 +63,8 @@ flowchart LR
   Buy -- "search" --> Apify
   Buy -- "add_deal, request_approval" --> STDB
   Buy --> Visa
-  Visa -- "auth / capture / reversal" --> CS
+  Visa -- "auth / capture / void" --> AN
+  Visa -. "auth / capture / reversal" .-> CS
   Visa -. "no keys, or 5xx with fallback on" .-> Sim
   Visa -- "record_payment, log_agent_event" --> STDB
   CIBA -- "bc-authorize, poll" --> Auth0
@@ -79,7 +84,8 @@ Agent worker                                          |
      v                                                |
   VisaCheckout.purchase: gate -> ledger -> hold ------+ record_payment / log_agent_event
      -> re-check -> capture | reversal
-     |-- keys set:  CyberSource REST sandbox (test card)
+     |-- Authorize.net keys:  Authorize.net sandbox (test card; the hosted worker)
+     |-- CyberSource keys:    CyberSource REST sandbox (test card; 502 today)
      '-- no keys:   simulated backend (simulated: true)
   approval worker (#35) --CIBA--> Auth0 push --> decide_approval
 ```
@@ -109,14 +115,15 @@ Agent worker                                          |
   - A 5xx or network error falls back to the simulated backend, for that one purchase, in two cases: `VISA_FALLBACK_SIMULATED=1`, or no `VISA_PROVIDER` set (backend picked from the keys). Otherwise it is a retryable failure.
 - Holds remember which backend placed them, so a capture or reversal always goes to the right one. A hold can be closed only once.
 - A capture that fails in transit is not voided, and its budget is not released. The payment stays pending and is flagged for reconciliation, which blocks a repeat purchase. Only one purchase per shopping item is allowed.
-- `agents/test/visa.test.ts` covers signing, a fake CyberSource server, declines, the approval gate, the ledger (including concurrent purchases), fallback and reconciliation. `agents/test/buy.test.ts` covers the buy agent.
+- `agents/test/visa.test.ts` covers signing, fake CyberSource and Authorize.net servers, declines, the approval gate, the ledger (including concurrent purchases), fallback and reconciliation. `agents/test/buy.test.ts` covers the buy agent.
 
 ## Commerce impact
 - Furnishing a new place means a burst of purchases at a stressful time. Moove turns it into a list you review and approve, instead of a weekend of browsing.
 - Merchants get a buyer agent that pays by card under a clear, bounded mandate, instead of a scraper.
 - Honest scope:
   - Every demo shopping item has a committed live replay: 16 real Apify searches (Oct 24) in `agents/fixtures/deals-live-*.json`, 3 to 9 active FB Marketplace and eBay listings each, replayed with a REPLAY label. `agents/test/deals-apify.test.ts` enforces 3+ listings per file and no seller identities. An item whose name has no replay is searched live with `APIFY_TOKEN`, or falls back to labeled sample data.
-  - A sandbox charge would go to our own sandbox merchant, standing in for the retailer (the payee reads "Visa Acceptance sandbox merchant (for ikea)").
+  - A sandbox charge goes to our own sandbox merchant, standing in for the retailer (the payee reads "Authorize.net sandbox merchant (for <merchant>)").
+  - Our free Apify account's $5 monthly credit is used up (HTTP 403 "Monthly usage hard limit exceeded", resets Nov 23), so live deal searches fail today and fall back to the committed replays (REPLAY) or sample data (SAMPLE). The code searches live again once there's credit.
 
 ## Trust and responsibility
 - **Approval above the threshold.**
@@ -181,9 +188,9 @@ AUTHORIZENET_API_LOGIN_ID=...
 AUTHORIZENET_TRANSACTION_KEY=...
 AUTHORIZENET_HOST=apitest.authorize.net   # optional, the default
 ```
-Check it with `VISA_PROVIDER=authorizenet npm run visa:demo -- 1.00`. With `VISA_PROVIDER` empty, the backend is `authorizenet` if both `AUTHORIZENET_*` keys are set, else `acceptance` if the three CyberSource keys are, else simulated. This backend is covered by fake-server tests in `agents/test/visa.test.ts`; a live sandbox run hasn't been recorded here yet.
+Check it with `VISA_PROVIDER=authorizenet npm run visa:demo -- 1.00`. With `VISA_PROVIDER` empty, the backend is `authorizenet` if both `AUTHORIZENET_*` keys are set, else `acceptance` if the three CyberSource keys are, else simulated. This backend is covered by fake-server tests in `agents/test/visa.test.ts`, and it runs live on the hosted worker: payment #97 on Live is a $89.99 sandbox capture (transaction `120092631489`).
 
-**Demo setting:** we run the demo with `VISA_PROVIDER=simulated` and are not attempting live sandbox charges. The CyberSource integration is built and tested (HTTP Signature checked against `cybersource-rest-client`, a fake-server test suite, sandbox-host and test-card locks), but the live sandbox charge is blocked on our sandbox account's merchant setup (HTTP 502, needs a human in the sandbox Business Center). Because the keys are configured, leaving `VISA_PROVIDER` empty would still call the sandbox on every purchase, so set it explicitly.
+**Demo setting:** the hosted worker checks out through the `authorizenet` backend and reports `visa_checkout=sandbox`. Don't set `VISA_PROVIDER=acceptance`: the CyberSource integration is built and tested (HTTP Signature checked against `cybersource-rest-client`, a fake-server test suite, sandbox-host and test-card locks), but its live sandbox charge is blocked on our sandbox account's merchant setup (HTTP 502, needs a human in the sandbox Business Center), so every checkout would fail. `VISA_PROVIDER=simulated` is the labeled fallback if the Authorize.net sandbox is down.
 
 Other settings in `.env.example`:
 - `VISA_FALLBACK_SIMULATED`, `VISA_SPEND_CAP_USD`, `VISA_MAX_PER_PURCHASE_USD`, `VISA_SEED_BUDGETS`, `VISA_SIM_DELAY_MS` (400)
@@ -191,17 +198,18 @@ Other settings in `.env.example`:
 - `DEALS_SOURCE`, `DEALS_APIFY_SOURCES`, `DEALS_SEARCH_CONCURRENCY`, `DEALS_PER_SOURCE` (6), `DEALS_HOME_LAT` / `DEALS_HOME_LNG`
 
 ## Known limitations
-- **The real sandbox charge hasn't succeeded.** CyberSource returns HTTP 502 `SYSTEM_ERROR` (latest request ids `7928329698276400003813` and `7928175635416253203813`), a merchant-side setup problem (most likely no card processor enabled) that needs a human in the sandbox Business Center. The demo uses the labeled simulation. Don't set `VISA_PROVIDER=acceptance` for a demo until a `visa:demo -- 1.00` run succeeds, or every checkout fails.
+- **Sandbox only.** Checkout on the hosted worker is a real Authorize.net sandbox charge on the public test card. No real card or real money is involved.
+- **CyberSource's sandbox charge hasn't succeeded.** CyberSource returns HTTP 502 `SYSTEM_ERROR` (latest request ids `7928329698276400003813` and `7928175635416253203813`), a merchant-side setup problem (most likely no card processor enabled) that needs a human in the sandbox Business Center. Don't set `VISA_PROVIDER=acceptance` until a `visa:demo -- 1.00` run succeeds, or every checkout fails.
 - **VIC is not implemented.** Credentials are gated, so `vic` is a seam that falls back to simulated. The mandate is only logged, not enforced by Visa. Our code does not check its 24-hour `effectiveUntil`.
-- **Replays cover the 16 demo item names.** An item named differently (Claude may write "Full size mattress") is searched live, or gets labeled sample data.
-- **The fraud screen is rules only.** The AI-text signal needs a `PANGRAM_URL` service. A deal chosen before it is scored waits for the score, so if the fraud agent can't write a score (3 failed `set_deal_fraud` tries, logged as an error), that purchase waits until the worker restarts.
+- **Replays cover the 16 demo item names.** An item named differently (Claude may write "Full size mattress") is searched live, or gets labeled sample data (today, with the Apify credit used up, it gets sample data).
+- **The fraud screen is rules only.** The AI-text signal needs a `PANGRAM_URL` service and is off on the hosted worker; an open-source Pangram integration is in progress. A deal chosen before it is scored waits for the score, so if the fraud agent can't write a score (3 failed `set_deal_fraud` tries, logged as an error), that purchase waits until the worker restarts.
 - **The card budget lives in the worker.** It is per agent name rather than per user, and it is enforced in our code, not by the processor.
 - **The live shopping flow on the phone is unverified on device.** It is wired (PR #28) and the worker side passes `npm run e2e`; the Offline demo is the fallback.
-- **Bought items don't appear in the new-home layout** (#14) yet.
+- **At or under the approval limit, Choose pays right away**, with no confirm step. A confirm dialog is in PR #313, which is still open (not merged).
 
 ## Devpost block
 - **Track:** Visa, Reimagining Shopping.
 - **What:** Moove's buy agent turns your new home's rooms, minus what you keep, into a shopping list. It ranks live and replayed deals and checks out by card for the deal you choose, asking for approval on your phone above your threshold.
-- **Visa tooling:** Visa Acceptance (CyberSource) REST sandbox: an auth-only hold on the Visa test card, then capture or reversal, with HTTP Signature auth. VIC credentials were gated, so each purchase carries a VIC-shaped mandate instead. Our real sandbox attempts return a 502 (merchant setup on the sandbox account), so the demo checkout is a labeled simulation.
+- **Visa tooling:** Visa Acceptance sandboxes: on the hosted worker, Authorize.net (an auth-only hold on the Visa test card, then capture or void; real sandbox charges, no real money, labeled VISA SANDBOX, e.g. a $89.99 Target bed frame, transaction 120092631489). A CyberSource REST backend with HTTP Signature auth is also built, but our CyberSource sandbox returns a 502 on every charge (merchant setup on the sandbox account). VIC credentials were gated, so VIC is a documented seam and each purchase carries a VIC-shaped mandate instead.
 - **Trust:** Auth0 CIBA approval above `approvalThresholdCents`, the approved amount re-checked right before capture, per-agent and per-purchase card caps, a broken integration never disguised as a simulation, every step logged as an `agent_event`, and a rule-based fraud screen on every deal (0.7+ is never bought).
 - **Repo:** https://github.com/christianazinn/moove, see `docs/visa.md` (code: `agents/src/integrations/visa.ts`, `agents/src/agents/buy.ts`).
