@@ -83,6 +83,8 @@ final class MooveStore {
         do {
             let result = try await backend.connect(token: saved)
             if token == nil { Keychain.set(result.token, for: .spacetimeToken) }
+        } catch is CancellationError {
+            // Superseded by a newer connect: its status wins.
         } catch {
             status = .failed(error.localizedDescription)
         }
