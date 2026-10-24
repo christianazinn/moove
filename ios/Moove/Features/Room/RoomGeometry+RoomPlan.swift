@@ -3,7 +3,7 @@ import RoomPlan
 import simd
 import MooveKit
 
-extension Transform {
+extension RoomTransform {
     init(_ m: simd_float4x4) {
         self.init(columns: [m.columns.0, m.columns.1, m.columns.2, m.columns.3])
     }
@@ -16,7 +16,7 @@ extension RoomGeometry {
     init(_ room: CapturedRoom) {
         func surface(_ s: CapturedRoom.Surface, _ kind: SurfaceKind) -> Surface {
             Surface(id: s.identifier.uuidString, kind: kind, parentId: s.parentIdentifier?.uuidString,
-                    dimensions: s.dimensions, transform: Transform(s.transform))
+                    dimensions: s.dimensions, transform: RoomTransform(s.transform))
         }
         let floors: [Floor] = room.floors.map { f in
             // Corners are in the floor's local space; fall back to its rectangle.
@@ -35,7 +35,7 @@ extension RoomGeometry {
             floors: floors,
             objects: room.objects.map { o in
                 Object(id: o.identifier.uuidString, category: String(describing: o.category),
-                       dimensions: o.dimensions, transform: Transform(o.transform))
+                       dimensions: o.dimensions, transform: RoomTransform(o.transform))
             }
         )
     }
