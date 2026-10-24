@@ -312,6 +312,8 @@ extension Canvas {
             box(0, ty, mainD - 1, lShape ? X - wing : X, Y, mainD, shade(body, 0.93)) // front edge
             if lShape { box(X - wing, ty, Z - 1, X, Y, Z, shade(body, 0.93)) }
         }
+        surface(0, 0, X, mainD, Y)
+        if lShape { surface(X - wing, mainD, X, Z, Y) }
         if standing {
             // sit-stand frame: two T-legs (column + foot), a crossbar, the keypad under the front edge
             let zc = mainD / 2
@@ -527,9 +529,13 @@ extension Canvas {
             }
             cyl(cx, cz, max(1, r * 0.12), 1, ty, metalLegs ? legC : shade(w, 0.85))
             cyl(cx, cz, max(1.5, r * 0.45), 0, 1, metalLegs ? legC : shade(w, 0.8))
+            // the square inscribed in the ellipse (half sides ex / √2, ez / √2)
+            let sx = max(0, fl(ex * 0.7)), sz = max(0, fl(ez * 0.7))
+            surface(rd(cx) - sx + (X % 2 == 0 ? 1 : 0), rd(cz) - sz + (Z % 2 == 0 ? 1 : 0), rd(cx) + sx, rd(cz) + sz, Y)
             return
         }
         if glass { top { _, _ in true } } else { wood(0, ty, 0, X, Y, Z, w, X >= Z ? .x : .z) }
+        surface(0, 0, X, Z, Y)
         // a coffee table (under ~0.6 m) gets a thicker top and chunkier legs
         let coffee = attr("tabletype.coffee") || (!attr("tabletype.dining") && hM < 0.6)
         if coffee && !glass && Y >= 6 { wood(0, ty - 1, 0, X, ty, Z, shade(w, 0.94), X >= Z ? .x : .z) }
@@ -587,6 +593,7 @@ extension Canvas {
         if legH > 0 { for (lx, lz) in [(0, 0), (X - 1, 0), (0, Z - 2), (X - 1, Z - 2)] { box(lx, 0, lz, lx + 1, legH, lz + 1, shade(body, 0.75)) } }
         wood(0, legH, 0, X, Y - 1, max(1, Z - 1), shade(body, 0.95), .x)
         wood(0, Y - 1, 0, X, Y, Z, body, .x) // top with overhang
+        if !wardrobe { surface(0, 0, X, Z, Y) }
         let zf = max(0, Z - 2)
         let y0 = legH + 1, y1 = Y - 1
         box(0, legH, zf, X, legH + 1, zf + 1, shade(body, 0.7)) // kick rail
@@ -635,6 +642,7 @@ extension Canvas {
     func bookshelf(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
         let w = colorFromName(name, name.has("ikea") ? P.birch : P.oak)
         if name.has("ladder", "leaning") { ladderShelf(X, Y, Z, w); return }
+        surface(0, 0, X, Z, Y)
         if name.has("cube", "kallax", "cubby", "cubbies", "expedit") { cubeShelf(X, Y, Z, w); return }
         let doors = name.has("doors", "cabinet", "hutch", "with door")
         let back = shade(w, 0.82)
@@ -698,6 +706,9 @@ extension Canvas {
                     ellipsoid(D(px) - 0.5, D(yb + 2) + D(min(2, gapH - 3)) * 0.6, D(pz) - 0.5, 1.8, min(1.6, D(gapH - 2) / 2), 1.6) { _, yy, _, _ in
                         yy > yb + 3 ? 0x7FA262 : 0x4F7A3F
                     }
+                } else if sx1 - sx0 >= 2 {
+                    // the free end of the shelf (back panel at z = 0), under the next board
+                    surface(sx0, 1, sx1, Z, yb, clearance: gapH)
                 }
             }
         }
@@ -791,6 +802,8 @@ extension Canvas {
             }
             y0 = cH
             x0 = rd(D(X) * 0.07); x1 = X - x0
+            // the console's front strip, in front of the panel's stand
+            surface(0, min(Z - 1, Z / 2 + 2), X, Z, cH)
         }
         let zc = Z >= 3 ? Z / 2 : Z - 1
         let standH = wall ? 0 : clamp(rd(D(Y - y0) * 0.1), 1, 3)
