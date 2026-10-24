@@ -53,14 +53,18 @@ final class ScanSession {
 
     var roomJSON: URL { folder.appending(path: "room.json") }
     var roomUSDZ: URL { folder.appending(path: "room.usdz") }
+    /// Moove's own geometry: RoomPlan's room plus the extra detected objects.
+    var geometryJSON: URL { folder.appending(path: "geometry.json") }
 
-    func captured(_ room: CapturedRoom) {
+    /// `extras` are objects RoomPlan doesn't recognize, found by the extra detector (#73).
+    func captured(_ room: CapturedRoom, extras: [RoomGeometry.Object] = []) {
         do {
             try JSONEncoder().encode(room).write(to: roomJSON)
             try room.export(to: roomUSDZ, exportOptions: .model)
-            let geometry = RoomGeometry(room)
+            var geometry = RoomGeometry(room)
+            geometry.objects += extras
             self.geometry = geometry
-            try JSONEncoder().encode(geometry).write(to: folder.appending(path: "geometry.json"))
+            try JSONEncoder().encode(geometry).write(to: geometryJSON)
         } catch {
             phase = .failed("Couldn't save the scan: \(error.localizedDescription)")
             return
@@ -74,6 +78,11 @@ final class ScanSession {
                 heightM: Double(object.dimensions.y),
                 depthM: Double(object.dimensions.z)
             )
+        } + extras.compactMap { extra in
+            UUID(uuidString: extra.id).map {
+                DetectedObject(id: $0, category: extra.category, widthM: Double(extra.dimensions.x),
+                               heightM: Double(extra.dimensions.y), depthM: Double(extra.dimensions.z))
+            }
         }
         phase = .reviewing
     }
@@ -125,7 +134,9 @@ final class ScanSession {
         // room files fall back to this device's copies (only the app reads them),
         // and photos are left off so the vision agent never gets a URL it can't fetch.
         let usdzUrl = await send(roomUSDZ, "model/vnd.usdz+zip") ?? roomUSDZ.absoluteString
-        let jsonUrl = await send(roomJSON, "application/json") ?? roomJSON.absoluteString
+        // Upload Moove's geometry (it includes objects RoomPlan doesn't know); RoomPlan's
+        // raw room.json stays in the on-device fixture folder.
+        let jsonUrl = await send(geometryJSON, "application/json") ?? geometryJSON.absoluteString
         var photoUrls: [UUID: String] = [:]
         for (id, file) in photos { photoUrls[id] = await send(file, "image/jpeg") }
 
