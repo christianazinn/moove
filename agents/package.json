@@ -11,7 +11,8 @@
     "x402:demo": "tsx scripts/x402-demo.ts",
     "x402:e2e": "tsx scripts/x402-e2e.ts",
     "ebay:setup": "tsx scripts/ebay-setup.ts",
-    "spotcheck:injection": "tsx scripts/injection-spotcheck.ts"
+    "spotcheck:injection": "tsx scripts/injection-spotcheck.ts",
+    "visa:demo": "tsx scripts/visa-demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",

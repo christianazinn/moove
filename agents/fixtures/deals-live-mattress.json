@@ -1,0 +1,102 @@
+{
+  "_note": "Cached live Apify search (active listings) for the buy agent (#15), fetched with a real APIFY_TOKEN and trimmed to the fields we use. FB seller names and eBay seller handles removed (privacy). Served for the demo 'Mattress' shopping item (search text was 'mattress queen'). Rows read back from this file are labeled as a cached replay.",
+  "query": "mattress queen",
+  "fetchedAt": "2026-10-24T05:01:32.629Z",
+  "actors": {
+    "fb": "apify~facebook-marketplace-scraper",
+    "ebay": "automation-lab~ebay-scraper"
+  },
+  "errors": [],
+  "rows": [
+    {
+      "source": "fb",
+      "title": "Casper Cooling Select 12\" Memory Foam Queen Mattress",
+      "priceCents": 12500,
+      "url": "https://www.facebook.com/marketplace/item/2193757778687987/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Saatva Zenhaven Mattress, Queen",
+      "priceCents": 120000,
+      "url": "https://www.facebook.com/marketplace/item/1147133254641345/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Queen mattress (1y old)",
+      "priceCents": 10000,
+      "url": "https://www.facebook.com/marketplace/item/940322625010158/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Queen size mattress",
+      "priceCents": 4000,
+      "url": "https://www.facebook.com/marketplace/item/1579248373673596/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Hybrid Mattress 12/14 Inch Medium Firm Bed in a Box Twin Full Queen King Memory",
+      "priceCents": 11599,
+      "url": "https://www.ebay.com/itm/407284966037",
+      "seller": "eBay seller, new seller, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "12\"/14\" Twin Full Queen King Size Mattress Hybrid Foam Pocket Coils Bed In a Box",
+      "priceCents": 14399,
+      "url": "https://www.ebay.com/itm/314401578221",
+      "seller": "eBay seller, 99.8% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "12/14 Inch Hybrid Mattress Queen King Memory Foam Firm Bed in a Box White",
+      "priceCents": 11699,
+      "url": "https://www.ebay.com/itm/407285074483",
+      "seller": "eBay seller, new seller, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "8/10 Inch Mattress, Cooling Hybrid Queen Size Mattress in a Box, Medium Firm",
+      "priceCents": 21999,
+      "url": "https://www.ebay.com/itm/800458611773",
+      "seller": "eBay seller, 100% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "5/6/8/10/12/14in Gel Memory Foam Medium-Firm Mattress for All Sizes in a Box",
+      "priceCents": 6861,
+      "url": "https://www.ebay.com/itm/395424970773",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    }
+  ]
+}
