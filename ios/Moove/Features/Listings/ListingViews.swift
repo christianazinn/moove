@@ -2,16 +2,8 @@ import SwiftUI
 import MooveKit
 
 extension ListingStatus {
-    var label: String {
-        switch self {
-        case .draft: "Drafting"
-        case .awaitingApproval: "Needs approval"
-        case .rejected: "Not posted"
-        case .posted: "Live on eBay"
-        case .sold: "Sold"
-        case .failed: "Failed"
-        }
-    }
+    /// Real-listing label; use `displayLabel(simulated:)` (MooveKit) when the listing may be simulated.
+    var label: String { displayLabel(simulated: false) }
 
     var systemImage: String {
         switch self {
@@ -36,8 +28,10 @@ extension ListingStatus {
 }
 
 /// Status as a colored dot and mono label (the prototype's `.tag`). The dot pulses while drafting.
+/// A simulated listing never says "Live on eBay".
 struct ListingStatusChip: View {
     let status: ListingStatus
+    var simulated = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -45,18 +39,14 @@ struct ListingStatusChip: View {
                 .font(.system(size: 7))
                 .symbolEffect(.pulse, isActive: status == .draft)
                 .accessibilityHidden(true)
-            Text(status.label).monoText(12.5)
+            Text(status.displayLabel(simulated: simulated)).monoText(12.5)
         }
         .foregroundStyle(status.tint)
         .lineLimit(1)
     }
 }
 
-/// CLAUDE.md hard rule: anything simulated says so in the UI.
+/// CLAUDE.md hard rule: anything simulated says so in the UI, in the shared SIMULATED pill.
 struct SimulatedTag: View {
-    var body: some View {
-        MonoTag(text: "Simulated", tone: Theme.ochreInk)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Simulated listing, not posted to eBay")
-    }
+    var body: some View { SimulatedBadge(spoken: "Simulated listing, not posted to eBay") }
 }

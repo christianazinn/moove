@@ -12,7 +12,8 @@ struct ListingDetailView: View {
         if let listing = store.snapshot.listings.first(where: { $0.id == listingId }) {
             content(listing, item: store.items.first { $0.id == listing.itemId })
         } else {
-            ContentUnavailableView("Listing removed", systemImage: "tag")
+            ContentUnavailableView("Listing removed", systemImage: "tag",
+                                   description: Text("This listing is no longer synced. Go back to see the rest."))
                 .foregroundStyle(Theme.muted)
                 .mooveScreen()
         }
@@ -23,7 +24,7 @@ struct ListingDetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text("04 — Sell · Listing").eyebrow().padding(.bottom, 16)
                 if listing.simulated {
-                    notice("Simulated post. Not live on eBay.", systemImage: "info.circle", tint: Theme.ochre)
+                    notice("Simulated post. Not live on eBay, and no buyer can see it.", systemImage: "info.circle", tint: Theme.ochre)
                         .padding(.bottom, 20)
                 }
                 if let item {
@@ -37,26 +38,48 @@ struct ListingDetailView: View {
                         .foregroundStyle(Theme.text)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
-                    Text(listing.priceCents.usd)
+                    Text(listing.formattedPrice)
                         .monoText(32, weight: .bold, maxScale: 1.6)
                         .tracking(-0.3)
                         .foregroundStyle(Theme.text)
-                    HStack(spacing: 10) {
-                        ListingStatusChip(status: listing.status)
+                        .amountText()
+                    AdaptiveLine(spacing: 10) {
+                        ListingStatusChip(status: listing.status, simulated: listing.simulated)
                         if listing.simulated { SimulatedTag() }
-                        if let number = listing.externalId {
+                        // A simulated listing's item number is made up, so only real posts show one.
+                        if let number = listing.displayExternalId {
                             Text("eBay #\(number)").monoMeta()
                         }
                     }
                 }
-                if listing.status == .awaitingApproval {
-                    notice("Over your approval limit. Approve it on your phone to post.", systemImage: "hand.raised", tint: Theme.ochre)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(listing.accessibilitySummary + (listing.displayExternalId.map { ", eBay item \($0)" } ?? ""))
+                .accessibilityAddTraits(.isHeader)
+                switch listing.status {
+                case .awaitingApproval:
+                    notice("Over your approval limit. Approve it in Approvals, or on your phone if Auth0 Guardian is set up, to post it.",
+                           systemImage: "hand.raised", tint: Theme.ochre)
                         .padding(.top, 20)
+                case .rejected:
+                    notice(store.snapshot.problem(for: listing).map { "\($0). Nothing was posted to eBay." } ?? "Not posted: the request was denied or the price changed.",
+                           systemImage: "xmark.circle", tint: Theme.danger)
+                        .padding(.top, 20)
+                case .failed:
+                    notice("Couldn't post this listing. \(store.snapshot.problem(for: listing) ?? "The listing agent hit an error"). You can still copy the text and post it yourself.",
+                           systemImage: "exclamationmark.triangle", tint: Theme.danger)
+                        .padding(.top, 20)
+                case .draft:
+                    notice("The listing agent is still drafting this. It posts once it's ready, or asks you first if it's over your limit.",
+                           systemImage: "pencil.line", tint: Theme.muted)
+                        .padding(.top, 20)
+                case .posted, .sold:
+                    EmptyView()
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     if let url = listing.url.flatMap(URL.init(string:)) {
                         Button { openURL(url) } label: {
-                            Label("View listing page", systemImage: "safari").frame(maxWidth: .infinity)
+                            Label(listing.simulated ? "View simulated listing page" : "View on eBay", systemImage: "safari")
+                                .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.pill(.primary))
                     }
@@ -73,7 +96,9 @@ struct ListingDetailView: View {
                         }
                     }
                     .buttonStyle(.pill(.outline))
+                    .accessibilityHint("Copies the title, price and description")
                     Text("Copy the text to post on FB Marketplace or Craigslist.").monoMeta()
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, 28)
 
