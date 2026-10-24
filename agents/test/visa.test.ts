@@ -653,3 +653,55 @@ test("explicit provider: a 502 is retryable and does not fall back unless VISA_F
   assert.equal(r2.status, "captured");
   assert.equal(r2.simulated, true);
 });
+
+// ---------- holds left open by an earlier run (worker restart between authorize and capture) ----------
+
+test("a stale sandbox hold is reversed once and its row marked failed", async () => {
+  const { sink, updates, events } = memorySink();
+  const server = fakeCybersource();
+  const co = new VisaCheckout({ sink, backend: createAcceptanceBackend({ ...CFG, fetch: server.fetch, now: () => NOW }), ledger: ledger() });
+  assert.equal(await co.releaseStale(ctx(), { paymentId: 9n, authId: "7000000000000000000001", simulated: false }), true);
+  assert.deepEqual(server.seen.map((s) => [s.kind, s.path]), [["reverse", "/pts/v2/payments/7000000000000000000001/reversals"]]);
+  assert.deepEqual(updates, [{ paymentId: 9n, status: "failed" }]);
+  assert.equal(events.at(-1)!.kind, "payment");
+});
+
+test("a stale hold the processor won't reverse (e.g. the capture went through) stays pending", async () => {
+  const { sink, updates, events } = memorySink();
+  const server = fakeCybersource({ reverse: { status: 400, body: { status: "INVALID_REQUEST", errorInformation: { reason: "INVALID_REQUEST", message: "already captured" } } } });
+  const co = new VisaCheckout({ sink, backend: createAcceptanceBackend({ ...CFG, fetch: server.fetch, now: () => NOW }), ledger: ledger() });
+  assert.equal(await co.releaseStale(ctx(), { paymentId: 9n, authId: "A1", simulated: false }), false);
+  assert.deepEqual(updates, [], "never marked failed: money may have moved");
+  assert.equal(events.at(-1)!.kind, "error");
+  assert.equal((events.at(-1)!.data as { reconcile?: boolean }).reconcile, true);
+});
+
+test("a real stale hold is not 'released' through the simulated backend", async () => {
+  const { sink, updates } = memorySink();
+  const s = spy(createSimulatedBackend());
+  const co = new VisaCheckout({ sink, backend: s.backend, ledger: ledger() });
+  assert.equal(await co.releaseStale(ctx(), { paymentId: 9n, authId: "7000000000000000000001", simulated: false }), false);
+  assert.equal(s.calls.void, 0);
+  assert.deepEqual(updates, []);
+});
+
+test("this process's own holds (capture unknown) are never treated as stale", async () => {
+  const { sink, payments, updates } = memorySink();
+  const sim = createSimulatedBackend();
+  const co = new VisaCheckout({ sink, backend: { ...sim, capture: async () => { throw new TypeError("fetch failed"); } }, ledger: ledger() });
+  const r = await co.purchase(ctx());
+  assert.equal(r.status, "unknown");
+  assert.equal(payments[0].status, "pending");
+  assert.equal(co.knowsHold(payments[0].txHash), true);
+  assert.equal(await co.releaseStale(ctx(), { paymentId: payments[0].id, authId: payments[0].txHash, simulated: true }), false);
+  assert.deepEqual(updates, []);
+});
+
+test("card caps: exactly at the per-purchase max and exactly filling the budget are allowed", () => {
+  const l = ledger(20_000n, 15_000n);
+  assert.equal(l.check("buy", 15_000n), undefined);
+  assert.match(l.check("buy", 15_001n)!, /per-purchase max/);
+  l.reserve("buy", 15_000n);
+  assert.equal(l.check("buy", 5_000n), undefined);
+  assert.match(l.check("buy", 5_001n)!, /exceed/);
+});
