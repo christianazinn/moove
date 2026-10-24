@@ -13,7 +13,8 @@ const EXT: Record<string, string> = {
   'model/vnd.usdz+zip': 'usdz',
   'application/json': 'json',
 };
-const TYPE = Object.fromEntries(Object.entries(EXT).map(([t, e]) => [e, t]));
+// html is served (simulated listing pages written by integrations/ebay.ts) but never accepted as an upload.
+const TYPE: Record<string, string> = { ...Object.fromEntries(Object.entries(EXT).map(([t, e]) => [e, t])), html: 'text/html; charset=utf-8' };
 
 // Minimal file store for photos, USDZ scans and CapturedRoom JSON (SpacetimeDB isn't a blob store).
 //   POST /upload   raw body, Content-Type header  -> 201 { "url": "<public url>" }
