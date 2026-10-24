@@ -358,8 +358,9 @@ export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
       const q = queryText(dq);
       fallback ??= fixtureDealSource();
       // Marketplace listings can't be paid through an API, so the matching sample retail rows (still
-      // labeled "sample data") ride along: every item keeps at least one card-checkout option.
-      const withRetail = async (found: DealCandidate[]) => [...found, ...(await fallback!.search(dq)).filter(c => c.checkout === 'visa')];
+      // labeled "sample data") ride along: every item keeps at least one card-checkout option. So does
+      // a planted demo scam for this item, if any (also "sample data"), so the fraud block shows live.
+      const withRetail = async (found: DealCandidate[]) => [...found, ...(await fallback!.search(dq)).filter(c => c.checkout === 'visa' || c.planted)];
       if (q && opts.token) {
         const settled = await Promise.allSettled(sources.map(s => runActor(s, q)));
         const rows = dedupe(settled.flatMap(r => (r.status === 'fulfilled' ? r.value : [])));
