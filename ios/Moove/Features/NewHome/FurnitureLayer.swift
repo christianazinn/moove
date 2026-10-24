@@ -5,10 +5,14 @@ import MooveKit
 /// The kept items as voxel models in the new home, plus the fly-in: items start piled
 /// beside the house (the "old room"), lift, arc over the walls and settle into
 /// their layout spots, staggered. Switching layouts glides them to new spots.
+/// Props `PropPlacer` put on furniture land on top of it (`Placement.elevationM`); wall-hung
+/// items use their flat wall model.
 @MainActor
 final class FurnitureLayer {
     let root = Entity()
     private var entities: [UInt64: ModelEntity] = [:]
+    /// Items currently shown with their flat wall-hung model.
+    private var wallModels: Set<UInt64> = []
     private var items: [UInt64: LayoutItem] = [:]
     private var flight: Task<Void, Never>?
 
@@ -18,13 +22,16 @@ final class FurnitureLayer {
         items = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let placed = placements.filter { items[$0.itemId] != nil }
         let wanted = Set(placed.map(\.itemId))
-        for (id, e) in entities where !wanted.contains(id) {
+        // Drop items that left, and items switching between the floor and the wall model.
+        let wall = Set(placed.filter(\.isWallMounted).map(\.itemId))
+        for (id, e) in entities where !wanted.contains(id) || wall.contains(id) != wallModels.contains(id) {
             e.removeFromParent()
             entities[id] = nil
         }
+        wallModels = wall
         var newcomers = Set<UInt64>()
         for p in placed where entities[p.itemId] == nil {
-            let e = Self.entity(for: items[p.itemId]!)
+            let e = VoxelEntity.furniture(items[p.itemId]!, wallMounted: p.isWallMounted)
             entities[p.itemId] = e
             root.addChild(e)
             newcomers.insert(p.itemId)
@@ -33,8 +40,8 @@ final class FurnitureLayer {
         if flyIn {
             let pile = Self.pile(placed.compactMap { items[$0.itemId] }, beside: plan.bounds)
             for p in placed { if let t = pile[p.itemId] { entities[p.itemId]?.transform = t } }
-            // Biggest pieces first, like real movers.
-            let order = placed.sorted { area($0) > area($1) }
+            // Biggest pieces first, like real movers; things that sit on others land after them.
+            let order = placed.sorted { (($0.onTopOf == nil ? 0 : 1), -area($0)) < (($1.onTopOf == nil ? 0 : 1), -area($1)) }
             flight = Task { [weak self] in
                 for (i, p) in order.enumerated() {
                     if i > 0 { try? await Task.sleep(for: .milliseconds(110)) }
@@ -60,11 +67,12 @@ final class FurnitureLayer {
     }
 
     private func transform(for p: Placement) -> Transform {
-        // Voxel models have their origin at the bottom center; they stand on the plank floor.
+        // Voxel models have their origin at the bottom center; they stand on the plank floor,
+        // or `elevationM` above it (on a nightstand, hung on a wall).
         Transform(
             scale: .one,
             rotation: simd_quatf(angle: Float(p.rotationDeg * .pi / 180), axis: [0, 1, 0]),
-            translation: [Float(p.x), Float(VoxelHouse.floorTopM), Float(p.y)]
+            translation: [Float(p.x), Float(VoxelHouse.floorTopM + (p.elevationM ?? 0)), Float(p.y)]
         )
     }
 
@@ -101,10 +109,5 @@ final class FurnitureLayer {
             col += 1
         }
         return out
-    }
-
-    /// The piece's voxel model (cached per spec); it shows its own front, so no marker.
-    private static func entity(for item: LayoutItem) -> ModelEntity {
-        VoxelEntity.furniture(item)
     }
 }

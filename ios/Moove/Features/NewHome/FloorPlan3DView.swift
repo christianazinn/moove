@@ -13,6 +13,9 @@ struct FloorPlan3DView: UIViewRepresentable {
     var items: [LayoutItem] = []
     var placements: [Placement] = []
     var flyInToken = 0
+    /// Measured from the scan's photos (scan results); nil keeps the default palette.
+    var wallColor: VoxelColor? = nil
+    var floorColor: VoxelColor? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -23,14 +26,14 @@ struct FloorPlan3DView: UIViewRepresentable {
         let view = ARView(frame: .zero, cameraMode: .nonAR, automaticallyConfigureSession: false)
         view.environment.background = .color(Self.sceneBackground.resolvedColor(with: view.traitCollection))
         context.coordinator.attach(to: view)
-        context.coordinator.show(plan, focusRoom: focusRoom, animated: false)
+        context.coordinator.show(plan, focusRoom: focusRoom, animated: false, wallColor: wallColor, floorColor: floorColor)
         context.coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken)
         return view
     }
 
     func updateUIView(_ view: ARView, context: Context) {
         view.environment.background = .color(Self.sceneBackground.resolvedColor(with: view.traitCollection))
-        context.coordinator.show(plan, focusRoom: focusRoom, animated: true)
+        context.coordinator.show(plan, focusRoom: focusRoom, animated: true, wallColor: wallColor, floorColor: floorColor)
         context.coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken)
     }
 
@@ -88,9 +91,9 @@ struct FloorPlan3DView: UIViewRepresentable {
             }
         }
 
-        func show(_ plan: FloorPlan, focusRoom: String?, animated: Bool) {
+        func show(_ plan: FloorPlan, focusRoom: String?, animated: Bool, wallColor: VoxelColor? = nil, floorColor: VoxelColor? = nil) {
             let planChanged = plan != scene.plan
-            scene.build(plan)
+            scene.build(plan, wallColor: wallColor, floorColor: floorColor)
             guard planChanged || shownFocus != .some(focusRoom) else { return }
             shownFocus = .some(focusRoom)
             frame(on: focusRoom.flatMap(plan.room(named:))?.bounds ?? plan.bounds, animated: animated && !planChanged)

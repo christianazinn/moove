@@ -15,6 +15,25 @@ import Foundation
 // clothes, electronics, decor, box) and VoxelModels+Moove.swift (Moove-only pieces: fridge and
 // other appliances, fans, bean bag, mirror, quilt rack, framed photos).
 
+/// A flat top where small props can sit, in a piece's voxel coords: the half-open rectangle
+/// [x0, x1) × [z0, z1), with `y` the first free voxel layer above the surface (so a prop's
+/// bottom sits at `y * voxelSize` above the piece's base). `clearance`: free layers above it
+/// (a bookshelf slot under the next board), nil when nothing is above.
+public struct VoxelSurface: Sendable, Hashable {
+    public var x0: Int, z0: Int, x1: Int, z1: Int
+    public var y: Int
+    public var clearance: Int?
+
+    public init(x0: Int, z0: Int, x1: Int, z1: Int, y: Int, clearance: Int? = nil) {
+        self.x0 = x0; self.z0 = z0; self.x1 = x1; self.z1 = z1
+        self.y = y
+        self.clearance = clearance
+    }
+
+    public var width: Int { x1 - x0 }
+    public var depth: Int { z1 - z0 }
+}
+
 public enum VoxelModels {
     /// Largest grid side, in voxels (8 m).
     static let maxSide = 160
@@ -22,7 +41,15 @@ public enum VoxelModels {
     /// A detailed voxel model for one piece, sized to its dimensions (front faces +z).
     /// Unknown categories fall back to a simple box so the scene never breaks.
     /// Deterministic: the same spec always yields the same grid.
-    public static func build(_ spec: VoxelItemSpec) -> VoxelGrid {
+    public static func build(_ spec: VoxelItemSpec) -> VoxelGrid { buildWithSurfaces(spec).grid }
+
+    /// Top surfaces of the piece where small props can sit (desk / table / dresser / nightstand
+    /// tops, free bookshelf slots, the TV console's front), in the same voxel coords as
+    /// `build(spec)`'s grid. Empty for pieces nothing sits on (chairs, sofas, beds, props).
+    public static func surfaces(_ spec: VoxelItemSpec) -> [VoxelSurface] { buildWithSurfaces(spec).surfaces }
+
+    /// The grid and its surfaces from one build.
+    public static func buildWithSurfaces(_ spec: VoxelItemSpec) -> (grid: VoxelGrid, surfaces: [VoxelSurface]) {
         let cat = trimmed(spec.category.lowercased())
         let nameV = VName(spec.name.lowercased())
         let attrs = Set(spec.attributes.map { trimmed($0.lowercased()) })
@@ -49,6 +76,7 @@ public enum VoxelModels {
         X = min(X, maxSide); NY = min(NY, maxSide); Z = min(Z, maxSide)
 
         let g = Canvas(X, NY, Z, seed: seed)
+        let wallHung = attrs.contains(wallMountAttribute.lowercased())
         g.wear = wearLevel(spec.condition)
         g.attrs = attrs
         g.secondary = name.secondary
@@ -74,10 +102,10 @@ public enum VoxelModels {
         case .table: g.table(X, NY, Z, name)
         case .dresser: g.dresser(X, NY, Z, name)
         case .bookshelf: g.bookshelf(X, NY, Z, name)
-        case .tv: g.tv(X, NY, Z, name, wall: name.has("wall mount", "wall-mount", "mounted"))
+        case .tv: g.tv(X, NY, Z, name, wall: wallHung || name.has("wall mount", "wall-mount", "mounted"))
         case .lamp: g.lamp(X, NY, Z, name)
         case .books: g.books(X, NY, Z, name)
-        case .art: g.art(X, NY, Z, name, wall: false)
+        case .art: g.art(X, NY, Z, name, wall: wallHung)
         case .photos: g.photos(X, NY, Z, name)
         case .binder: g.binder(X, NY, Z, name)
         case .kitchenware: g.kitchenware(X, NY, Z, name)
@@ -94,7 +122,20 @@ public enum VoxelModels {
         case .framedPhotos: g.framedPhotos(X, NY, Z, name)
         case .box: g.kraftBox(X, NY, Z, name)
         }
-        return g.output()
+        return (g.output(), g.surfaces)
+    }
+
+    /// Attribute that asks for the flat, wall-hung version of a piece (see `wallVariant`).
+    public static let wallMountAttribute = "Mount.wall"
+
+    /// The thin, wall-hung version of a piece: art loses its easel leg, a TV / monitor its feet
+    /// (it gets a wall bracket), and the depth shrinks to at most 8 cm. Front still faces +z.
+    public static func wallVariant(_ spec: VoxelItemSpec) -> VoxelItemSpec {
+        var s = spec
+        let d = spec.depthM.isFinite && spec.depthM > 0 ? spec.depthM : 0.08
+        s.depthM = min(d, 0.08)
+        if !s.attributes.contains(wallMountAttribute) { s.attributes.append(wallMountAttribute) }
+        return s
     }
 
     /// Condition 1 (broken) ... 5 (like new) to a wear amount 3 ... 0. Unknown condition: crisp.
@@ -547,6 +588,16 @@ final class Canvas {
     var attrs: Set<String> = []
     /// Photo-measured accent color, if any.
     var secondary: Int?
+    /// Top surfaces builders report for props (MoveWise's `g.surface`).
+    var surfaces: [VoxelSurface] = []
+
+    /// Records a prop surface: half-open [x0, x1) × [z0, z1), `y` the first free layer above it,
+    /// `clearance` the free layers above it (nil: open). Clipped to the grid; empty rects are dropped.
+    func surface(_ x0: Int, _ z0: Int, _ x1: Int, _ z1: Int, _ y: Int, clearance: Int? = nil) {
+        let xs = max(0, x0), zs = max(0, z0), xe = min(nx, x1), ze = min(nz, z1)
+        guard xe > xs, ze > zs, y >= 0 else { return }
+        surfaces.append(VoxelSurface(x0: xs, z0: zs, x1: xe, z1: ze, y: y, clearance: clearance))
+    }
 
     func attr(_ a: String) -> Bool { attrs.contains(a) }
 
