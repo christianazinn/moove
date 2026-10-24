@@ -18,6 +18,7 @@
 // before authorizing and again right before capture.
 
 import crypto from 'node:crypto';
+import { usdCapFromEnv } from './caps.js';
 
 export type VisaProvider = 'acceptance' | 'simulated' | 'vic';
 
@@ -758,11 +759,9 @@ export interface VisaEnv {
 export const hasAcceptanceKeys = (env: VisaEnv): boolean =>
   !!(env.VISA_ACCEPTANCE_MERCHANT_ID && env.VISA_ACCEPTANCE_KEY_ID && env.VISA_ACCEPTANCE_SECRET);
 
-// An explicit "0" means "no card spending" (it used to fall through to the default). Garbage -> default.
-const usdToCents = (s: string | undefined, d: number): bigint => {
-  const n = s === undefined || s.trim() === '' ? d : Number(s);
-  return BigInt(Math.round((Number.isFinite(n) ? n : d) * 100));
-};
+// An explicit "0" means "no card spending". Non-numeric or negative -> a loud warning and the default (caps.ts).
+const capCents = (env: VisaEnv, key: 'VISA_SPEND_CAP_USD' | 'VISA_MAX_PER_PURCHASE_USD'): bigint =>
+  BigInt(Math.round(usdCapFromEnv(env, key) * 100));
 
 /** Picks the backend. Falls back to simulated (with a reason) whenever the real one can't run. */
 /** Stands in for an explicitly requested provider that can't run: every call fails loudly. */
@@ -810,7 +809,7 @@ export function selectBackend(env: VisaEnv, fetchImpl?: typeof globalThis.fetch)
 export function createVisaCheckout(sink: VisaSink, env: VisaEnv = process.env, fetchImpl?: typeof globalThis.fetch): VisaCheckout {
   const { backend, note } = selectBackend(env, fetchImpl);
   if (note) console.warn(backend.simulated ? `[visa] using the SIMULATED checkout: ${note}` : `[visa] CHECKOUT WILL FAIL: ${note}`);
-  const ledger = new CardSpendLedger(usdToCents(env.VISA_SPEND_CAP_USD, 1500), usdToCents(env.VISA_MAX_PER_PURCHASE_USD, 750));
+  const ledger = new CardSpendLedger(capCents(env, 'VISA_SPEND_CAP_USD'), capCents(env, 'VISA_MAX_PER_PURCHASE_USD'));
   // Falling back to simulated on a 5xx/network error is opt-in once a provider is explicitly chosen
   // (VISA_FALLBACK_SIMULATED=1), and on by default only when the provider was picked from the keys.
   const fallbackAllowed = env.VISA_FALLBACK_SIMULATED === '1' || (!env.VISA_PROVIDER && env.VISA_FALLBACK_SIMULATED !== '0');
