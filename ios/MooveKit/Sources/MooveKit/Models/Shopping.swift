@@ -218,8 +218,11 @@ extension SyncSnapshot {
         return .checkingOut(deal)
     }
 
-    /// Pending purchase approvals for deals on the user's shopping list, oldest first.
+    /// Pending purchase approvals for the chosen deal of an item on the user's shopping list,
+    /// oldest first. Approvals for deals that aren't synced (or no longer chosen) are left to the
+    /// approvals inbox (#12).
     public var pendingPurchaseApprovals: [Approval] {
-        pendingApprovals.filter { $0.kind == .purchase }
+        let chosen = Set(myShoppingItems.compactMap { chosenDeal(for: $0)?.id })
+        return pendingApprovals.filter { $0.kind == .purchase && chosen.contains($0.refId) }
     }
 }

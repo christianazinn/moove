@@ -134,7 +134,16 @@ import Testing
         item.chosenDealId = 10
         #expect(s.checkout(for: item) == .checkingOut(s.deals[0]))
         var approval = Approval(id: 5, owner: "me", kind: .purchase, refId: 10, amountCents: 40_000, summary: "Buy")
-        s.approvals = [approval, Approval(id: 6, owner: "me", kind: .listing, refId: 10, amountCents: 1, summary: "x")]
+        s.approvals = [
+            approval,
+            Approval(id: 6, owner: "me", kind: .listing, refId: 10, amountCents: 1, summary: "x"),
+            // A purchase approval for a deal that isn't synced stays in the #12 inbox only.
+            Approval(id: 7, owner: "me", kind: .purchase, refId: 999, amountCents: 1, summary: "y"),
+            // Not the chosen deal.
+            Approval(id: 8, owner: "me", kind: .purchase, refId: 11, amountCents: 1, summary: "z"),
+        ]
+        #expect(s.pendingPurchaseApprovals.isEmpty) // item not on the list yet
+        s.shoppingItems = [item]
         #expect(s.checkout(for: item) == .needsApproval(approval))
         #expect(s.pendingPurchaseApprovals.map(\.id) == [5])
         approval.status = .denied
