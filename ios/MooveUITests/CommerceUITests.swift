@@ -6,7 +6,8 @@ import XCTest
 /// (keepAlways) in the .xcresult that CI uploads.
 ///
 /// Fixture ids come from MooveKit `DemoFixtures` / `ShoppingFixtures`: listing 201 (the mesh chair, posted, simulated),
-/// approvals 300 (Aeron listing) and 85 (sofa purchase), payment 500 (the real Base Sepolia tx),
+/// approval 85 (sofa purchase; the $30 chair listing is under the threshold, so no listing approval),
+/// payment 500 (the real Base Sepolia tx),
 /// shopping item 52 (Desk chair) with deals 74 (Target task chair, $79.99, under the demo user's
 /// $100 approval threshold) and 76 (the planted Craigslist Aeron scam, fraud 0.85).
 @MainActor
@@ -29,7 +30,7 @@ final class CommerceUITests: XCTestCase {
         }
         let xs = [listingsTab, shoppingTab, approvalsTab, spendingTab].map { $0.frame.minX }
         XCTAssertEqual(xs, xs.sorted(), "segments out of order: \(xs)")
-        XCTAssertTrue(approvalsTab.label.contains("2"), "Approvals segment should show 2 pending: \(approvalsTab.label)")
+        XCTAssertTrue(approvalsTab.label.contains("1"), "Approvals segment should show 1 pending: \(approvalsTab.label)")
         shot("0-sell-and-buy")
 
         // Spending: SIMULATED rows and the Basescan link for the one real payment.
@@ -53,30 +54,22 @@ final class CommerceUITests: XCTestCase {
         shot("2-listings")
         assertNoLiveOnEbay()
 
-        // Approvals: 2 pending; approving the Aeron listing moves it to History.
+        // Approvals: 1 pending (the sofa); approving it moves it to History.
         approvalsTab.tap()
         XCTAssertTrue(app.navigationBars["Approvals"].waitForExistence(timeout: 10))
-        XCTAssertTrue(byId("approval.pending.300").waitForExistence(timeout: 10), "no pending Aeron approval")
         XCTAssertTrue(scrollTo(byId("approval.pending.85")), "no pending sofa approval")
         XCTAssertEqual(app.descendants(matching: .any)
-            .matching(NSPredicate(format: "identifier BEGINSWITH 'approval.pending.'")).count, 2)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'approval.pending.'")).count, 1)
         scrollToTop()
         shot("3-approvals-pending")
-        let approve = byId("approval.approve.300")
-        XCTAssertTrue(scrollTo(approve), "no Approve button on the Aeron approval")
+        let approve = byId("approval.approve.85")
+        XCTAssertTrue(scrollTo(approve), "no Approve button on the sofa approval")
         approve.tap()
-        let decided = byId("approval.decided.300")
-        XCTAssertTrue(scrollTo(decided), "approved Aeron listing never showed up in History")
+        let decided = byId("approval.decided.85")
+        XCTAssertTrue(scrollTo(decided), "approved sofa never showed up in History")
         XCTAssertTrue(decided.label.contains("approved"), decided.label)
-        XCTAssertTrue(waitGone(byId("approval.pending.300")), "Aeron approval still pending")
+        XCTAssertTrue(waitGone(byId("approval.pending.85")), "sofa approval still pending")
         shot("3-approvals-history")
-
-        // The approved listing is posted, still simulated.
-        listingsTab.tap()
-        let aeron = byId("listing.200")
-        XCTAssertTrue(scrollTo(aeron), "no Aeron listing row")
-        XCTAssertTrue(waitFor(aeron, label: "posted (simulated)"), aeron.label)
-        assertNoLiveOnEbay()
 
         // Shopping > Desk chair: the Craigslist Aeron is blocked; the Target chair checks out (simulated).
         shoppingTab.tap()
@@ -190,7 +183,7 @@ final class CommerceUITests: XCTestCase {
         tapSegment(approvalsTab)
         XCTAssertTrue(app.navigationBars["Approvals"].waitForExistence(timeout: 10))
         shot("\(prefix)-3-approvals")
-        XCTAssertTrue(scrollTo(byId("approval.approve.300")), "Approve not hittable")
+        XCTAssertTrue(scrollTo(byId("approval.approve.85")), "Approve not hittable")
         shot("\(prefix)-3-approvals-approve")
 
         tapSegment(spendingTab)

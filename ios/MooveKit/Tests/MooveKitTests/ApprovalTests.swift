@@ -3,8 +3,20 @@ import Testing
 @testable import MooveKit
 
 @Suite struct ApprovalTests {
+    /// The Offline demo has no listing approvals (its one listing, the $30 mesh chair, is under
+    /// the $100 threshold), so these tests add one: a listing for the chair awaiting approval.
+    private func withListingApproval(_ base: SyncSnapshot) -> SyncSnapshot {
+        var s = base
+        let owner = s.items.first { $0.id == 17 }!.owner
+        s.listings.append(Listing(id: 200, owner: owner, itemId: 17, title: "Mesh office chair", description: "Test listing.",
+                                  priceCents: 12_000, status: .awaitingApproval))
+        s.approvals.append(Approval(id: 300, owner: owner, kind: .listing, refId: 200, amountCents: 12_000,
+                                    summary: "Sell \"Mesh office chair\" for $120"))
+        return s
+    }
+
     private func connectedDemo() async throws -> FixtureBackend {
-        let backend = FixtureBackend.demo(identity: "me")
+        let backend = FixtureBackend(identity: "me", seed: withListingApproval(DemoFixtures.demo(owner: "me")))
         _ = try await backend.connect(token: nil)
         return backend
     }
@@ -35,15 +47,12 @@ import Testing
         #expect(ApprovalKind.allCases.map(\.rawValue) == ["listing", "purchase"])
     }
 
-    @Test func demoHasPendingListingApprovalForAwaitingListing() {
-        let s = DemoFixtures.inventory(owner: "me")
-        let pendingListing = s.pendingApprovals.filter { $0.kind == .listing }
-        #expect(!pendingListing.isEmpty)
-        for a in pendingListing {
-            let l = s.listing(for: a)
-            #expect(l?.status == .awaitingApproval)
-            #expect(l?.priceCents == a.amountCents)
-        }
+    @Test func demoHasNoListingApprovals() {
+        // Its only listing is under the threshold; the purchase approvals carry the approval story.
+        let s = DemoFixtures.demo(owner: "me")
+        #expect(!s.approvals.contains { $0.kind == .listing })
+        #expect(!s.listings.contains { $0.status == .awaitingApproval })
+        #expect(s.pendingApprovals.contains { $0.kind == .purchase })
         #expect(!s.decidedApprovals.isEmpty)
     }
 
@@ -68,7 +77,7 @@ import Testing
     }
 
     @Test func approvalForAStalePriceRejects() async throws {
-        var seed = DemoFixtures.inventory(owner: "me")
+        var seed = withListingApproval(DemoFixtures.inventory(owner: "me"))
         seed.listings[seed.listings.firstIndex { $0.id == 200 }!].priceCents = 39_000 // price changed after the approval was requested
         let backend = FixtureBackend(identity: "me", seed: seed)
         _ = try await backend.connect(token: nil)
@@ -89,7 +98,7 @@ import Testing
             try await backend.decideApproval(approvalId: 9_999, status: .approved)
         }
 
-        var seed = DemoFixtures.inventory(owner: "alice")
+        var seed = withListingApproval(DemoFixtures.inventory(owner: "alice"))
         seed.me = nil
         let other = FixtureBackend(identity: "bob", seed: seed)
         _ = try await other.connect(token: nil)

@@ -22,7 +22,7 @@ import Testing
     }
 
     @Test func fixtureItemsBuildWithinBounds() {
-        #expect(Self.fixtureSpecs.count == 12)
+        #expect(Self.fixtureSpecs.count == 9)
         for s in Self.fixtureSpecs {
             let g = VoxelModels.build(s)
             print("voxels \(s.name) [\(VoxelModels.kind(s))]: \(g.nx)x\(g.ny)x\(g.nz), \(g.filledCount) filled, \(colors(g).count) colors")
@@ -38,7 +38,6 @@ import Testing
     @Test func fixtureRouting() {
         let kinds = Dictionary(uniqueKeysWithValues: Self.fixtureSpecs.map { ($0.name, VoxelModels.kind($0)) })
         #expect(kinds["Full size metal bed frame"] == .bed)
-        #expect(kinds["Office chair"] == .chair)
         #expect(kinds["Mesh office chair"] == .chair)
         #expect(kinds["IKEA Micke desk"] == .desk)
         #expect(kinds["IKEA Kallax shelf"] == .bookshelf)
@@ -46,10 +45,11 @@ import Testing
         #expect(kinds["TCL 32 inch TV"] == .tv)
         #expect(kinds["Dell 27 inch monitor"] == .monitor)
         #expect(kinds["Yamaha acoustic guitar"] == .guitar)
-        #expect(kinds["Nightstand"] == .dresser)
-        #expect(kinds["Bean bag"] == .beanBag)
         #expect(kinds["Mini fridge"] == .appliance)
         // Kinds the old hand-written fixture covered.
+        #expect(VoxelModels.kind(spec("chair", "Office chair", 0.7, 0.7, 1.1)) == .chair)
+        #expect(VoxelModels.kind(spec("storage", "Nightstand", 0.45, 0.4, 0.55)) == .dresser)
+        #expect(VoxelModels.kind(spec("sofa", "Bean bag", 0.9, 0.9, 0.7)) == .beanBag)
         #expect(VoxelModels.kind(spec("appliance", "Box fan", 0.5, 0.2, 0.5)) == .fan)
         #expect(VoxelModels.kind(spec("decor", "Broken mirror", 0.6, 0.05, 0.9)) == .mirror)
         #expect(VoxelModels.kind(spec("decor", "Grandma's quilt rack", 0.9, 0.3, 0.9)) == .quiltRack)
@@ -94,7 +94,7 @@ import Testing
         #expect(filled(sofa, z: 0, sofa.nz / 3, above: high) > filled(sofa, z: sofa.nz * 2 / 3, sofa.nz, above: high) * 3)
 
         // office chair: backrest at low z
-        let chair = VoxelModels.build(Self.fixtureSpecs.first { $0.name == "Office chair" }!)
+        let chair = VoxelModels.build(Self.fixtureSpecs.first { $0.name == "Mesh office chair" }!)
         let chairHigh = chair.ny - 4
         #expect(filled(chair, z: 0, chair.nz / 2, above: chairHigh) > 0)
         #expect(filled(chair, z: chair.nz / 2 + 2, chair.nz, above: chairHigh) == 0)
@@ -176,14 +176,19 @@ import Testing
     // MARK: per-item variation (scan data drives the look; the seed only the small details)
 
     @Test func itemInitCarriesScanData() {
-        let item = DemoFixtures.inventory(owner: "me").items.first { $0.name == "Bean bag" }!
+        // A photographed item (the seeded demo items have no photos, so no material or condition).
+        let item = Item(id: 20, owner: "me", roomId: 1, scanObjectId: "demo-20", name: "Bean bag", category: "sofa",
+                        widthM: 0.9, heightM: 0.7, depthM: 0.9, material: "fabric", condition: 3)
         let s = VoxelItemSpec(item)
         #expect(s.id == "demo-20" && s.material == "fabric" && s.brand == nil && s.condition == 3)
         #expect(s.attributes.isEmpty && s.primaryColor == nil && s.secondaryColor == nil)
     }
 
     @Test func itemInitCarriesAttributesAndColors() {
-        let chair = DemoFixtures.inventory(owner: "me").items.first { $0.name == "Office chair" }!
+        let chair = Item(id: 11, owner: "me", roomId: 1, scanObjectId: "demo-11", name: "Office chair", category: "chair",
+                         widthM: 0.7, heightM: 1.1, depthM: 0.7, material: "mesh", brand: "Herman Miller", condition: 4,
+                         attributes: ["ChairType.swivel", "ChairArmType.existing", "ChairBackType.existing", "ChairLegType.star"],
+                         colors: ItemColors(primary: 0x3A3D42, secondary: 0x1E1F21))
         let s = VoxelItemSpec(chair)
         #expect(s.attributes.contains("ChairLegType.star"))
         #expect(s.primaryColor == 0x3A3D42 && s.secondaryColor == 0x1E1F21)

@@ -86,7 +86,7 @@ import Testing
         let s = MoveSummary(items: items, sales: [], spend: [], events: [])
         let diverted = items.filter { $0.disposition == .sell || $0.disposition == .donate }
         #expect(s.divertedItems == diverted.count)
-        #expect(s.divertedKg > 20 && s.divertedKg < 300)
+        #expect(s.divertedKg > 5 && s.divertedKg < 50) // the mesh chair
         #expect(abs(s.keptVolumeM3 - items.filter { $0.disposition == .keep }.reduce(0) { $0 + $1.volumeM3 }) < 1e-9)
     }
 

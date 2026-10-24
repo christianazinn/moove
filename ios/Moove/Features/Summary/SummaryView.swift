@@ -259,7 +259,7 @@ struct SummaryView: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("About \(Int(s.divertedKg.rounded())) kilograms kept out of landfill")
-                Text("\(s.divertedItems) items sold or donated, not trashed.")
+                Text("\(s.divertedItems) \(s.divertedItems == 1 ? "item" : "items") sold or donated, not trashed.")
                     .sansText(15.5)
                     .lineSpacing(3)
                     .foregroundStyle(Theme.text)

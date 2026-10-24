@@ -79,9 +79,9 @@ import Testing
     @Test func userOverrideSurvivesAgentRerun() async throws {
         let backend = FixtureBackend.demo()
         _ = try await backend.connect(token: nil)
-        try await backend.setDisposition(itemId: 11, disposition: .keep)
-        try backend.setAutoDisposition(itemId: 11, disposition: .sell, reason: "rerun")
-        let item = await firstSnapshot(backend).items.first { $0.id == 11 }
+        try await backend.setDisposition(itemId: 17, disposition: .keep)
+        try backend.setAutoDisposition(itemId: 17, disposition: .sell, reason: "rerun")
+        let item = await firstSnapshot(backend).items.first { $0.id == 17 }
         #expect(item?.disposition == .keep)
         #expect(item?.dispositionSource == .user)
     }
@@ -99,7 +99,7 @@ import Testing
         let backend = FixtureBackend(identity: "mallory", seed: seed)
         _ = try await backend.connect(token: nil)
         await #expect(throws: FixtureBackend.Failure.unauthorized) {
-            try await backend.setDisposition(itemId: 11, disposition: .trash)
+            try await backend.setDisposition(itemId: 17, disposition: .trash)
         }
     }
 
@@ -115,7 +115,7 @@ import Testing
 
     @Test func demoHasSentimentalItemsNeedingUser() {
         let snap = DemoFixtures.inventory(owner: "me")
-        #expect(snap.items.count >= 10)
+        #expect(snap.items.count == 9)
         #expect(snap.items.filter(\.maybeSentimental).allSatisfy { $0.needsUser })
     }
 
@@ -224,7 +224,7 @@ import Testing
         let merged = sampled.filling(from: DemoFixtures.scanColors())
         #expect(merged.floorColor == 0x101010 && merged.wallColor == DemoFixtures.scanColors().wallColor)
         #expect(merged.objectColors["demo-10"]?.primary == 0x202020)
-        #expect(merged.objectColors["demo-11"] == DemoFixtures.scanColors().objectColors["demo-11"])
+        #expect(merged.objectColors["demo-17"] == DemoFixtures.scanColors().objectColors["demo-17"])
     }
 
     private func firstSnapshot(_ backend: FixtureBackend) async -> SyncSnapshot {

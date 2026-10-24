@@ -28,13 +28,13 @@ final class DevpostShotsTests: XCTestCase {
         _ = byId("review.deck").waitForExistence(timeout: slow)
         shot("04-review")
 
-        // 3b. Review > Sell > Office chair: the price and its comparable listings.
+        // 3b. Review > Sell > Mesh office chair: the price and its comparable listings.
         let sell = byId("review.pile.sell")
         if scrollTo(sell) { sell.tap() }
-        let chair = byId("review.item.11")
+        let chair = byId("review.item.17")
         if scrollTo(chair) {
             chair.tap()
-            XCTAssertTrue(app.navigationBars["Office chair"].waitForExistence(timeout: slow), "Office chair detail")
+            XCTAssertTrue(app.navigationBars["Mesh office chair"].waitForExistence(timeout: slow), "Mesh office chair detail")
             _ = scrollTo(app.staticTexts["Comparable listings"])
             shot("03b-item-comps")
             app.navigationBars.buttons.firstMatch.tap()
@@ -48,7 +48,7 @@ final class DevpostShotsTests: XCTestCase {
         _ = scrollTo(byId("payment.basescan.500"))
         shot("03-spending")
 
-        // 5. Sell & Buy > Approvals: two requests wait for the user.
+        // 5. Sell & Buy > Approvals: the sofa purchase waits for the user.
         open(tab: "Sell & Buy", segment: "Approvals")
         XCTAssertTrue(app.navigationBars["Approvals"].waitForExistence(timeout: slow))
         shot("05-approvals")

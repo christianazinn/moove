@@ -40,9 +40,9 @@ import Testing
         #expect(aeron.map { VoxelModels.kind(ShoppingThumbnails.spec(for: $0, item: nil)) } == .chair)
     }
 
-    /// The items behind the Offline-demo listings (Aeron, mesh chair, nightstand, bean bag).
+    /// The items behind the Offline-demo listings (the mesh chair, the one item the sort agent sells).
     @Test func listedItemsRouteToTheirKind() {
-        let expected: [UInt64: VoxelModels.Kind] = [11: .chair, 17: .chair, 19: .dresser, 20: .beanBag]
+        let expected: [UInt64: VoxelModels.Kind] = [17: .chair]
         let listed = Set(snapshot.listings.map(\.itemId))
         #expect(listed == Set(expected.keys), "listing fixture changed: update this table")
         for id in listed {

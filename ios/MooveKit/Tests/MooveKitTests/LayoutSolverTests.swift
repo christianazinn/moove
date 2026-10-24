@@ -34,7 +34,7 @@ import Testing
         let room = Dictionary(uniqueKeysWithValues: option.placements.map { ($0.itemId, $0.room) })
         #expect(room[10] == "Bedroom") // bed goes in the primary (bigger) bedroom
         #expect(room[21] == "Kitchen") // mini fridge
-        #expect(plan.room(named: room[11]!)?.kind != .bathroom)
+        #expect(plan.room(named: room[17]!)?.kind != .bathroom) // the mesh chair
     }
 
     @Test func compactUsesFewerRooms() {

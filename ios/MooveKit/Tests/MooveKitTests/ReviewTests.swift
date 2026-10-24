@@ -31,10 +31,10 @@ import Testing
 
     @Test func totalsMatchFixture() {
         let t = Review.totals(items)
-        // Sell: the Aeron, the mesh chair, the nightstand and the bean bag. Keep: the other 7 seeded items.
-        #expect(t.expectedSaleCents == 42_000 + 3_000 + 3_000 + 2_000)
+        // Sell: the mesh chair (the sort agent's one sell). Keep: the other 7 seeded items.
+        #expect(t.expectedSaleCents == 3_000)
         #expect(t.itemsToMove == 7)
         #expect(t.needsYou == 1)
-        #expect(t.divertedFromLandfill == 4)
+        #expect(t.divertedFromLandfill == 1)
     }
 }
