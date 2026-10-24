@@ -32,6 +32,7 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 - Judged on innovation 25%, UX 25%, technical execution 20%, commerce impact 15%, trust & responsibility 15%.
 - [ ] Use the Visa Starter Pack tooling for checkout (#15, stubbed until then).
 - [ ] Show privacy, transparency, approvals and fraud checks (trust & responsibility write-up: [`docs/security.md`](security.md)).
+- **Write-up and Devpost block:** [`docs/visa.md`](visa.md) (checkout merged in #40; the demo checkout is a labeled simulation because the CyberSource sandbox returned 502; fraud screen #18 pending).
 
 **Anthropic** ($5k credits, plus 1 year of Max 20x)
 - Name a specific community (to be decided), show a real problem we've lived, make it work, and use Claude thoughtfully, including knowing where it could go wrong for users.
@@ -39,7 +40,7 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 - [ ] Settle the community and the pitch line.
 
 ## Tier 2
-- **Auth0 (MLH)**: use any Auth0 API. We use login, plus Auth0 for AI Agents async authorization for approvals.
+- **Auth0 (MLH)**: use any Auth0 API. We use login, plus Auth0 for AI Agents async authorization for approvals. Write-up and Devpost block: [`docs/auth0.md`](auth0.md).
 - **CRS Credit**: the Identity/Fraud Innovation prize, if the fraud screening (#18) uses the CRS sandbox.
 - **Best Planet-First Hack** (overall prize): the resell / donate-over-trash story.
 - **Notability**: keep the build notes there if someone wants it.
@@ -53,5 +54,5 @@ Convex (we chose SpacetimeDB). Bright Data (it disqualifies mocked demo data and
 
 ## General submission rules
 - Submit on Devpost **by Sun 9:00 AM**. Late submissions are not judged. Draft by Sat night.
-- The whole team stays at the table 10:30-12:30. Live demo, 2-minute pitch.
+- The whole team stays at the table 10:30-12:30. Live demo, 2-minute pitch. Commerce demo runbook: [`docs/demo-commerce.md`](demo-commerce.md).
 - All work must be started during the event. Follow the MLH Code of Conduct.
