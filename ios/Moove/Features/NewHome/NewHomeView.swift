@@ -60,16 +60,20 @@ struct NewHomeView: View {
         }
     }
 
-    /// Kept items from the inventory; the demo inventory's keeps if there are none yet.
+    /// Kept items from the inventory plus bought ones (#15); the demo's if there are none yet.
     private var furniture: Furniture {
         // Stored colors (`set_item_colors`); demo bedroom items without any use the demo room's.
         func layoutItem(_ item: Item) -> LayoutItem {
             item.colors == nil && DemoFixtures.isDemoItem(item) ? LayoutItem(item, colors: DemoFixtures.scanColors()) : LayoutItem(item)
         }
         let kept = store.items.filter { $0.disposition == .keep }
-        if !kept.isEmpty { return Furniture(items: kept.map(layoutItem), isDemo: false, sources: kept) }
-        let demo = DemoFixtures.inventory(owner: "demo").items.filter { $0.disposition == .keep }
-        return Furniture(items: demo.map(layoutItem), isDemo: true, sources: demo)
+        let bought = store.snapshot.boughtLayoutItems
+        if !kept.isEmpty || !bought.isEmpty {
+            return Furniture(items: kept.map(layoutItem) + bought, isDemo: false, sources: kept)
+        }
+        let demo = DemoFixtures.demo(owner: "demo")
+        let demoKept = demo.items.filter { $0.disposition == .keep }
+        return Furniture(items: demoKept.map(layoutItem) + demo.boughtLayoutItems, isDemo: true, sources: demoKept)
     }
 
     private func choose(_ name: String, _ source: NewHomeSource, _ plan: FloorPlan) {
