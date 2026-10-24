@@ -8,10 +8,15 @@ struct MooveApp: App {
 
     init() {
         #if DEBUG
-        // UI tests: start from a fresh install's defaults (signed out, first tab).
-        // Launch arguments (`-moove.backendKind fixture`) still apply on top.
-        if ProcessInfo.processInfo.environment["MOOVE_UI_TEST_RESET"] != nil, let id = Bundle.main.bundleIdentifier {
-            UserDefaults.standard.removePersistentDomain(forName: id)
+        // UI tests: start from a fresh install's state (signed out, Scan tab).
+        // Values are written rather than removed so they also shadow a
+        // simulator-wide `simctl spawn defaults write`. Launch arguments
+        // (`-moove.backendKind fixture -moove.auth.guest YES`) still win.
+        if ProcessInfo.processInfo.environment["MOOVE_UI_TEST_RESET"] != nil {
+            let defaults = UserDefaults.standard
+            defaults.set("scan", forKey: "moove.tab")
+            defaults.set(false, forKey: AuthService.guestKey)
+            defaults.set(MooveStore.BackendKind.spacetime.rawValue, forKey: MooveStore.backendKindKey)
         }
         #endif
     }
