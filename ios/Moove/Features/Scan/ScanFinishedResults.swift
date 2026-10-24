@@ -14,19 +14,37 @@ struct ScanFinishedResults: View {
 
     @State private var geometry: RoomGeometry?
 
-    private var room: Room? {
-        store.snapshot.rooms.filter { $0.name == roomName && $0.home == .old }.max { $0.id < $1.id }
-    }
+    private var room: Room? { store.newestRoom(named: roomName) }
 
     private var items: [Item] {
         guard let room else { return [] }
         return store.items.filter { $0.roomId == room.id }
     }
 
+    /// Sampled colors, with the demo bedroom's fixture colors filling any gaps for demo items
+    /// (the offline demo and "Load demo scan" have no camera frames to sample).
+    private var shownColors: ScanColors? {
+        guard items.contains(where: DemoFixtures.isDemoItem) else { return colors }
+        return (colors ?? .empty).filling(from: DemoFixtures.scanColors())
+    }
+
     var body: some View {
         Group {
             if let room, !items.isEmpty {
-                ScanResultsView(room: room, items: items, comps: store.snapshot.comps, geometry: geometry, colors: colors, onSelect: onSelect)
+                ScanResultsView(room: room, items: items, comps: store.snapshot.comps, geometry: geometry, colors: shownColors, onSelect: onSelect)
+            } else if room != nil {
+                // The room landed with no items (RoomPlan found no furniture, nothing added by photo).
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("No furniture in this scan").blockTitle()
+                    Text("The room is saved. Scan again more slowly, or add items by photo, and they'll show up here.")
+                        .monoMeta()
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 28)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .ruled(.top)
+                .ruled()
+                .accessibilityElement(children: .combine)
             } else {
                 HStack(spacing: 10) {
                     ProgressView().tint(Theme.accentStrong)
@@ -37,7 +55,68 @@ struct ScanFinishedResults: View {
         }
         .task(id: room?.id) {
             guard let room else { return }
+            // A geometry that fails to load leaves nil: the results estimate a room and say so.
             geometry = try? await RoomGeometryLoader.load(room: room, snapshot: store.snapshot)
         }
+    }
+}
+
+/// The whole "scan done" page: header, the results above, and a button to the inventory.
+/// Shared by a real scan (`ScanFlowView`) and "Load demo scan", so the demo path looks the same.
+struct ScanFinishedScreen: View {
+    @Environment(MooveStore.self) private var store
+    var roomName: String
+    var colors: ScanColors? = nil
+    /// The recorded demo bedroom rather than a live scan: labeled as such.
+    var isDemo = false
+    /// Set when the room files or photos couldn't be uploaded.
+    var uploadProblem: String? = nil
+    /// How many items the import sent, for the title before the rows sync back.
+    var importedCount: Int? = nil
+    var onDone: () -> Void
+
+    private var itemCount: Int {
+        if let importedCount { return importedCount }
+        guard let room = store.newestRoom(named: roomName) else { return 0 }
+        return store.items.filter { $0.roomId == room.id }.count
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    Text("01 — Scan · Done").eyebrow()
+                    if isDemo { MonoTag(text: "Demo scan", tone: Theme.ochreInk) }
+                }
+                Text(itemCount == 0 ? "Room saved" : "\(itemCount) item\(itemCount == 1 ? "" : "s") added")
+                    .pageTitle()
+                    .padding(.top, 8)
+                Text(lede)
+                    .lede()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
+                ScanFinishedResults(roomName: roomName, colors: colors)
+                    .padding(.top, 28)
+                Button("See inventory", action: onDone)
+                    .buttonStyle(.pill(.primary))
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 32)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 24)
+        }
+        .mooveScreen()
+    }
+
+    private var lede: String {
+        if let uploadProblem {
+            return "Photos couldn't be uploaded (\(uploadProblem)), so agents can't identify items yet. The room is saved, and the 3D view works on this device."
+        }
+        if isDemo {
+            return store.backendKind == .fixture
+                ? "A recorded bedroom, not a live scan. Offline demo: items, prices and colors are fixture data, as if the agents had run."
+                : "A recorded bedroom, not a live scan. Agents are identifying and pricing it now; colors are the demo room's."
+        }
+        return "Agents are identifying and pricing them now."
     }
 }

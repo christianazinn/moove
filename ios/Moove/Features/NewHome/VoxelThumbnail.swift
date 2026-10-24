@@ -17,8 +17,15 @@ struct VoxelThumbnail: View {
         self.init(spec: VoxelItemSpec(item), size: size)
     }
 
+    /// With the item's attributes, material and stored colors (`item.colors`); a demo bedroom
+    /// item with none stored uses the demo room's fixture colors.
     init(_ item: Item, size: CGFloat = 56) {
-        self.init(spec: VoxelItemSpec(category: item.category, name: item.name, widthM: item.widthM, depthM: item.depthM, heightM: item.heightM), size: size)
+        var spec = VoxelItemSpec(item)
+        if item.colors == nil, DemoFixtures.isDemoItem(item), let c = DemoFixtures.scanColors().colors(for: item) {
+            spec.primaryColor = c.primary
+            spec.secondaryColor = c.secondary
+        }
+        self.init(spec: spec, size: size)
     }
 
     var body: some View {

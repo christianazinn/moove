@@ -62,10 +62,14 @@ struct NewHomeView: View {
 
     /// Kept items from the inventory; the demo inventory's keeps if there are none yet.
     private var furniture: Furniture {
+        // Stored colors (`set_item_colors`); demo bedroom items without any use the demo room's.
+        func layoutItem(_ item: Item) -> LayoutItem {
+            item.colors == nil && DemoFixtures.isDemoItem(item) ? LayoutItem(item, colors: DemoFixtures.scanColors()) : LayoutItem(item)
+        }
         let kept = store.items.filter { $0.disposition == .keep }
-        if !kept.isEmpty { return Furniture(items: kept.map(LayoutItem.init), isDemo: false) }
+        if !kept.isEmpty { return Furniture(items: kept.map(layoutItem), isDemo: false, sources: kept) }
         let demo = DemoFixtures.inventory(owner: "demo").items.filter { $0.disposition == .keep }
-        return Furniture(items: demo.map(LayoutItem.init), isDemo: true)
+        return Furniture(items: demo.map(layoutItem), isDemo: true, sources: demo)
     }
 
     private func choose(_ name: String, _ source: NewHomeSource, _ plan: FloorPlan) {
@@ -156,6 +160,8 @@ struct Furniture: Equatable {
     var items: [LayoutItem]
     /// True when these are fixture items, not the user's.
     var isDemo: Bool
+    /// The inventory rows behind `items` (room and scan object ids), for the fly-in's old-room starts.
+    var sources: [Item] = []
 }
 
 // MARK: - Detail
@@ -176,6 +182,10 @@ struct NewHomeDetail: View {
     @State private var style: LayoutSolver.Style = .byFunction
     @State private var flyInToken = 0
     @State private var savedStyle: LayoutSolver.Style?
+    /// Each piece's scanned spot in its old room, where the fly-in starts it (nil: the pile).
+    @State private var starts: FlyInStarts?
+    /// False until the starts are looked up, so the first fly-in starts from the right place.
+    @State private var ready = false
 
     private static let stageID = "stage"
 
@@ -206,13 +216,23 @@ struct NewHomeDetail: View {
         }
         .background(Theme.bg)
         .onChange(of: plan) { focusRoom = nil }
-        .task(id: SolveKey(plan: plan, items: furniture.items)) { solve() }
+        .task(id: SolveKey(plan: plan, items: furniture.items)) {
+            ready = false
+            solve()
+            starts = await OldRoomStarts.load(furniture.sources, snapshot: store.snapshot, beside: plan.bounds)
+            guard !Task.isCancelled else { return }
+            ready = true
+            flyInToken += 1
+        }
     }
 
     private struct SolveKey: Equatable {
         var plan: FloorPlan
         var items: [LayoutItem]
     }
+
+    /// Placements shown in 3D: none until the fly-in's starts are known.
+    private var shownPlacements: [Placement] { ready ? option?.placements ?? [] : [] }
 
     private func solve() {
         // Lived-in pass: small things onto furniture tops, art and mirrors onto the walls
@@ -229,7 +249,6 @@ struct NewHomeDetail: View {
             style = match
             savedStyle = match
         }
-        flyInToken += 1
     }
 
     private func save() async {
@@ -266,7 +285,8 @@ struct NewHomeDetail: View {
 
     private var stage: some View {
         VStack(alignment: .leading, spacing: 0) {
-            FloorPlan3DView(plan: plan, focusRoom: focusRoom, items: furniture.items, placements: option?.placements ?? [], flyInToken: flyInToken)
+            FloorPlan3DView(plan: plan, focusRoom: focusRoom, items: furniture.items, placements: shownPlacements, flyInToken: flyInToken,
+                            flyInStarts: starts)
                 .frame(height: 420)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
                 .accessibilityElement()
@@ -274,7 +294,7 @@ struct NewHomeDetail: View {
                 .accessibilityHint("Drag to orbit, pinch to zoom, double-tap to reset")
             HStack(spacing: 10) {
                 Circle().fill(Theme.accent).frame(width: 8, height: 8).accessibilityHidden(true)
-                Text(focusRoom.map { "Showing \($0)" } ?? "Drag to orbit · pinch to zoom")
+                Text(focusRoom.map { "Showing \($0)" } ?? (starts == nil ? "Drag to orbit · pinch to zoom" : "Flying in from your scanned room · drag to orbit"))
                     .monoText(13)
                     .foregroundStyle(Theme.muted)
                     .lineLimit(2)
@@ -415,7 +435,8 @@ struct NewHomeDetail: View {
     NavigationStack {
         NewHomeDetail(
             name: DemoHouse.name, source: .demo, plan: DemoHouse.floorPlan, home: nil,
-            furniture: Furniture(items: DemoFixtures.inventory(owner: "demo").items.map(LayoutItem.init), isDemo: true)
+            furniture: Furniture(items: DemoFixtures.inventory(owner: "demo").items.map(LayoutItem.init), isDemo: true,
+                                 sources: DemoFixtures.inventory(owner: "demo").items)
         )
         .mooveScreen()
     }

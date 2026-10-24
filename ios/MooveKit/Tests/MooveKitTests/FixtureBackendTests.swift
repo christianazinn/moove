@@ -105,6 +105,114 @@ import Testing
         #expect(snap.items.filter(\.maybeSentimental).allSatisfy { $0.needsUser })
     }
 
+    // MARK: set_item_colors
+
+    private func backendWithItem() async throws -> (FixtureBackend, UInt64) {
+        let backend = FixtureBackend()
+        _ = try await backend.connect(token: nil)
+        try await backend.importScan(ScanImport(roomName: "Bedroom", objects: [
+            ScanObject(scanObjectId: "bed", category: "bed", widthM: 1.6, heightM: 0.4, depthM: 2.1),
+        ]))
+        return (backend, await firstSnapshot(backend).items[0].id)
+    }
+
+    @Test func setItemColorsStoresAndClears() async throws {
+        let (backend, id) = try await backendWithItem()
+        try await backend.setItemColors(itemId: id, colors: ItemColors(primary: 0xB98A5A, secondary: 0xE9E3D6))
+        #expect(await firstSnapshot(backend).items[0].colors == ItemColors(primary: 0xB98A5A, secondary: 0xE9E3D6))
+        try await backend.setItemColors(itemId: id, colors: ItemColors(primary: 0x00000A))
+        #expect(await firstSnapshot(backend).items[0].colors == ItemColors(primary: 0x00000A))
+        try await backend.setItemColors(itemId: id, colors: nil)
+        #expect(await firstSnapshot(backend).items[0].colors == nil)
+    }
+
+    @Test func setItemColorsValidatesLikeTheModule() async throws {
+        let (backend, id) = try await backendWithItem()
+        // Lowercase is accepted and stored uppercase, as the module does.
+        try await backend.setItemColors(itemId: id, colorsJson: ##"{"secondary":"#a0b1c2","primary":"#0f0f0f"}"##)
+        #expect(await firstSnapshot(backend).items[0].colors == ItemColors(primary: 0x0F0F0F, secondary: 0xA0B1C2))
+        #expect(ItemColors.normalizedJson(##"{"secondary":"#a0b1c2","primary":"#0f0f0f"}"##) == ##"{"primary":"#0F0F0F","secondary":"#A0B1C2"}"##)
+        #expect(ItemColors.normalizedJson("") == "")
+        for bad in [##"{"primary":"0F0F0F"}"##, ##"{"primary":"#0F0F0"}"##, ##"{"primary":"#GGGGGG"}"##, ##"{"accent":"#0F0F0F"}"##,
+                    ##"{"primary":255}"##, ##"["#0F0F0F"]"##, "not json", ##""#0F0F0F""##] {
+            await #expect(throws: FixtureBackend.Failure.invalidColors, "\(bad)") {
+                try await backend.setItemColors(itemId: id, colorsJson: bad)
+            }
+        }
+        // Out of 24-bit range has no #RRGGBB form.
+        await #expect(throws: FixtureBackend.Failure.invalidColors) {
+            try await backend.setItemColors(itemId: id, colors: ItemColors(primary: 0x1000000))
+        }
+        // Rejected writes leave the stored colors alone.
+        #expect(await firstSnapshot(backend).items[0].colors == ItemColors(primary: 0x0F0F0F, secondary: 0xA0B1C2))
+    }
+
+    @Test func setItemColorsNeedsTheItemAndOwner() async throws {
+        let (backend, id) = try await backendWithItem()
+        await #expect(throws: FixtureBackend.Failure.noSuchItem) {
+            try await backend.setItemColors(itemId: id + 999, colors: ItemColors(primary: 0x123456))
+        }
+        let other = FixtureBackend(identity: "someone-else", seed: await firstSnapshot(backend))
+        _ = try await other.connect(token: nil)
+        await #expect(throws: FixtureBackend.Failure.unauthorized) {
+            try await other.setItemColors(itemId: id, colors: ItemColors(primary: 0x123456))
+        }
+    }
+
+    @Test func sampledColorsPersistOntoImportedItems() async throws {
+        let (backend, id) = try await backendWithItem()
+        let sampled = ScanColors(wallColor: 0xEEEEEE, objectColors: ["bed": .init(primary: 0xB98A5A), "gone": .init(primary: 0x111111)])
+        let updates = sampled.itemColorUpdates(for: await firstSnapshot(backend).items)
+        #expect(updates == [ItemColorUpdate(itemId: id, colors: ItemColors(primary: 0xB98A5A))])
+        for u in updates { try await backend.setItemColors(itemId: u.itemId, colors: u.colors) }
+        let items = await firstSnapshot(backend).items
+        #expect(items[0].colors?.primary == 0xB98A5A)
+        // Already stored: nothing more to write.
+        #expect(sampled.itemColorUpdates(for: items).isEmpty)
+        // And the new home / thumbnails pick them up from the item alone.
+        #expect(LayoutItem(items[0]).primaryColor == 0xB98A5A)
+        #expect(VoxelItemSpec(items[0]).primaryColor == 0xB98A5A)
+    }
+
+    // MARK: Demo scan
+
+    @Test func demoScanImportsIdentifiedItems() async throws {
+        let backend = FixtureBackend()
+        _ = try await backend.connect(token: nil)
+        try await backend.importScan(DemoFixtures.scanImport())
+        let snap = await firstSnapshot(backend)
+        let template = DemoFixtures.inventory(owner: "demo").items
+        #expect(snap.items.count == template.count)
+        let bed = snap.items.first { $0.scanObjectId == "demo-10" }!
+        #expect(bed.name == "Queen bed frame" && bed.material == "oak" && bed.disposition == .keep && bed.estValueCents == 12_000)
+        // Sentimental pieces are still left for the user.
+        #expect(snap.items.filter(\.maybeSentimental).allSatisfy { $0.disposition == .undecided })
+        // Colors come through set_item_colors, not the import.
+        #expect(snap.items.allSatisfy { $0.colors == nil })
+    }
+
+    @Test func demoScanColorsCoverTheDemoRoom() {
+        let colors = DemoFixtures.scanColors()
+        #expect(colors.wallColor != nil && colors.floorColor != nil)
+        let objects = Set(DemoFixtures.roomGeometry().objects.map(\.id))
+        #expect(Set(colors.objectColors.keys) == objects)
+        for item in DemoFixtures.inventory(owner: "demo").items {
+            #expect(DemoFixtures.isDemoItem(item))
+            #expect(colors.colors(for: item) != nil, "\(item.name)")
+            // Consistent with the colors the seeded demo items already store.
+            if let stored = item.colors { #expect(ItemColors(colors.colors(for: item)!) == stored) }
+        }
+        #expect(colors.objectColors.values.allSatisfy { ItemColors($0).isValid })
+    }
+
+    @Test func sampledColorsWinOverTheDemoFallback() {
+        let sampled = ScanColors(floorColor: 0x101010, objectColors: ["demo-10": .init(primary: 0x202020)])
+        let merged = sampled.filling(from: DemoFixtures.scanColors())
+        #expect(merged.floorColor == 0x101010 && merged.wallColor == DemoFixtures.scanColors().wallColor)
+        #expect(merged.objectColors["demo-10"]?.primary == 0x202020)
+        #expect(merged.objectColors["demo-11"] == DemoFixtures.scanColors().objectColors["demo-11"])
+    }
+
     private func firstSnapshot(_ backend: FixtureBackend) async -> SyncSnapshot {
         var it = backend.snapshots().makeAsyncIterator()
         return await it.next()!

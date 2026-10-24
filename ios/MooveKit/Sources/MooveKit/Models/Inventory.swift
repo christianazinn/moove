@@ -179,6 +179,24 @@ public struct ItemColors: Codable, Sendable, Hashable {
         return value
     }
 
+    /// The module's `colorsJsonOf` (`set_item_colors`): '' stays '' (clears); otherwise a JSON
+    /// object whose only keys are `primary` / `secondary`, each a "#RRGGBB" string, stored
+    /// uppercase. nil when the module would reject it.
+    public static func normalizedJson(_ json: String) -> String? {
+        if json.isEmpty { return "" }
+        guard let object = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else { return nil }
+        var out: [String: String] = [:]
+        for (key, value) in object {
+            guard key == "primary" || key == "secondary", let hex = value as? String, color(hex: hex) != nil else { return nil }
+            out[key] = hex.uppercased()
+        }
+        let parts = ["primary", "secondary"].compactMap { key in out[key].map { "\"\(key)\":\"\($0)\"" } }
+        return "{" + parts.joined(separator: ",") + "}"
+    }
+
+    /// Both colors fit in 24 bits (a `VoxelColor` above 0xFFFFFF has no "#RRGGBB" form).
+    public var isValid: Bool { [primary, secondary].allSatisfy { ($0 ?? 0) <= 0xFFFFFF } }
+
     /// 0xRRGGBB → "#RRGGBB" (uppercase, as the module stores it).
     public static func hex(_ color: VoxelColor) -> String {
         let v = color & 0xFFFFFF
