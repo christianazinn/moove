@@ -10,7 +10,7 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 - Submit:
   - [x] project summary (who it's for, what it does, which Coinbase tools)
   - [ ] demo + repo with setup instructions (repo + setup done in the doc below; the demo video and the live in-app log, pending #6 and #10, are not)
-  - [x] **architecture diagram**, controls and known limitations
+  - [x] **architecture diagram**, controls and known limitations (whole-app security controls: [`docs/security.md`](security.md))
   - [x] **builder feedback** (biggest blocker, how we worked around it, the missing capability we want most)
 
   **Devpost block (paste from [`docs/coinbase-x402.md`](coinbase-x402.md)):**
@@ -31,10 +31,11 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 **Visa: Reimagining Shopping** ($5,000)
 - Judged on innovation 25%, UX 25%, technical execution 20%, commerce impact 15%, trust & responsibility 15%.
 - [ ] Use the Visa Starter Pack tooling for checkout (#15, stubbed until then).
-- [ ] Show privacy, transparency, approvals and fraud checks.
+- [ ] Show privacy, transparency, approvals and fraud checks (trust & responsibility write-up: [`docs/security.md`](security.md)).
 
 **Anthropic** ($5k credits, plus 1 year of Max 20x)
 - Name a specific community (to be decided), show a real problem we've lived, make it work, and use Claude thoughtfully, including knowing where it could go wrong for users.
+- Where it could go wrong, and what we did about it: the prompt-injection and responsible-AI sections of [`docs/security.md`](security.md).
 - [ ] Settle the community and the pitch line.
 
 ## Tier 2
@@ -45,6 +46,10 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 
 ## Not targeting
 Convex (we chose SpacetimeDB). Bright Data (it disqualifies mocked demo data and scraping behind a login). Hyphenate, Atlassian, Meta, SpaceXAI, Factory, Mana, Moss, Bitdeer, Elastic, Cartesia.
+
+## Security (all tracks; Armadin Best Security Hack)
+- Security and responsible-AI notes for judges are in [`docs/security.md`](security.md) (#17). Armadin's criteria were still "coming soon" at kickoff, so check the live prizes page.
+- No keys in the repo (Cartesia and others require this): gitleaks runs on every PR and over the full history.
 
 ## General submission rules
 - Submit on Devpost **by Sun 9:00 AM**. Late submissions are not judged. Draft by Sat night.

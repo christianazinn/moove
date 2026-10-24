@@ -10,12 +10,18 @@ export type ImageInput = { mediaType: 'image/jpeg' | 'image/png' | 'image/gif' |
 
 // Fetches an image (from our upload server or anywhere) and base64-encodes it, so the API
 // never needs to reach a localhost/LAN URL itself.
+// Photo URLs come from clients (add_item_photo), so only plain http(s) is fetched, with a size cap.
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 export async function loadImage(url: string): Promise<ImageInput> {
-  const res = await fetch(url);
+  if (!/^https?:\/\//i.test(url)) throw new Error(`refusing to fetch non-http(s) photo URL`);
+  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
   if (!res.ok) throw new Error(`fetch ${url}: ${res.status}`);
+  if (Number(res.headers.get('content-length') ?? '0') > MAX_IMAGE_BYTES) throw new Error(`photo over ${MAX_IMAGE_BYTES} bytes`);
   const type = (res.headers.get('content-type') ?? '').split(';')[0];
   const mediaType = (['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const).find(t => t === type) ?? 'image/jpeg';
-  return { mediaType, data: Buffer.from(await res.arrayBuffer()).toString('base64') };
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (bytes.length > MAX_IMAGE_BYTES) throw new Error(`photo over ${MAX_IMAGE_BYTES} bytes`);
+  return { mediaType, data: bytes.toString('base64') };
 }
 
 export class RefusalError extends Error {}
