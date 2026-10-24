@@ -12,47 +12,58 @@ struct ShoppingItemDetailView: View {
             content(item)
         } else {
             ContentUnavailableView("Removed from the list", systemImage: "cart")
+                .mooveScreen()
         }
     }
 
     private func content(_ item: ShoppingItem) -> some View {
         let deals = store.snapshot.deals(for: item.id)
         let checkout = store.snapshot.checkout(for: item)
-        return List {
-            Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(item.name).font(.title3.weight(.semibold))
-                        Spacer()
-                        ShoppingStatusChip(status: item.status)
-                    }
-                    if !item.reason.isEmpty {
-                        Text(item.reason).font(.subheadline).foregroundStyle(.secondary)
-                    }
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("07 — Shopping").eyebrow().padding(.bottom, 12)
+                Text(item.name)
+                    .pageTitle()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                ShoppingStatusChip(status: item.status).padding(.top, 10)
+                if !item.reason.isEmpty {
+                    Text(item.reason)
+                        .lede()
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 10)
                 }
-                .padding(.vertical, 2)
-            }
-            Section("Checkout") {
+
+                ListHeader(title: "Checkout").padding(.top, 36)
                 ShoppingCheckoutView(checkout: checkout)
-            }
-            if !deals.isEmpty {
-                Section {
+                    .padding(.vertical, 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .ruled()
+
+                if !deals.isEmpty {
+                    ListHeader(title: "Deals", count: "\(deals.count)").padding(.top, 40)
                     ForEach(deals) { deal in
                         DealRow(item: item, deal: deal, isChosen: deal.id == item.chosenDealId)
                     }
-                } header: {
-                    Text("Deals · \(deals.count)")
-                } footer: {
-                    if deals.contains(where: \.isSample) {
-                        Text("SAMPLE deals are hand-made demo data, not live listings.")
-                    } else if deals.contains(where: \.isReplay) {
-                        Text("REPLAY deals come from a cached search, not live listings.")
+                    Group {
+                        if deals.contains(where: \.isSample) {
+                            Text("SAMPLE deals are hand-made demo data, not live listings.")
+                        } else if deals.contains(where: \.isReplay) {
+                            Text("REPLAY deals come from a cached search, not live listings.")
+                        }
                     }
+                    .monoMeta()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 12)
                 }
             }
+            .padding(.horizontal, Theme.gutter)
+            .padding(.top, 16)
+            .padding(.bottom, 48)
         }
         .navigationTitle(item.name)
         .navigationBarTitleDisplayMode(.inline)
+        .mooveScreen()
         .animation(.default, value: deals)
         .animation(.default, value: item)
     }
@@ -65,37 +76,41 @@ struct ShoppingCheckoutView: View {
     var body: some View {
         switch checkout {
         case .findingDeals:
-            Label("The buy agent is looking for deals.", systemImage: "magnifyingglass")
-                .foregroundStyle(.secondary)
+            step("The buy agent is looking for deals.", systemImage: "magnifyingglass")
         case .chooseDeal:
-            Label("Pick a deal below and the agent takes it from there.", systemImage: "hand.tap")
-                .foregroundStyle(.secondary)
+            step("Pick a deal below and the agent takes it from there.", systemImage: "hand.tap")
         case .messageSeller(let deal):
-            Label("\(deal.source) sellers can't be paid through an API. The agent drafted a message to the seller.",
-                  systemImage: "envelope")
-                .foregroundStyle(.secondary)
+            step("\(deal.source) sellers can't be paid through an API. The agent drafted a message to the seller.",
+                 systemImage: "envelope")
         case .fraudBlocked(let deal):
-            VStack(alignment: .leading, spacing: 4) {
-                Label("Not buying: the fraud screen flagged this deal.", systemImage: "exclamationmark.shield.fill")
-                    .foregroundStyle(.red)
+            VStack(alignment: .leading, spacing: 6) {
+                step("Not buying: the fraud screen flagged this deal.", systemImage: "exclamationmark.shield.fill",
+                     tint: Theme.danger)
                 ForEach(deal.fraudReasons, id: \.self) { reason in
-                    Text("• \(reason)").font(.caption).foregroundStyle(.secondary)
+                    Text("· \(reason)").monoMeta().fixedSize(horizontal: false, vertical: true)
                 }
             }
         case .needsApproval(let approval):
             PurchaseApprovalCard(approval: approval)
         case .notApproved(let approval):
-            Label(approval.status == .expired ? "The approval expired. Nothing was bought."
-                  : approval.status == .approved ? "The price changed after you approved. Nothing was bought."
-                  : "You denied this purchase. Nothing was bought.",
-                  systemImage: "xmark.circle")
-                .foregroundStyle(.secondary)
+            step(approval.status == .expired ? "The approval expired. Nothing was bought."
+                 : approval.status == .approved ? "The price changed after you approved. Nothing was bought."
+                 : "You denied this purchase. Nothing was bought.",
+                 systemImage: "xmark.circle")
         case .checkingOut:
-            Label("Cleared to buy. Waiting for the agent to place the Visa hold.", systemImage: "creditcard")
-                .foregroundStyle(.secondary)
+            step("Cleared to buy. Waiting for the agent to place the Visa hold.", systemImage: "creditcard")
         case .payment(let payment):
             VisaPaymentRow(payment: payment)
         }
+    }
+
+    private func step(_ text: String, systemImage: String, tint: Color = Theme.muted) -> some View {
+        Label {
+            Text(text).sansText(15).fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: systemImage).font(.system(size: 14, weight: .light))
+        }
+        .foregroundStyle(tint)
     }
 }
 
@@ -108,58 +123,59 @@ struct DealRow: View {
 
     var body: some View {
         let payments = store.snapshot.visaPayments(for: deal.id)
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if isChosen {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.accentStrong)
                         .accessibilityLabel("Chosen deal")
                 }
-                Text(deal.title).font(.subheadline.weight(.semibold)).lineLimit(2)
-                Spacer()
+                Text(deal.title).blockTitle().lineLimit(2)
+                Spacer(minLength: 8)
                 if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
             }
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(deal.priceCents.usd).font(.headline.monospacedDigit())
-                Text(deal.source).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                Spacer()
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(deal.priceCents.usd).monoText(16, weight: .bold).foregroundStyle(Theme.text)
+                Text(deal.source).monoMeta()
+                Spacer(minLength: 8)
                 Label(deal.supportsCardCheckout ? "Visa checkout" : "Message seller",
                       systemImage: deal.supportsCardCheckout ? "creditcard" : "envelope")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .monoMeta()
+                    .lineLimit(1)
             }
             if !deal.sellerDetails.isEmpty {
-                Text(deal.sellerDetails).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Text(deal.sellerDetails).sansText(14).foregroundStyle(Theme.muted).lineLimit(2)
             }
             if let level = deal.fraudLevel, let score = deal.fraudScore {
                 FraudChip(level: level, score: score)
                 if level != .low {
                     ForEach(deal.fraudReasons, id: \.self) { reason in
-                        Text("• \(reason)").font(.caption2).foregroundStyle(.secondary)
+                        Text("· \(reason)").monoMeta().fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
             ForEach(payments) { VisaPaymentRow(payment: $0) }
-            HStack {
+            HStack(spacing: 8) {
                 if let url = deal.link {
                     Link(destination: url) {
-                        Label("View", systemImage: "arrow.up.right.square").font(.caption.weight(.medium))
+                        Label("View", systemImage: "arrow.up.right.square")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.pill(.text, compact: true))
                 }
                 Spacer()
                 if isChosen {
-                    Text("Chosen").font(.caption.weight(.semibold)).foregroundStyle(.green)
+                    MonoTag(text: "Chosen", tone: Theme.accentStrong)
                 } else if item.status != .bought {
                     // Disabled while a hold or a purchase approval is pending: that one finishes (or is denied) first.
                     Button("Choose") { choose() }
-                        .font(.caption.weight(.semibold))
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.pill(.outline, compact: true))
                         .disabled(working || store.snapshot.isCheckoutLocked(item))
                 }
             }
         }
-        .padding(.vertical, 4)
-        .listRowBackground(isChosen ? Color.green.opacity(0.06) : nil)
+        .padding(.vertical, 16)
+        .ruled()
     }
 
     private func choose() {
@@ -182,17 +198,25 @@ struct AddShoppingItemSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("What do you need? (e.g. Desk lamp)", text: $name)
-                    TextField("Category (optional, e.g. lamp)", text: $category)
-                        .textInputAutocapitalization(.never)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    field("Item") {
+                        TextField("What do you need? (e.g. Desk lamp)", text: $name)
+                    }
+                    field("Category") {
+                        TextField("Category (optional, e.g. lamp)", text: $category)
+                            .textInputAutocapitalization(.never)
+                    }
+                    field("Why") {
+                        TextField("Reason (optional)", text: $reason, axis: .vertical)
+                            .lineLimit(2...4)
+                    }
                 }
-                Section("Why") {
-                    TextField("Reason (optional)", text: $reason, axis: .vertical)
-                        .lineLimit(2...4)
-                }
+                .padding(.horizontal, Theme.gutter)
+                .padding(.top, 8)
+                .padding(.bottom, 32)
             }
+            .mooveScreen()
             .navigationTitle("Add to list")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -206,6 +230,20 @@ struct AddShoppingItemSheet: View {
             }
         }
         .presentationDetents([.medium])
+        .presentationBackground(Theme.bg)
+    }
+
+    /// Mono label over a sans text field, on a rule.
+    private func field<Field: View>(_ label: String, @ViewBuilder _ input: () -> Field) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label).eyebrow()
+            input()
+                .sansText(16)
+                .foregroundStyle(Theme.text)
+                .frame(minHeight: 44)
+                .ruled()
+        }
+        .padding(.top, 20)
     }
 
     private func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }

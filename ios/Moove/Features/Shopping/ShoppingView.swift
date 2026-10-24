@@ -11,30 +11,72 @@ struct ShoppingView: View {
     var body: some View {
         let items = store.shoppingItems
         let approvals = store.snapshot.pendingPurchaseApprovals
+        // A plain List (not a ScrollView) so rows keep swipe-to-delete; the theme comes from clear
+        // row backgrounds, gutter insets and rule-colored separators.
         List {
+            Section {
+                PageHeader(
+                    eyebrow: "07 — Shopping",
+                    title: "What the new place needs.",
+                    lede: "The shopping agent writes the list, you edit it, and the buy agent finds deals and checks out with Visa."
+                )
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+                .shoppingChromeRow()
+                if items.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Nothing to buy yet").blockTitle()
+                        Text("Once your new home is set up, the shopping agent lists what it still needs. You can add things too.")
+                            .monoMeta()
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Add item", systemImage: "plus") { showAdd = true }
+                            .buttonStyle(.pill(.primary, compact: true))
+                            .padding(.top, 14)
+                    }
+                    .padding(.vertical, 28)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .ruled(.top)
+                    .ruled()
+                    .padding(.top, 24)
+                    .shoppingChromeRow()
+                }
+            }
+            .listSectionSeparator(.hidden)
             if !approvals.isEmpty {
                 Section {
+                    ListHeader(title: "Needs you", count: "\(approvals.count)")
+                        .padding(.top, 32)
+                        .shoppingChromeRow()
                     ForEach(approvals) { approval in
                         PurchaseApprovalCard(approval: approval)
+                            .shoppingLedgerRow()
                     }
-                } header: {
-                    Text("Needs you · \(approvals.count)")
                 }
+                .listSectionSeparator(.hidden)
             }
             if !items.isEmpty {
                 Section {
+                    ListHeader(title: "Still to buy", count: "\(items.filter { $0.status != .bought }.count)")
+                        .padding(.top, 32)
+                        .shoppingChromeRow()
                     ForEach(items) { item in
                         NavigationLink(value: ShoppingRoute(itemId: item.id)) { ShoppingItemRow(item: item) }
+                            .shoppingLedgerRow()
                     }
                     .onDelete { offsets in remove(offsets.map { items[$0] }) }
-                } header: {
-                    Text("Still to buy · \(items.filter { $0.status != .bought }.count)")
-                } footer: {
                     Text("Swipe to remove anything you don't need. Agents only buy what's on this list.")
+                        .monoMeta()
+                        .padding(.top, 12)
+                        .padding(.bottom, 32)
+                        .shoppingChromeRow()
                 }
+                .listSectionSeparator(.hidden)
             }
         }
+        .listStyle(.plain)
+        .environment(\.defaultMinListRowHeight, 0)
         .navigationTitle("Shopping")
+        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: ShoppingRoute.self) { ShoppingItemDetailView(itemId: $0.itemId) }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -42,17 +84,7 @@ struct ShoppingView: View {
             }
         }
         .sheet(isPresented: $showAdd) { AddShoppingItemSheet() }
-        .overlay {
-            if items.isEmpty {
-                ContentUnavailableView {
-                    Label("Nothing to buy yet", systemImage: "cart")
-                } description: {
-                    Text("Once your new home is set up, the shopping agent lists what it still needs. You can add things too.")
-                } actions: {
-                    Button("Add item") { showAdd = true }
-                }
-            }
-        }
+        .mooveScreen()
         .animation(.default, value: items)
         .animation(.default, value: approvals)
     }
@@ -61,6 +93,23 @@ struct ShoppingView: View {
         Task {
             for item in doomed { await store.removeShoppingItem(item) }
         }
+    }
+}
+
+private extension View {
+    /// A non-interactive row (heading, note): no separator, page background, gutter insets.
+    func shoppingChromeRow() -> some View {
+        listRowInsets(EdgeInsets(top: 0, leading: Theme.gutter, bottom: 0, trailing: Theme.gutter))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Theme.bg)
+    }
+
+    /// An item row: page background and a full-width rule-colored separator.
+    func shoppingLedgerRow() -> some View {
+        listRowInsets(EdgeInsets(top: 0, leading: Theme.gutter, bottom: 0, trailing: Theme.gutter))
+            .listRowBackground(Theme.bg)
+            .listRowSeparatorTint(Theme.line)
+            .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
     }
 }
 
@@ -75,29 +124,33 @@ struct ShoppingItemRow: View {
     var body: some View {
         let deals = store.snapshot.deals(for: item.id)
         let chosen = store.snapshot.chosenDeal(for: item)
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(item.name).font(.headline)
-                Spacer()
-                ShoppingStatusChip(status: item.status)
-            }
-            if !item.reason.isEmpty {
-                Text(item.reason).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
-            }
-            HStack(spacing: 6) {
-                if let chosen {
-                    Text(chosen.priceCents.usd).font(.subheadline.weight(.semibold).monospacedDigit())
-                    Text("· \(chosen.source)").font(.caption).foregroundStyle(.secondary)
-                } else if !deals.isEmpty {
-                    Text("\(deals.count) deals · pick one").font(.caption).foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: 16) {
+            IconTile(systemName: item.status == .bought ? "checkmark" : "cart")
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(item.name).blockTitle().lineLimit(2)
+                    Spacer(minLength: 8)
+                    if let chosen { Text(chosen.priceCents.usd).rowValue() }
                 }
-                Spacer()
-                if let chosen, let payment = store.snapshot.visaPayment(for: chosen.id) {
-                    VisaRailBadge(badge: VisaPaymentBadge(payment))
+                ShoppingStatusChip(status: item.status)
+                if !item.reason.isEmpty {
+                    Text(item.reason).sansText(14).foregroundStyle(Theme.muted).lineLimit(2)
+                }
+                HStack(spacing: 8) {
+                    if let chosen {
+                        Text(chosen.source).monoMeta()
+                    } else if !deals.isEmpty {
+                        Text("\(deals.count) deals · pick one").monoMeta()
+                    }
+                    Spacer(minLength: 0)
+                    if let chosen, let payment = store.snapshot.visaPayment(for: chosen.id) {
+                        VisaRailBadge(badge: VisaPaymentBadge(payment))
+                    }
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 16)
+        .frame(minHeight: 44)
     }
 }
 
@@ -122,25 +175,28 @@ extension ShoppingStatus {
 
     var tint: Color {
         switch self {
-        case .open: .secondary
-        case .searching: .blue
-        case .found: .orange
-        case .bought: .green
+        case .open: Theme.muted
+        case .searching: Theme.text
+        case .found: Theme.ochreInk
+        case .bought: Theme.accentStrong
         }
     }
 }
 
+/// Status as a colored dot and mono label; the dot pulses while the agent searches.
 struct ShoppingStatusChip: View {
     let status: ShoppingStatus
 
     var body: some View {
-        Label(status.label, systemImage: status.systemImage)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .foregroundStyle(status.tint)
-            .background(status.tint.opacity(0.12), in: .capsule)
-            .symbolEffect(.pulse, isActive: status == .searching)
+        HStack(spacing: 6) {
+            Image(systemName: "circle.fill")
+                .font(.system(size: 7))
+                .symbolEffect(.pulse, isActive: status == .searching)
+                .accessibilityHidden(true)
+            Text(status.label).monoText(12.5)
+        }
+        .foregroundStyle(status.tint)
+        .lineLimit(1)
     }
 }
 
@@ -157,50 +213,59 @@ struct PurchaseApprovalCard: View {
         let deal = store.snapshot.deals.first { $0.id == approval.refId }
         let item = deal.flatMap { d in store.snapshot.shoppingItems.first { $0.id == d.shoppingItemId } }
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Label("Buy", systemImage: "cart")
-                    .font(.caption2.weight(.bold))
-                    .textCase(.uppercase)
-                    .foregroundStyle(.secondary)
-                if let item { Text(item.name).font(.caption.weight(.semibold)).foregroundStyle(.secondary) }
-                Spacer()
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label {
+                    Text("Buy").monoText(11.5, weight: .bold, maxScale: 1.6).tracking(0.5)
+                } icon: {
+                    Image(systemName: "cart").font(.system(size: 10))
+                }
+                .labelStyle(.titleAndIcon)
+                .textCase(.uppercase)
+                .foregroundStyle(Theme.muted)
+                if let item { Text(item.name).monoMeta().lineLimit(1) }
+                Spacer(minLength: 8)
                 if deal?.isSample == true { ReplayBadge(sample: true) } else if deal?.isReplay == true { ReplayBadge() }
             }
-            Text(deal?.title ?? approval.summary).font(.subheadline.weight(.semibold)).lineLimit(3)
-            HStack {
-                Text(approval.amountCents.usd).font(.title3.weight(.bold).monospacedDigit())
-                if let deal { Text("from \(deal.source)").font(.subheadline).foregroundStyle(.secondary) }
-                Spacer()
-                Text(approval.requestedAt, format: .relative(presentation: .named))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Text(deal?.title ?? approval.summary).blockTitle().lineLimit(3)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(approval.amountCents.usd)
+                    .monoText(22, weight: .bold, maxScale: 1.6)
+                    .foregroundStyle(Theme.text)
+                if let deal { Text("from \(deal.source)").monoMeta() }
+                Spacer(minLength: 8)
+                Text(approval.requestedAt, format: .relative(presentation: .named)).monoMeta()
             }
             if let deal, deal.priceCents != approval.amountCents {
-                Label("Price changed to \(deal.priceCents.usd) since this was requested. Approving won't buy it.",
-                      systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle").font(.system(size: 12)).accessibilityHidden(true)
+                    Text("Price changed to \(deal.priceCents.usd) since this was requested. Approving won't buy it.")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .monoText(12.5)
+                .foregroundStyle(Theme.ochreInk)
+                .accessibilityElement(children: .combine)
             }
             if let level = deal?.fraudLevel, let score = deal?.fraudScore {
                 FraudChip(level: level, score: score)
             }
             Text("Over your approval limit. The agent pays with Visa only after you approve.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            HStack {
+                .sansText(14)
+                .foregroundStyle(Theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 10) {
                 Button(role: .destructive) { confirmDeny = true } label: {
                     Label("Deny", systemImage: "xmark").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.pill(.danger))
                 Button { decide(approve: true) } label: {
                     Label("Approve", systemImage: "checkmark").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
+                .buttonStyle(.pill(.primary))
             }
+            .padding(.top, 4)
             .disabled(working)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 18)
         .confirmationDialog("Deny this purchase?", isPresented: $confirmDeny, titleVisibility: .visible) {
             Button("Deny \(approval.amountCents.usd)", role: .destructive) { decide(approve: false) }
         } message: {
@@ -223,12 +288,8 @@ struct ReplayBadge: View {
     var sample = false
 
     var body: some View {
-        Text(sample ? "SAMPLE" : "REPLAY")
-            .font(.caption2.weight(.bold))
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .foregroundStyle(.purple)
-            .overlay(Capsule().strokeBorder(.purple.opacity(0.6)))
+        MonoTag(text: sample ? "Sample" : "Replay", tone: Theme.muted)
+            .accessibilityElement(children: .ignore)
             .accessibilityLabel(sample ? "Sample data, not a live listing" : "Cached replay, not a live listing")
     }
 }
@@ -244,9 +305,9 @@ extension FraudLevel {
 
     var tint: Color {
         switch self {
-        case .low: .green
-        case .medium: .orange
-        case .high: .red
+        case .low: Theme.accentStrong
+        case .medium: Theme.ochreInk
+        case .high: Theme.danger
         }
     }
 }
@@ -256,36 +317,37 @@ struct FraudChip: View {
     let score: Double
 
     var body: some View {
-        Label("\(level.label) · \(score.formatted(.number.precision(.fractionLength(2))))",
-              systemImage: level == .low ? "checkmark.shield" : "exclamationmark.shield")
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .foregroundStyle(level.tint)
-            .background(level.tint.opacity(0.12), in: .capsule)
+        HStack(spacing: 6) {
+            Image(systemName: level == .low ? "checkmark.shield" : "exclamationmark.shield")
+                .font(.system(size: 11))
+                .accessibilityHidden(true)
+            Text("\(level.label) · \(score.formatted(.number.precision(.fractionLength(2))))").monoText(12.5)
+        }
+        .foregroundStyle(level.tint)
+        .lineLimit(1)
+        .accessibilityElement(children: .combine)
     }
 }
 
 /// SIMULATED for simulated payments (never presented as real), otherwise the Visa sandbox label.
+/// Simulated is a filled ochre pill so it can't be mistaken for the outlined sandbox tag.
 struct VisaRailBadge: View {
     let badge: VisaPaymentBadge
 
     var body: some View {
         if badge.simulated {
             Text(badge.railLabel)
-                .font(.caption2.weight(.heavy))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .foregroundStyle(.white)
-                .background(.orange, in: .capsule)
+                .monoText(10.5, weight: .bold, maxScale: 1.6)
+                .tracking(0.5)
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .foregroundStyle(Theme.bg)
+                .background(Theme.ochreInk, in: .capsule)
                 .accessibilityLabel("Simulated payment, no money moved")
         } else {
-            Text(badge.railLabel)
-                .font(.caption2.weight(.heavy))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .foregroundStyle(.white)
-                .background(.blue, in: .capsule)
+            MonoTag(text: badge.railLabel, tone: Theme.muted)
+                .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Visa sandbox payment, test card, no real money")
         }
     }
@@ -302,9 +364,9 @@ extension VisaPaymentBadge.State {
 
     var tint: Color {
         switch self {
-        case .hold: .orange
-        case .paid: .green
-        case .failed: .red
+        case .hold: Theme.ochreInk
+        case .paid: Theme.accentStrong
+        case .failed: Theme.danger
         }
     }
 }
@@ -315,20 +377,22 @@ struct VisaPaymentRow: View {
 
     var body: some View {
         let badge = VisaPaymentBadge(payment)
-        HStack(spacing: 8) {
-            Label(badge.stateLabel, systemImage: badge.state.systemImage)
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .foregroundStyle(badge.state.tint)
-                .background(badge.state.tint.opacity(0.12), in: .capsule)
-                .symbolEffect(.pulse, isActive: badge.state == .hold)
+        HStack(spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 7))
+                    .symbolEffect(.pulse, isActive: badge.state == .hold)
+                    .accessibilityHidden(true)
+                Text(badge.stateLabel).monoText(12.5)
+            }
+            .foregroundStyle(badge.state.tint)
             Text(payment.formattedAmount)
-                .font(.subheadline.monospacedDigit())
+                .rowValue()
                 .strikethrough(badge.state == .failed)
-            Spacer()
+            Spacer(minLength: 8)
             VisaRailBadge(badge: badge)
         }
+        .lineLimit(1)
         .accessibilityElement(children: .combine)
     }
 }
