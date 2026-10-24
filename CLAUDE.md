@@ -10,6 +10,7 @@ Read these before writing code:
 - `docs/data-model.md`: SpacetimeDB tables + reducers. **This is the contract between lanes.**
 - `docs/tasks/NN-*.md`: the brief for the task you're working on (same text as the GitHub issue)
 - `docs/tracks.md`: sponsor-track requirements. Check it before cutting a corner a judge would care about.
+- `docs/demo.md`: demo runbook (seeded backup room, the 2-minute script, fallbacks)
 
 ## Repo map
 | Path | What | Owner lane |
