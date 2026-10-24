@@ -14,6 +14,7 @@ struct RoomModelView: View {
 
     var body: some View {
         RealityView { content in
+            AppliedLookComponent.registerComponent()
             await RoomScene.prepareLook()
             let room = RoomScene.make(geometry)
             RoomScene.addEnvironmentLight(to: room)
@@ -73,24 +74,32 @@ struct RoomModelView: View {
     }
 
     /// Recolors furniture for the current mode and selection, and shows labels.
+    /// Incremental: each container remembers the look it last got, so SwiftUI
+    /// updates only rebuild materials or labels whose inputs changed.
     private func apply(to room: Entity) {
         guard let objects = room.children.first(where: { $0.name == "objects" }) else { return }
+        let byId = Dictionary(geometry.objects.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let fontSize = labelSize
         for container in objects.children {
             let id = String(container.name.dropFirst(RoomScene.objectPrefix.count))
-            guard let object = geometry.objects.first(where: { $0.id == id }),
+            guard let object = byId[id],
                   let body = RoomScene.body(of: container) else { continue }
             let item = items[id]
             let selected = id == selection
             let color = RoomPalette.color(for: object, item: item, mode: mode)
-            RoomScene.recolor(body, color, roughness: 0.5, glow: selected)
-            body.scale = selected ? SIMD3(repeating: 1.06) : .one
+            let look = RoomObjectLook(color: RoomSceneCache.rgba(color), selected: selected,
+                                      label: showLabels || selected ? RoomObjectLook.labelText(for: object, item: item) : nil,
+                                      labelSize: fontSize)
+            let changes = look.changes(since: container.components[AppliedLookComponent.self]?.look)
+            guard !changes.isEmpty else { continue }
 
-            container.children.filter { $0.name == "label" }.forEach { $0.removeFromParent() }
-            if showLabels || selected {
-                var text = item?.name ?? object.category.capitalized
-                if item?.maybeSentimental == true { text += " ♥" }
-                container.addChild(RoomScene.label(text, above: object, fontSize: labelSize))
+            if changes.contains(.color) { RoomScene.recolor(body, color, roughness: 0.5, glow: selected) }
+            if changes.contains(.selection) { RoomScene.setSelected(body, selected: selected) }
+            if changes.contains(.label) {
+                container.children.filter { $0.name == "label" }.forEach { $0.removeFromParent() }
+                if let text = look.label { container.addChild(RoomScene.label(text, above: object, fontSize: fontSize)) }
             }
+            container.components.set(AppliedLookComponent(look: look))
         }
     }
 }
