@@ -210,6 +210,7 @@ struct DealRow: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel((isChosen ? "Chosen deal. " : "") + deal.accessibilitySummary
                                 + (deal.fraudReasons.isEmpty || deal.fraudLevel == .low ? "" : ". " + deal.fraudReasons.joined(separator: ". ")))
+            .accessibilityIdentifier("deal.\(deal.id)")
             ForEach(payments) { VisaPaymentRow(payment: $0) }
             if failed {
                 CommerceProblem(text: "Couldn't send your choice. Check the connection and try again.")
@@ -231,6 +232,7 @@ struct DealRow: View {
                         MonoTag(text: "Blocked: likely fraud", tone: Theme.danger)
                             .fixedSize()
                             .accessibilityLabel("Blocked, likely fraud. The agent won't buy this deal.")
+                            .accessibilityIdentifier("deal.blocked.\(deal.id)")
                     } else {
                         // Disabled while a hold or a purchase approval is pending: that one finishes (or is denied) first.
                         Button { choose() } label: {
@@ -240,6 +242,7 @@ struct DealRow: View {
                         .disabled(working || locked)
                         .accessibilityLabel("Choose this deal, \(deal.formattedPrice) from \(deal.source)")
                         .accessibilityHint(locked ? "Locked while a hold or an approval is pending for this item" : "")
+                        .accessibilityIdentifier("deal.choose.\(deal.id)")
                     }
                 }
             }

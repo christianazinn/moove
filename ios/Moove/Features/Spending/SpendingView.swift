@@ -181,6 +181,7 @@ struct PaymentRow: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(payment.accessibilitySummary + (failureReason.map { " \($0)" } ?? ""))
+            .accessibilityIdentifier("payment.\(payment.id)")
             // Only real x402 payments with a tx hash link out (`explorerURL` is nil when simulated).
             if let url = payment.explorerURL, let hash = payment.txHash {
                 Link(destination: url) {
@@ -191,6 +192,7 @@ struct PaymentRow: View {
                 }
                 .accessibilityLabel("View the transaction on Basescan")
                 .accessibilityHint("Opens sepolia.basescan.org")
+                .accessibilityIdentifier("payment.basescan.\(payment.id)")
             }
         }
         .padding(.top, 16)
