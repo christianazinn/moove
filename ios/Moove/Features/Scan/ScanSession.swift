@@ -5,7 +5,7 @@ import MooveKit
 
 /// One scan, from RoomPlan result to `importScan`. Everything is also written
 /// to Documents/scans/<id>/ in the #3 fixture layout (room.json, room.usdz,
-/// geometry.json, photos/<object uuid>.jpg) so a good scan can be copied off the device
+/// geometry.json, photos/<object uuid>.jpg, frames/, colors.json) so a good scan can be copied off the device
 /// (Files app or `xcrun devicectl device copy from`) and committed as a fixture.
 @MainActor
 @Observable
@@ -40,6 +40,11 @@ final class ScanSession {
     private(set) var objects: [DetectedObject] = []
     private(set) var photos: [UUID: URL] = [:]
     private(set) var geometry: RoomGeometry?
+    /// Wall, floor and per-object colors sampled from the capture's camera frames. Nil until
+    /// the analysis finishes (a second or two after capture), or if no frames were kept.
+    private(set) var colors: ScanColors?
+    /// Keeps camera keyframes during capture for `colors`.
+    let frameRecorder = ScanFrameRecorder()
     /// Set when some files couldn't reach the worker's upload server.
     private(set) var uploadProblem: String?
     let folder: URL
@@ -55,6 +60,7 @@ final class ScanSession {
     var roomUSDZ: URL { folder.appending(path: "room.usdz") }
 
     func captured(_ room: CapturedRoom) {
+        frameRecorder.stop()
         do {
             try JSONEncoder().encode(room).write(to: roomJSON)
             try room.export(to: roomUSDZ, exportOptions: .model)
@@ -76,6 +82,19 @@ final class ScanSession {
             )
         }
         phase = .reviewing
+        analyzeColors()
+    }
+
+    /// Samples real colors from the kept frames off the main actor. The raw geometry is in
+    /// the same ARSession world space as the frames (don't use a `centered()` copy here).
+    private func analyzeColors() {
+        guard let geometry, !frameRecorder.frames.isEmpty else { return }
+        let frames = frameRecorder.frames, folder = folder
+        Task { [weak self] in
+            let colors = await ScanColorAnalysis.run(geometry: geometry, frames: frames, saveTo: folder)
+            try? JSONEncoder().encode(colors).write(to: folder.appending(path: "colors.json"))
+            self?.colors = colors
+        }
     }
 
     /// An item RoomPlan missed, added by its photo. The vision agent names and

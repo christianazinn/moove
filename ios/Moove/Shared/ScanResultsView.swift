@@ -14,12 +14,17 @@ struct ScanResultsView: View {
     var onSelect: (Item) -> Void
     /// The scan's real room (walls, doors, windows, object positions). Nil: estimate a room.
     var geometry: RoomGeometry?
+    /// Real colors sampled from the scan's photos: furniture uses them over its keyword palette.
+    /// `colors?.wallColor` / `floorColor` are for the dollhouse shell (VoxelHouse) once it takes them.
+    var colors: ScanColors?
 
-    init(room: Room?, items: [Item], comps: [Comp], geometry: RoomGeometry? = nil, onSelect: @escaping (Item) -> Void = { _ in }) {
+    init(room: Room?, items: [Item], comps: [Comp], geometry: RoomGeometry? = nil, colors: ScanColors? = nil,
+         onSelect: @escaping (Item) -> Void = { _ in }) {
         self.room = room
         self.items = items
         self.comps = comps
         self.geometry = geometry
+        self.colors = colors
         self.onSelect = onSelect
     }
 
@@ -31,9 +36,9 @@ struct ScanResultsView: View {
             stage
             inventory.padding(.top, 40)
         }
-        .onChange(of: ModelKey(name: roomName, items: items.map(LayoutItem.init), geometry: geometry), initial: true) { _, key in
+        .onChange(of: ModelKey(name: roomName, items: items.map { LayoutItem($0, colors: colors) }, geometry: geometry), initial: true) { _, key in
             if let geometry = key.geometry {
-                model = EstimatedRoom.scanned(name: key.name, geometry: geometry, items: items)
+                model = EstimatedRoom.scanned(name: key.name, geometry: geometry, items: items, layoutItems: key.items)
             } else {
                 model = EstimatedRoom.build(name: key.name, items: key.items)
             }
@@ -112,7 +117,7 @@ struct ScanResultsView: View {
                         valueTint: ranges[item.id] == nil ? Theme.muted : Theme.text,
                         chevron: true
                     ) {
-                        VoxelThumbnail(item)
+                        VoxelThumbnail(spec: Self.spec(item, colors: colors))
                     } trailing: {
                         if item.maybeSentimental { MonoTag(text: "Needs you", tone: Theme.ochreInk) }
                     }
@@ -122,6 +127,13 @@ struct ScanResultsView: View {
                 .accessibilityAddTraits(.isButton)
             }
         }
+    }
+
+    /// The thumbnail spec, with the item's scanned colors when there are any.
+    static func spec(_ item: Item, colors: ScanColors?) -> VoxelItemSpec {
+        let c = colors?.colors(for: item)
+        return VoxelItemSpec(category: item.category, name: item.name, widthM: item.widthM, depthM: item.depthM, heightM: item.heightM,
+                             primaryColor: c?.primary, secondaryColor: c?.secondary)
     }
 
     static func meta(_ item: Item) -> String {
@@ -184,10 +196,11 @@ struct EstimatedRoom {
 
     /// The scanned room with each item where the scan found it. Items the scan can't match
     /// (added by photo, no RoomPlan object) are left out of the 3D view; they stay in the list.
-    static func scanned(name: String, geometry: RoomGeometry, items: [Item]) -> EstimatedRoom {
+    /// `layoutItems` are `items` as layout items (with their scanned colors); defaults to plain ones.
+    static func scanned(name: String, geometry: RoomGeometry, items: [Item], layoutItems: [LayoutItem]? = nil) -> EstimatedRoom {
         let result = geometry.dollhouse(roomName: name, items: items)
         let b = result.plan.bounds
-        return EstimatedRoom(plan: result.plan, items: items.map(LayoutItem.init), placements: result.placements,
+        return EstimatedRoom(plan: result.plan, items: layoutItems ?? items.map(LayoutItem.init), placements: result.placements,
                              widthM: b.width, depthM: b.depth, scanned: true)
     }
 
