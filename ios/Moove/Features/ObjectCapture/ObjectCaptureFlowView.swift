@@ -13,6 +13,8 @@ struct ObjectCaptureFlowView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var session: ObjectCaptureSession?
+    /// Held so Cancel can stop a reconstruction that's already running.
+    @State private var photogrammetry: PhotogrammetrySession?
     @State private var phase: Phase = .capturing
     @State private var progress: Double = 0
     @State private var stage: String = "Preparing"
@@ -130,13 +132,18 @@ struct ObjectCaptureFlowView: View {
 
     private func reconstruct() async {
         phase = .reconstructing
-        let output = ObjectModelStore.shared.modelFile(for: objectId)
+        // Build into a temp file and only replace the item's model once it succeeds,
+        // so a failed or cancelled recapture keeps the previous good model.
+        let final = ObjectModelStore.shared.modelFile(for: objectId)
+        let output = folder.appending(path: "model-building.usdz")
         try? FileManager.default.removeItem(at: output)
         do {
             var configuration = PhotogrammetrySession.Configuration()
             configuration.checkpointDirectory = checkpointFolder
             configuration.isObjectMaskingEnabled = true
             let photogrammetry = try PhotogrammetrySession(input: imagesFolder, configuration: configuration)
+            self.photogrammetry = photogrammetry
+            defer { self.photogrammetry = nil }
             try photogrammetry.process(requests: [.modelFile(url: output)])
             for try await event in photogrammetry.outputs {
                 switch event {
@@ -150,8 +157,15 @@ struct ObjectCaptureFlowView: View {
                 case .processingCancelled:
                     return
                 case .processingComplete:
+                    try? FileManager.default.removeItem(at: final)
+                    do {
+                        try FileManager.default.moveItem(at: output, to: final)
+                    } catch {
+                        phase = .failed("Couldn't save the model: \(error.localizedDescription)")
+                        return
+                    }
                     ObjectModelStore.shared.didSaveModel(for: objectId)
-                    onFinished(output)
+                    onFinished(final)
                     phase = .done
                     return
                 default:
@@ -164,7 +178,9 @@ struct ObjectCaptureFlowView: View {
     }
 
     private func cancel() {
+        photogrammetry?.cancel()
         session?.cancel()
+        try? FileManager.default.removeItem(at: folder.appending(path: "model-building.usdz"))
         try? FileManager.default.removeItem(at: imagesFolder)
         try? FileManager.default.removeItem(at: checkpointFolder)
         dismiss()
