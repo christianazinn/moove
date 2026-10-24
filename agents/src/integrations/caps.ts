@@ -18,16 +18,31 @@ const warned = new Set<string>();
 
 /** Dollars for `key`: the env value if it is a finite number >= 0, else the default (with a warning). */
 export function usdCapFromEnv(env: SpendCapEnv, key: SpendCapKey, warn: Warn = console.warn): number {
-  const d = SPEND_CAP_DEFAULTS[key];
-  const raw = env[key];
+  return numberFromEnv(env[key], key, SPEND_CAP_DEFAULTS[key], { min: 0 }, warn);
+}
+
+/**
+ * Any numeric limit from env (also HOMES_MAX_PAID_CALLS / HOMES_SPEND_WINDOW_H in config.ts): a finite
+ * number >= `min` (or > `above`) is used; unset/empty means the default, quietly; anything else (NaN,
+ * Infinity, out of range) warns once per key+value and uses the default.
+ */
+export function numberFromEnv(
+  raw: string | undefined,
+  key: string,
+  d: number,
+  range: { min?: number; above?: number } = { min: 0 },
+  warn: Warn = console.warn
+): number {
   if (raw === undefined || raw.trim() === '') return d;
   const n = Number(raw);
-  if (Number.isFinite(n) && n >= 0) return n;
+  const inRange = (range.min === undefined || n >= range.min) && (range.above === undefined || n > range.above);
+  if (Number.isFinite(n) && inRange) return n;
   // Once per key+value per process: the startup check and the rail/checkout constructors share this.
   const seen = `${key}=${raw}`;
   if (!warned.has(seen)) {
     warned.add(seen);
-    warn(`[caps] WARNING: ${key}=${JSON.stringify(raw)} is not a number >= 0; using the default ${d}. Fix it in .env.local.`);
+    const want = range.above !== undefined ? `> ${range.above}` : `>= ${range.min ?? 0}`;
+    warn(`[caps] WARNING: ${key}=${JSON.stringify(raw)} is not a number ${want}; using the default ${d}. Fix it in .env.local.`);
   }
   return d;
 }

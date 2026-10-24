@@ -29,6 +29,22 @@ import Testing
         }
     }
 
+    @Test func onADeviceTheBuildURLBeatsALoopbackAnnouncement() {
+        // The worker announces http://localhost:8787 when PUBLIC_UPLOAD_BASE_URL is unset.
+        let build = URL(string: "https://moove-uploads.example.com")
+        for loop in ["http://localhost:8787", "http://127.0.0.1:8787"] {
+            let c = ServiceConfig(values: ["upload_base_url": loop])
+            #expect(c.uploadBaseURL(fallback: build, onDevice: true) == build, "\(loop)")
+            #expect(c.uploadBaseURL(fallback: build, onDevice: false)?.absoluteString == loop, "the Simulator can reach the laptop's localhost")
+            #expect(c.uploadBaseURL(fallback: nil, onDevice: true)?.absoluteString == loop, "no build URL: keep the announcement")
+        }
+        // LAN and tunnel announcements still win on a device.
+        for live in ["http://192.168.1.20:8787", "https://x.trycloudflare.com", "http://aiden-mbp.local:8787"] {
+            #expect(ServiceConfig(values: ["upload_base_url": live]).uploadBaseURL(fallback: build, onDevice: true)?.absoluteString == live)
+        }
+        #expect(ServiceConfig.runningOnDevice == false, "swift test never runs on a phone")
+    }
+
     @Test func parsesWorkerStatus() {
         let c = ServiceConfig(values: ["worker_version": "878eead", "worker_started_at": "2026-10-24T09:00:57.123Z"])
         #expect(c.workerVersion == "878eead")

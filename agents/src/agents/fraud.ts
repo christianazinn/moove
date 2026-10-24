@@ -269,6 +269,56 @@ async function screen(conn: Conn, d: Deal): Promise<void> {
   }
 }
 
+// Re-screen (after #143's retry): a deal whose set_deal_fraud failed every try stays at -1 and its
+// purchase waits at "Waiting for the fraud screen" until a restart. So every FRAUD_RESCREEN_MS (60 s)
+// a low-frequency sweep re-screens deals this worker has seen unscored for at least
+// FRAUD_RESCREEN_AGE_MS (30 s), at most RESCREEN_MAX_ATTEMPTS times per deal, then gives up with one
+// error event (a restart starts the count again). Age is measured from when this worker first saw the
+// deal unscored, not created_at, so DB/worker clock skew doesn't matter. The timer is unref()'d.
+export const RESCREEN_MAX_ATTEMPTS = 3;
+const RESCREEN_EVERY_MS = Number(process.env.FRAUD_RESCREEN_MS ?? '60000');
+const RESCREEN_AGE_MS = Number(process.env.FRAUD_RESCREEN_AGE_MS ?? '30000');
+const firstSeenUnscored = new Map<bigint, number>();
+const rescreens = new Map<bigint, number>();
+let rescreenTimer: NodeJS.Timeout | undefined;
+
+/** One re-screen pass (exported for tests). Returns the ids it re-screened. */
+export function rescreenStale(conn: Conn, now = Date.now()): bigint[] {
+  const pendingItems = new Set(timers.keys()); // a settle timer will screen these anyway
+  const started: bigint[] = [];
+  for (const d of conn.db.deal.iter()) {
+    if (d.fraudScore !== -1 || inFlight.has(d.id) || pendingItems.has(d.shoppingItemId)) continue;
+    const seen = firstSeenUnscored.get(d.id);
+    if (seen === undefined) {
+      firstSeenUnscored.set(d.id, now);
+      continue;
+    }
+    if (now - seen < RESCREEN_AGE_MS) continue;
+    const n = rescreens.get(d.id) ?? 0;
+    if (n > RESCREEN_MAX_ATTEMPTS) continue; // already gave up
+    if (n === RESCREEN_MAX_ATTEMPTS) {
+      rescreens.set(d.id, n + 1);
+      logEvent(conn, { owner: d.owner, agent: 'fraud', kind: 'error', message: `Fraud screen gave up on "${d.title}" after ${n} re-screens; it stays unscored until the worker restarts.`, refTable: 'deal', refId: d.id });
+      continue;
+    }
+    rescreens.set(d.id, n + 1);
+    console.warn(`[fraud] deal ${d.id} still unscored after ${Math.round((now - seen) / 1000)} s, re-screening (${n + 1}/${RESCREEN_MAX_ATTEMPTS})`);
+    started.push(d.id);
+    void screen(conn, d);
+  }
+  return started;
+}
+
+/** Stops the re-screen timer and pending settle timers (tests; the worker just exits). */
+export function stopFraudAgent(): void {
+  clearInterval(rescreenTimer);
+  rescreenTimer = undefined;
+  for (const t of timers.values()) clearTimeout(t);
+  timers.clear();
+  firstSeenUnscored.clear();
+  rescreens.clear();
+}
+
 function screenPending(conn: Conn, shoppingItemId: bigint): void {
   timers.delete(shoppingItemId);
   for (const d of conn.db.deal.iter()) {
@@ -282,13 +332,24 @@ export const fraudAgent: Agent = {
   start(conn) {
     if (detector === undefined) detector = chooseAiTextDetector();
     console.log(`[fraud] AI-text detector: ${detector ? detector.name : 'off (PANGRAM_URL unset)'}`);
+    stopFraudAgent(); // a second start() (tests) replaces the first one's timer
     const maybe = (d: Deal) => {
-      if (d.fraudScore !== -1 || inFlight.has(d.id)) return;
+      if (d.fraudScore !== -1) {
+        firstSeenUnscored.delete(d.id);
+        rescreens.delete(d.id);
+        return;
+      }
+      if (!firstSeenUnscored.has(d.id)) firstSeenUnscored.set(d.id, Date.now());
+      if (inFlight.has(d.id)) return;
       clearTimeout(timers.get(d.shoppingItemId));
       timers.set(d.shoppingItemId, setTimeout(() => screenPending(conn, d.shoppingItemId), SETTLE_MS));
     };
     for (const d of conn.db.deal.iter()) maybe(d);
     conn.db.deal.onInsert((_ctx, d) => maybe(d));
     conn.db.deal.onUpdate((_ctx, _old, d) => maybe(d));
+    if (RESCREEN_EVERY_MS > 0) {
+      rescreenTimer = setInterval(() => rescreenStale(conn), RESCREEN_EVERY_MS);
+      rescreenTimer.unref?.(); // never keeps the worker alive on its own
+    }
   },
 };
