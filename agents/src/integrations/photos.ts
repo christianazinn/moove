@@ -135,7 +135,10 @@ export async function loadPhoto(
 ): Promise<ImageInput> {
   const src = resolvePhotoSource(raw, policy);
   if (src.kind === 'local') {
-    const buf = await readFile(src.file);
+    // Vision errors land in agent_event rows clients can read, so don't echo the server path.
+    const buf = await readFile(src.file).catch(() => {
+      throw new PhotoUrlError('upload not found on this worker');
+    });
     if (buf.length > MAX_PHOTO_BYTES) throw new PhotoUrlError('photo is too large');
     // heic isn't an API media type; label it jpeg like the upload server's fetch path always did.
     return { mediaType: MEDIA_BY_EXT[src.ext] ?? 'image/jpeg', data: buf.toString('base64') };

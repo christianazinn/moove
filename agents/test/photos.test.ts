@@ -38,6 +38,15 @@ test("own upload URLs are read from disk, never fetched", async () => {
   assert.equal(Buffer.from(img.data, "base64").toString(), "jpeg-bytes");
 });
 
+test("a missing upload fails without echoing the server's upload path", async () => {
+  const missing = "00000000-0000-4000-8000-000000000000.png";
+  await assert.rejects(loadPhoto(`https://moove-tunnel.example.com/files/${missing}`, policy, { fetch: noFetch }), (err: Error) => {
+    assert.ok(err instanceof PhotoUrlError);
+    assert.ok(!err.message.includes(uploadDir), err.message);
+    return true;
+  });
+});
+
 test("upload base URL with a path prefix and host case differences still match", () => {
   const p = { ...policy, publicUploadBaseUrl: "http://192.168.1.20:8787/moove/" };
   const src = resolvePhotoSource(`HTTP://192.168.1.20:8787/moove/files/${NAME}`, p);
