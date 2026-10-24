@@ -152,7 +152,7 @@ async function checkout(conn: Conn, s: ShoppingItem): Promise<void> {
   busy.add(key);
   try {
     const visa = visaCheckout(conn);
-    logEvent(conn, { ...ref, kind: 'plan', message: `Checking out "${d.title}" for ${dollars(d.priceCents)} via Visa${visa.simulated ? ' (simulated)' : ''}${gate.approvalId ? ', approved by the user' : `, under the ${dollars(threshold)} approval threshold`}` });
+    logEvent(conn, { ...ref, kind: 'plan', message: `Checking out "${d.title}" for ${dollars(d.priceCents)} via Visa (${visa.simulated ? 'simulated' : 'sandbox, test card'}; the result says what actually ran)${gate.approvalId ? ', approved by the user' : `, under the ${dollars(threshold)} approval threshold`}` });
     const r = await visa.purchase({
       owner: s.owner,
       agent: AGENT,
