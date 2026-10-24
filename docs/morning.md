@@ -85,13 +85,13 @@ Everyone: pull `main`, then `cd ios && xcodegen`, then build to your phone.
 3. Create the new home (Move tab). **Expected:**
    - The shopping list fills in, deals appear, and fraud flags show. The planted Zelle-only Aeron is blocked.
    - When you choose a card deal, the purchase approval says **SIMULATED** (#238). Approve it, and a simulated Visa payment appears in Spending.
-4. Spending log: every x402 comps payment is listed (simulated, since the worker has no CDP keys).
+4. Spending log: every x402 comps payment is listed. Rows from after ~12:40 PDT Saturday are real Base Sepolia payments with a Basescan link (the worker has CDP keys now); older rows are labeled SIMULATED.
 
 ### Christian: decisions + submission
 See "Needs a human" below, then the Devpost draft (`docs/devpost.md`) and the demo video.
 
 ## Needs a human
-1. **Keys (or keep simulated):** real CDP keys on the worker make the x402 payments real Base Sepolia testnet transactions (Coinbase track). The same goes for eBay sandbox keys and the Auth0 CIBA config. Everything is labeled simulated today. Put keys in the repo-root `.env.local`; the workers restart themselves when it changes.
+1. **Keys (or keep simulated):** done for x402: the worker has CDP keys since ~12:40 PDT Saturday, so comps payments are real Base Sepolia testnet transactions (Coinbase track). eBay sandbox keys and the Auth0 CIBA config are still missing, so those stay labeled simulated. Put keys in the repo-root `.env.local`; the workers restart themselves when it changes.
 2. **Anthropic pitch community:** still a TODO in `docs/devpost.md` (suggestions are there).
 3. **Devpost text, gallery and demo video:**
    - [`docs/devpost.md`](devpost.md) is ready to paste (checked against `main` Sat ~12:30 PM, through #284); its "How to submit" checklist covers screenshots, fields, video, team and tracks.

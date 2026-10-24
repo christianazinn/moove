@@ -46,7 +46,7 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 ### 5. 0:51–1:04 The agent pays for its own data (x402)
 - **VO:** "When the pricing agent needs premium data, it pays for it itself: one cent of USDC over x402 on Base Sepolia, from a Coinbase server wallet. This Basescan link is the real transaction. Rows tagged Simulated are simulated, and a request over the per-call cap was refused before anything was signed."
 - **ON SCREEN:** Sell & Buy > **Spending**. Totals **Spent $0.01**, **Simulated $180.005**, **Refused 1**. The $0.01 "Premium comps for "Herman Miller Aeron"" row, tap **Basescan 0xc794…136c** (Safari shows the tx). Scroll to the red **Refused** $0.25 row, "Nothing was signed or paid."
-- **STATE:** Offline demo (the only state with the real payment's row; on Demo every x402 row is simulated with no Basescan link).
+- **STATE:** Offline demo (fixture data with the real proof row). Demo now also has a real row (the Herman Miller chair's $0.01 comps, Sat Oct 24), but its on-screen strings above are from Offline.
 - **TRACK:** Coinbase x402 (spending log, budget + per-call cap). Spacetime (every payment is a row).
 - **FALLBACK:** Laptop cutaway: `npm run x402:demo -- "Herman Miller Aeron"` in `agents/`, then the `On-chain:` link (a real 0.01 testnet USDC payment; its comps are canned fixture data, so don't call the data live). If the wallet is empty: open the proof tx https://sepolia.basescan.org/tx/0xc7942646380456c56dde204434aeb6115338b521b6e91a0901ec05dde1fe136c and say "settled earlier".
 
