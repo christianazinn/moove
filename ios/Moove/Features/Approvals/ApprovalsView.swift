@@ -15,11 +15,6 @@ struct ApprovalsView: View {
         let state = store.commerceState(hasRows: !(pending.isEmpty && decided.isEmpty && shared.isEmpty))
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                PageHeader(
-                    eyebrow: "05 — Approvals",
-                    title: "Your go-ahead.",
-                    lede: "When an agent wants to sell or buy something over your limit, it asks here first."
-                )
                 if state != .content {
                     CommercePlaceholder(
                         state: state,
@@ -42,14 +37,14 @@ struct ApprovalsView: View {
                         Image(systemName: "iphone.radiowaves.left.and.right")
                             .font(.system(size: 12))
                             .accessibilityHidden(true)
-                        Text("Also sent to your phone via Auth0 Guardian when set up. Approving here works too.")
+                        Text("Also sent to your phone (Auth0 Guardian).")
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .monoMeta()
                     .padding(.top, 12)
                 } else if !decided.isEmpty {
                     ListHeader(title: "Needs you", count: "0").padding(.top, 36)
-                    Text("You're all caught up. New requests over your limit show up here.")
+                    Text("All caught up.")
                         .monoMeta()
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.vertical, 16)

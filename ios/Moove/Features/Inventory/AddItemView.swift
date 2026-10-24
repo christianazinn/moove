@@ -24,11 +24,6 @@ struct AddItemView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    PageHeader(
-                        eyebrow: "02 — Inventory · Add",
-                        title: "Add an item.",
-                        lede: "Something the scan missed, or that's in another room. Add a photo and Moove identifies and prices it."
-                    )
 
                     Text("Name").eyebrow().padding(.top, 28)
                     TextField("e.g. Road bike", text: $name)
@@ -117,7 +112,7 @@ struct AddItemView: View {
 
     private var sizeText: String {
         let f = { (v: Double) in v.formatted(.number.precision(.fractionLength(1))) }
-        return "Typical size: \(f(size.w)) × \(f(size.d)) × \(f(size.h)) m (W × D × H), used for packing and the new home"
+        return "Typical size \(f(size.w)) × \(f(size.d)) × \(f(size.h)) m"
     }
 
     @ViewBuilder private var photoRow: some View {

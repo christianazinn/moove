@@ -15,11 +15,6 @@ struct SpendingView: View {
         let state = store.commerceState(hasRows: !split.isEmpty)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                PageHeader(
-                    eyebrow: "06 — Spending",
-                    title: "Where the money went.",
-                    lede: "Every payment the agents make, printed live: one receipt per agent run, with its budget and anything refused."
-                )
                 if state != .content {
                     CommercePlaceholder(
                         state: state,

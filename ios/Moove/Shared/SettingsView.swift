@@ -11,8 +11,6 @@ struct SettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    PageHeader(eyebrow: "Moove — Settings", title: "Settings",
-                               lede: "Your account, and where the app gets its data.")
 
                     section("Account") {
                         switch auth.state {

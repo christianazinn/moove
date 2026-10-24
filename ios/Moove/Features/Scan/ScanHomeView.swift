@@ -15,7 +15,6 @@ struct ScanHomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 PageHeader(
-                    eyebrow: "01 — Scan",
                     title: "Scan a room.",
                     lede: "Walk around slowly. Moove finds and measures every piece."
                 )

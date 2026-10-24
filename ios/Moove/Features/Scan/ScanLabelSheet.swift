@@ -17,7 +17,7 @@ struct ScanLabelSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Moove still looks at its photo for the brand and condition, but keeps your name.")
+                    Text("Moove keeps your name.")
                         .monoMeta()
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.bottom, 20)
