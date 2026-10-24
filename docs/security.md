@@ -89,11 +89,11 @@ The vision prompt also says that text visible in photos is evidence, never instr
 Anything not real says so in the data (`simulated: true` on `listing` and `payment`), in event messages (`[SIMULATED]`, `(simulated)`), and in the UI. Today that covers the simulated eBay posts (whenever eBay sandbox keys are absent), the simulated x402 rail (no CDP keys or `X402_SIMULATE=1`), and the Visa checkout until the Starter Pack lands. Real x402 payments link to the Base Sepolia explorer.
 
 ## Pending (with issues)
-- ⏳ **Connection gate + private tables with per-user views**: [#41](https://github.com/christianazinn/moove/issues/41). Check `iss`/`aud` in `client_connected`, make tables private, and expose `my_*` views filtered by `ctx.sender` (which needs an indexed `owner` on `comp`). This also closes the public `join_code` hole. It has to wait for Auth0 login (#1) because the app still connects with anonymous SpacetimeDB tokens.
+- ⏳ **Connection gate + private tables with per-user views**: [#41](https://github.com/christianazinn/moove/issues/41). Check `iss`/`aud` in `client_connected`, make tables private, and expose `my_*` views filtered by `ctx.sender` (comps join through the caller's items via the indexed `comp.item_id`; an `owner` column on `comp` is optional). This also closes the public `join_code` hole. It has to wait for Auth0 login (#1) because the app still connects with anonymous SpacetimeDB tokens.
 - ⏳ **The worker can't approve its own requests**: [#42](https://github.com/christianazinn/moove/issues/42).
 - ⏳ **Reducer hardening**: [#44](https://github.com/christianazinn/moove/issues/44). Take `register_user` identity fields from the JWT, pin the worker identity, restrict what owners can set in `update_listing`, and bound `set_approval_threshold`.
 - ⏳ **Upload auth**: verify the Auth0 bearer token on `POST /upload` once #1 lands (the iOS uploader already sends one when signed in).
-- ⏳ **SSRF**: block private and link-local addresses in `loadImage`.
+- ⏳ **SSRF**: block private and link-local addresses in `loadImage` (tracked in [#44](https://github.com/christianazinn/moove/issues/44)).
 - Nice to have: a CDP Policy Engine policy that only lets the wallet sign USDC authorizations; Auth0 CIBA with RAR `authorization_details` that bind the amount and item; `permissions: contents: read` in CI; Dependabot.
 
 ## Manual test: calling another user's reducer is rejected
