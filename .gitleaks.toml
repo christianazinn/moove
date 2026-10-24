@@ -1,5 +1,11 @@
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
+description = "Public identifiers, not secrets"
 paths = ['''\.env\.example''']
+
+[[allowlists]]
+description = "Auth0 native-app client IDs are public (shipped in every app binary)"
+regexTarget = "line"
+regexes = ['''MOOVE_AUTH0_CLIENT_ID\s*=''']
