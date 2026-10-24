@@ -236,6 +236,10 @@ struct NewHomeDetail: View {
                             .padding(.horizontal, Theme.gutter)
                             .padding(.top, 36)
                     }
+                    if !shownPlacements.isEmpty {
+                        RoomShotsSection(homeName: name, plan: plan, items: furniture.items, placements: shownPlacements, ready: ready)
+                            .padding(.top, 44)
+                    }
                     pieces(proxy)
                         .padding(.horizontal, Theme.gutter)
                         .padding(.top, 44)
