@@ -292,8 +292,9 @@ type Ctx = ReducerCtx<typeof spacetimedb.schemaType>;
 // Not secrets: the issuer and client id are in every Auth0 ID token the app holds.
 const AUTH0_ISSUER = 'https://dev-78lq8spq27b2bipk.us.auth0.com/'; // exactly as in the token's `iss`
 const AUTH0_IOS_CLIENT_ID = 'B674uRd1BKSPe11boeGRMXd2UlJIuDur'; // ID token `aud` (iOS native app)
-// Connection gate (#41 part A). Off until Auth0 login (#1) merges: the app still falls back to an
-// anonymous SpacetimeDB token. Setting it back to false is the demo escape hatch if login breaks on stage.
+// Connection gate (#41 part A). Off for now: Auth0 login (#1) has merged, but the app still falls back
+// to an anonymous SpacetimeDB token ("Guest"). Setting it back to false is the demo escape hatch if
+// login breaks on stage.
 const REQUIRE_AUTH0 = false;
 // On maincloud only the pinned worker identity may hold the worker role (#44). Every other database
 // (local dev) keeps first-caller-wins so teammates can run their own worker.
@@ -359,7 +360,10 @@ function getItem(ctx: Ctx, id: bigint) {
 export const onConnect = spacetimedb.clientConnected(ctx => {
   if (!REQUIRE_AUTH0 || ctx.senderAuth.isInternal) return;
   // The worker connects with a SpacetimeDB-minted token, not Auth0.
-  if (pinnedWorkers(ctx)?.includes(hex(ctx.sender)) || isWorker(ctx)) return;
+  const pinned = pinnedWorkers(ctx);
+  if (pinned?.includes(hex(ctx.sender)) || isWorker(ctx)) return;
+  // A fresh local DB has no worker yet: let the first one in so it can call register_worker.
+  if (pinned == null && ctx.db.worker.count() === 0n) return;
   const jwt = auth0Claims(ctx);
   if (!jwt || !jwt.audience.includes(AUTH0_IOS_CLIENT_ID)) {
     throw new SenderError('sign in with Auth0 to use Moove');
