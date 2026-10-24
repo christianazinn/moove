@@ -1,0 +1,13 @@
+{
+  "model": "claude-sonnet-5-5",
+  "output": {
+    "name": "brown wood desk with orange metal legs",
+    "category": "table",
+    "material": "brown wood top with orange-red metal legs",
+    "brand": "",
+    "condition": "good",
+    "fragile": false,
+    "maybeSentimental": false,
+    "notes": "Low-resolution image shows a rectangular brown tabletop on thin orange-red legs with no visible logos or wear, so the brand is blank and the condition is assumed good."
+  }
+}
