@@ -60,7 +60,7 @@ struct InventoryView: View {
                     ForEach(items) { item in
                         LedgerRow(
                             title: item.name,
-                            meta: item.category.capitalized,
+                            meta: item.origin == .roomPhotos ? "\(item.category.capitalized) · from room photos" : item.category.capitalized,
                             value: item.priceText,
                             valueTint: item.estValueCents == nil ? Theme.muted : Theme.text
                         ) {
