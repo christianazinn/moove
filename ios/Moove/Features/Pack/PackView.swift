@@ -20,7 +20,7 @@ struct PackView: View {
                 PageHeader(
                     eyebrow: "08 — Pack",
                     title: "Pack your move.",
-                    lede: "A truck, a crew and a box for everything you're keeping, labeled by the room it's going to."
+                    lede: "Truck, crew and boxes for what you keep."
                 )
                 .padding(.top, 16)
                 .padding(.bottom, 24)
@@ -117,11 +117,11 @@ struct PackView: View {
                 }
                 .frame(height: 6)
                 .accessibilityHidden(true)
-                Text("\(Int((fill * 100).rounded()))% of the truck · \(plan.boxes.count) boxes, \(plan.furniture.count) furniture pieces")
+                Text("\(Int((fill * 100).rounded()))% full · \(plan.boxes.count) boxes · \(plan.furniture.count) furniture")
                     .monoMeta()
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text("Rough estimate from your items' volume. Ask movers for a real quote.")
+            Text("Rough estimate. Ask movers for a quote.")
                 .monoMeta()
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -162,7 +162,7 @@ struct PackView: View {
                 Text("\(sealedCount) sealed").monoMeta()
             }
             if boxes.isEmpty {
-                Text("No boxes needed: everything you're keeping is furniture.")
+                Text("No boxes needed. It's all furniture.")
                     .monoMeta()
                     .padding(.top, 14)
             }
@@ -223,7 +223,7 @@ struct PackView: View {
                             ForEach(Array(note.steps.enumerated()), id: \.offset) { i, step in
                                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                                     Text(i + 1 < 10 ? "0\(i + 1)" : "\(i + 1)")
-                                        .monoText(12.5, weight: .bold)
+                                        .monoText(13.5, weight: .bold)
                                         .foregroundStyle(Theme.accentStrong)
                                     Text(step).sansText(15).fixedSize(horizontal: false, vertical: true)
                                 }
@@ -308,7 +308,7 @@ struct PackView: View {
                     .frame(width: 12)
                     .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(Self.when(step.daysBeforeMove)).monoText(12.5).foregroundStyle(Theme.muted)
+                        Text(Self.when(step.daysBeforeMove)).monoText(13.5).foregroundStyle(Theme.muted)
                         Text(step.title).blockTitle().fixedSize(horizontal: false, vertical: true)
                         if !stepBoxes.isEmpty {
                             ScrollView(.horizontal, showsIndicators: false) {
