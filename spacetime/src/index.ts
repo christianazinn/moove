@@ -473,6 +473,25 @@ function newJoinCode(ctx: Ctx): string {
   }
 }
 
+// ---------- per-user views (#41 part B, step 1 of 2) ----------
+// Step 1 is additive: clients switch their subscriptions to these views (`SELECT * FROM my_room`,
+// `SELECT * FROM my_user`). Step 2 then makes `room` and `user` private, so join codes, emails
+// and Auth0 subjects stop being readable by everyone. Views return the base row types so the
+// generated decoders can be reused (names stay `my_<table>`).
+export const myRoom = spacetimedb.view({ name: 'my_room', public: true }, t.array(room.rowType), ctx => {
+  const out = [...ctx.db.room.owner.filter(ctx.sender)];
+  for (const m of ctx.db.roomMember.member.filter(ctx.sender)) {
+    const r = ctx.db.room.id.find(m.roomId);
+    if (r && !out.some(o => o.id === r.id)) out.push(r);
+  }
+  return out;
+});
+
+export const myUser = spacetimedb.view({ name: 'my_user', public: true }, t.array(user.rowType), ctx => {
+  const u = ctx.db.user.identity.find(ctx.sender);
+  return u ? [u] : [];
+});
+
 export const joinRoom = spacetimedb.reducer({ code: t.string() }, (ctx, { code }) => {
   const r = ctx.db.room.joinCode.find(code.trim().toUpperCase());
   if (!r) throw new SenderError('no room with that code');

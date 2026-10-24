@@ -43,6 +43,12 @@ Status values:
 - `shopping_item.status`: `open`\|`searching`\|`found`\|`bought`
 - `payment.status`: `pending`\|`settled`\|`failed`
 
+## Views (#41 part B)
+- **`my_room`**: rooms you own or joined through `room_member` (base `room` rows, including `join_code`).
+- **`my_user`**: your own `user` row.
+
+**Step 1 (now):** additive. Clients should subscribe with `SELECT * FROM my_room` / `SELECT * FROM my_user` instead of filtering the base tables. **Step 2 (after the iOS switch):** `room` and `user` become private, so join codes, emails and Auth0 subjects stop being world-readable, and the worker gets a worker-only users view for CIBA. One-off SQL queries against views return no rows (SDK behavior); use subscriptions.
+
 ## Reducers
 **App (owner), and the worker can call these too:**
 - **Users:** `register_user(auth0_sub, name, email)` (`auth0_sub`/`email` come from the token, see above), `set_approval_threshold(cents)` (`-1` = always ask, else `0..10000000` = $100,000)
