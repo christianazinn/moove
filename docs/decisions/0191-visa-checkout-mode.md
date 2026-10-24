@@ -1,6 +1,6 @@
 # 0191: The worker announces its Visa checkout mode (service_config `visa_checkout`)
 
-**Status:** accepted by lazy consensus (no objections by the 2026-10-24 11:01 UTC deadline on #191). Worker and app shipped by the commerce lane. **Module key pending in the backend lane:** `visa_checkout` still has to be added to `SERVICE_KEYS` in `spacetime/src/index.ts` and republished; until then the module rejects it and nothing changes in the app.
+**Status:** accepted by lazy consensus (no objections by the 2026-10-24 11:01 UTC deadline on #191). Worker and app shipped by the commerce lane. **Module key: backend lane.** `visa_checkout` was added to `SERVICE_KEYS` in `spacetime/src/index.ts` and to `docs/data-model.md` in #235. Each database (maincloud `moove`, `moove-demo`, local) still needs that module republished. Until then it rejects the key and the app shows nothing new.
 
 ## Context
 A pending purchase approval (e.g. the $429.99 wayfair sofa) showed no SIMULATED pill even when the worker's Visa rail was simulated. `deal` and `approval` carry no rail mode, the `payment` row (which has `simulated`) only exists after the approval, and older payments can't be trusted because the worker can restart with a different `VISA_PROVIDER`. That broke the "label anything simulated" rule. See #191.
@@ -15,6 +15,6 @@ A pending purchase approval (e.g. the $429.99 wayfair sofa) showed no SIMULATED 
 - The offline demo reports `simulated` (it never pays anyone), so the sofa approval shows the pill.
 
 ## Consequences
-- This adds a key, not a table or column, so there's no binding regen. `docs/data-model.md` (owned by the backend lane) should list `visa_checkout` when the module accepts it.
+- This adds a key, not a table or column, so there's no binding regen. `docs/data-model.md` (owned by the backend lane) lists it as of #235.
 - Workers have to restart to announce the key once the module accepts it.
 - The mode is per worker process, not per approval: a restart with a different `VISA_PROVIDER` changes the label on approvals that are already pending. That's acceptable, since the label describes what approving would do now.
