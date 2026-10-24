@@ -39,6 +39,7 @@ struct SummaryView: View {
                     money(s)
                     impact(s)
                     agents(s)
+                    safety(SafetySummary(snapshot: store.snapshot))
                 }
             }
             .padding(.horizontal, Theme.gutter)
@@ -310,6 +311,52 @@ struct SummaryView: View {
                     .accessibilityElement(children: .combine)
                 }
             }
+        }
+    }
+
+    /// The guardrails that fired (#225): scams blocked, approvals asked, sentimental items left
+    /// alone, spend against the caps. Simulated money says so in the line and gets a tag.
+    private func safety(_ safety: SafetySummary) -> some View {
+        let lines = safety.lines
+        return section("Agents kept you safe", tag: lines.contains(where: \.simulated) ? "Simulated" : nil) {
+            if lines.isEmpty {
+                Text(SafetySummary.emptyText).monoMeta().padding(.top, 16)
+            } else {
+                ForEach(lines) { line in
+                    HStack(alignment: .top, spacing: 14) {
+                        Image(systemName: Self.safetyIcon(line.kind))
+                            .font(.system(size: 14, weight: .light))
+                            .foregroundStyle(Theme.accentStrong)
+                            .frame(width: 18)
+                            .padding(.top, 2)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(line.text).monoText(13.5).fixedSize(horizontal: false, vertical: true)
+                            if let detail = line.detail {
+                                Text(detail).monoMeta().lineLimit(2)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        if line.simulated { MonoTag(text: "Sim", tone: Theme.ochreInk) }
+                    }
+                    .padding(.vertical, 12)
+                    .frame(minHeight: 44)
+                    .ruled()
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(line.spoken)
+                }
+            }
+        }
+    }
+
+    static func safetyIcon(_ kind: SafetySummary.LineKind) -> String {
+        switch kind {
+        case .fraud: "exclamationmark.shield"
+        case .approvals: "hand.raised"
+        case .sentimental: "heart"
+        case .x402: "dollarsign.circle"
+        case .card: "creditcard"
+        case .ai: "gauge"
         }
     }
 

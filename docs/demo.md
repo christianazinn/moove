@@ -64,7 +64,7 @@ Two phones if we have them: A (presenter) and B (shows live sync). Have the work
 5. **List and approve (20s).** Sell & Buy tab (**Listings**, then **Approvals**; the tab badge counts pending approvals). Mark something sell. The listing agent drafts an eBay listing. Anything over the $100 threshold needs approval: a Guardian push (Auth0 CIBA) or the in-app Approvals inbox.
 6. **Buy (15s).** Sell & Buy > **Shopping**. The new place needs something. The buy agent finds deals, screens them for fraud, and checks out after approval.
 7. **New home and fly-in (15s).** Move tab, **New Home**. Pick the demo house (**Use this home**), or **Import from a listing**: paste a Zillow link, optionally add floor-plan screenshots, **Build floor plan**, **Use this home**. Everything you kept flies out of your scanned room (drawn beside the house) to its new spot, and things you bought fly in too. Switch layout style (By function / Compact / Open), **Fly in** replays it, **Save layout** saves it. If there's time: **Pack** (same tab) for the boxes and the truck estimate.
-8. **Summary (5s).** Summary tab. Money made, money spent (real vs simulated), and kg kept out of landfill.
+8. **Summary (5s).** Summary tab. Money made, money spent (real vs simulated), and kg kept out of landfill. At the bottom, "Agents kept you safe": the scam deal blocked, approvals asked, sentimental items left to you, and spend against the caps (simulated labeled).
 
 ## Fallbacks
 Everything simulated says so, in the data (`simulated: true`) and in the UI.
