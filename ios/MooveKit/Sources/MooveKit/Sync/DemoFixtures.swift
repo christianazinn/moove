@@ -102,29 +102,42 @@ public enum DemoFixtures {
     public static func paymentEvents(owner: IdentityHex, now: Date = .now) -> [AgentEvent] {
         func ago(_ minutes: Double) -> Date { now.addingTimeInterval(-minutes * 60) }
         let explorer = BaseSepolia.explorerTxPrefix + realX402TxHash
+        // Every x402 event carries the rail fields from #45: rail, outcome, simulated, and the
+        // worker ledger's remaining budget and cap after that step.
+        func rail(_ outcome: String, remaining: Int64, simulated: Bool = false) -> String {
+            #""rail":"x402","outcome":"\#(outcome)","simulated":\#(simulated),"remainingUsdMicros":"\#(remaining)","capUsdMicros":"5000000""#
+        }
         return [
             AgentEvent(id: 600, owner: owner, agent: "pricing", kind: .toolCall,
                        message: "Paying $0.01 for premium comps for \"Herman Miller Aeron\"", refTable: "item", refId: 11,
-                       dataJson: #"{"payee":"\#(realX402Payee)","amountUsdMicros":"10000","simulated":false}"#,
+                       dataJson: #"{\#(rail("paying", remaining: 4_990_000)),"payee":"\#(realX402Payee)","amountUsdMicros":"10000"}"#,
                        createdAt: ago(25.1)),
             AgentEvent(id: 601, owner: owner, agent: "pricing", kind: .payment,
                        message: "Paid $0.01 USDC for premium comps for \"Herman Miller Aeron\"", refTable: "item", refId: 11,
-                       dataJson: #"{"txHash":"\#(realX402TxHash)","network":"base-sepolia","explorer":"\#(explorer)"}"#,
+                       dataJson: #"{\#(rail("settled", remaining: 4_990_000)),"payee":"\#(realX402Payee)","amountUsdMicros":"10000","txHash":"\#(realX402TxHash)","network":"base-sepolia","explorer":"\#(explorer)"}"#,
                        createdAt: ago(25)),
             AgentEvent(id: 602, owner: owner, agent: "pricing", kind: .payment,
-                       message: "[SIMULATED] Paid $0.01 USDC for premium comps for \"IKEA laminate desk\"",
-                       refTable: "item", refId: 12, dataJson: #"{"simulated":true}"#, createdAt: ago(18)),
+                       message: "[SIMULATED] Paid $0.01 USDC for premium comps for \"IKEA laminate desk\"", refTable: "item", refId: 12,
+                       dataJson: #"{\#(rail("settled", remaining: 4_980_000, simulated: true)),"payee":"simulated","amountUsdMicros":"10000"}"#,
+                       createdAt: ago(18)),
+            AgentEvent(id: 606, owner: owner, agent: "pricing", kind: .payment,
+                       message: "[SIMULATED] Paid $0.005 USDC for price history for \"Frigidaire mini fridge\"", refTable: "item", refId: 21,
+                       dataJson: #"{\#(rail("settled", remaining: 4_975_000, simulated: true)),"payee":"simulated","amountUsdMicros":"5000"}"#,
+                       createdAt: ago(12)),
+            // Failed after the 402 round-trip: comes with failed payment 503, so the log shows it once.
             AgentEvent(id: 603, owner: owner, agent: "shopping", kind: .error,
-                       message: "x402 payment for seller report failed (HTTP 402, insufficient_funds)",
-                       dataJson: #"{"url":"https://moove.example/x402/seller-report"}"#, createdAt: ago(6)),
+                       message: "x402 payment for seller report for a used dresser failed (HTTP 402, insufficient_funds)",
+                       dataJson: #"{\#(rail("failed", remaining: 5_000_000)),"payee":"\#(realX402Payee)","amountUsdMicros":"20000","url":"https://moove.example/x402/seller-report"}"#,
+                       createdAt: ago(6)),
             AgentEvent(id: 604, owner: owner, agent: "shopping", kind: .error,
                        message: "Refused x402 payment for a premium deal scan: $0.25 is over the per-call max of $0.10",
-                       dataJson: #"{"payee":"\#(realX402Payee)","amountUsdMicros":"250000","remainingUsdMicros":"5000000","refused":true}"#,
+                       dataJson: #"{\#(rail("refused", remaining: 5_000_000)),"payee":"\#(realX402Payee)","amountUsdMicros":"250000"}"#,
                        createdAt: ago(3)),
-            // An attempt that errored before settlement (no payment row), shown as a failed attempt.
+            // Failed before any payment row was written, so it shows as a failed attempt.
             AgentEvent(id: 605, owner: owner, agent: "pricing", kind: .error,
                        message: "No USDC payment option on Base Sepolia for https://comps.example/x402/report",
-                       dataJson: #"{"url":"https://comps.example/x402/report"}"#, createdAt: ago(9)),
+                       dataJson: #"{\#(rail("failed", remaining: 4_975_000)),"url":"https://comps.example/x402/report"}"#,
+                       createdAt: ago(9)),
         ]
     }
 }

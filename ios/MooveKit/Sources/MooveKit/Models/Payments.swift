@@ -132,11 +132,19 @@ public struct AgentEventData: Sendable, Hashable, Decodable {
     public var refused: Bool?
     public var amountUsdMicros: Int64?
     public var remainingUsdMicros: Int64?
+    /// "x402" on every x402 rail event (#45).
+    public var rail: String?
+    /// x402 step outcome: "paying" | "settled" | "failed" | "refused" (#45).
+    public var outcome: String?
+    /// The worker ledger's per-agent cap (#45).
+    public var capUsdMicros: Int64?
 
     public init() {}
 
+    public var isX402: Bool { rail == "x402" }
+
     private enum CodingKeys: String, CodingKey {
-        case txHash, explorer, url, payee, simulated, refused, amountUsdMicros, remainingUsdMicros
+        case txHash, explorer, url, payee, simulated, refused, amountUsdMicros, remainingUsdMicros, rail, outcome, capUsdMicros
     }
 
     public init(from decoder: Decoder) throws {
@@ -149,6 +157,9 @@ public struct AgentEventData: Sendable, Hashable, Decodable {
         refused = try? c.decodeIfPresent(Bool.self, forKey: .refused)
         amountUsdMicros = Self.int64(c, .amountUsdMicros)
         remainingUsdMicros = Self.int64(c, .remainingUsdMicros)
+        rail = try? c.decodeIfPresent(String.self, forKey: .rail)
+        outcome = try? c.decodeIfPresent(String.self, forKey: .outcome)
+        capUsdMicros = Self.int64(c, .capUsdMicros)
     }
 
     /// The worker serializes bigint micros as strings; accept numbers too.
@@ -195,36 +206,40 @@ public struct AgentEvent: Codable, Sendable, Hashable, Identifiable {
 
     public var data: AgentEventData { AgentEventData.parse(dataJson) }
 
-    /// A spend-cap refusal from the x402 rail: an `error` event with `refused: true`.
-    public var isRefusal: Bool { kind == .error && data.refused == true }
-
-    /// An x402 attempt that errored without writing a `payment` row: the worker's
-    /// "x402 payment for … failed: <reason>" (thrown before settlement) and
-    /// "No USDC payment option …" events. The "failed (HTTP …)" variant is skipped
-    /// because it comes with a failed `payment` row, which the log already shows.
-    public var isFailedX402Attempt: Bool {
-        guard kind == .error, !isRefusal else { return false }
-        if message.hasPrefix("No USDC payment option") { return true }
-        return message.hasPrefix("x402 payment") && message.contains(" failed: ")
+    /// A spend-cap refusal from the x402 rail: `outcome: "refused"` (#45), or the older `refused: true`.
+    public var isRefusal: Bool {
+        guard kind == .error else { return false }
+        let d = data
+        return (d.isX402 && d.outcome == "refused") || d.refused == true
     }
+
+    /// An x402 step that failed (`rail: "x402"`, `outcome: "failed"`, #45). Some of these come
+    /// with a failed `payment` row; `SpendingLog` drops those so the failure isn't shown twice.
+    public var isFailedX402Attempt: Bool {
+        let d = data
+        return d.isX402 && d.outcome == "failed"
+    }
+
+    /// Any x402 rail event, which carries the worker ledger's live budget (#45).
+    public var isX402: Bool { data.isX402 }
 }
 
 /// Per-agent spend against its cap.
 ///
 /// The worker's real ledger is per process, keyed by agent across all owners, resets on
 /// restart, and takes its cap from `AGENT_SPEND_CAP_USDC`. The app only sees this owner's
-/// payment rows, so its own figure is an estimate. When the worker has reported a remaining
-/// balance (on a refusal newer than any of the agent's payments), that number wins.
+/// payment rows, so its own sum is an estimate. Every x402 agent event carries the ledger's
+/// `remainingUsdMicros` and `capUsdMicros` (#45), so the agent's newest one wins when present.
 public struct AgentBudget: Sendable, Hashable, Identifiable {
     public var agent: String
-    /// Assumed cap (the worker's default); the real one is worker config.
+    /// The worker-reported cap when known, else the worker's default ($5).
     public var capUsdMicros: Int64
     /// This owner's non-failed payments, real and simulated (the worker's ledger counts both).
     public var spentUsdMicros: Int64
     /// The part of `spentUsdMicros` that was simulated.
     public var simulatedUsdMicros: Int64
     public var refusals: Int
-    /// `remainingUsdMicros` from the agent's newest refusal, if still current.
+    /// `remainingUsdMicros` from the agent's newest x402 event, if any.
     public var reportedRemainingUsdMicros: Int64? = nil
 
     public var id: String { agent }
@@ -291,11 +306,18 @@ public struct SpendingLog: Sendable, Equatable {
 
     public init(payments: [Payment], events: [AgentEvent], capPerAgentUsdMicros: Int64 = UsdMicros.defaultAgentCap) {
         let refusals = events.filter(\.isRefusal)
-        // Only agents that actually use the x402 rail get failed-attempt rows.
-        let x402Agents = Set(payments.filter { $0.rail == .x402 }.map(\.agent))
-            .union(refusals.map(\.agent))
-            .union(events.filter { $0.kind == .payment }.map(\.agent))
-        let failedAttempts = events.filter { $0.isFailedX402Attempt && x402Agents.contains($0.agent) }
+        let x402Events = events.filter(\.isX402)
+        let failedPayments = payments.filter { $0.status == .failed }
+        // A failed x402 step that also wrote a failed payment row (same agent and amount,
+        // within a minute) is already in the log as that payment.
+        let failedAttempts = x402Events.filter { e in
+            guard e.isFailedX402Attempt else { return false }
+            let amount = e.data.amountUsdMicros
+            return !failedPayments.contains { p in
+                p.agent == e.agent && (amount == nil || amount == p.amountUsdMicros)
+                    && abs(p.createdAt.timeIntervalSince(e.createdAt)) <= 60
+            }
+        }
         entries = (payments.map(SpendingEntry.payment) + refusals.map(SpendingEntry.refusal)
                    + failedAttempts.map(SpendingEntry.failedAttempt))
             .sorted { a, b in
@@ -312,20 +334,19 @@ public struct SpendingLog: Sendable, Equatable {
         realSpentUsdMicros = counted.filter { !$0.simulated }.map(\.amountUsdMicros).reduce(0, +)
         simulatedSpentUsdMicros = counted.filter(\.simulated).map(\.amountUsdMicros).reduce(0, +)
 
-        let agents = Set(payments.map(\.agent)).union(refusals.map(\.agent))
+        let agents = Set(payments.map(\.agent)).union(refusals.map(\.agent)).union(x402Events.map(\.agent))
         budgets = agents.sorted().map { agent in
             let mine = counted.filter { $0.agent == agent }
             let myRefusals = refusals.filter { $0.agent == agent }
-            // Trust the worker's figure only if no payment by this agent came after it.
-            let newestRefusal = myRefusals.max { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
-            let newestPaymentAt = payments.filter { $0.agent == agent }.map(\.createdAt).max()
-            var reported: Int64?
-            if let r = newestRefusal, newestPaymentAt.map({ r.createdAt >= $0 }) ?? true {
-                reported = r.data.remainingUsdMicros
-            }
+            // The worker ledger's live budget, as of the agent's newest x402 step.
+            let newest = x402Events
+                .filter { $0.agent == agent }
+                .max { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }?
+                .data
+            let reported = newest?.remainingUsdMicros
             return AgentBudget(
                 agent: agent,
-                capUsdMicros: capPerAgentUsdMicros,
+                capUsdMicros: newest?.capUsdMicros ?? capPerAgentUsdMicros,
                 spentUsdMicros: mine.map(\.amountUsdMicros).reduce(0, +),
                 simulatedUsdMicros: mine.filter(\.simulated).map(\.amountUsdMicros).reduce(0, +),
                 refusals: myRefusals.count,
