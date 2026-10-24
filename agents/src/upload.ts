@@ -1,4 +1,4 @@
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createReadStream, existsSync, mkdirSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -6,6 +6,7 @@ import path from 'node:path';
 import { config } from './config.js';
 import { BadImageError, sanitizeUpload } from './imagemeta.js';
 import { importHome, ImportInputError } from './homes/listing.js';
+import { getMoverQuotes, QuoteInputError } from './moves/quotes.js';
 import { clientKey, diskQuota, rateLimiter } from './ratelimit.js';
 
 const EXT: Record<string, string> = {
@@ -30,6 +31,7 @@ const FILE_RE = /^\/files\/([A-Za-z0-9][\w-]*\.(\w+))$/;
 //   GET  /files/<name>                                       -> the file
 //   GET  /healthz                                            -> 200 { "ok": true } (platform health checks)
 //   POST /homes/import  JSON {url?, address?, beds?, ...}     -> 200 new-home draft (#89, homes/listing.ts)
+//   POST /moves/quotes  JSON {volumeM3, truckSize, crew, hours, ...} -> 200 mover estimates (moves/quotes.ts)
 // Hardening (#17): type allowlist + magic-byte check, size cap, EXIF/GPS stripped from JPEG/PNG,
 // random UUID names (the client's ?name is ignored), no directory listing, nosniff + CSP, per-client
 // rate limits on POST (429) and a cap on the upload dir's total size (507), see ratelimit.ts.
@@ -39,6 +41,7 @@ export function startUploadServer(port = config.uploadPort): Server {
   mkdirSync(config.uploadDir, { recursive: true });
   const uploadLimit = rateLimiter(config.uploadRatePerMin);
   const homesLimit = rateLimiter(config.homesRatePerMin);
+  const quotesLimit = rateLimiter(config.moves.ratePerMin);
   const quota = diskQuota(config.uploadDir, config.uploadDirMaxBytes);
   return createServer(async (req, res) => {
     res.setHeader('x-content-type-options', 'nosniff');
@@ -78,6 +81,10 @@ export function startUploadServer(port = config.uploadPort): Server {
         if (!homesLimit(clientKey(req))) return send(res, 429, { error: `over ${config.homesRatePerMin} imports a minute; try again shortly` });
         return await homesImport(req, res);
       }
+      if (req.method === 'POST' && pathname === '/moves/quotes') {
+        if (!quotesLimit(clientKey(req))) return send(res, 429, { error: `over ${config.moves.ratePerMin} quote requests a minute; try again shortly` });
+        return await moverQuotes(req, res);
+      }
       const m = req.method === 'GET' && pathname.match(FILE_RE);
       if (m && TYPE[m[2]] && existsSync(path.join(config.uploadDir, m[1]))) {
         const headers: Record<string, string> = { 'content-type': TYPE[m[2]] };
@@ -96,28 +103,9 @@ export function startUploadServer(port = config.uploadPort): Server {
 
 // Import a new home from a listing link / address / floor-plan images (#89). Small JSON body only.
 const HOMES_IMPORT_MAX_BYTES = 64 * 1024;
-async function homesImport(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) {
-  const type = (req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
-  if (type !== 'application/json') return send(res, 415, { error: 'send Content-Type: application/json' });
-  if (Number(req.headers['content-length'] ?? '0') > HOMES_IMPORT_MAX_BYTES) return send(res, 413, { error: `over ${HOMES_IMPORT_MAX_BYTES} bytes` });
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const c of req) {
-    size += (c as Buffer).length;
-    if (size > HOMES_IMPORT_MAX_BYTES) {
-      res.setHeader('connection', 'close');
-      send(res, 413, { error: `over ${HOMES_IMPORT_MAX_BYTES} bytes` });
-      res.once('finish', () => req.destroy());
-      return;
-    }
-    chunks.push(c as Buffer);
-  }
-  let body: unknown;
-  try {
-    body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-  } catch {
-    return send(res, 400, { error: 'body is not valid JSON' });
-  }
+async function homesImport(req: IncomingMessage, res: ServerResponse) {
+  const body = await readJson(req, res, HOMES_IMPORT_MAX_BYTES);
+  if (body === NO_BODY) return;
   try {
     send(res, 200, await importHome(body));
   } catch (err) {
@@ -127,7 +115,53 @@ async function homesImport(req: import('node:http').IncomingMessage, res: import
   }
 }
 
-function send(res: import('node:http').ServerResponse, status: number, body: unknown) {
+// Mover quotes for the Pack screen: rate-table estimates (+ optional listed rates). Small JSON body only.
+const QUOTES_MAX_BYTES = 8 * 1024;
+async function moverQuotes(req: IncomingMessage, res: ServerResponse) {
+  const body = await readJson(req, res, QUOTES_MAX_BYTES);
+  if (body === NO_BODY) return;
+  try {
+    send(res, 200, await getMoverQuotes(body));
+  } catch (err) {
+    if (err instanceof QuoteInputError) return send(res, 400, { error: err.message });
+    console.error('[movers] quotes failed', err);
+    send(res, 500, { error: 'mover quotes failed' });
+  }
+}
+
+const NO_BODY = Symbol('no body');
+/** Reads a JSON body of at most `max` bytes. On a bad type, size or JSON it answers (415/413/400) and returns NO_BODY. */
+async function readJson(req: IncomingMessage, res: ServerResponse, max: number): Promise<unknown> {
+  const type = (req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') {
+    send(res, 415, { error: 'send Content-Type: application/json' });
+    return NO_BODY;
+  }
+  if (Number(req.headers['content-length'] ?? '0') > max) {
+    send(res, 413, { error: `over ${max} bytes` });
+    return NO_BODY;
+  }
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const c of req) {
+    size += (c as Buffer).length;
+    if (size > max) {
+      res.setHeader('connection', 'close');
+      send(res, 413, { error: `over ${max} bytes` });
+      res.once('finish', () => req.destroy());
+      return NO_BODY;
+    }
+    chunks.push(c as Buffer);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    send(res, 400, { error: 'body is not valid JSON' });
+    return NO_BODY;
+  }
+}
+
+function send(res: ServerResponse, status: number, body: unknown) {
   if (res.headersSent) return;
   res.writeHead(status, { 'content-type': 'application/json' });
   res.end(JSON.stringify(body));

@@ -7,6 +7,7 @@ import { connect } from './spacetime.js';
 import { startUploadServer } from './upload.js';
 import { announceService, announceSpend } from './service.js';
 import { attachHomesEvents } from './homes/listing.js';
+import { attachMovesEvents } from './moves/quotes.js';
 import { visionAgent } from './agents/vision.js';
 import { pricingAgent, setCompsSource } from './agents/pricing.js';
 import { installPaidComps, paidCompsSource, pricingPaysX402, startCompsPaywall } from './integrations/paid-comps.js';
@@ -40,6 +41,8 @@ startUploadServer();
 const { conn, identity } = await connect();
 // POST /homes/import (#89) has no caller identity yet, so its agent_events are owned by the worker.
 attachHomesEvents(conn, identity);
+// POST /moves/quotes: same, its "movers" agent_events are owned by the worker.
+attachMovesEvents(conn, identity);
 console.log(`[agents] cache ready: ${conn.db.item.count()} items`);
 await announceService(conn);
 announceSpend(conn);

@@ -605,6 +605,22 @@ await stage("vision: a photographed item gets identified (Claude, replayed)", as
   return { detail: `"${done.name}" (${done.category}; ${done.material || "no material"}; ${done.condition})` };
 });
 
+await stage("movers: POST /moves/quotes -> 3 labeled estimates + agent events", async () => {
+  const res = await fetch(`http://localhost:${PORT}/moves/quotes`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ volumeM3: 14, truckSize: "ft15", crew: 2, hours: 4 }),
+  });
+  if (!res.ok) throw new Error(`moves/quotes: HTTP ${res.status} ${await res.text()}`);
+  const j = (await res.json()) as { quotes: { kind: string; estimate: boolean; provider: string; lowCents: number; highCents: number }[]; steps: unknown[] };
+  if (j.quotes.length !== 3 || j.quotes.some(q => q.kind !== "estimate" || q.estimate !== true)) throw new Error(`want 3 labeled estimates, got ${JSON.stringify(j.quotes)}`);
+  const evs = await until("movers events", () => {
+    const xs = [...conn!.db.agentEvent.iter()].filter(e => e.agent === "movers");
+    return xs.length >= j.steps.length ? xs : undefined;
+  }, 15_000);
+  return { detail: `${j.quotes.map(q => `${q.provider} $${q.lowCents / 100}-$${q.highCents / 100}`).join("; ")}; ${evs.length} events` };
+});
+
 await stage("agent log: no unexpected errors", async () => {
   const evs = [...conn!.db.agentEvent.iter()].filter(e => me && e.owner.isEqual(me));
   // Expected noise: spend-cap refusals are designed behavior; transient retries recover.
