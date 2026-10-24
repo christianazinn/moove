@@ -1,0 +1,20 @@
+{
+  "93c061b553f55ab8": {
+    "item": "black wall-mounted flat screen TV; category tv; material black plastic and glass; 1.10 x 0.65 x 0.06 m (W x H x D); condition good",
+    "n": 1,
+    "keep": [
+      1
+    ],
+    "reason": "Kept listing 1 as a plain wall-mountable black flat screen TV, matching the item; no accessory, bundle, or collectible issues.",
+    "model": "claude-haiku-5-5"
+  },
+  "85fcc74080efb55c": {
+    "item": "black wall-mounted flat screen TV; category tv; material black plastic and glass; 0.79 x 0.96 x 0.34 m (W x H x D); condition good",
+    "n": 1,
+    "keep": [
+      1
+    ],
+    "reason": "Kept listing 1 as a plain wall-mountable black flat screen TV of the same kind; no accessories, bundles, or collector/premium versions were present.",
+    "model": "claude-haiku-5-5"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "2f6c1796bf1535ec": {
+    "item": "vacuum; category vacuum; 1.07 x 2.08 x 0.77 m (W x H x D)",
+    "n": 10,
+    "keep": [
+      1,
+      6,
+      7,
+      8
+    ],
+    "reason": "Dropped accessories/parts (2,3,5,9,10) and a handheld cordless unit (4) that is a different product from the generic vacuum item; kept robot vacuums and upright/stationary vacuums that are complete u…",
+    "model": "claude-haiku-5-5"
+  }
+}

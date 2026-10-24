@@ -1,0 +1,16 @@
+{
+  "3513a770249e2ed3": {
+    "item": "silver thin laptop with black screen; category electronics; material aluminum; 0.58 x 0.19 x 0.20 m (W x H x D); condition good",
+    "n": 10,
+    "keep": [
+      2,
+      5,
+      6,
+      7,
+      8,
+      10
+    ],
+    "reason": "Dropped Samsung N145 (old 10.1in netbook, different model), HP Stream and Samsung Chrome listings (different product lines), and the Dell widescreen monitor (not a laptop); kept generic and same-kind…",
+    "model": "claude-haiku-5-5"
+  }
+}

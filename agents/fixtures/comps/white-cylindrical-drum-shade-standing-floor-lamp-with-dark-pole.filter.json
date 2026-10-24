@@ -1,0 +1,15 @@
+{
+  "5e4b9fed9186ad62": {
+    "item": "white cylindrical drum shade standing floor lamp with dark pole; category lamp; material white fabric shade, dark metal pole; 0.31 x 0.90 x 0.25 m (W x H x D); condition good",
+    "n": 8,
+    "keep": [
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "reason": "Dropped table lamp (1), arc floor lamp (8) and twisted cage/bell shade lamp (7) as different products; kept generic or drum/cylinder-shade floor lamps with similar metal poles and shades.",
+    "model": "claude-haiku-5-5"
+  }
+}

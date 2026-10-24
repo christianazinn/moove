@@ -2,7 +2,7 @@ import type { Agent } from './types.js';
 import type { Conn } from '../spacetime.js';
 import type { Item } from '../module_bindings/types.js';
 import { logEvent } from '../events.js';
-import { filterCacheFile, lookupComps, type Comp, type CompsResult } from '../integrations/apify.js';
+import { filterCacheFile, isApifyUnavailable, lookupComps, similarCachedComps, type Comp, type CompsResult } from '../integrations/apify.js';
 import { filterComps, type FilterResult } from './comp-filter.js';
 
 // Where comps come from. Defaults to calling Apify directly; once the x402 rail (#7) is wired,
@@ -79,7 +79,26 @@ async function price(conn: Conn, it: Item, retry: (it: Item, delayMs: number) =>
   conn.reducers.setItemStage({ itemId: it.id, stage: 'running', field: 'pricing' });
   logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'tool_call', message: `Looking up comps for "${q}"`, refTable: 'item', refId: it.id });
   try {
-    const { comps: raw, replayed } = await compsSource(q, it);
+    let similarTo = '';
+    const { comps: raw, replayed } = await compsSource(q, it).catch((err: unknown) => {
+      // Apify can't run (out of credit, daily cap, no token): reuse the real cached comps of the most
+      // similar item we have, labeled as such. The relevance filter below still checks them against
+      // this item. No match: fail as before.
+      const unavailable = !isTransientPricingError(err) && (isApifyUnavailable(err) || /comps lookup failed/i.test(String(err)));
+      const sim = unavailable ? similarCachedComps(q, it.category) : null;
+      if (!sim) throw err;
+      similarTo = sim.query;
+      logEvent(conn, {
+        owner: it.owner,
+        agent: 'pricing',
+        kind: 'tool_call',
+        message: `[REPLAYED] No live comps (${String(err).replace(/^Error: /, '').slice(0, 120)}); using cached real comps for a similar item "${sim.query}"`,
+        refTable: 'item',
+        refId: it.id,
+        data: { query: q, similarTo: sim.query, score: Number(sim.score.toFixed(2)), replayed: true, reason: String(err).slice(0, 300) },
+      });
+      return { comps: sim.comps, replayed: true };
+    });
     // Drop accessories/parts/bundles/other products before they skew the estimate.
     const f = await filterComps(it, raw, { cacheFile: filterCacheFile(q) });
     const comps = f.comps;
@@ -130,10 +149,10 @@ async function price(conn: Conn, it: Item, retry: (it: Item, delayMs: number) =>
       owner: it.owner,
       agent: 'pricing',
       kind: 'result',
-      message: `${replayed ? '[REPLAYED] ' : ''}${q}: ~$${e.est / 100} ($${e.low / 100}-$${e.high / 100}) from ${comps.length} comps${dropped ? ` (${dropped} irrelevant dropped)` : ''}`,
+      message: `${similarTo ? `[REPLAYED, similar item "${similarTo}"] ` : replayed ? '[REPLAYED] ' : ''}${q}: ~$${e.est / 100} ($${e.low / 100}-$${e.high / 100}) from ${comps.length} comps${dropped ? ` (${dropped} irrelevant dropped)` : ''}`,
       refTable: 'item',
       refId: it.id,
-      data: { query: q, replayed, n: comps.length, dropped, filter: f.mode, filterClaude: f.claude, ...e },
+      data: { query: q, replayed, ...(similarTo ? { similarTo } : {}), n: comps.length, dropped, filter: f.mode, filterClaude: f.claude, ...e },
     });
   } catch (err) {
     const n = (attempts.get(it.id) ?? 0) + 1;

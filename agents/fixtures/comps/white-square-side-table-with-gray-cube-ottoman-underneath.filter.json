@@ -1,0 +1,12 @@
+{
+  "0e705b6000d9a9d3": {
+    "item": "white square side table with gray cube ottoman underneath; category table; material white laminate; 1.02 x 0.83 x 0.60 m (W x H x D); condition good",
+    "n": 8,
+    "keep": [
+      3,
+      7
+    ],
+    "reason": "Kept 3 and 7 as generic ottoman-table combos; dropped ottoman-only, lot, bundle, fuzzy cube, and premium 6 listings as different products or unfit comparables.",
+    "model": "claude-haiku-5-5"
+  }
+}

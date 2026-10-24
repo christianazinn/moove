@@ -1,0 +1,20 @@
+{
+  "1943b56d53fc598e": {
+    "item": "white over-ear headphones; category electronics; material plastic; 0.20 x 0.20 x 0.08 m (W x H x D); condition good",
+    "n": 17,
+    "keep": [
+      2,
+      5,
+      7,
+      8,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+    ],
+    "reason": "Dropped AirPods Max listings (1,3,6,9) and Bose QuietComfort Ultra (4) as premium smart versions, Nicole Miller (10) as a designer novelty, and Beats Solo 4 (11) as on-ear rather than over-ear.",
+    "model": "claude-haiku-5-5"
+  }
+}
