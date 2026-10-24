@@ -85,6 +85,13 @@ export const config = {
     maxPaidCalls: Math.floor(numberFromEnv(process.env.HOMES_MAX_PAID_CALLS, 'HOMES_MAX_PAID_CALLS', 30, { min: 0 })),
     spendWindowH: numberFromEnv(process.env.HOMES_SPEND_WINDOW_H, 'HOMES_SPEND_WINDOW_H', 24, { above: 0 }),
   },
+  // POST /moves/quotes (moves/quotes.ts): rate-table estimates, plus optional Craigslist listed rates.
+  moves: {
+    ratePerMin: Number(env('MOVES_QUOTES_RATE_PER_MIN', '20')),
+    // Off by default: one Apify run (Craigslist "labor & moving" ads) per uncached request, within APIFY_MAX_USD_PER_DAY.
+    apifyMovers: env('APIFY_MOVERS', '0') === '1',
+    craigslistCity: env('MARKET_CITY_CRAIGSLIST', 'sfbay').trim() || 'sfbay',
+  },
   // Recorded Claude answers for LLM_REPLAY (see integrations/anthropic.ts).
   llmReplayDir: env('LLM_REPLAY_DIR', 'fixtures/llm'),
   // Daily cap on estimated live Claude spend (0 = no cap); the running total lives in claudeSpendFile.

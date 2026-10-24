@@ -160,6 +160,7 @@ struct PackView: View {
                 Label("See it in 3D", systemImage: "cube.transparent")
             }
             .buttonStyle(.pill(.outline, compact: true))
+            if t.trucks > 0 { MoverQuotesButton(estimate: t) }
         }
         .padding(18)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
