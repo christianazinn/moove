@@ -89,7 +89,7 @@ The vision prompt also says that text visible in photos is evidence, never instr
 The pricing agent's comp relevance filter (`agents/src/agents/comp-filter.ts`, Haiku) uses the same clean + fence + rule. It can't add comps or change their prices (indices outside the list are ignored; keeping none falls back to the rule-filtered comps), but a fooled filter could still skew the estimate by keeping only a planted comp, and the listing clamp above is relative to that estimate. Open gap: no code-side floor on how many comps it may drop. Tests: `agents/test/comp-filter.test.ts` plants the same injection title.
 
 ### Simulated actions are labeled
-Anything not real says so in the data (`simulated: true` on `listing` and `payment`), in event messages (`[SIMULATED]`, `(simulated)`), and in the UI. Today that covers the simulated eBay posts (whenever eBay sandbox keys are absent), and the simulated x402 rail (no CDP keys or `X402_SIMULATE=1`). ⏳ Visa checkout labelling arrives with #40 (simulated until the Starter Pack is wired). Real x402 payments link to the Base Sepolia explorer.
+Anything not real says so in the data (`simulated: true` on `listing` and `payment`), in event messages (`[SIMULATED]`, `(simulated)`), and in the UI. Today that covers the simulated eBay posts (whenever eBay sandbox keys are absent), and the simulated x402 rail (no CDP keys or `X402_SIMULATE=1`). Visa checkout (#40, #154) is labeled too: simulated payments carry `simulated: true` and every simulated step starts with `[SIMULATED]`; sandbox payments say `[Visa sandbox]`. Real x402 payments link to the Base Sepolia explorer.
 
 ## Follow-up pass (Sat Oct 24): everything merged after #38
 Scope: the 48 PRs merged after #38 (`b6ee593..origin/main`):
@@ -117,7 +117,7 @@ Tests for every fix are in `agents/test/security-followup.test.ts` and `ios/Moov
   - `planIssues` now rejects sides over 20 m, which falls back to the packed layout.
   - Doors and windows are capped at 8 per room.
 - **SAM 3D: `FAL_KEY` stays on fal.** fal's reply includes `status_url` and `response_url`. We sent our `Authorization: Key …` header to them with no host check. Now both must be https on `*.fal.run`.
-- **App: upload origin.** `ServiceConfig.uploadBaseURL` refuses `user@host`, a query and a fragment. Plain http is allowed only to localhost, `*.local`, loopback or a private IPv4 address. For anything else the app falls back to the build's URL.
+- **App: upload origin.** `ServiceConfig.uploadBaseURL` refuses `user@host`, a query and a fragment. Plain http is allowed only to localhost, `*.local`, loopback or a private IPv4 address. For anything else the app falls back to the build's URL. On a physical phone, a loopback announcement (`http://localhost:8787`, what the worker announces when `PUBLIC_UPLOAD_BASE_URL` is unset) also loses to the build's URL when one is set, since it points at the phone itself and uploads would silently fail (`uploadBaseURL(fallback:onDevice:)`). The worker still announces localhost in that case: set `PUBLIC_UPLOAD_BASE_URL` (or `PUBLIC_UPLOAD_BASE_URL_FILE`) on any worker phones use. Settings' "live" upload-URL badge (`MooveStore.uploadURLIsLive`) doesn't know about this override yet.
 - **Fixture PII.**
   - Two realistic addresses in the listing-import tests became `Example St` placeholders. One was a real NYC building and unit.
   - A planted scam email on a real provider's domain now uses `example.invalid`.

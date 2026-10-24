@@ -40,5 +40,25 @@ public struct ServiceConfig: Sendable, Equatable {
     }
 
     /// The runtime URL when the worker announced one, else `fallback` (the build's config).
-    public func uploadBaseURL(fallback: URL?) -> URL? { uploadBaseURL ?? fallback }
+    /// On a real device a loopback announcement (`localhost`, `127.x`: what the worker announces
+    /// when its `PUBLIC_UPLOAD_BASE_URL` is unset) points at the phone itself, so uploads would
+    /// silently fail. There the build's URL wins whenever it is set.
+    public func uploadBaseURL(fallback: URL?, onDevice: Bool = Self.runningOnDevice) -> URL? {
+        guard let announced = uploadBaseURL else { return fallback }
+        if onDevice, let fallback, Self.isLoopback(announced.host?.lowercased() ?? "") { return fallback }
+        return announced
+    }
+
+    /// True on a physical iPhone/iPad (not the Simulator, not macOS/Linux test runs).
+    public static var runningOnDevice: Bool {
+        #if os(iOS) && !targetEnvironment(simulator)
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    static func isLoopback(_ host: String) -> Bool {
+        host == "localhost" || host == "::1" || host == "[::1]" || host.hasPrefix("127.")
+    }
 }

@@ -64,6 +64,17 @@ export function replayMode(raw = process.env.LLM_REPLAY): ReplayMode {
   return v === 'record' || v === 'replay' || v === 'auto' ? v : 'off';
 }
 
+/**
+ * True when structuredCall(opts) would answer from a recording (LLM_REPLAY=replay|auto and one exists
+ * for these exact inputs), i.e. no API spend. Spend caps (homes/budget.ts) skip their slot for these,
+ * so rehearsals on recorded answers don't use up the demo's budget.
+ */
+export function hasRecordedAnswer(opts: { model: string; system: string; text: string; images?: ImageInput[]; schema: z.ZodType }): boolean {
+  const mode = replayMode();
+  if (mode !== 'replay' && mode !== 'auto') return false;
+  return existsSync(path.join(config.llmReplayDir, `${replayKey(opts)}.json`));
+}
+
 // Replayed or recorded answers must never reach the live DB (#17): a stale cassette would stand in
 // for the model on real users' items. The worker refuses to start with LLM_REPLAY set against maincloud.
 export function replayGuardError(mode: ReplayMode, spacetimeUri: string): string | null {
