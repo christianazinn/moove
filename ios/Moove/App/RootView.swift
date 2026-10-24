@@ -21,6 +21,9 @@ struct RootView: View {
                 .tabItem { Label("Review", systemImage: "checklist") }
             NavigationStack { screen(NewHomeView()) }
                 .tabItem { Label("New Home", systemImage: "house") }
+            NavigationStack { screen(ListingsView()) }
+                .tag("listings")
+                .tabItem { Label("Listings", systemImage: "tag") }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .task { await store.connect(token: nil) }

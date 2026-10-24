@@ -22,7 +22,7 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         self.state = seed
         let ids: [[UInt64]] = [
             seed.rooms.map(\.id), seed.scans.map(\.id), seed.items.map(\.id), seed.comps.map(\.id),
-            seed.newHomes.map(\.id), seed.layouts.map(\.id),
+            seed.newHomes.map(\.id), seed.layouts.map(\.id), seed.listings.map(\.id),
         ]
         let maxId = ids.joined().max() ?? 0
         self.nextId = maxId + 1

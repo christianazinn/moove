@@ -11,6 +11,7 @@ public struct SyncSnapshot: Sendable, Equatable {
     public var comps: [Comp] = []
     public var newHomes: [NewHome] = []
     public var layouts: [Layout] = []
+    public var listings: [Listing] = []
 
     public init(me: IdentityHex? = nil) { self.me = me }
 
@@ -22,6 +23,9 @@ public struct SyncSnapshot: Sendable, Equatable {
     }
 
     public func layouts(for newHomeId: UInt64) -> [Layout] { layouts.filter { $0.newHomeId == newHomeId } }
+
+    /// The item's newest listing, if the listing agent has written one.
+    public func listing(for itemId: UInt64) -> Listing? { listings.filter { $0.itemId == itemId }.max { $0.id < $1.id } }
 }
 
 /// One object from a RoomPlan scan, ready to become an `items` row.
