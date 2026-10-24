@@ -63,6 +63,16 @@ const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, N
  * (`kept`), and a new find that looks like a scanned object the model didn't match (same kind or
  * kinds the scanner confuses, similar size) is not added (`twins`). See src/sizefit.ts.
  */
+// Parts of the building, never inventory, even when the model lists them despite the prompt (Rio's
+// bunk room: "white plantation window shutters" behind the bed came back as a new item, landed on
+// the bed and drew as a vase with stems). Things that only mention one (a window fan) are kept.
+const BUILT_IN = /\b(windows?|window ?sills?|shutters?|blinds?|valances?|curtain rods?|drapery rods?|doors?|doorways?|door ?frames?|walls?|ceilings?|floors?|flooring|baseboards?|moldings?|mouldings?|radiators?|outlets?|light switch(es)?|switch ?plates?|vents?|thermostats?|smoke detectors?|sprinklers?|recessed lights?|ceiling lights?|light fixtures?|stairs?|staircases?|railings?|banisters?|fireplaces?|mantels?|built-?ins?|countertops?|toilets?|bathtubs?|showers?|shower curtains?|shower doors?|sinks?)\b/i;
+const MOVABLE_EVEN_SO = /\b(fans?|ac|a\/c|air ?conditioners?|heaters?|humidifiers?|dehumidifiers?|lamps?|mirrors?|art|artwork|posters?|prints?|paintings?|plants?|rugs?|mats?|clocks?|shelf|shelves|racks?|stands?|carts?|organizers?|caddy|caddies|baskets?|bins?|hampers?|hooks?|hangers?|speakers?|tv|television|monitor)\b/i;
+export function isBuiltIn(n: { name: string; category: string }): boolean {
+  const text = `${n.name} ${n.category}`;
+  return BUILT_IN.test(text) && !MOVABLE_EVEN_SO.test(text);
+}
+
 export function vetSweep(r: SweepResult, items: Item[], photoUrls: string[]) {
   const byId = new Map(items.map(it => [it.id.toString(), it]));
   const seen = new Set<string>();
@@ -97,10 +107,12 @@ export function vetSweep(r: SweepResult, items: Item[], photoUrls: string[]) {
       depthM: clamp(n.depthM, 0.05, 5),
     }))
     .filter(n => n.name && !existing.has(n.name.toLowerCase()) && (existing.add(n.name.toLowerCase()), true));
+  const builtIns = newItems.filter(isBuiltIn).map(n => n.name);
   // Scanned items the model already named are explained; each other one absorbs at most one find.
   const taken = new Set(fitting.map(m => m.item.id));
   const twins: { name: string; item: Item; message: string }[] = [];
   const fresh = newItems.filter(n => {
+    if (isBuiltIn(n)) return false;
     const twin = scannedTwin(n, items, taken);
     if (!twin) return true;
     taken.add(twin.id);
@@ -111,7 +123,7 @@ export function vetSweep(r: SweepResult, items: Item[], photoUrls: string[]) {
     });
     return false;
   });
-  return { matches: fitting, newItems: fresh.slice(0, MAX_NEW_ITEMS), kept, twins };
+  return { matches: fitting, newItems: fresh.slice(0, MAX_NEW_ITEMS), kept, twins, builtIns };
 }
 
 export function sweepPrompt(items: Item[]): string {
@@ -153,7 +165,8 @@ export async function sweep(conn: Conn, scan: Scan, deps: Deps = agentDeps): Pro
     const ok = photos.flatMap((p, i) => (loaded[i].status === 'fulfilled' ? [{ url: p.url, img: (loaded[i] as PromiseFulfilledResult<ImageInput>).value }] : []));
     if (ok.length === 0) throw new Error('none of the room photos could be loaded');
     const raw = await deps.call(ok.map(o => o.img), sweepPrompt(items));
-    const { matches, newItems, kept, twins } = vetSweep(raw, items, ok.map(o => o.url));
+    const { matches, newItems, kept, twins, builtIns } = vetSweep(raw, items, ok.map(o => o.url));
+    if (builtIns.length) ev('result', `Skipped part of the room, not an item: ${builtIns.slice(0, 6).join(', ')}`, { builtIn: true, skipped: builtIns });
     for (const k of kept) {
       logEvent(conn, { owner: scan.owner, agent: 'sweep', kind: 'result', message: k.message, refTable: 'item', refId: k.item.id, data: { sizeCheck: 'rename_rejected', proposed: k.name, reason: k.reason } });
     }
@@ -182,7 +195,7 @@ export async function sweep(conn: Conn, scan: Scan, deps: Deps = agentDeps): Pro
       'result',
       `Named ${renamed.length} scanned object(s) and found ${newItems.length} the scan missed` +
         (newItems.length ? `: ${newItems.slice(0, 6).map(n => n.name).join(', ')}${newItems.length > 6 ? ', ...' : ''}` : ''),
-      { renamed: renamed.map(m => ({ id: m.item.id, from: m.item.name, to: m.name })), added: newItems.map(n => n.name), droppedLowConfidence: raw.matches.length + raw.newItems.length - matches.length - newItems.length - kept.length - twins.length, keptNames: kept.length, skippedDuplicates: twins.length }
+      { renamed: renamed.map(m => ({ id: m.item.id, from: m.item.name, to: m.name })), added: newItems.map(n => n.name), droppedLowConfidence: raw.matches.length + raw.newItems.length - matches.length - newItems.length - kept.length - twins.length - builtIns.length, keptNames: kept.length, skippedDuplicates: twins.length, skippedBuiltIns: builtIns.length }
     );
   } catch (err) {
     await conn.reducers.setSweepStatus({ scanId: scan.id, status: 'failed' }).catch(() => {});
