@@ -166,6 +166,13 @@ final class MooveStore {
         return nil
     }
 
+    /// Offline demo only (#181): plays the photo sweep on the newest scan of `roomName`,
+    /// since there's no worker. A no-op on the live backend, where the real sweep runs.
+    func simulateSweep(roomName: String) async {
+        guard let fixture = backend as? FixtureBackend, let scan = await newestScan(inRoomNamed: roomName) else { return }
+        await run { _ in try await fixture.simulateSweep(scanId: scan.id) }
+    }
+
     @discardableResult
     func addScanPhoto(scanId: UInt64, url: String) async -> Bool {
         await run { try await $0.addScanPhoto(scanId: scanId, url: url) }
