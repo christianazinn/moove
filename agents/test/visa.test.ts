@@ -701,6 +701,16 @@ test("a real stale hold is not 'released' through the simulated backend", async 
   assert.deepEqual(updates, []);
 });
 
+test("a real stale hold that can't be released now is not labeled simulated", async () => {
+  const { sink, events } = memorySink();
+  const co = new VisaCheckout({ sink, backend: createSimulatedBackend(), ledger: ledger() });
+  assert.equal(await co.releaseStale(ctx(), { paymentId: 9n, authId: "7000000000000000000001", simulated: false }), false);
+  const e = events.at(-1)!;
+  assert.equal(e.kind, "error");
+  assert.ok(!e.message.startsWith("[SIMULATED]"), e.message);
+  assert.equal((e.data as { simulated?: boolean }).simulated, false);
+});
+
 test("this process's own holds (capture unknown) are never treated as stale", async () => {
   const { sink, payments, updates } = memorySink();
   const sim = createSimulatedBackend();
