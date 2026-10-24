@@ -10,45 +10,61 @@ struct ShareRoomView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Text("Enter this code on the other phone under **Inventory → Join a room**. You'll both see and edit the same items, live.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-
-                if let code = room.joinCode {
-                    Text(code)
-                        .font(.system(size: 48, weight: .bold, design: .monospaced))
-                        .kerning(6)
-                        .textSelection(.enabled)
-                        .accessibilityLabel(code.map(String.init).joined(separator: " "))
-
-                    HStack {
-                        Button(copied ? "Copied" : "Copy code", systemImage: copied ? "checkmark" : "doc.on.doc") {
-                            UIPasteboard.general.string = code
-                            copied = true
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    PageHeader(
+                        eyebrow: "02 — Inventory · Share",
+                        title: "Share \(room.name).",
+                        lede: "On the other phone, open Inventory → Join a room and enter this code. You'll both see and edit the same items, live."
+                    )
+                    if let code = room.joinCode {
+                        Text(code)
+                            .monoText(44, weight: .bold, maxScale: 1.4)
+                            .kerning(8)
+                            .foregroundStyle(Theme.text)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 28)
+                            .ruled(.top)
+                            .ruled()
+                            .padding(.top, 28)
+                            .accessibilityLabel("Join code " + code.map(String.init).joined(separator: " "))
+                        HStack(spacing: 12) {
+                            Button {
+                                UIPasteboard.general.string = code
+                                copied = true
+                            } label: {
+                                Label(copied ? "Copied" : "Copy code", systemImage: copied ? "checkmark" : "doc.on.doc")
+                            }
+                            .buttonStyle(.pill(.outline))
+                            ShareLink(item: "Join my room in Moove: \(code)") {
+                                Label("Share", systemImage: "square.and.arrow.up")
+                            }
+                            .buttonStyle(.pill(.primary))
                         }
-                        .buttonStyle(.bordered)
-
-                        ShareLink(item: "Join my room in Moove: \(code)") {
-                            Label("Share", systemImage: "square.and.arrow.up")
+                        .padding(.top, 20)
+                    } else {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("No code yet").blockTitle()
+                            Text("This room doesn't have a join code yet. Try again in a moment.").monoMeta()
                         }
-                        .buttonStyle(.borderedProminent)
+                        .padding(.vertical, 28)
+                        .ruled(.top)
+                        .padding(.top, 28)
                     }
-                } else {
-                    ContentUnavailableView("No code yet", systemImage: "number",
-                                           description: Text("This room doesn't have a join code."))
                 }
-                Spacer()
+                .padding(.horizontal, Theme.gutter)
+                .padding(.top, 16)
+                .padding(.bottom, 32)
             }
-            .padding()
-            .navigationTitle("Share \(room.name)")
+            .navigationTitle("Share")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
+            .mooveScreen()
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 }
 

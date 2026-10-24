@@ -16,11 +16,21 @@ struct JoinRoomView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    PageHeader(
+                        eyebrow: "02 — Inventory · Join",
+                        title: "Join a room.",
+                        lede: store.backendKind == .fixture
+                            ? "Offline demo: try \(DemoFixtures.roommateJoinCode)."
+                            : "Ask the room's owner to tap Share in their Inventory, then enter the 6-character code."
+                    )
+                    Text("Room code").eyebrow().padding(.top, 28)
                     TextField("ABC123", text: $code)
-                        .font(.system(.title, design: .monospaced, weight: .semibold))
+                        .monoText(32, weight: .bold, maxScale: 1.4)
+                        .kerning(6)
                         .multilineTextAlignment(.center)
+                        .foregroundStyle(Theme.text)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
                         .keyboardType(.asciiCapable)
@@ -32,38 +42,45 @@ struct JoinRoomView: View {
                             if clean != new { code = clean }
                             error = nil
                         }
-                } header: {
-                    Text("Room code")
-                } footer: {
-                    if store.backendKind == .fixture {
-                        Text("Offline demo: try \(DemoFixtures.roommateJoinCode).")
-                    } else {
-                        Text("Ask the room's owner to tap Share room in their Inventory.")
-                    }
-                }
+                        .frame(minHeight: 56)
+                        .ruled()
+                        .accessibilityLabel("Room code")
+                        .accessibilityHint("Six letters and numbers")
 
-                if let error {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
-                }
-                if joined {
-                    Label("Joined. The room will appear in your inventory.", systemImage: "checkmark.circle")
-                        .foregroundStyle(.green)
-                }
-
-                Button(action: join) {
-                    HStack {
-                        Text("Join")
-                        if joining { Spacer(); ProgressView() }
+                    if let error {
+                        Label(error, systemImage: "exclamationmark.triangle")
+                            .monoText(13.5)
+                            .foregroundStyle(Theme.danger)
+                            .padding(.top, 14)
                     }
+                    if joined {
+                        Label("Joined. The room will appear in your inventory.", systemImage: "checkmark.circle")
+                            .monoText(13.5)
+                            .foregroundStyle(Theme.accentStrong)
+                            .padding(.top, 14)
+                    }
+
+                    Button(action: join) {
+                        HStack(spacing: 8) {
+                            Text(joining ? "Joining…" : "Join")
+                            if joining { ProgressView().controlSize(.small) }
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.pill(.primary))
+                    .disabled(code.count != Self.length || joining || joined)
+                    .padding(.top, 24)
                 }
-                .disabled(code.count != Self.length || joining || joined)
+                .padding(.horizontal, Theme.gutter)
+                .padding(.top, 16)
+                .padding(.bottom, 32)
             }
-            .navigationTitle("Join a room")
+            .navigationTitle("Join")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
+            .mooveScreen()
             .onAppear { focused = true }
         }
         .presentationDetents([.medium, .large])

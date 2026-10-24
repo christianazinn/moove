@@ -26,7 +26,7 @@ struct InventoryView: View {
                         HStack(spacing: 8) {
                             if isMine(room) {
                                 Button { sharing = room } label: {
-                                    Label("Share", systemImage: "person.badge.plus")
+                                    Image(systemName: "person.badge.plus")
                                 }
                                 .buttonStyle(.pill(.outline, compact: true))
                                 .accessibilityLabel("Share \(room.name)")
@@ -71,6 +71,17 @@ struct InventoryView: View {
         }
         .sheet(item: $sharing) { ShareRoomView(room: $0) }
         .sheet(isPresented: $showJoin) { JoinRoomView() }
+        #if DEBUG
+        // Screenshot/UI-test hook: MOOVE_OPEN_SHEET=share|join.
+        .task {
+            let sheet = ProcessInfo.processInfo.environment["MOOVE_OPEN_SHEET"]
+            if sheet == "join" { showJoin = true }
+            if sheet == "share" {
+                for _ in 0..<20 where store.snapshot.rooms.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
+                sharing = store.snapshot.rooms.first(where: isMine)
+            }
+        }
+        #endif
         .mooveScreen()
         .animation(.default, value: store.items)
     }
