@@ -42,6 +42,8 @@ export const config = {
     usdPerRun: Number(env('SAM3D_USD_PER_RUN', '0.02')),
     // Per worker run, covering fal + the Claude image pick + image searches (~$0.07 per item).
     maxUsd: Number(env('SAM3D_MAX_USD', '2.00')),
+    // The cap covers this many hours (spend logged by earlier worker runs counts too).
+    spendWindowH: Number(env('SAM3D_SPEND_WINDOW_H', '24')),
     concurrency: Number(env('SAM3D_CONCURRENCY', '2')),
     // After fal says it can't run (no balance, rate limit, outage), wait this long before retrying.
     retryLaterSec: Number(env('SAM3D_RETRY_LATER_SEC', '600')),
