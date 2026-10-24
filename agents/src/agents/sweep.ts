@@ -21,8 +21,8 @@ export const SETTLE_MS = Number(process.env.SWEEP_SETTLE_MS ?? 8000);
 
 const CONDITION = z.enum(['new', 'like_new', 'good', 'fair', 'poor']);
 const Details = {
-  name: z.string().describe('Short, specific name a buyer would search for. Include the main visible color and any shape or style words, e.g. "white IKEA Kallax 2x4 shelf", "gray L-shaped sectional sofa", "black mesh office chair", "round walnut dining table", "tufted beige headboard bed". These words also drive the item\'s 3D look in the app.'),
-  category: z.string().describe('furniture, electronics, appliance, decor, kitchen, lighting, instrument, sports, bag, clothing, books, plant, other'),
+  name: z.string().describe('Short, specific name a buyer would search for. Include the main visible color and any shape or style words, e.g. "white IKEA Kallax 2x4 shelf", "gray L-shaped sectional sofa", "black mesh office chair", "round walnut dining table", "tufted beige headboard bed". These words also drive the item\'s 3D look in the app: when visible, always include one color word and the shape word (round, oval, L-shaped, sectional, corner, standing, tufted, arc, torchiere, platform, cube...).'),
+  category: z.string().describe('One of the app\'s 3D model categories: sofa, bed, mattress, desk, chair, table, dresser, storage, lamp, tv, books, art, photos, plant, rug, kitchenware, clothes, electronics, appliance, decor. If none fits, a short plain noun (e.g. "instrument", "bicycle", "bag")'),
   material: z.string().describe('Main material(s) with finish/color, e.g. "walnut veneer", "white laminate", "gray fabric", "black leather", "brushed steel"; "" if unclear'),
   brand: z.string().describe('Only with visible evidence (logo, label, distinctive design), else ""'),
   condition: CONDITION,

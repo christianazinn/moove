@@ -5,26 +5,26 @@
       {
         "itemId": "2",
         "name": "brown wood desk with orange legs",
-        "category": "furniture",
-        "material": "brown wood top with orange-red metal legs",
+        "category": "desk",
+        "material": "wood top with orange metal legs",
         "brand": "",
         "condition": "good",
         "fragile": false,
         "maybeSentimental": false,
         "photoIndex": 0,
-        "confidence": 0.45
+        "confidence": 0.4
       },
       {
         "itemId": "8",
-        "name": "black floor lamp",
-        "category": "lighting",
+        "name": "black standing floor lamp",
+        "category": "lamp",
         "material": "black metal",
         "brand": "",
         "condition": "good",
-        "fragile": false,
+        "fragile": true,
         "maybeSentimental": false,
         "photoIndex": 0,
-        "confidence": 0.3
+        "confidence": 0.35
       }
     ],
     "newItems": []
