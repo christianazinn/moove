@@ -189,6 +189,7 @@ final class MooveStore {
             Task { [weak self] in
                 for await snap in snapshots {
                     self?.snapshot = snap
+                    self?.restoreKeptNames()
                     // Same rule as `uploadBaseURL` (a loopback announcement loses to the build's
                     // URL on a device), so the uploader and listing import agree with Settings.
                     AppConfig.runtimeUploadBaseURL = self?.uploadBaseURL
@@ -257,6 +258,9 @@ final class MooveStore {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name != item.name else { return true }
         guard await run({ try await $0.renameItem(itemId: item.id, name: name) }) else { return false }
+        // Vision hasn't answered yet and would replace the name: keep it until it has.
+        let current = snapshot.items.first { $0.id == item.id } ?? item
+        if ItemLabels.isIdentifying(current) || keptNames[item.id] != nil { keepNames([item.id: name]) }
         // The voxel model follows the new name, even over RoomPlan's own attributes.
         return await setItemAttributes(ItemFix.renamed(to: name, attributes: currentAttributes(item)), for: item)
     }
@@ -309,6 +313,56 @@ final class MooveStore {
             return true
         } catch {
             return false
+        }
+    }
+
+    // MARK: Names the user chose (kept through vision)
+
+    /// Item id → the name the user gave it (scan checklist, or a rename while vision was still
+    /// identifying). Vision's `set_item_details` replaces names, so each snapshot puts these back
+    /// (`rename_item`) until vision is done with the item. Saved on this device.
+    private(set) var keptNames: [UInt64: String] =
+        ItemLabels.decode(UserDefaults.standard.dictionary(forKey: ItemLabels.keptNamesDefaultsKey))
+    @ObservationIgnored private var restoringNames: Set<UInt64> = []
+
+    func keepNames(_ names: [UInt64: String]) {
+        guard !names.isEmpty else { return }
+        keptNames.merge(names) { _, new in new }
+        saveKeptNames()
+        restoreKeptNames()
+    }
+
+    private func saveKeptNames() {
+        UserDefaults.standard.set(ItemLabels.encode(keptNames), forKey: ItemLabels.keptNamesDefaultsKey)
+    }
+
+    private func restoreKeptNames() {
+        // An empty snapshot (still subscribing) would look like every item is gone.
+        guard !keptNames.isEmpty, !snapshot.items.isEmpty, status == .connected || backendKind == .fixture else { return }
+        let work = ItemLabels.keptNameWork(keptNames, items: snapshot.items)
+        for (id, name) in work.renames where !restoringNames.contains(id) {
+            restoringNames.insert(id)
+            Task {
+                _ = await run { try await $0.renameItem(itemId: id, name: name) }
+                restoringNames.remove(id)
+            }
+        }
+        if !work.settled.isEmpty {
+            for id in work.settled { keptNames[id] = nil }
+            saveKeptNames()
+        }
+    }
+
+    /// After a scan import: keeps the names given in the checklist (`labels` by scan object id)
+    /// on the items just imported into `roomName`, waiting up to ~5 s for them like `saveScanColors`.
+    func keepScanNames(_ labels: [String: ItemLabels.Label], roomName: String) async {
+        guard labels.values.contains(where: { $0.cleanName != nil }) else { return }
+        for attempt in 0..<20 {
+            if let room = newestRoom(named: roomName) {
+                let names = ItemLabels.keptNames(for: labels, in: items.filter { $0.roomId == room.id })
+                if !names.isEmpty { keepNames(names); return }
+            }
+            if attempt < 19 { try? await Task.sleep(for: .milliseconds(250)) }
         }
     }
 

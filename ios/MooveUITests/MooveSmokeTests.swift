@@ -98,6 +98,46 @@ final class MooveSmokeTests: XCTestCase {
         snap("03-scan-skipped")
     }
 
+    /// An item nobody could name shows under Review's "Needs a name"; renaming it from Item
+    /// detail's Fix it takes it off the list.
+    func testNameAnUnidentifiedItemFromReview() {
+        launch(environment: ["MOOVE_DEMO_UNNAMED": "1"])
+        open(tab: "Scan")
+        let load = app.buttons["Load demo scan"]
+        XCTAssertTrue(scrollTo(load), "Load demo scan button")
+        load.tap()
+        XCTAssertTrue(app.buttons["See inventory"].waitForExistence(timeout: slow), "scan finished screen")
+        app.buttons["See inventory"].tap()
+        open(tab: "Items", segment: "Review")
+        let header = text(matching: "Needs a name")
+        let row = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'review.unnamed.'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: slow), "unnamed item row under Needs a name")
+        XCTAssertTrue(header.exists, "Needs a name header")
+        // The deck card takes drags in the middle of the screen, so scroll from the page title.
+        let title = text(matching: "Your call.")
+        for _ in 0..<4 where !row.isHittable && title.exists {
+            let from = title.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            from.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.0)))
+        }
+        XCTAssertTrue(scrollTo(row), "unnamed item row on screen")
+        XCTAssertTrue(row.label.contains("Other"), row.label)
+        snap("07-needs-a-name")
+        row.tap()
+
+        let field = app.textFields["item.fix.name"]
+        XCTAssertTrue(scrollTo(field), "Fix it name field on item detail")
+        field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 12) + "Record crate")
+        let save = app.buttons["item.fix.saveName"]
+        XCTAssertTrue(save.waitForExistence(timeout: slow), "Save name")
+        save.tap()
+        XCTAssertTrue(app.navigationBars["Record crate"].waitForExistence(timeout: slow), "renamed on item detail")
+        snap("07-renamed")
+        app.navigationBars["Record crate"].buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Review"].waitForExistence(timeout: slow), "back on Review")
+        XCTAssertTrue(header.waitForNonExistence(timeout: slow), "Needs a name is empty once it's named")
+    }
+
     func testLoadDemoScanShowsRoomInInventory() {
         launch()
         open(tab: "Scan")

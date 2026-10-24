@@ -79,8 +79,9 @@ struct RoomVisualizationView: View {
                     .accessibilityLabel("View")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                // Coloring, labels and wall height only apply to RoomPlan's boxes.
-                if style != .voxel { displayMenu }
+                // Coloring, labels and wall height only apply to RoomPlan's boxes. The voxel
+                // view can't be tapped, so it lists the pieces instead (to open one's card).
+                if style != .voxel { displayMenu } else if !items.isEmpty { pieceMenu }
             }
         }
         .mooveScreen()
@@ -121,6 +122,19 @@ struct RoomVisualizationView: View {
             Label("Display", systemImage: "paintpalette")
         }
         .accessibilityIdentifier("room.display")
+    }
+
+    /// Voxel style: pick a piece to show its card (Rename, What is it?).
+    private var pieceMenu: some View {
+        Menu {
+            ForEach(geometry.objects.filter { items[$0.id] != nil }) { object in
+                Button(items[object.id]?.name ?? object.category.capitalized) { selection = object.id }
+            }
+        } label: {
+            Label("Items", systemImage: "list.bullet")
+        }
+        .accessibilityLabel("Pick an item")
+        .accessibilityIdentifier("room.items")
     }
 
     private var accessibilitySummary: String {
@@ -167,11 +181,61 @@ struct RoomVisualizationView: View {
 }
 
 private struct SelectedObjectCard: View {
+    @Environment(MooveStore.self) private var store
     let object: RoomGeometry.Object
     let item: Item?
     let close: () -> Void
+    @State private var renaming = false
+    @State private var newName = ""
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            summary
+            if let item { relabel(item) }
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 6)
+        .padding(.vertical, 12)
+        .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("room.selection")
+        .alert("Rename", isPresented: $renaming, presenting: item) { item in
+            TextField("Name", text: $newName)
+            Button("Save") { Task { await store.renameItem(item, to: newName) } }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    /// Relabel straight from the 3D view: the model rebuilds from the new name or kind.
+    private func relabel(_ item: Item) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                newName = item.name
+                renaming = true
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+            .buttonStyle(.pill(.outline, compact: true))
+            .accessibilityLabel("Rename \(item.name)")
+            .accessibilityIdentifier("room.selection.rename")
+            Menu {
+                let current = ItemFix.quickKind(in: item.attributes)
+                ForEach(ItemFix.QuickKind.allCases) { kind in
+                    Toggle(kind == .other ? "Other (automatic)" : kind.label, isOn: Binding(
+                        get: { kind == current },
+                        set: { _ in Task { await store.setQuickKind(kind, for: item) } }))
+                }
+            } label: {
+                Label("What is it?", systemImage: "questionmark.circle")
+            }
+            .buttonStyle(.pill(.outline, compact: true))
+            .accessibilityIdentifier("room.selection.kind")
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var summary: some View {
         HStack(spacing: 14) {
             if let item {
                 ItemThumbnail(item: item, size: 56)
@@ -216,13 +280,6 @@ private struct SelectedObjectCard: View {
                 .contentShape(Rectangle())
                 .buttonStyle(.plain)
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 6)
-        .padding(.vertical, 12)
-        .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("room.selection")
     }
 
     private var size: String {
