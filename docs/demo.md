@@ -2,6 +2,12 @@
 
 The judging demo is live, 2 minutes, on a phone. This page covers the seeded backup room, the script, and what to do when something breaks.
 
+## Before the demo (5 minutes)
+1. `cd agents && npm run status`: both backends **UP**, with uploads healthy and recent agent events. See `docs/backends.md` if not.
+2. Phones: **Settings → Backend → Demo** (maincloud `moove-demo`, a clean database for judges), then Items → **Join a room → `4RZ9G8`** to get the seeded Bedroom (9 priced and sorted items, the guitar flagged sentimental). The app reads the worker's upload URL from `service_config`, so there's nothing to configure.
+3. Budget: live Claude calls stop at `CLAUDE_MAX_USD_PER_DAY` (default $3) and live comps runs at `APIFY_MAX_USD_PER_DAY` (default $2), shared by both workers. Check `.cache/claude-spend.json` / `.cache/apify-spend.json` in `agents/` on Christian's laptop, and raise the caps in `.env.local` if a rehearsal used them up (the workers restart on save).
+4. Rehearse on **Demo**, not Live. Live `moove` holds earlier test scans, junk included.
+
 ## The seeded room (safety net)
 `npm run seed:demo` (in `agents/`) creates a college-student bedroom through the same app reducers iOS calls (`register_user`, `import_scan`, `set_sentimental`). It connects as a **normal user**, not the worker. The room is "Bedroom", home `old`, with 9 RoomPlan-style objects (`agents/scripts/demo-room.ts`):
 
