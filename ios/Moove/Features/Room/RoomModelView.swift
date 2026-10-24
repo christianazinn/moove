@@ -14,8 +14,12 @@ struct RoomModelView: View {
 
     var body: some View {
         RealityView { content in
+            await RoomScene.prepareLook()
             let room = RoomScene.make(geometry)
-            content.add(stage(holding: room))
+            RoomScene.addEnvironmentLight(to: room)
+            let staged = stage(holding: room)
+            content.add(staged)
+            if Self.orbitsRoom { content.cameraTarget = staged }  // orbit pivots on (and frames) the room
             apply(to: room)
         } update: { content in
             guard let room = content.entities.first?.findEntity(named: "room") else { return }
@@ -54,6 +58,10 @@ struct RoomModelView: View {
     }
     static var lift: Float {
         Float(ProcessInfo.processInfo.environment["MOOVE_ROOM_LIFT"].flatMap(Double.init) ?? 0.22)
+    }
+    /// Point the orbit camera at the room. MOOVE_ROOM_ORBIT_TARGET=0 falls back to orbiting the world origin.
+    static var orbitsRoom: Bool {
+        ProcessInfo.processInfo.environment["MOOVE_ROOM_ORBIT_TARGET"] != "0"
     }
     static var tilt: Float {
         Float(ProcessInfo.processInfo.environment["MOOVE_ROOM_TILT"].flatMap(Double.init) ?? 1.0)
