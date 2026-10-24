@@ -87,6 +87,21 @@ final class AutoPhotographer: @unchecked Sendable {
         return out
     }
 
+    /// A few whole keyframes that together show the room (`WideFramePicker`), as JPEG,
+    /// longest side ≤ `maxPhotoSide`, for the worker's photo sweep (#92). Call off the main thread.
+    func roomPhotos(count: Int = 4) -> [Data] {
+        queue.sync {}
+        let frames = lock.withLock { keyframes }
+        return WideFramePicker.pick(frames, count: count).compactMap { id in
+            guard var image = CIImage(contentsOf: url(id)) else { return nil }
+            let scale = min(1, Self.maxPhotoSide / max(image.extent.width, image.extent.height))
+            if scale < 1 { image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale)) }
+            guard let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+            return context.jpegRepresentation(of: image, colorSpace: space,
+                                              options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.8])
+        }
+    }
+
     // MARK: Frame data
 
     static func pose(_ camera: ARCamera) -> CameraPose {

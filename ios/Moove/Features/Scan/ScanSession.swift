@@ -43,6 +43,8 @@ final class ScanSession {
     private(set) var photos: [UUID: URL] = [:]
     /// Objects whose photo was cut from a scan keyframe (#82), not taken by the user.
     private(set) var autoPhotos: Set<UUID> = []
+    /// Wide room photos for the worker's photo sweep (#92), sent after the import.
+    private(set) var roomPhotos: [URL] = []
     /// True while auto photos are being cut after the scan.
     private(set) var autoPhotosPending = false
     private(set) var geometry: RoomGeometry?
@@ -113,8 +115,10 @@ final class ScanSession {
         Task.detached(priority: .userInitiated) { [weak self] in
             let started = Date()
             let jpegs = photographer.photos(for: objects)
-            print("[auto-photos] \(jpegs.count) of \(objects.count) objects in \(Int(Date().timeIntervalSince(started) * 1000)) ms")
+            let room = photographer.roomPhotos()
+            print("[auto-photos] \(jpegs.count) of \(objects.count) objects + \(room.count) room photos in \(Int(Date().timeIntervalSince(started) * 1000)) ms")
             await self?.applyAutoPhotos(jpegs)
+            await self?.saveRoomPhotos(room)
         }
     }
 
@@ -125,6 +129,15 @@ final class ScanSession {
             guard photos[object.id] == nil, let jpeg = jpegs[object.id.uuidString] else { continue }
             setPhoto(jpeg, for: object)
             autoPhotos.insert(object.id)
+        }
+    }
+
+    private func saveRoomPhotos(_ jpegs: [Data]) {
+        let dir = folder.appending(path: "room-photos", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        roomPhotos = jpegs.enumerated().compactMap { i, jpeg in
+            let url = dir.appending(path: "\(i).jpg")
+            return (try? jpeg.write(to: url)) != nil ? url : nil
         }
     }
 
@@ -224,7 +237,27 @@ final class ScanSession {
         if imported {
             self.store = store
             await persistColors()
+            await sendRoomPhotos(to: store, uploader: uploader)
         }
+    }
+}
+
+// MARK: - Room photo sweep (#92)
+
+extension ScanSession {
+    /// Attaches the wide room photos to the scan just imported (`add_scan_photo`); the
+    /// worker then names "other" items and adds ones RoomPlan missed. Skipped offline
+    /// (no sweep agent) and when uploads failed: the worker can't fetch a device URL.
+    /// Runs after `.finished` shows, so it doesn't touch `phase`.
+    fileprivate func sendRoomPhotos(to store: MooveStore, uploader: Uploader) async {
+        guard !roomPhotos.isEmpty, store.uploadBaseURL != nil, uploadProblem == nil,
+              let scan = await store.newestScan(inRoomNamed: roomName) else { return }
+        var sent = 0
+        for file in roomPhotos {
+            guard let url = try? await uploader.upload(file, contentType: "image/jpeg") else { break }
+            if await store.addScanPhoto(scanId: scan.id, url: url) { sent += 1 }
+        }
+        print("[sweep] sent \(sent) of \(roomPhotos.count) room photos for scan \(scan.id)")
     }
 }
 

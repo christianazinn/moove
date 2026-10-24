@@ -33,7 +33,7 @@ _Checked against `main` on Sat Oct 24, ~01:00. "Simulated" rows are labeled as s
 | Flow | State on `main` |
 |---|---|
 | Photo → item details (Claude vision) | Built (#5). Runs on items that have a photo. |
-| Room photo sweep (fix "other" and missed items) | Built (#92): a few wide room photos → one Claude vision call names RoomPlan's boxes and adds what it missed. The iOS capture step is not on `main` yet. |
+| Room photo sweep (fix "other" and missed items) | Built (#92): a few wide room photos → one Claude vision call names RoomPlan's boxes and adds what it missed. The app picks up to 4 sharp, level, outward-facing scan keyframes (`WideFramePicker`) and sends them with `add_scan_photo` after the import; not yet verified on a device. |
 | Pricing from Apify comps, paid for over x402 | Built (#6, #7, #46): Apify eBay-sold + FB Marketplace comps, rules + Haiku relevance filter (#62), queue under Apify's concurrency limit (#107). Real Base Sepolia settlement is proven by `npm run x402:demo`. The live worker has no CDP keys, so its payments are **labeled simulated**. |
 | Auto-sort keep/sell/donate/trash | Built (#8, rules only, no model calls). Never overrides a user's choice; possibly sentimental items are left to the user. |
 | eBay listing | Built (#11, #32). Real sandbox posting needs the `EBAY_*` keys, which aren't on the live worker, so listings are **labeled simulated**. |
