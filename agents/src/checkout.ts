@@ -30,6 +30,7 @@ export function visaSink(conn: Conn): VisaSink {
       const match = (r: Payment) =>
         r.rail === 'visa' && r.txHash === p.txHash && r.refTable === p.refTable && r.refId === p.refId && r.owner.isEqual(owner);
       const id = waitForPayment(conn, match);
+      id.catch(() => undefined); // handled by the await below; avoids an unhandled rejection if the reducer throws
       await conn.reducers.recordPayment({ ...p, owner });
       return id;
     },
@@ -48,6 +49,15 @@ let checkout: VisaCheckout | undefined;
 export function visaCheckout(conn: Conn): VisaCheckout {
   if (!checkout) {
     checkout = createVisaCheckout(visaSink(conn));
+    // The card budget is per process; count earlier pending/settled card payments so a restart
+    // doesn't hand the agents a fresh cap.
+    const prior = new Map<string, bigint>();
+    for (const p of conn.db.payment.iter()) {
+      if (p.rail === 'visa' && (p.status === 'pending' || p.status === 'settled')) {
+        prior.set(p.agent, (prior.get(p.agent) ?? 0n) + p.amountUsdMicros / 10_000n);
+      }
+    }
+    for (const [agent, cents] of prior) checkout.seedSpent(agent, cents);
     console.log(`[visa] checkout ready (${checkout.simulated ? 'SIMULATED' : checkout.provider})`);
   }
   return checkout;
