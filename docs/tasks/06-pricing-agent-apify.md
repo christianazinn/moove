@@ -19,7 +19,7 @@ An agent in the worker (`agents/`). It subscribes to items that have details but
 - Cache raw Apify results to `agents/fixtures/comps/` for demo replay.
 
 ## Tables / reducers touched
-`comps`, `items` (estValue, priceLow, priceHigh), `payments` (via #7), `agentEvents`.
+`comps`, `item` (est_value_cents, est_low_cents, est_high_cents via `set_est_value`; comps via `add_comps`), `payments` (via #7), `agentEvents`.
 
 ## Acceptance criteria
 - [ ] Fixture items get prices with at least 3 comps each, and each comp links to a real listing URL.
