@@ -53,6 +53,7 @@ struct SummaryView: View {
 
     private func hero(_ s: MoveSummary) -> some View {
         VStack(alignment: .leading, spacing: 8) {
+            MooveWordmark(height: 40).padding(.bottom, 14)
             Text("Summary · \(s.itemCount) items").eyebrow()
             Text("Your move, handled.")
                 .font(.system(size: 28, weight: .semibold))
