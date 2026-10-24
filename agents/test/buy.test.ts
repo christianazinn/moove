@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fixtureDealSource, rankDeals, sanitizeText, sellerInfo, toCandidate, type DealCandidate } from '../src/integrations/deals.js';
-import { pickDealsToWrite, pickRecommendation, requestOnce } from '../src/agents/buy.js';
+import { pickDealsToWrite, pickRecommendation, requestOnce, searchingMessage, searchLabel } from '../src/agents/buy.js';
+import { dealSourceReplayOnly } from '../src/integrations/deals-apify.js';
 import { DEMO_ROOMS, parseRooms, ruleBasedList } from '../src/agents/shopping.js';
 
 const cand = (o: Partial<DealCandidate>): DealCandidate => ({
@@ -119,4 +120,18 @@ test('the written deals always include the best card-checkout option', () => {
   assert.equal(picked.length, 5);
   assert.ok(picked.some(d => d.title === 'ikea'));
   assert.equal(pickRecommendation(picked)?.title, 'ikea');
+});
+
+test('deal search labels: header by configuration, result line per search', () => {
+  // Only a source that can never search live gets "(not live)" in the header.
+  assert.equal(dealSourceReplayOnly({}), true);
+  assert.equal(dealSourceReplayOnly({ DEALS_SOURCE: 'fixtures', APIFY_TOKEN: 'x' }), true);
+  assert.equal(dealSourceReplayOnly({ APIFY_TOKEN: ' ' }), true);
+  assert.equal(dealSourceReplayOnly({ APIFY_TOKEN: 'x' }), false);
+  assert.equal(searchingMessage('Apify live listings (fb, ebay)', true, 'Desk'), 'Searching Apify live listings (fb, ebay) (not live) for "Desk"');
+  assert.equal(searchingMessage('Apify live listings (fb, ebay)', false, 'Desk'), 'Searching Apify live listings (fb, ebay) for "Desk"');
+  // Whether a search was live is read from its own results, never from the previous search.
+  assert.equal(searchLabel({ replay: false }), ' [live search]');
+  assert.equal(searchLabel({ replay: true }), ' [cached replay]');
+  assert.equal(searchLabel({ replay: true, sample: true }), ' [sample data]');
 });
