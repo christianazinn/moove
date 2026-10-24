@@ -29,7 +29,8 @@ struct MooveApp: App {
                 NavigationStack {
                     RoomVisualizationView(
                         geometry: DemoFixtures.roomGeometry(),
-                        items: Dictionary(uniqueKeysWithValues: DemoFixtures.inventory(owner: "me").items.map { ($0.scanObjectId!, $0) })
+                        items: Dictionary(uniqueKeysWithValues: DemoFixtures.inventory(owner: "me").items.map { ($0.scanObjectId!, $0) }),
+                        roomName: "Bedroom", roomItems: DemoFixtures.inventory(owner: "me").items
                     )
                 }
             } else {
