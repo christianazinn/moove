@@ -2,7 +2,7 @@ import SwiftUI
 import MooveKit
 
 /// The "New Home" tab: pick the new place (demo house or typed-in rooms),
-/// then explore it in 3D. #14 adds the kept items and the fly-in here.
+/// then explore it in 3D with the kept items flown in and arranged (#14).
 struct NewHomeView: View {
     @Environment(MooveStore.self) private var store
     @State private var showPicker = false
@@ -24,7 +24,10 @@ struct NewHomeView: View {
     var body: some View {
         Group {
             if let current {
-                NewHomeDetail(name: current.name, source: current.source, plan: current.plan, saved: unsaved == nil)
+                NewHomeDetail(
+                    name: current.name, source: current.source, plan: current.plan,
+                    home: unsaved == nil ? store.newHome : nil, furniture: furniture
+                )
             } else {
                 NewHomePicker(onPick: choose)
             }
@@ -50,6 +53,14 @@ struct NewHomeView: View {
                 }
             }
         }
+    }
+
+    /// Kept items from the inventory; the demo inventory's keeps if there are none yet.
+    private var furniture: Furniture {
+        let kept = store.items.filter { $0.disposition == .keep }
+        if !kept.isEmpty { return Furniture(items: kept.map(LayoutItem.init), isDemo: false) }
+        let demo = DemoFixtures.inventory(owner: "demo").items.filter { $0.disposition == .keep }
+        return Furniture(items: demo.map(LayoutItem.init), isDemo: true)
     }
 
     private func choose(_ name: String, _ source: NewHomeSource, _ plan: FloorPlan) {
@@ -107,21 +118,95 @@ struct NewHomePicker: View {
     }
 }
 
-/// 3D view plus a strip of room chips; tapping a chip flies the camera there.
+struct Furniture: Equatable {
+    var items: [LayoutItem]
+    /// True when these are fixture items, not the user's.
+    var isDemo: Bool
+}
+
+/// 3D view with the kept items arranged in it, a layout picker, and a strip of
+/// room chips; tapping a chip flies the camera there.
 struct NewHomeDetail: View {
+    @Environment(MooveStore.self) private var store
     var name: String
     var source: NewHomeSource
     var plan: FloorPlan
-    var saved: Bool
+    /// The saved `newHome` row; nil while the plan is only local.
+    var home: NewHome?
+    var furniture: Furniture
 
     @State private var focusRoom: String?
+    @State private var options: [LayoutOption] = []
+    @State private var style: LayoutSolver.Style = .byFunction
+    @State private var flyInToken = 0
+    @State private var savedStyle: LayoutSolver.Style?
+
+    private var saved: Bool { home != nil }
+    private var option: LayoutOption? { options.first { $0.style == style } }
 
     var body: some View {
-        FloorPlan3DView(plan: plan, focusRoom: focusRoom)
+        FloorPlan3DView(plan: plan, focusRoom: focusRoom, items: furniture.items, placements: option?.placements ?? [], flyInToken: flyInToken)
             .ignoresSafeArea(edges: .horizontal)
             .overlay(alignment: .top) { header }
-            .safeAreaInset(edge: .bottom) { roomStrip }
+            .safeAreaInset(edge: .bottom) { controls }
             .onChange(of: plan) { focusRoom = nil }
+            .task(id: SolveKey(plan: plan, items: furniture.items)) { solve() }
+    }
+
+    private struct SolveKey: Equatable {
+        var plan: FloorPlan
+        var items: [LayoutItem]
+    }
+
+    private func solve() {
+        options = LayoutSolver(plan: plan).solveAll(furniture.items)
+        // Reopen on the layout the user saved last, if any.
+        if let home, let last = store.snapshot.layouts(for: home.id).max(by: { $0.id < $1.id }),
+           let match = LayoutSolver.Style.allCases.first(where: { $0.label == last.name }) {
+            style = match
+            savedStyle = match
+        }
+        flyInToken += 1
+    }
+
+    private var controls: some View {
+        VStack(spacing: 0) {
+            if !furniture.items.isEmpty {
+                HStack(spacing: 10) {
+                    Picker("Layout", selection: $style) {
+                        ForEach(LayoutSolver.Style.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    Button("Fly in", systemImage: "arrow.triangle.turn.up.right.diamond") { flyInToken += 1 }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.bordered)
+                    Button(savedStyle == style ? "Saved" : "Save") { Task { await save() } }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!saved || savedStyle == style || option == nil)
+                }
+                .padding(.horizontal)
+                .padding(.top, 10)
+                HStack {
+                    if let option, !option.unplaced.isEmpty {
+                        Label("\(option.unplaced.count) didn't fit", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                    }
+                    if furniture.isDemo { Text("Demo items: nothing kept yet") }
+                    Spacer()
+                    Text("\(option?.placements.count ?? 0) items")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+                .padding(.top, 6)
+            }
+            roomStrip
+        }
+        .background(.bar)
+    }
+
+    private func save() async {
+        guard let home, let option else { return }
+        if await store.saveLayout(option.placements, name: option.name, for: home) { savedStyle = option.style }
     }
 
     private var header: some View {
@@ -164,7 +249,6 @@ struct NewHomeDetail: View {
             .padding(.horizontal)
             .padding(.vertical, 10)
         }
-        .background(.bar)
     }
 
     private func chip(_ title: LocalizedStringKey, systemImage: String?, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -189,6 +273,10 @@ struct NewHomeDetail: View {
 
 #Preview("Detail") {
     NavigationStack {
-        NewHomeDetail(name: DemoHouse.name, source: .demo, plan: DemoHouse.floorPlan, saved: true)
+        NewHomeDetail(
+            name: DemoHouse.name, source: .demo, plan: DemoHouse.floorPlan, home: nil,
+            furniture: Furniture(items: DemoFixtures.inventory(owner: "demo").items.map(LayoutItem.init), isDemo: true)
+        )
     }
+    .environment(MooveStore.preview())
 }
