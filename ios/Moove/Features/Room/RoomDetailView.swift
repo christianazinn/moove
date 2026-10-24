@@ -12,7 +12,8 @@ struct RoomDetailView: View {
     var body: some View {
         Group {
             if let geometry {
-                RoomVisualizationView(geometry: geometry, items: itemsByScanObject, initialMode: .decision)
+                RoomVisualizationView(geometry: geometry, items: itemsByScanObject, initialMode: .decision,
+                                      roomName: room.name, roomItems: store.items.filter { $0.roomId == room.id })
             } else if !loaded {
                 ProgressView {
                     Text("Loading room…").monoMeta()
