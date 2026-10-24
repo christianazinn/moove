@@ -109,7 +109,7 @@ struct ListingRow: View {
         HStack(spacing: 16) {
             if let item { ItemThumbnail(item: item, size: 56) } else { IconTile(systemName: "tag") }
             VStack(alignment: .leading, spacing: 5) {
-                Text(listing.title).blockTitle().lineLimit(stacked ? 6 : 3)
+                Text(listing.title).blockTitle().lineLimit(stacked ? 6 : 3).fixedSize(horizontal: false, vertical: true)
                 ListingStatusChip(status: listing.status, simulated: listing.simulated)
                 if let problem {
                     Text(problem).monoMeta().lineLimit(stacked ? 6 : 3)
