@@ -59,10 +59,14 @@ public struct ScanObject: Codable, Sendable, Hashable {
     /// RoomPlan (iOS 17) attributes, type-prefixed raw values like "ChairLegType.star" (#110).
     /// [] for objects RoomPlan didn't classify (manual / extra detections).
     public var attributes: [String]
+    /// The user's own name for it from the scan checklist ("Name it…"); nil lets the module
+    /// name it from the category until vision runs (`import_scan_v2` `name: ''`).
+    public var name: String?
 
     public init(scanObjectId: String, category: String, widthM: Double, heightM: Double, depthM: Double,
-                photoUrl: String? = nil, attributes: [String] = []) {
+                photoUrl: String? = nil, attributes: [String] = [], name: String? = nil) {
         self.scanObjectId = scanObjectId
+        self.name = name
         self.category = category
         self.widthM = widthM
         self.heightM = heightM

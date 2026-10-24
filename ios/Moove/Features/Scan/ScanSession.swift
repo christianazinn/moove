@@ -31,6 +31,8 @@ final class ScanSession {
         /// Added by photo because RoomPlan didn't detect it: no size or position,
         /// so it's in the inventory but not in the 3D room.
         var manual = false
+        /// What the user called it in the checklist ("Name it…"), carried into the import.
+        var label: ItemLabels.Label?
 
         static func manual() -> DetectedObject {
             DetectedObject(id: UUID(), category: "other", widthM: 0, heightM: 0, depthM: 0, manual: true)
@@ -183,6 +185,12 @@ final class ScanSession {
         autoPhotos.remove(object.id)
     }
 
+    /// "Name it…": the user's name and/or kind for an object (nil or empty clears it).
+    func setLabel(_ label: ItemLabels.Label?, for object: DetectedObject) {
+        guard let i = objects.firstIndex(where: { $0.id == object.id }) else { return }
+        objects[i].label = (label?.isEmpty ?? true) ? nil : label
+    }
+
     func setPhoto(_ jpeg: Data, for object: DetectedObject) {
         let url = folder.appending(path: "photos/\(object.id.uuidString).jpg")
         do {
@@ -234,14 +242,19 @@ final class ScanSession {
             usdzUrl: usdzUrl,
             capturedRoomJsonUrl: jsonUrl,
             objects: Self.sanitized(objects).map {
-                ScanObject(scanObjectId: $0.id.uuidString, category: $0.category,
-                           widthM: $0.widthM, heightM: $0.heightM, depthM: $0.depthM,
-                           photoUrl: photoUrls[$0.id], attributes: $0.attributes)
+                // The user's label wins over the scan's category (vision still runs on it).
+                ItemLabels.applying($0.label, to: ScanObject(
+                    scanObjectId: $0.id.uuidString, category: $0.category,
+                    widthM: $0.widthM, heightM: $0.heightM, depthM: $0.depthM,
+                    photoUrl: photoUrls[$0.id], attributes: $0.attributes))
             }
         ))
         phase = imported ? .finished : .failed(store.lastError ?? "Couldn't save the scan")
         if imported {
             self.store = store
+            // Vision would replace the names given here; the store puts them back.
+            let labels = Dictionary(objects.compactMap { o in o.label.map { (o.id.uuidString, $0) } }, uniquingKeysWith: { a, _ in a })
+            await store.keepScanNames(labels, roomName: roomName)
             await persistColors()
             await sendRoomPhotos(to: store, uploader: uploader)
             if !pendingPhotos.isEmpty, !(uploader is LocalUploader) {
