@@ -37,10 +37,11 @@ final class MooveSmokeTests: XCTestCase {
         XCTAssertLessThan(needsYou.frame.minY, keep.frame.minY, "Needs you comes first")
         snap("02-review")
 
-        let quilt = row(startingWith: "Grandma")
-        XCTAssertTrue(quilt.exists)
-        XCTAssertLessThan(quilt.frame.minY, keep.frame.minY, "quilt rack starts in Needs you")
-        quilt.swipeRight()
+        // The seeded Bedroom's one sentimental item (#243).
+        let guitar = row(startingWith: "Yamaha acoustic guitar")
+        XCTAssertTrue(guitar.exists)
+        XCTAssertLessThan(guitar.frame.minY, keep.frame.minY, "guitar starts in Needs you")
+        guitar.swipeRight()
         let keepAction = app.buttons["Keep"].firstMatch
         XCTAssertTrue(keepAction.waitForExistence(timeout: slow), "Keep swipe action")
         snap("02-swipe")
@@ -48,22 +49,22 @@ final class MooveSmokeTests: XCTestCase {
 
         // Moved: now below the Keep header, and marked as the user's call.
         sleep(1)  // list animation
-        XCTAssertTrue(text(containing: "Need you, 1").exists, "one item still needs you")
-        let moved = row(startingWith: "Grandma")
-        XCTAssertTrue(scrollTo(moved), "quilt rack still listed")
+        XCTAssertTrue(text(containing: "Need you, 0").exists, "nothing needs you any more")
+        let moved = row(startingWith: "Yamaha acoustic guitar")
+        XCTAssertTrue(scrollTo(moved), "guitar still listed")
         XCTAssertTrue(moved.label.contains("Keep") && moved.label.contains("You decided"), moved.label)
         let keepHeader = text(matching: "Keep")
         if keepHeader.exists {
-            XCTAssertGreaterThan(moved.frame.minY, keepHeader.frame.minY, "quilt rack moved under Keep")
+            XCTAssertGreaterThan(moved.frame.minY, keepHeader.frame.minY, "guitar moved under Keep")
         }
         snap("02-kept")
         // Back to the top for the next row.
         for _ in 0..<4 { app.swipeDown() }
 
-        row(startingWith: "Framed photos").tap()
+        row(startingWith: "Floor lamp").tap()
         let picker = app.descendants(matching: .any)["item.disposition"].firstMatch
         XCTAssertTrue(picker.waitForExistence(timeout: slow), "disposition picker on item detail")
-        XCTAssertTrue(app.navigationBars["Framed photos"].exists)
+        XCTAssertTrue(app.navigationBars["Floor lamp"].exists)
         for choice in ["Keep", "Sell", "Donate", "Trash"] {
             XCTAssertTrue(picker.buttons[choice].exists, "\(choice) choice")
         }
@@ -102,9 +103,9 @@ final class MooveSmokeTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Inventory"].waitForExistence(timeout: slow), "jumped to Inventory")
         XCTAssertTrue(scrollTo(text(matching: "Demo bedroom")), "new room in Inventory")
         snap("03-inventory")
-        // Offline photo sweep (#181): the room photos "find" a guitar RoomPlan missed.
-        let guitar = text(matching: "Acoustic guitar")
-        XCTAssertTrue(guitar.waitForExistence(timeout: slow) || scrollTo(guitar), "item added by the photo sweep")
+        // Offline photo sweep (#181): the room photos "find" a plant RoomPlan missed.
+        let plant = text(matching: "Potted monstera")
+        XCTAssertTrue(plant.waitForExistence(timeout: slow) || scrollTo(plant), "item added by the photo sweep")
         snap("03-inventory-sweep")
     }
 
