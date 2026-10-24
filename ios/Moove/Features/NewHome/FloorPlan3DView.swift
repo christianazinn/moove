@@ -4,9 +4,13 @@ import MooveKit
 
 /// Non-AR RealityKit view of a floor plan. Drag to orbit, pinch to zoom,
 /// two-finger drag to pan, double-tap to reset. Setting `focusRoom` flies the camera to that room.
+/// Items in `placements` are drawn as boxes; bumping `flyInToken` replays the fly-in.
 struct FloorPlan3DView: UIViewRepresentable {
     var plan: FloorPlan
     var focusRoom: String? = nil
+    var items: [LayoutItem] = []
+    var placements: [Placement] = []
+    var flyInToken = 0
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -15,16 +19,21 @@ struct FloorPlan3DView: UIViewRepresentable {
         view.environment.background = .color(UIColor(red: 0.95, green: 0.95, blue: 0.97, alpha: 1))
         context.coordinator.attach(to: view)
         context.coordinator.show(plan, focusRoom: focusRoom, animated: false)
+        context.coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken)
         return view
     }
 
     func updateUIView(_ view: ARView, context: Context) {
         context.coordinator.show(plan, focusRoom: focusRoom, animated: true)
+        context.coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken)
     }
 
     @MainActor
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         let scene = NewHomeScene()
+        let furniture = FurnitureLayer()
+        private var shownPlacements: [Placement]?
+        private var shownFlyIn: Int?
         private let anchor = AnchorEntity(world: .zero)
         private let camera = PerspectiveCamera()
         private var target: SIMD3<Float> = .zero
@@ -37,6 +46,7 @@ struct FloorPlan3DView: UIViewRepresentable {
             camera.camera.fieldOfViewInDegrees = 50
             anchor.addChild(camera)
             anchor.addChild(scene.root)
+            anchor.addChild(furniture.root)
             let sun = DirectionalLight()
             sun.light.intensity = 2500
             sun.look(at: .zero, from: [4, 10, 6], relativeTo: nil)
@@ -62,6 +72,15 @@ struct FloorPlan3DView: UIViewRepresentable {
             guard planChanged || shownFocus != .some(focusRoom) else { return }
             shownFocus = .some(focusRoom)
             frame(on: focusRoom.flatMap(plan.room(named:))?.bounds ?? plan.bounds, animated: animated && !planChanged)
+        }
+
+        func showFurniture(_ placements: [Placement], items: [LayoutItem], plan: FloorPlan, flyInToken: Int) {
+            guard placements != shownPlacements || flyInToken != shownFlyIn else { return }
+            // Hold the fly-in until there's something to fly.
+            let flyIn = flyInToken != shownFlyIn && !placements.isEmpty
+            shownPlacements = placements
+            if !placements.isEmpty { shownFlyIn = flyInToken }
+            furniture.show(placements, items: items, plan: plan, flyIn: flyIn)
         }
 
         private func frame(on bounds: PlanBounds, animated: Bool) {
