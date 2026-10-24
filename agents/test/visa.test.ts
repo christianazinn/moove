@@ -283,6 +283,22 @@ test("above the threshold with no approval: needs_approval and nothing is author
   assert.equal(co.remaining("buy"), 50_000n);
 });
 
+test("simulated checkout labels the pending and refusal steps too; the sandbox does not", async () => {
+  const { sink, events } = memorySink();
+  const co = new VisaCheckout({ sink, backend: createSimulatedBackend(), ledger: ledger(20_000n, 15_000n) });
+  await co.purchase(ctx({ amountCents: 25_000n })); // over the threshold: "Not charging yet"
+  await co.purchase(ctx({ amountCents: 16_000n })); // over the per-purchase max: "Refused card payment"
+  assert.deepEqual(events.map((e) => e.message.replace(/:.*/, "")), ["[SIMULATED] Not charging yet", "[SIMULATED] Refused card payment for Twin bed frame from IKEA"]);
+  for (const e of events) assert.equal(e.data.simulated, true);
+
+  const real = memorySink();
+  const sandbox = new VisaCheckout({ sink: real.sink, backend: createAcceptanceBackend({ ...CFG, fetch: fakeCybersource().fetch, now: () => NOW }), ledger: ledger(20_000n, 15_000n) });
+  await sandbox.purchase(ctx({ amountCents: 25_000n }));
+  await sandbox.purchase(ctx({ amountCents: 16_000n }));
+  assert.match(real.events[0].message, /^Not charging yet: /);
+  assert.match(real.events[1].message, /^Refused card payment for /);
+});
+
 test("pending approval waits, denied and mismatched approvals refuse, none authorize", async () => {
   const { sink } = memorySink();
   const s = spy(createSimulatedBackend());

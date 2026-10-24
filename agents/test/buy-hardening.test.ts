@@ -13,7 +13,10 @@ process.env.BUY_RETRY_DELAY_MS = "20";
 process.env.BUY_FRAUD_BLOCK = "0.7";
 delete process.env.BUY_REQUIRE_FRAUD_SCORE;
 delete process.env.BUY_AUTO_CHOOSE;
-const { buyAgent } = await import("../src/agents/buy.js");
+const { buyAgent, pickDealsToWrite } = await import("../src/agents/buy.js");
+const { createDealSource } = await import("../src/integrations/deals-apify.js");
+const { rankDeals, sellerInfo } = await import("../src/integrations/deals.js");
+const { cachedCompPrices, screenDeal } = await import("../src/agents/fraud.js");
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const owner = { isEqual: (o: unknown) => o === owner, toHexString: () => "owner" };
@@ -143,4 +146,44 @@ test("an approval for a different amount never pays", async () => {
   insert();
   await sleep(40);
   assert.deepEqual(paymentsFor(deal.id), []);
+});
+
+test("the planted demo scam on Desk chair is written, labeled sample data, scored >= 0.7 by the real fraud rules, and never paid", async () => {
+  // The demo path with no APIFY_TOKEN: committed live replay + sample retail rows + the planted scam.
+  const found = await createDealSource({}).search({ name: "Desk chair", category: "chair" });
+  const live = found.filter(d => !d.sample);
+  assert.ok(live.length >= 3 && live.every(d => d.replay && !d.planted), "the planted deal is not one of the 3+ replayed live deals");
+  const written = pickDealsToWrite(rankDeals(found), 5);
+  const planted = written.find(d => d.planted);
+  assert.ok(planted, "the planted deal always makes the written top 5");
+  assert.ok(written.some(d => d.checkout === "visa"), "and the card-checkout deal still does");
+  assert.equal(planted.title, "Herman Miller Aeron, brand new, $95, Zelle only, ship only");
+  assert.ok(planted.sample);
+  assert.match(sellerInfo(planted), /^Planted demo scam \(not a real listing\) · .*sample data$/);
+  assert.equal(planted.checkout, "seller_message");
+  assert.ok(!(await createDealSource({}).search({ name: "Office chair", category: "chair" })).some(d => d.planted), "only planted for Desk chair");
+
+  // Score it the way the fraud agent does: against the other written deals and cached comps.
+  const itemId = nextId++;
+  const rows = written.map(d => ({ id: nextId++, owner, shoppingItemId: itemId, source: d.source, title: d.title, priceCents: d.priceCents, url: d.url, sellerInfo: sellerInfo(d), fraudScore: -1, aiTextScore: -1, fraudReasons: [] as string[] }));
+  const row = rows[written.indexOf(planted)];
+  const screen = screenDeal(row, { allDeals: rows, compPrices: cachedCompPrices("Desk chair") });
+  assert.ok(screen.fraudScore >= 0.7, `scored ${screen.fraudScore}`);
+  assert.ok(screen.reasons.includes("asks for payment by Zelle"), screen.reasons.join("; "));
+
+  // The user chooses it anyway: the buy agent refuses, with no approval request and no payment.
+  for (const r of rows) db.deal.rows.set(r.id, r);
+  db.deal.rows.set(row.id, { ...row, fraudScore: screen.fraudScore, fraudReasons: screen.reasons });
+  db.shoppingItem.insert({ id: itemId, owner, name: "Desk chair", category: "chair", reason: "Desk nook: needs a chair", status: "found", chosenDealId: row.id });
+  await sleep(50);
+  assert.deepEqual(paymentsFor(row.id), []);
+  assert.equal([...db.approval.rows.values()].filter(a => a.refId === row.id).length, 0);
+  assert.ok(eventsFor(row.id).some(e => e.kind === "error" && /^Not buying "Herman Miller Aeron, brand new.*fraud screen scored it 0\.\d\d \(asks for payment by Zelle/.test(e.message)));
+});
+
+test("pickDealsToWrite keeps the card deal and the planted deal when both are outside the top n", () => {
+  const d = (title: string, extra: Record<string, unknown> = {}) => ({ source: "fb", title, priceCents: 1000n, url: `https://x/${title}`, seller: "", condition: "good", distanceMiles: 1, checkout: "seller_message", replay: true, score: 1, why: "", ...extra }) as any;
+  const ranked = [d("a"), d("b"), d("c"), d("card", { checkout: "visa", source: "ikea" }), d("scam", { planted: true, sample: true })];
+  assert.deepEqual(pickDealsToWrite(ranked, 3).map(x => x.title), ["a", "scam", "card"]);
+  assert.deepEqual(pickDealsToWrite(ranked.slice(0, 2).concat(ranked[4]), 5).map(x => x.title), ["a", "b", "scam"]);
 });

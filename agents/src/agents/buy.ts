@@ -63,6 +63,17 @@ export function pickDealsToWrite(ranked: RankedDeal[], n: number): RankedDeal[] 
   const top = ranked.slice(0, n);
   const card = ranked.find(d => d.checkout === 'visa');
   if (card && !top.includes(card)) top[top.length - 1] = card;
+  // A planted demo scam (labeled sample data) is always written, so the fraud block can be shown.
+  // It takes the lowest-ranked slot that isn't the card deal.
+  const planted = ranked.find(d => d.planted);
+  if (planted && !top.includes(planted)) {
+    if (top.length < n) top.push(planted);
+    else {
+      let i = top.length - 1;
+      while (i >= 0 && top[i] === card) i--;
+      if (i >= 0) top[i] = planted;
+    }
+  }
   return top;
 }
 
