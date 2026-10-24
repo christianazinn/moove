@@ -359,7 +359,13 @@ test("payee allowlist: unknown payTo is refused before signing", async () => {
   });
   await assert.rejects(rail.paidFetch(ctx, "https://paid.example/comps?q=chair"), SpendRefusedError);
   assert.equal(fakeSigner.signed.length, 0);
-  assert.ok(events.some((e) => e.kind === "error" && /allowlist/.test(e.message)));
+  const refusal = events.find((e) => e.kind === "error" && /allowlist/.test(e.message));
+  assert.ok(refusal, "refusal logged");
+  const data = JSON.parse(refusal.dataJson);
+  assert.equal(data.rail, "x402");
+  assert.equal(data.outcome, "refused");
+  assert.equal(data.refused, true);
+  assert.equal(data.remainingUsdMicros, usdToMicros(1).toString());
   assert.equal(rail.remaining("pricing"), usdToMicros(1), "budget untouched");
 
   const ok = new X402Rail({ sink, ledger: new SpendLedger(usdToMicros(1), usdToMicros(0.1)), signer: fakeSigner, fetch: server.fetch, allowedPayees: [PAY_TO.toUpperCase().replace("0X", "0x")] });

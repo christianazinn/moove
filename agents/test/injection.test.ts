@@ -51,6 +51,16 @@ test('links and contact details from comps never reach the published copy', () =
   assert.ok(out.title.length <= 80);
 });
 
+test('phone scrubbing removes real numbers but keeps dimensions and model numbers', () => {
+  for (const keep of ['Size 120.0 - 60.0 - 75.0 cm', 'Model number 1234567890', 'Width 68 x 82 x 100 cm, 2019 model']) {
+    assert.equal(finalizeCopy({ title: keep, description: keep }).description, keep, keep);
+  }
+  for (const phone of ['call 415-555-0100', 'call (415) 555-0100', 'call +1 415 555 0100', 'text 415.555.0100']) {
+    const out = finalizeCopy({ title: 't', description: phone }).description;
+    assert.ok(!/555/.test(out), `${phone} -> ${out}`);
+  }
+});
+
 test('cleanUntrusted bounds length and strips markup', () => {
   const s = cleanUntrusted(`<b>Chair</b>${ZWSP} ${'x'.repeat(500)}`, 50);
   assert.ok(s.length <= 50 && s.startsWith('Chair') && s.endsWith('…'));

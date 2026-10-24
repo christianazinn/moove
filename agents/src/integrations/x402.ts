@@ -226,6 +226,7 @@ export class X402Rail {
     const amount = BigInt(requirements.amount);
     if (!/^0x[0-9a-fA-F]{40}$/.test(requirements.payTo) || (this.allowedPayees.size > 0 && !this.allowedPayees.has(requirements.payTo.toLowerCase()))) {
       await this.event(ctx, "error", `Refused x402 payment for ${ctx.purpose}: payee ${requirements.payTo} is not on the allowlist`, {
+        ...this.railData(ctx, "refused"),
         url: request.url,
         payee: requirements.payTo,
         amountUsdMicros: amount.toString(),

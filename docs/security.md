@@ -32,13 +32,13 @@ Out of scope for a hackathon: DoS against maincloud, a compromised laptop, an Au
 ### Secrets
 - Keys live only in `.env.local` (gitignored) or the worker's environment. Every key is documented, with empty values, in [`.env.example`](../.env.example).
 - `.gitignore` covers `.env*` (except the example), `*.pem`, `*.p8`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `*.mobileprovision`, `*.cer`, `*.der`, `credentials.json`, `service-account*.json`, `*.secret`, worker tokens (`.worker-token*`) and `ios/Config/Local.xcconfig`.
-- **CI runs gitleaks twice**: `gitleaks-action` on each PR/push, and a full-history `gitleaks detect --log-opts=--all` on every run ([ci.yml](../.github/workflows/ci.yml)). `.gitleaks.toml` uses the default rules with **no path allowlist**, so a real key pasted into `.env.example` fails CI too. The first full-history scan (30 commits, all branches, Oct 23) found one hit: the Auth0 **native** client id in `ios/Config/Moove.xcconfig` on the #1 branch. That value is public by design (PKCE, no secret), so `.gitleaks.toml` allows only the `MOOVE_AUTH0_CLIENT_ID`/`MOOVE_AUTH0_DOMAIN` lines in `ios/Config/*.xcconfig`. After that, the history is clean.
+- **CI runs gitleaks twice**: `gitleaks-action` on each PR/push, and a full-history `gitleaks detect --log-opts=--all` over every commit on every branch ([ci.yml](../.github/workflows/ci.yml)). The full-history scan gates pushes to `main`; on PRs it reports but can't fail, so one flagged string on a teammate's branch doesn't turn every PR red. `.gitleaks.toml` uses the default rules with **no path allowlist**, so a real key pasted into `.env.example` fails CI too. The first full-history scan (all branches, Fri Oct 23 night) found one hit: the Auth0 **native** client id in `ios/Config/Moove.xcconfig` on the #1 branch. That value is public by design (PKCE, no secret), so `.gitleaks.toml` allows only the `MOOVE_AUTH0_CLIENT_ID`/`MOOVE_AUTH0_DOMAIN` lines in `ios/Config/*.xcconfig`. After that, the history is clean.
 - The iOS bundle holds only the SpacetimeDB host/db name, the upload base URL, and the Auth0 domain + native client id (public by design; PKCE, no client secret). Tokens go in the Keychain (`ios/Moove/Shared/Keychain.swift`). ATS stays on; the only exception is `NSAllowsLocalNetworking` for the dev server.
 - `npm run ebay:setup` prints the eBay refresh token once to the developer's terminal, for pasting into `.env.local`. It is never written to disk or logged by the worker.
 - **If a key is ever committed: rotate it first**, then remove it from history. Rotation is what matters once a key has been pushed.
 
 ### Uploads (photos, USDZ scans, room JSON): `agents/src/upload.ts`, `agents/src/imagemeta.ts`
-- **EXIF/GPS stripped** from JPEG (APP1 EXIF/XMP, APP13 IPTC, comments, MPF trailers with their own EXIF) and PNG (`eXIf`, `tEXt`/`zTXt`/`iTXt`, `tIME`) before anything touches disk. Only the orientation tag is kept, so photos aren't rotated. Pure TypeScript, no native deps. The iOS camera path also re-encodes photos to JPEG before upload, which drops location on the device too.
+- **EXIF/GPS stripped** from JPEG (APP1 EXIF/XMP, APP13 IPTC, comments, MPF trailers with their own EXIF) and PNG (`eXIf`, `tEXt`/`zTXt`/`iTXt`, `tIME`) before anything touches disk. Only the orientation tag is kept, so photos aren't rotated. Pure TypeScript, no native deps. ⏳ Belt and braces once #28 merges: the iOS camera path re-encodes photos to JPEG before upload, which drops location on the device too.
 - **Body must match the declared type** (magic bytes). The allowlist is jpeg/png/heic/webp/usdz/json; html is never accepted, so nobody can host a phishing page on our origin.
 - **Size cap** `UPLOAD_MAX_BYTES` (default 50 MB), enforced while streaming.
 - **Unguessable names**: `crypto.randomUUID()` + extension. The client's `?name=` is ignored.
@@ -54,7 +54,7 @@ Out of scope for a hackathon: DoS against maincloud, a compromised laptop, an Au
   - `X402_MAX_PER_CALL_USDC` (default $0.10),
   - the per-agent budget `AGENT_SPEND_CAP_USDC` (default $5), reserved before signing so concurrent calls can't overspend,
   - an optional payee allowlist, `X402_ALLOWED_PAYEES`.
-- **Budgets survive restarts**: on startup, the rail counts the last 24 h of x402 `payment` rows per agent.
+- **Budgets survive restarts**: on startup, the rail counts the last 24 h of x402 `payment` rows per agent. `X402_SEED_BUDGETS=0` turns this off (e.g. so rehearsals don't use up the demo-day budget). This is active for the pricing agent once #46 (pricing pays for comps over x402) merges; until then the only caller is the `x402:demo`/`x402:e2e` scripts.
 - **Backstop**: CDP `spendControls` (`maxAmountPerPayment`, `maxCumulativeSpend`, `allowedNetworks`, `allowedAssets`).
 - Every attempt, refusal, payment and failure writes an `agent_event` row, and every payment writes a `payment` row with its tx hash, so the app's spending log is a live audit trail.
 - **One team-owned testnet wallet.** We never hold other people's funds (a Coinbase track rule). Testnet only.
@@ -74,7 +74,7 @@ Scraped comps and deals are written by strangers, so we treat them as data:
 4. **Force the output shape**: `structuredCall` uses a zod schema, so nothing else gets through.
 5. **Check in code, whatever the model said**:
    - the price is clamped to 70-130% of the pricing agent's range, or with no estimate to 0.5x the lowest to 1.5x the highest comp, and never under $1,
-   - links, emails and phone numbers are scrubbed from the title and description before posting,
+   - links, emails and phone-shaped numbers (e.g. `(415) 555-0100`) are scrubbed from the title and description before posting. Dimensions like `120.0 - 60.0 - 75.0 cm` and bare model numbers are left alone,
    - the result event shows the model's price next to the clamped one.
 6. **Least privilege**: the model has no tools. Posting, paying and approving happen in code, after the checks above and the approval gate.
 
@@ -86,7 +86,7 @@ Scraped comps and deals are written by strangers, so we treat them as data:
 The vision prompt also says that text visible in photos is evidence, never instructions.
 
 ### Simulated actions are labeled
-Anything not real says so in the data (`simulated: true` on `listing` and `payment`), in event messages (`[SIMULATED]`, `(simulated)`), and in the UI. Today that covers the simulated eBay posts (whenever eBay sandbox keys are absent), the simulated x402 rail (no CDP keys or `X402_SIMULATE=1`), and the Visa checkout until the Starter Pack lands. Real x402 payments link to the Base Sepolia explorer.
+Anything not real says so in the data (`simulated: true` on `listing` and `payment`), in event messages (`[SIMULATED]`, `(simulated)`), and in the UI. Today that covers the simulated eBay posts (whenever eBay sandbox keys are absent), and the simulated x402 rail (no CDP keys or `X402_SIMULATE=1`). ⏳ Visa checkout labelling arrives with #40 (simulated until the Starter Pack is wired). Real x402 payments link to the Base Sepolia explorer.
 
 ## Pending (with issues)
 - ⏳ **Connection gate + private tables with per-user views**: [#41](https://github.com/christianazinn/moove/issues/41). Check `iss`/`aud` in `client_connected`, make tables private, and expose `my_*` views filtered by `ctx.sender` (comps join through the caller's items via the indexed `comp.item_id`; an `owner` column on `comp` is optional). This also closes the public `join_code` hole. It has to wait for Auth0 login (#1) because the app still connects with anonymous SpacetimeDB tokens.

@@ -39,9 +39,11 @@ export function untrustedBlock(kind: string, lines: string[]): string {
 
 const URL_RE = /\b(?:https?:\/\/|www\.)\S+/gi;
 const EMAIL_RE = /\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b/g;
-const PHONE_RE = /\+?[\d(][\d\s().-]{8,}\d/g;
+// NANP-shaped numbers (optional +1, 3-3-4 digits with optional separators), not inside a longer
+// digit run or a decimal, so dimensions ("120.0 - 60.0 - 75.0 cm") and model numbers survive.
+const PHONE_RE = /(?<![\d.])(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?![\d.]*\d)/g;
 
 /** Removes links and contact details from model-written copy that will be published. */
 export function scrubPublishedText(s: string): string {
-  return s.replace(URL_RE, '[link removed]').replace(EMAIL_RE, '[email removed]').replace(PHONE_RE, m => (m.replace(/\D/g, '').length >= 10 ? '[number removed]' : m));
+  return s.replace(URL_RE, '[link removed]').replace(EMAIL_RE, '[email removed]').replace(PHONE_RE, m => (/[\s().-]/.test(m.replace(/^\+?1?/, '')) ? '[number removed]' : m));
 }

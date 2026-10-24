@@ -46,8 +46,9 @@ export function startUploadServer(port = config.uploadPort): Server {
         for await (const c of req) {
           size += (c as Buffer).length;
           if (size > config.uploadMaxBytes) {
+            res.setHeader('connection', 'close');
             send(res, 413, { error: `over ${config.uploadMaxBytes} bytes` });
-            req.destroy();
+            res.once('finish', () => req.destroy()); // let the 413 flush before dropping the socket
             return;
           }
           chunks.push(c as Buffer);

@@ -139,7 +139,7 @@ export function stripPng(buf: Buffer): Buffer {
 export function sanitizeUpload(type: string, buf: Buffer): Buffer {
   if (type === 'application/json') {
     try {
-      JSON.parse(buf.toString('utf8'));
+      JSON.parse(buf.toString('utf8').replace(/^\uFEFF/, '')); // tolerate a UTF-8 BOM
     } catch {
       throw new BadImageError('body is not valid JSON');
     }

@@ -99,6 +99,7 @@ test('declared type must match the bytes', () => {
   assert.throws(() => sanitizeUpload('image/png', jpeg()), BadImageError);
   assert.throws(() => sanitizeUpload('application/json', Buffer.from('{nope')), BadImageError);
   assert.doesNotThrow(() => sanitizeUpload('application/json', Buffer.from('{"rooms":[]}')));
+  assert.doesNotThrow(() => sanitizeUpload('application/json', Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{"rooms":[]}')])));
 });
 
 // ---------- upload server ----------

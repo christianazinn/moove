@@ -54,9 +54,10 @@ export function paymentRail(conn: Conn): Promise<X402Rail> {
   rail ??= createX402Rail(spacetimeSink(conn)).then((r) => {
     // Budgets survive restarts: count the last 24h of x402 spend already in the payment table (#17),
     // matching the CDP client's 24h spendControls window.
+    // X402_SEED_BUDGETS=0 turns this off (e.g. so rehearsals don't use up the demo-day budget).
     const since = BigInt(Date.now() - 24 * 3600 * 1000);
     const spent = new Map<string, bigint>();
-    for (const p of conn.db.payment.iter()) {
+    for (const p of process.env.X402_SEED_BUDGETS === '0' ? [] : conn.db.payment.iter()) {
       if (p.rail === 'x402' && p.status !== 'failed' && p.simulated === r.simulated && p.createdAt.toMillis() >= since) {
         spent.set(p.agent, (spent.get(p.agent) ?? 0n) + p.amountUsdMicros);
       }
