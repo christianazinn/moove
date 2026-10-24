@@ -27,7 +27,7 @@
 | `item` | room_id, scan_id, scan_object_id, name, category, width_m, height_m, depth_m, photo_urls[], material, brand, condition, **details_status**, est_value_cents, est_low_cents, est_high_cents, **pricing_status**, **disposition**, **disposition_source**: `auto`\|`user`, disposition_reason, fragile, maybe_sentimental, **model_url**, **model_source**: `capture`\|`sam3d`\|`''`, **model_status** |, **attributes_json** (JSON array of RoomPlan attributes like `ChairType.swivel`, default `[]`), **colors_json** (`{"primary":"#RRGGBB","secondary":"#RRGGBB"}`, default `''`) for the voxel look (#110)
 | `comp` | item_id, source (`fb`\|`craigslist`\|`ebay`\|…), title, price_cents, url |
 | `listing` | item_id, platform (`ebay`), title, description, price_cents, status, external_id, url, simulated |
-| `approval` | kind: `listing`\|`purchase`, ref_id, amount_cents, summary, status, **decided_via**: `''` (pending)\|`app`\|`ciba`, ciba_subject (the Auth0 `sub` the worker reported) |
+| `approval` | kind: `listing`\|`purchase`, ref_id, amount_cents, summary, status, **decided_via**: `''` (pending)\|`app`\|`ciba`\|`expired`, ciba_subject (the Auth0 `sub` the worker reported) |
 | `shopping_item` | name, category, reason, status, chosen_deal_id |
 | `deal` | shopping_item_id, source, title, price_cents, url, seller_info, fraud_score (0-1), ai_text_score (0-1), fraud_reasons[] |
 | `payment` | agent, rail: `x402`\|`visa`, purpose, payee, amount_usd_micros, tx_hash, status, simulated, ref_table, ref_id |
@@ -39,8 +39,8 @@
 Status values:
 - `details_status` / `pricing_status` / `model_status`: `pending`\|`running`\|`done`\|`failed`. The worker picks up `pending` rows. The SAM 3D agent only takes items that have a photo.
 - `disposition`: `undecided`\|`keep`\|`sell`\|`donate`\|`trash`
-- `listing.status`: `draft`\|`awaiting_approval`\|`rejected`\|`posted`\|`sold`\|`failed`
-- `approval.status`: `pending`\|`approved`\|`denied`\|`expired`. Since #42 nothing sets `expired`; decisions are only `approved`\|`denied`.
+- `listing.status`: `draft`\|`awaiting_approval`\|`rejected`\|`posting`\|`posted`\|`sold`\|`failed`. `posting` (#144) means the worker is publishing it. `update_listing` only allows it from `draft` or `awaiting_approval`, so a restarted worker that finds `posting` knows not to post again.
+- `approval.status`: `pending`\|`approved`\|`denied`\|`expired`. Decisions are only `approved`\|`denied`; `expired` is set only by the worker's `expire_approval` (#186).
 - `shopping_item.status`: `open`\|`searching`\|`found`\|`bought`
 - `payment.status`: `pending`\|`settled`\|`failed`
 
@@ -77,6 +77,6 @@ Enforced in the module, so they hold for every client:
 - **Photo sweep (worker):** `set_sweep_status(scan_id, status)`, `apply_sweep_match(item_id, name, category, material, brand, condition, fragile, maybe_sentimental, photo_url)` (a changed name/brand re-queues pricing), `add_sweep_item(scan_id, name, category, width_m, height_m, depth_m, material, brand, condition, fragile, maybe_sentimental, photo_url)` (`details_status = done`, so no second vision call)
 - **Item enrichment:** `set_item_stage(item_id, stage, field: details|pricing|model)`, `set_item_details(...)`, `add_comps(item_id, comps[])`, `set_est_value(item_id, est_value_cents, est_low_cents, est_high_cents)`
 - **Sorting:** `set_auto_disposition(item_id, disposition, reason)`. It no-ops on user-set items and forces `undecided` on `maybe_sentimental` ones.
-- **Listings, approvals, deals:** `create_listing_draft(...)`, `update_listing(listing_id, status, external_id, url, price_cents)` (`''`/`-1` keep the current value; worker-only since #44), `request_approval(owner, kind, ref_id, amount_cents, summary)` (the listing, or deal for `purchase`, must belong to `owner` and `amount_cents` must equal its `price_cents`), `record_ciba_decision(approval_id, status, ciba_subject)` (`approved`\|`denied`; `ciba_subject` must equal the owner's `user.auth0_sub`; records `decided_via = 'ciba'`), `add_deal(...)`, `set_deal_fraud(deal_id, fraud_score, ai_text_score, reasons[])`
+- **Listings, approvals, deals:** `create_listing_draft(...)`, `update_listing(listing_id, status, external_id, url, price_cents)` (`''`/`-1` keep the current value; worker-only since #44), `request_approval(owner, kind, ref_id, amount_cents, summary)` (the listing, or deal for `purchase`, must belong to `owner` and `amount_cents` must equal its `price_cents`), `record_ciba_decision(approval_id, status, ciba_subject)` (`approved`\|`denied`; `ciba_subject` must equal the owner's `user.auth0_sub`; records `decided_via = 'ciba'`), `expire_approval(approval_id)` (#186: pending only, at least 15 minutes after `requested_at`; sets `expired`, `decided_via = 'expired'`), `add_deal(...)`, `set_deal_fraud(deal_id, fraud_score, ai_text_score, reasons[])`
 - CIBA results are relayed by the worker and not verified in the module (reducers can't fetch JWKS); `decided_via` says which path decided.
 - **Payments and logging:** `record_payment(...)`, `update_payment(payment_id, status, tx_hash)`, `log_agent_event(owner, agent, kind, message, ref_table, ref_id, data_json)`
