@@ -363,6 +363,9 @@ public enum VoxelModels {
         if attrs.contains("storagetype.cabinet") { return .dresser }
         if attrs.contains(where: { $0.hasPrefix("chairtype.") || $0.hasPrefix("chairlegtype.") }) && !n.has("sofa", "couch") { return .chair }
         if attrs.contains(where: { $0.hasPrefix("sofatype.") }) { return .sofa }
+        // Bathroom fixtures by name: vision has no toilet/sink/bathtub category and files them under
+        // "appliance" ("white two-piece elongated toilet" drew as a white cabinet in Rio's bathroom)
+        if let fixture = bathroomFixture(n) { return fixture }
         if attrs.contains("tableshapetype.lshaped") && (cat == "table" || cat == "desk") { return .desk }
         if n.has("mattress") && !n.has("frame") { return .mattress }
         if n.has("bean bag", "beanbag", "bean-bag", "pouf", "floor cushion") { return .beanBag }
@@ -576,7 +579,7 @@ public enum VoxelModels {
         if n.has("coat rack", "coat stand", "coat tree", "hat stand", "hat rack", "hall tree", "shoe rack", "shoe shelf", "shoe stand",
                  "shoe organizer", "clothes rack", "clothing rack", "garment rack", "clothes rail", "clothes stand", "rolling rack") { return .rack }
         if (n.word("ladder", "ladders", "stepladder", "stepladders") || n.has("step ladder", "step-ladder"))
-            && !n.has("blanket", "quilt", "towel", "shelf", "bookcase", "desk", "plant", "rack") { return .ladder }
+            && !n.has("blanket", "quilt", "towel", "shelf", "bookcase", "desk", "plant", "rack", "bed", "bunk", "loft") { return .ladder }
         if n.word("grill", "grills", "bbq", "barbecue", "barbeque", "smoker", "hibachi", "kamado", "traeger") || n.has("big green egg", "weber kettle") {
             if !n.has("grill pan", "foreman", "panini", "griddle", "indoor", "brush", "cover", "grill tool", "grill mat") { return .grill }
         }
@@ -629,6 +632,21 @@ public enum VoxelModels {
     static func isScreen(_ n: VName) -> Bool {
         n.has("room divider", "folding screen", "privacy screen", "screen divider", "shower curtain", "shower door")
             || n.word("divider", "curtain", "curtains", "drapes")
+    }
+
+    /// A toilet, sink or bathtub named as such, not an accessory for one (toilet paper, a sink
+    /// strainer, a bath mat).
+    static func bathroomFixture(_ n: VName) -> Kind? {
+        if n.word("toilet", "toilets", "commode", "wc") && !n.has("paper", "brush", "plunger", "cleaner", "seat cover", "mat", "roll", "caddy", "shelf", "storage") {
+            return .toilet
+        }
+        if n.has("bathtub", "bath tub") || (n.word("tub") && n.has("soaking", "clawfoot", "claw-foot", "alcove", "freestanding", "jetted", "whirlpool", "porcelain")) {
+            return .bathtub
+        }
+        if n.word("sink", "sinks", "washbasin", "washbasins") && !n.has("strainer", "stopper", "mat", "organizer", "caddy", "drain", "sponge", "cabinet", "skirt") {
+            return .sink
+        }
+        return nil
     }
 
     /// The name is a TV itself, not a TV accessory ("TV remote", "TV antenna").
