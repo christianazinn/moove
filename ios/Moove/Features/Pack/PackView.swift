@@ -5,7 +5,8 @@ import MooveKit
 /// kraft moving box in its room's color, grouped by destination room, with printable labels; things
 /// bought for the new home (delivered there, not packed); furniture take-apart notes; supplies; and a
 /// short schedule. Every placement says why. Live: it re-plans whenever the kept items (hidden rooms
-/// excluded), the purchases or the saved new-home layout change.
+/// excluded), the "Moving from" room picks (shared with New Home), the purchases or the saved
+/// new-home layout change.
 struct PackView: View {
     @Environment(MooveStore.self) private var store
     @State private var plan: PackingPlan?
@@ -16,6 +17,7 @@ struct PackView: View {
     @State private var expandedRooms: Set<String> = []
     /// Rooms whose estimate folder is flipped from its default (folded when the room has scanned boxes).
     @State private var flippedEstimates: Set<String> = []
+    @State private var showRooms = false
     // Check-off state survives relaunches. Keys: "boxId:lineIndex" and supply names.
     @AppStorage("moove.pack.checked") private var checkedRaw = ""
     @AppStorage("moove.pack.supplies") private var suppliesRaw = ""
@@ -32,7 +34,12 @@ struct PackView: View {
                 )
                 .padding(.top, 16)
                 .padding(.bottom, 24)
-                if input.demo { demoNotice.padding(.bottom, 24) }
+                if input.demo {
+                    demoNotice.padding(.bottom, 24)
+                } else if !input.choices.isEmpty {
+                    MovingFromRow(movingFrom: MovingFrom(choices: input.choices, itemCount: input.items.count), idPrefix: "pack") { showRooms = true }
+                        .padding(.bottom, 24)
+                }
                 if let plan {
                     truckCard(plan.truck, plan: plan, demo: input.demo)
                     boxes(plan.boxes)
@@ -55,6 +62,7 @@ struct PackView: View {
             plan = next
             truckLoad = TruckLoader.load(plan: next, items: new.items)
         }
+        .sheet(isPresented: $showRooms) { MovingRoomsSheet { showRooms = false } }
         .sheet(item: $openBox) { box in
             // Look the box up again so a re-plan while the sheet is open shows fresh contents.
             BoxDetailView(box: plan?.boxes.first { $0.id == box.id } ?? box, checked: checkedBinding,
@@ -70,24 +78,26 @@ struct PackView: View {
         var rooms: [UInt64: String]
         var bought: [BoughtPiece]
         var demo: Bool
+        /// The "Moving from" rooms (empty for the demo items).
+        var choices: [MovingRooms.Choice] = []
     }
 
-    /// Kept items plus undecided sentimental ones (those may well come along) from visible rooms
-    /// (hidden rooms stay out, #271), plus what was bought for the new home (purchased only, not
-    /// still-shopping), with destination rooms from the newest saved layout of the user's new home.
-    /// Demo fixtures until anything is kept.
+    /// Kept items plus undecided sentimental ones (those may well come along) from the rooms that
+    /// are moving (New Home's "Moving from" picks, `MooveStore.movingItems`: hidden rooms and older
+    /// re-scans stay out), plus what was bought for the new home (purchased only, not
+    /// still-shopping, shown as "Delivered"), with destination rooms from the newest saved layout
+    /// of the user's new home. Demo fixtures until anything is kept.
     private var inputs: Inputs {
         let snap = store.snapshot
         func packable(_ item: Item) -> Bool { item.disposition == .keep || (item.disposition == .undecided && item.maybeSentimental) }
-        var items = store.visibleItems.filter(packable)
-        let demo = items.isEmpty
-        if demo { items = DemoFixtures.inventory(owner: snap.me ?? "demo").items.filter(packable) }
+        let demo = !store.visibleItems.contains(where: packable)
+        let items = demo ? DemoFixtures.inventory(owner: snap.me ?? "demo").items.filter(packable) : store.movingItems(where: packable)
         var rooms: [UInt64: String] = [:]
         if let home = snap.myNewHome,
            let layout = snap.layouts(for: home.id).max(by: { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }) {
             for p in layout.placements { rooms[p.itemId] = p.room }
         }
-        return Inputs(items: items, rooms: rooms, bought: snap.boughtPieces, demo: demo)
+        return Inputs(items: items, rooms: rooms, bought: snap.boughtPieces, demo: demo, choices: demo ? [] : store.movingChoices)
     }
 
     private var checked: Set<String> { PackChecks.decode(checkedRaw) }

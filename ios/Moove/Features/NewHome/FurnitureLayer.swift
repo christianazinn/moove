@@ -32,7 +32,9 @@ final class FurnitureLayer {
         oldRoomsTask?.cancel()
         oldRooms.children.removeAll()
         items = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let placed = placements.filter { items[$0.itemId] != nil }
+        // A mattress laid on its bed frame is drawn as part of the bed (the bed model has one).
+        let onBeds = MattressPairing.drawnWithBed(placements, items: list)
+        let placed = placements.filter { items[$0.itemId] != nil && !onBeds.contains($0.itemId) }
         let wanted = Set(placed.map(\.itemId))
         // Drop items that left, and items switching between the floor and the wall model.
         let wall = Set(placed.filter(\.isWallMounted).map(\.itemId))

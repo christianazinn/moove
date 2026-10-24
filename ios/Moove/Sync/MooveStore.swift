@@ -92,6 +92,35 @@ final class MooveStore {
     /// Hidden rooms that still exist, for Inventory's "Show hidden rooms (N)".
     var hiddenRooms: [Room] { snapshot.rooms.filter { hiddenRoomIds.contains($0.id) } }
 
+    // MARK: Moving rooms (which old rooms move; New Home and Pack)
+
+    /// The user's "Moving from" picks (MooveKit `MovingRooms`), saved on this device only.
+    private(set) var movingRoomPicks: [UInt64: Bool] =
+        MovingRooms.decode(UserDefaults.standard.stringArray(forKey: MovingRooms.defaultsKey))
+
+    func setMovingRoomPicks(_ picks: [UInt64: Bool]) {
+        movingRoomPicks = MovingRooms.pruned(picks, rooms: snapshot.rooms)
+        UserDefaults.standard.set(MovingRooms.encode(movingRoomPicks), forKey: MovingRooms.defaultsKey)
+    }
+
+    /// Kept items in visible rooms (before the room picks).
+    var keptItems: [Item] { visibleItems.filter { $0.disposition == .keep } }
+
+    /// Every visible scanned room, newest first, with whether its kept items move.
+    var movingChoices: [MovingRooms.Choice] {
+        MovingRooms.choices(visibleSnapshot, keptItems: keptItems, overrides: movingRoomPicks)
+    }
+
+    /// What's actually moving: kept items from the picked rooms (by default the newest scan of
+    /// each room name), re-scan duplicates dropped. New Home lays these out; Pack packs them.
+    var movingItems: [Item] { MovingRooms.items(keptItems, choices: movingChoices) }
+
+    /// The picked rooms' items that pass `include` (Pack also packs undecided sentimental ones),
+    /// with the same room picks and re-scan dedupe as `movingItems`.
+    func movingItems(where include: (Item) -> Bool) -> [Item] {
+        MovingRooms.items(visibleItems.filter(include), choices: movingChoices)
+    }
+
     // MARK: Connection
 
     /// Connects with an Auth0 ID token when signed in, or the saved anonymous
