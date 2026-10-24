@@ -16,7 +16,8 @@
     "seed:demo": "tsx scripts/seed-demo.ts",
     "comps:prefetch": "tsx scripts/prefetch-comps.ts",
     "e2e": "tsx scripts/e2e.ts",
-    "status": "tsx scripts/status.ts"
+    "status": "tsx scripts/status.ts",
+    "comps:audit": "tsx scripts/comps-audit.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
