@@ -49,12 +49,15 @@ import DeleteItemReducer from "./delete_item_reducer";
 import ImportScanReducer from "./import_scan_reducer";
 import JoinRoomReducer from "./join_room_reducer";
 import LogAgentEventReducer from "./log_agent_event_reducer";
+import RecordCibaDecisionReducer from "./record_ciba_decision_reducer";
 import RecordPaymentReducer from "./record_payment_reducer";
 import RegisterUserReducer from "./register_user_reducer";
 import RegisterWorkerReducer from "./register_worker_reducer";
+import RemoveMemberReducer from "./remove_member_reducer";
 import RemoveShoppingItemReducer from "./remove_shopping_item_reducer";
 import RenameItemReducer from "./rename_item_reducer";
 import RequestApprovalReducer from "./request_approval_reducer";
+import RotateJoinCodeReducer from "./rotate_join_code_reducer";
 import SaveLayoutReducer from "./save_layout_reducer";
 import SetApprovalThresholdReducer from "./set_approval_threshold_reducer";
 import SetAutoDispositionReducer from "./set_auto_disposition_reducer";
@@ -337,12 +340,15 @@ const reducersSchema = __reducers(
   __reducerSchema("import_scan", ImportScanReducer),
   __reducerSchema("join_room", JoinRoomReducer),
   __reducerSchema("log_agent_event", LogAgentEventReducer),
+  __reducerSchema("record_ciba_decision", RecordCibaDecisionReducer),
   __reducerSchema("record_payment", RecordPaymentReducer),
   __reducerSchema("register_user", RegisterUserReducer),
   __reducerSchema("register_worker", RegisterWorkerReducer),
+  __reducerSchema("remove_member", RemoveMemberReducer),
   __reducerSchema("remove_shopping_item", RemoveShoppingItemReducer),
   __reducerSchema("rename_item", RenameItemReducer),
   __reducerSchema("request_approval", RequestApprovalReducer),
+  __reducerSchema("rotate_join_code", RotateJoinCodeReducer),
   __reducerSchema("save_layout", SaveLayoutReducer),
   __reducerSchema("set_approval_threshold", SetApprovalThresholdReducer),
   __reducerSchema("set_auto_disposition", SetAutoDispositionReducer),

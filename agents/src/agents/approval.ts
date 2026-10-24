@@ -26,8 +26,9 @@ export function bindingFor(conn: Conn, a: Approval): string {
 }
 
 // Sends pending approvals (#12) to the owner's phone via Auth0 CIBA (Guardian push) and records
-// the phone's answer with decide_approval. The in-app inbox can decide the same row at any time;
-// whichever lands first wins (decide_approval rejects a second decision).
+// the phone's answer with record_ciba_decision (#42: worker-only, decidedVia = 'ciba'). The in-app
+// inbox can decide the same row at any time with decide_approval; whichever lands first wins
+// (both reject a second decision).
 export const approvalAgent: Agent = {
   name: 'approval',
   start(conn) {
@@ -75,11 +76,11 @@ export const approvalAgent: Agent = {
     }
 
     // SECURITY INVARIANT: this is the only place the worker decides an approval, and `status`
-    // always comes from a gateway poll result (real Auth0 CIBA, or the simulated approver that
-    // must be explicitly enabled with APPROVAL_SIM_AUTO_APPROVE_SEC). No other code path in the
-    // worker may call decideApproval.
-    function decideFromGateway(a: Approval, status: 'approved' | 'denied'): void {
-      conn.reducers.decideApproval({ approvalId: a.id, status }).catch(err => {
+    // always comes from a real Auth0 CIBA poll result. The module only accepts it when
+    // `cibaSubject` (the sub the gateway checked in the id_token) is the owner's user.auth0_sub.
+    // The worker can't call decide_approval at all (owner-only since #42).
+    function decideFromGateway(a: Approval, status: 'approved' | 'denied', cibaSubject: string): void {
+      conn.reducers.recordCibaDecision({ approvalId: a.id, status, cibaSubject }).catch(err => {
         // Usually a race with an in-app decision that landed first.
         log(a, 'error', `Recording the phone decision failed: ${errText(err)}`);
       });
@@ -88,9 +89,8 @@ export const approvalAgent: Agent = {
     async function handle(a: Approval, g: ApprovalGateway): Promise<void> {
       const bindingMessage = bindingFor(conn, a);
       const user = conn.db.user.identity.find(a.owner);
-      // The simulated approver doesn't need a real Auth0 user.
       const auth0Sub = user?.auth0Sub ?? '';
-      if (!g.simulated && !auth0Sub) {
+      if (!auth0Sub) {
         waitingForSub.add(a.id);
         log(a, 'approval', 'No Auth0 user linked, waiting for in-app approval');
         return;
@@ -152,10 +152,10 @@ export const approvalAgent: Agent = {
           return;
         }
         if (r.status === 'approved') {
-          decideFromGateway(a, 'approved');
+          decideFromGateway(a, 'approved', auth0Sub);
           log(a, 'approval', `Approved on the phone (${g.name})${sim(g)}`, { gateway: g.name, status: 'approved' });
         } else {
-          decideFromGateway(a, 'denied');
+          decideFromGateway(a, 'denied', auth0Sub);
           log(a, 'approval', `Denied on the phone (${g.name})${sim(g)}`, { gateway: g.name, status: 'denied' });
         }
         return;
