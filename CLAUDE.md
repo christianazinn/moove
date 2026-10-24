@@ -52,6 +52,10 @@ The kickoff plan is a starting point, not a mandate. After kickoff, **agents coo
 - SDKs here are moving targets (SpacetimeDB, x402/CDP, Auth0 for AI Agents, Swift SpacetimeDB SDK). **Check current docs before writing integration code**, rather than relying on memory.
 - Keep demo fallbacks working: fixture data and a hardcoded demo house so the live demo never depends on a flaky scrape or network.
 
+## Shared database
+- **Maincloud:** DB `moove` at `wss://maincloud.spacetimedb.com` (dashboard: https://spacetimedb.com/moove). This is the team's shared/demo DB. Only Christian's CLI identity can publish to it, so ask on GitHub for a republish after contract changes.
+- The agent worker identity is already registered there. Only one worker should run against maincloud at a time (Christian's machine, token in `agents/.worker-token.maincloud`). For your own agent work, use a local `spacetime start` + `npm run publish:local`.
+
 ## Commands
 Each lane fills these in as it initializes its directory. Keep this section current.
 - `spacetime/` (needs the CLI: `curl -sSf https://install.spacetimedb.com | sh`): `npm install`, then `npm run typecheck`, `npm run build`, `spacetime start` (local server on :3000), `npm run publish:local` (or `publish:local:reset` to wipe data), `npm run generate` (regenerates `agents/src/module_bindings`, which are committed; never hand-edit them), and `npm run publish:cloud` (maincloud). Poke at it with `spacetime call -s local moove create_room '"Bedroom"' '"old"'` or `spacetime sql -s local moove "SELECT * FROM item"`.

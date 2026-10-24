@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import type { z } from 'zod';
+import '../config.js'; // loads .env.local before the client reads ANTHROPIC_API_KEY
 
 // Credentials resolve from ANTHROPIC_API_KEY (or an `ant auth login` profile).
 export const anthropic = new Anthropic();
