@@ -20,6 +20,8 @@ export const config = {
   uploadDir: env('UPLOAD_DIR', 'uploads'),
   // What phones/the worker use to fetch uploads; set to your LAN IP for devices.
   publicUploadBaseUrl: env('PUBLIC_UPLOAD_BASE_URL', 'http://localhost:8787'),
+  // Paywalled comps endpoint the pricing agent buys from over x402 (#7); bound to 127.0.0.1.
+  x402Port: Number(env('X402_PORT', '8402')),
   apify: {
     token: env('APIFY_TOKEN'),
     // Comma-separated subset of: ebay, fb, craigslist
