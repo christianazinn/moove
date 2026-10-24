@@ -40,7 +40,13 @@ export interface DealSource {
   name: string;
   /** True when results are not from a live search. */
   replay: boolean;
-  search(q: DealQuery): Promise<DealCandidate[]>;
+  /** `hooks.onNotice` hears about anything the user should know about this search (e.g. the daily
+   *  Apify cap skipped the live search, #185); the buy agent turns it into an agent_event. */
+  search(q: DealQuery, hooks?: DealSearchHooks): Promise<DealCandidate[]>;
+}
+
+export interface DealSearchHooks {
+  onNotice?: (notice: { message: string; data?: Record<string, unknown> }) => void;
 }
 
 const CONTROL = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/g;

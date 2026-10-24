@@ -104,6 +104,8 @@ const ALL_OK = {
 
 const emptyFallback: DealSource = { name: 'empty', replay: true, search: async () => [] };
 const tmp = () => mkdtempSync(path.join(tmpdir(), 'deals-apify-'));
+// Live (stubbed) runs book into the daily Apify spend log (#185): keep it out of agents/.cache.
+const spendTmp = () => path.join(tmp(), 'apify-spend.json');
 const Q = { name: 'Bed frame', category: 'bedroom' };
 
 test('normalizers keep active priced listings and drop sold, pending, free, auction, range and bad-url rows', () => {
@@ -128,7 +130,7 @@ test('normalizers keep active priced listings and drop sold, pending, free, auct
 });
 
 test('scraped text is data: no description/phone fields survive, control and bidi characters are stripped', async () => {
-  const src = createApifyDealSource({ sources: ['fb', 'craigslist', 'ebay'], token: 't', fetch: stubFetch(ALL_OK), cacheDir: tmp(), fallback: emptyFallback });
+  const src = createApifyDealSource({ sources: ['fb', 'craigslist', 'ebay'], token: 't', spendFile: spendTmp(), fetch: stubFetch(ALL_OK), cacheDir: tmp(), fallback: emptyFallback });
   const deals = await src.search(Q);
   const json = JSON.stringify(deals, (_k, v) => (typeof v === 'bigint' ? String(v) : v));
   assert.doesNotMatch(json, /IGNORE PREVIOUS|510-555/);
@@ -140,7 +142,7 @@ test('scraped text is data: no description/phone fields survive, control and bid
 test('live search merges sources, dedupes, returns >= 3 deals, and is not labeled a replay', async () => {
   const calls: Call[] = [];
   const dir = tmp();
-  const src = createApifyDealSource({ sources: ['fb', 'craigslist', 'ebay'], token: 'tok', fetch: stubFetch(ALL_OK, calls), cacheDir: dir, perSource: 5, maxUsdPerRun: 0.05, fallback: emptyFallback });
+  const src = createApifyDealSource({ sources: ['fb', 'craigslist', 'ebay'], token: 'tok', spendFile: spendTmp(), fetch: stubFetch(ALL_OK, calls), cacheDir: dir, perSource: 5, maxUsdPerRun: 0.05, fallback: emptyFallback });
   const deals = await src.search(Q);
   assert.equal(deals.length, 3);
   assert.deepEqual(new Set(deals.map(d => d.source)), new Set(['fb', 'craigslist', 'ebay']));
@@ -172,7 +174,7 @@ test('live search merges sources, dedupes, returns >= 3 deals, and is not labele
 
 test('one failing actor does not sink the search', async () => {
   const src = createApifyDealSource({
-    sources: ['fb', 'craigslist', 'ebay'], token: 't',
+    sources: ['fb', 'craigslist', 'ebay'], token: 't', spendFile: spendTmp(),
     fetch: stubFetch({ ...ALL_OK, [ACTORS.fb.actor]: { status: 402 }, [ACTORS.ebay.actor]: { throws: true } }),
     cacheDir: tmp(),
     fallback: emptyFallback,
@@ -184,9 +186,9 @@ test('one failing actor does not sink the search', async () => {
 
 test('when live fails, the last cached live search is replayed and labeled', async () => {
   const dir = tmp();
-  await createApifyDealSource({ sources: ['fb', 'craigslist', 'ebay'], token: 't', fetch: stubFetch(ALL_OK), cacheDir: dir, fallback: emptyFallback }).search(Q);
+  await createApifyDealSource({ sources: ['fb', 'craigslist', 'ebay'], token: 't', spendFile: spendTmp(), fetch: stubFetch(ALL_OK), cacheDir: dir, fallback: emptyFallback }).search(Q);
   const down = Object.fromEntries(Object.keys(ALL_OK).map(k => [k, { status: 500 }]));
-  const src = createApifyDealSource({ sources: ['fb', 'craigslist', 'ebay'], token: 't', fetch: stubFetch(down), cacheDir: dir, fallback: emptyFallback });
+  const src = createApifyDealSource({ sources: ['fb', 'craigslist', 'ebay'], token: 't', spendFile: spendTmp(), fetch: stubFetch(down), cacheDir: dir, fallback: emptyFallback });
   const deals = await src.search(Q);
   assert.equal(deals.length, 3);
   assert.ok(deals.every(d => d.replay));
@@ -230,7 +232,7 @@ test('createDealSource passes city and home location through to the actors', asy
   const calls: Call[] = [];
   const src = createDealSource(
     { APIFY_TOKEN: 't', DEALS_APIFY_SOURCES: 'fb,craigslist,ebay', MARKET_CITY_FB: 'oakland', MARKET_CITY_CRAIGSLIST: 'sfbay', DEALS_HOME_LAT: '37.8716', DEALS_HOME_LNG: '-122.2727', DEALS_PER_SOURCE: '3' },
-    { fetch: stubFetch(ALL_OK, calls), cacheDir: tmp(), fallback: emptyFallback },
+    { fetch: stubFetch(ALL_OK, calls), cacheDir: tmp(), spendFile: spendTmp(), fallback: emptyFallback },
   );
   const deals = await src.search(Q);
   assert.match(calls.find(c => c.actor === ACTORS.fb.actor)!.body.startUrls[0].url, /marketplace\/oakland\/search/);
@@ -276,7 +278,7 @@ test('FB seller names never reach a deal candidate, seller_info or the cache fil
   assert.ok(raw && !JSON.stringify(raw).includes('Jane'));
   const dir = tmp();
   const only = Object.fromEntries(Object.keys(ACTORS).map(s => [ACTORS[s as keyof typeof ACTORS].actor, { rows: s === 'fb' ? [fbRow] : [] }]));
-  const src = createApifyDealSource({ token: 't', fetch: stubFetch(only), cacheDir: dir, sources: ['fb'], fallback: emptyFallback });
+  const src = createApifyDealSource({ token: 't', spendFile: spendTmp(), fetch: stubFetch(only), cacheDir: dir, sources: ['fb'], fallback: emptyFallback });
   const deals = await src.search({ name: 'Queen mattress', category: 'mattress' });
   assert.equal(deals.length, 1);
   assert.ok(!sellerInfo(rankDeals(deals)[0]).includes('Jane'));
@@ -344,7 +346,7 @@ for (const file of REPLAYS) {
 }
 
 test('live results always carry the matching sample retail rows for card checkout', async () => {
-  const src = createApifyDealSource({ sources: ['fb', 'craigslist', 'ebay'], token: 't', fetch: stubFetch(ALL_OK), cacheDir: tmp() });
+  const src = createApifyDealSource({ sources: ['fb', 'craigslist', 'ebay'], token: 't', spendFile: spendTmp(), fetch: stubFetch(ALL_OK), cacheDir: tmp() });
   const deals = await src.search(Q);
   const live = deals.filter(d => !d.replay);
   const retail = deals.filter(d => d.sample);
@@ -357,7 +359,7 @@ test('runtime caches go to the cache dir, never over the committed replays', asy
   const cacheDir = tmp();
   const replayDir = tmp();
   writeFileSync(path.join(replayDir, 'deals-live-bed-frame.json'), JSON.stringify({ rows: [] }));
-  await createApifyDealSource({ sources: ['fb'], token: 't', fetch: stubFetch(ALL_OK), cacheDir, replayDir, fallback: emptyFallback }).search(Q);
+  await createApifyDealSource({ sources: ['fb'], token: 't', spendFile: spendTmp(), fetch: stubFetch(ALL_OK), cacheDir, replayDir, fallback: emptyFallback }).search(Q);
   assert.deepEqual(readdirSync(cacheDir), ['deals-live-bed-frame.json']);
   assert.equal(readFileSync(path.join(replayDir, 'deals-live-bed-frame.json'), 'utf8'), JSON.stringify({ rows: [] }));
 });

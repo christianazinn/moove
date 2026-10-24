@@ -8,7 +8,9 @@
 //   ebay        automation-lab~ebay-scraper               input {searchQueries, listingType: 'buy_it_now', maxProductsPerSearch,
 //                                                         maxSearchPages}; $0.001 start + ~$0.00345/product
 // With the default 6 per source, one item costs about $0.10 on Apify's free tier. Sources run in parallel,
-// and each run is capped by `maxTotalChargeUsd` and a 120 s actor timeout.
+// and each run is capped by `maxTotalChargeUsd` and a 120 s actor timeout. Each run also books that
+// maxTotalChargeUsd into the per-day Apify total shared with pricing comps (apify.ts, #170/#185); past
+// APIFY_MAX_USD_PER_DAY the run is skipped with a notice and the search falls back as below.
 //
 // Fallback chain, each step labeled: live search -> last cached live search for the same query
 // (fixtures/deals-live-<query>.json, replay: true) -> the hand-curated fixtureDealSource (replay: true).
@@ -21,6 +23,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { config } from '../config.js';
+import { apifySpentToday, reserveApifySpend } from './apify.js';
 import { fixtureDealSource, sanitizeText, toCandidate, type DealCandidate, type DealQuery, type DealSource } from './deals.js';
 
 type Env = Record<string, string | undefined>;
@@ -55,6 +59,10 @@ export interface ApifyDealOptions {
   /** Used when live and cache both come back empty. Default: fixtureDealSource(). */
   fallback?: DealSource;
   now?: () => Date;
+  /** Shared daily Apify spend log (#170/#185). Default: APIFY_SPEND_FILE (.cache/apify-spend.json). */
+  spendFile?: string;
+  /** Daily Apify cap shared with pricing comps, in USD; 0 = no cap. Default: APIFY_MAX_USD_PER_DAY ($2). */
+  maxUsdPerDay?: number;
 }
 
 // Distance used for a local listing whose location we can't measure: the far edge of rankDeals'
@@ -298,12 +306,15 @@ export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
   let lastReplay = !opts.token;
 
   const cacheFile = (q: string, dir = cacheDir) => path.join(dir, `deals-live-${slug(q)}.json`);
+  const spend = { file: opts.spendFile ?? config.apify.spendFile, cap: opts.maxUsdPerDay ?? config.apify.maxUsdPerDay };
+  // The most a run can cost (Apify stops it there). This is what the daily cap books before the run.
+  const runChargeUsd = (source: ApifySourceName) => Math.max(maxUsd, ACTORS[source].minChargeUsd);
 
   async function runActor(source: ApifySourceName, q: string): Promise<RawDeal[]> {
     const spec = ACTORS[source];
     const url = new URL(`https://api.apify.com/v2/acts/${spec.actor}/run-sync-get-dataset-items`);
     url.searchParams.set('maxItems', String(perSource));
-    url.searchParams.set('maxTotalChargeUsd', String(Math.max(maxUsd, spec.minChargeUsd)));
+    url.searchParams.set('maxTotalChargeUsd', String(runChargeUsd(source)));
     url.searchParams.set('timeout', '120');
     const res = await doFetch(url, {
       method: 'POST',
@@ -354,7 +365,7 @@ export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
     get replay() {
       return lastReplay;
     },
-    async search(dq) {
+    async search(dq, hooks) {
       const q = queryText(dq);
       fallback ??= fixtureDealSource();
       // Marketplace listings can't be paid through an API, so the matching sample retail rows (still
@@ -362,7 +373,20 @@ export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
       // a planted demo scam for this item, if any (also "sample data"), so the fraud block shows live.
       const withRetail = async (found: DealCandidate[]) => [...found, ...(await fallback!.search(dq)).filter(c => c.checkout === 'visa' || c.planted)];
       if (q && opts.token) {
-        const settled = await Promise.allSettled(sources.map(s => runActor(s, q)));
+        // Daily Apify cap shared with pricing comps (#170, #185): each run books its maxTotalChargeUsd
+        // before it starts. A run that would pass the cap is skipped, and if all are, this search
+        // falls back exactly as with no token (cached replay, then sample data). Replays are free.
+        const allowed = sources.filter(s => reserveApifySpend(runChargeUsd(s), spend));
+        const skipped = sources.filter(s => !allowed.includes(s));
+        if (skipped.length) {
+          const spent = apifySpentToday(spend.file);
+          const instead = allowed.length ? `searching only ${allowed.join(', ')} live` : 'using cached replays / sample deals instead of a live search';
+          hooks?.onNotice?.({
+            message: `Apify daily spend cap reached (~$${spent.usd.toFixed(2)} of $${spend.cap.toFixed(2)} today, ${spent.runs} runs): skipped the live ${skipped.join(', ')} search for "${q}", ${instead}. Raise APIFY_MAX_USD_PER_DAY to search live again.`,
+            data: { apifyCap: true, refused: true, skipped, allowed, spentUsd: spent.usd, runs: spent.runs, capUsd: spend.cap, query: q },
+          });
+        }
+        const settled = await Promise.allSettled(allowed.map(s => runActor(s, q)));
         const rows = dedupe(settled.flatMap(r => (r.status === 'fulfilled' ? r.value : [])));
         const errors = settled.flatMap(r => (r.status === 'rejected' ? [sanitizeText(String(r.reason), 300)] : []));
         if (rows.length) {
@@ -405,6 +429,8 @@ export function createDealSource(env: Env = process.env, overrides: Partial<Apif
     maxUsdPerRun: Number.isFinite(num('APIFY_MAX_USD_PER_RUN')) ? num('APIFY_MAX_USD_PER_RUN') : undefined,
     city: { fb: env.MARKET_CITY_FB?.trim() || 'sanfrancisco', craigslist: env.MARKET_CITY_CRAIGSLIST?.trim() || 'sfbay' },
     home: Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : undefined,
+    spendFile: env.APIFY_SPEND_FILE?.trim() || undefined,
+    maxUsdPerDay: Number.isFinite(num('APIFY_MAX_USD_PER_DAY')) ? num('APIFY_MAX_USD_PER_DAY') : undefined,
     ...overrides,
   });
 }
