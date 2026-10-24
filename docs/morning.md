@@ -45,7 +45,11 @@ Expected: `UP maincloud.spacetimedb.com/moove` and `UP …/moove-demo`, each wit
    - each object's auto photo uploads (no "upload unreachable" warning)
    - vision renames items within about a minute (names carry color + shape words)
    - prices appear, then keep/sell/donate/trash
-3. If the app has the room-photo step (#92): take 3–6 wide photos. **Expected:** "Identifying items…", then RoomPlan's "other" boxes get real names, and missed things are added (no 3D box, marked from photos).
+3. Room photo sweep (#92, #156/#178): **no extra step.** After **Add N items**, the app sends up to 4 wide frames from the scan by itself. **Expected:**
+   - Items shows "Identifying items from room photos…" under the room for about 10–30 s.
+   - Then "Unidentified item" / "other" boxes get real names, and missed things are added. Item detail says "Found by: Room photos (size estimated)", and those items aren't placed in the 3D room.
+   - The Xcode console prints `[sweep] sent N of M room photos for scan <id>`.
+   - Impossible boxes are skipped, and the finished page then says "N objects looked wrong and were skipped" (#180).
 4. Share the room (Items → Share) and join it on a second phone. **Expected:** the same items stream in live, and edits sync both ways.
 5. Report back, ideally on #28 or a new issue: objects in wrong places, wrong labels, sizes that look off. The worker now stores every scan's files, so the agents can inspect them.
 
