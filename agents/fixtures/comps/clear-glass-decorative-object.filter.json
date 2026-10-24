@@ -1,0 +1,11 @@
+{
+  "5e33a7d2d9616bd5": {
+    "item": "clear glass decorative object; category decor; material glass; 0.19 x 0.33 x 0.15 m (W x H x D); condition good",
+    "n": 8,
+    "keep": [
+      6
+    ],
+    "reason": "Kept listing 6 (clear glass decorative bowl) as the closest generic match; dropped obelisks, scalloped bowl set, vintage vase, marbles lot, brass terrarium, paperweight, and unspecified filled glass …",
+    "model": "claude-haiku-5-5"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "a62d34bd77023ce6": {
+    "item": "black mesh back office chair with patterned fabric seat; category chair; material black plastic frame, mesh back, patterned fabric seat; 0.51 x 0.86 x 0.60 m (W x H x D); condition fair",
+    "n": 7,
+    "keep": [
+      1,
+      4,
+      5,
+      6,
+      7
+    ],
+    "reason": "Dropped #2 (drafting chair, different product type), #3 (named Herman Miller-style premium model with headrest, different product line), leaving generic mesh office chairs and plain office chairs at …",
+    "model": "claude-haiku-5-5"
+  }
+}

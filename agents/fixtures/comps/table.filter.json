@@ -1,0 +1,20 @@
+{
+  "db97359e622aa956": {
+    "item": "table; category table; 1.01 x 0.83 x 0.63 m (W x H x D)",
+    "n": 10,
+    "keep": [
+      8
+    ],
+    "reason": "Dropped toys, prints, lamps, bags, jackets, vintage/antique pieces, and accessories; only listing 8 is a plain used wood side table of a comparable kind.",
+    "model": "claude-haiku-5-5"
+  },
+  "07e302ca651b06c1": {
+    "item": "table; category table; 1.05 x 0.75 x 0.50 m (W x H x D)",
+    "n": 10,
+    "keep": [
+      8
+    ],
+    "reason": "Dropped toys, bags, prints, lamps, vanity tray, jacket, collectibles/vintage stools and dough box, and small Barbie furniture; kept only #8, a plain side table, as a plausible same-kind comparable.",
+    "model": "claude-haiku-5-5"
+  }
+}

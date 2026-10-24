@@ -1,0 +1,16 @@
+{
+  "bfa04e1d47d07457": {
+    "item": "electronics; category electronics; 0.61 x 0.45 x 0.18 m (W x H x D)",
+    "n": 13,
+    "keep": [
+      2,
+      3,
+      5,
+      6,
+      7,
+      12
+    ],
+    "reason": "Item is a generic 'electronics' entry with no named model, so I kept complete consumer electronics units and dropped vinyl records, a yearbook CD, bulk/store-sale lots, a generic multi-item listing, …",
+    "model": "claude-haiku-5-5"
+  }
+}
