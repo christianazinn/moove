@@ -181,7 +181,7 @@ struct DealRow: View {
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.accentStrong)
                         }
-                        Text(deal.title).blockTitle().lineLimit(large ? 8 : 3)
+                        Text(deal.title).blockTitle().lineLimit(large ? 8 : 3).fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 8)
                         if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
                     }
