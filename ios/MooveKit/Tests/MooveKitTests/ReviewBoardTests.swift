@@ -62,7 +62,7 @@ import Testing
         #expect(sell.valueCents == Review.totals(items).expectedSaleCents)
         #expect(sell.items.first?.id == 11) // the Aeron, most valuable first
         #expect(sell.kg > 0)
-        #expect(piles[0].volumeM3 == Review.totals(items).volumeToMoveM3)
+        #expect(abs(piles[0].volumeM3 - Review.totals(items).volumeToMoveM3) < 1e-9)
         #expect(piles[2].valueCents == 0 && piles[2].kg == 0)
     }
 
