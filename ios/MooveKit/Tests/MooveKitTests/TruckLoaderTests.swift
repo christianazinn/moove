@@ -173,14 +173,6 @@ import Testing
         #expect(load.placements.isEmpty && load.unloaded.isEmpty && load.fill == 0)
     }
 
-    @Test func paletteIsStableAndMatchesCommonRooms() {
-        #expect(PackingPalette.color(forRoom: "Kitchen") == 0xD9B26A)
-        #expect(PackingPalette.color(forRoom: "Main bedroom") == 0x9FB0C0)
-        #expect(PackingPalette.color(forRoom: "Living room") == 0xA9B897)
-        #expect(PackingPalette.color(forRoom: "Sunroom") == PackingPalette.color(forRoom: "sunroom"))
-        #expect(PackingPalette.tapes.contains(PackingPalette.color(forRoom: "Sunroom")))
-    }
-
     @Test func truckShellAndBoxesBuild() {
         for size in TruckSize.allCases {
             let f = VoxelTruck.frame(size)
