@@ -695,3 +695,40 @@ extension Canvas {
         }
     }
 }
+
+// MARK: screens
+
+extension Canvas {
+    /// Room divider / folding screen (hinged panels zigzagging across the depth, a frame and a
+    /// fabric or slat infill) or a curtain (a rod and fabric hanging in folds). Detector "room
+    /// dividers" over a bathtub are shower curtains, which the scan drops before import.
+    func screen(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
+        let curtain = name.word("curtain", "curtains", "drapes") || name.has("shower curtain")
+        if curtain {
+            let fabric = colorFromName(name, 0xEDE6DA), fold = shade(fabric, 0.88)
+            box(0, Y - 1, 0, X, Y, 1, P.brass)  // rod
+            for x in upTo(0, X) {
+                // folds: the fabric steps back and forth one voxel every couple of columns
+                let z = (x / 2) % 2 == 0 ? 0 : min(1, Z - 1)
+                box(x, 0, z, x + 1, Y - 1, z + 1, (x / 2) % 2 == 0 ? fabric : fold)
+            }
+            return
+        }
+        let wood = name.has("wood", "wooden", "oak", "bamboo", "walnut", "rattan")
+        let frameC = colorFromName(name, wood ? P.oak : P.black)
+        let infill = name.has("rattan", "cane", "bamboo") ? 0xC9A66B : name.has("slat", "louver", "shutter") ? shade(frameC, 1.1) : 0xE9E2D4
+        let panels = max(2, min(4, rd(D(X) * voxelM / 0.45)))
+        let depth = max(1, Z - 1)
+        for p in 0..<panels {
+            let x0 = p * X / panels, x1 = max(x0 + 1, (p + 1) * X / panels)
+            for x in x0..<x1 {
+                // zigzag: even panels lean back, odd ones forward
+                let t = D(x - x0) / D(max(1, x1 - x0 - 1))
+                let z = clamp(rd(p % 2 == 0 ? t * D(depth) : (1 - t) * D(depth)), 0, Z - 1)
+                let edge = x == x0 || x == x1 - 1
+                box(x, 1, z, x + 1, Y, z + 1) { _, y, _ in edge || y == 1 || y == Y - 1 ? frameC : infill }
+                if edge { set(x, 0, z, shade(frameC, 0.8)) }  // feet
+            }
+        }
+    }
+}

@@ -164,6 +164,7 @@ public enum VoxelModels {
         case .clock: g.clock(X, NY, Z, name)
         case .toy: g.toy(X, NY, Z, name)
         case .rack: g.rack(X, NY, Z, name)
+        case .screen: g.screen(X, NY, Z, name)
         case .box: g.kraftBox(X, NY, Z, name)
         }
         return (g.output(), g.surfaces)
@@ -206,7 +207,7 @@ public enum VoxelModels {
         case framedPhotos, stove, dishwasher, microwave, bench, ottoman, bike, suitcase
         case guitar, piano, keyboard, drums, vacuum, monitor, scooter, bag, fitness, board
         case motorcycle, stroller, wheelchair, grill, lawnMower, crib, ladder, trunk, basket, trashCan, toolbox
-        case petCrate, petBed, catTree, clock, toy, rack, box
+        case petCrate, petBed, catTree, clock, toy, rack, screen, box
 
         /// Default size (w, d, h) in meters when a dimension is missing or invalid.
         var defaultSize: (Double, Double, Double) {
@@ -271,6 +272,7 @@ public enum VoxelModels {
             case .clock: (0.35, 0.05, 0.35)
             case .toy: (0.35, 0.3, 0.4)
             case .rack: (0.5, 0.5, 1.8)
+            case .screen: (1.2, 0.4, 1.7)
             case .box: (0.5, 0.4, 0.4)
             }
         }
@@ -326,6 +328,7 @@ public enum VoxelModels {
             case .clock: (5, 5, 1)
             case .toy: (6, 6, 5)
             case .rack: (5, 8, 3)
+            case .screen: (6, 10, 2)
             default: nil
             }
         }
@@ -357,6 +360,7 @@ public enum VoxelModels {
         // throw pillows and cushions are soft decor (drawn as a pillow), whatever the category
         if isPillow(n) { return .decor }
         if n.has("sectional", "sofa", "couch", "loveseat", "futon", "settee", "armchair") { return .sofa }
+        if isScreen(n) { return .screen }
         if n.has("bookcase", "bookshelf", "book shelf", "shelving", "shelf unit", "étagère") { return .bookshelf }
         // the vision agent's specific names ("black standing desk") beat a broad category ("furniture"),
         // but not a small-object one: a "coffee table book" stays books, a "TV remote" electronics.
@@ -495,6 +499,7 @@ public enum VoxelModels {
         case "toy", "toys", "stuffed animal", "plush", "dollhouse", "rocking horse": return .toy
         case "coat rack", "shoe rack", "clothes rack", "rack", "garment rack", "coat stand", "hat stand": return .rack
         case "workbench", "work bench": return .desk
+        case "room divider", "divider", "folding screen", "privacy screen", "screen divider", "curtain", "curtains", "shower curtain", "drapes": return .screen
         case "cart", "rolling cart", "utility cart": return n.has("bar cart", "tea cart") ? .table : .bookshelf
         case "decor":
             // a wall clock, a basket, a cat bed, a plush: household things, but not a "toy motorcycle" figurine
@@ -604,6 +609,13 @@ public enum VoxelModels {
     static func isBag(_ n: VName) -> Bool {
         n.word("backpack", "backpacks", "rucksack", "knapsack", "duffel", "duffle", "holdall", "tote", "totes", "handbag", "purse",
                "bag", "bags", "satchel", "briefcase", "daypack")
+    }
+
+    /// A room divider, folding screen or curtain (a shower curtain read as a "room divider" by the
+    /// detector drew as a 1.4 m bookshelf). "screen" alone is a TV or monitor word, so it needs a qualifier.
+    static func isScreen(_ n: VName) -> Bool {
+        n.has("room divider", "folding screen", "privacy screen", "screen divider", "shower curtain", "shower door")
+            || n.word("divider", "curtain", "curtains", "drapes")
     }
 
     /// The name is a TV itself, not a TV accessory ("TV remote", "TV antenna").
