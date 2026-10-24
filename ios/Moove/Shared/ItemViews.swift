@@ -73,14 +73,21 @@ struct ItemThumbnail: View {
 
     static func icon(for category: String) -> String {
         switch category.lowercased() {
-        case "bed": "bed.double"
+        case "bed", "mattress": "bed.double"
         case "chair": "chair"
-        case "sofa": "sofa"
-        case "table": "table.furniture"
-        case "storage": "cabinet"
+        case "sofa", "bench", "ottoman": "sofa"
+        case "table", "desk": "table.furniture"
+        case "storage", "dresser", "nightstand": "cabinet"
+        case "bookshelf", "books": "books.vertical"
         case "lamp": "lamp.floor"
         case "appliance", "refrigerator": "refrigerator"
-        case "television": "tv"
+        case "stove", "oven": "stove"
+        case "microwave": "microwave"
+        case "dishwasher": "dishwasher"
+        case "washerdryer": "washer"
+        case "television", "tv": "tv"
+        case "bike": "bicycle"
+        case "suitcase": "suitcase"
         case "decor": "photo.artframe"
         // RoomPlan categories not covered above (RoomPlan's own names, lowercased)
         case "washerdryer": "washer"
