@@ -136,7 +136,8 @@ public struct VoxelItemSpec: Sendable, Hashable {
 
     public init(_ item: Item) {
         self.init(category: item.category, name: item.name, widthM: item.widthM, depthM: item.depthM, heightM: item.heightM,
-                  id: item.scanObjectId ?? String(item.id), material: item.material, brand: item.brand, condition: item.condition)
+                  id: item.scanObjectId ?? String(item.id), material: item.material, brand: item.brand, condition: item.condition,
+                  attributes: item.attributes, primaryColor: item.colors?.primary, secondaryColor: item.colors?.secondary)
     }
 }
 

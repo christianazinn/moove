@@ -96,6 +96,11 @@ public struct Reducers: Sendable {
     }
 
     @discardableResult
+    public func importScanV2(roomname: String, home: String, usdzurl: String, capturedroomjsonurl: String, objects: [ScanObjectInputV2]) async throws -> ReducerSuccess {
+        try await client.callReducer(ImportScanV2Reducer(roomname: roomname, home: home, usdzurl: usdzurl, capturedroomjsonurl: capturedroomjsonurl, objects: objects))
+    }
+
+    @discardableResult
     public func joinRoom(code: String) async throws -> ReducerSuccess {
         try await client.callReducer(JoinRoomReducer(code: code))
     }
@@ -183,6 +188,16 @@ public struct Reducers: Sendable {
     @discardableResult
     public func setFragile(itemid: UInt64, value: Bool) async throws -> ReducerSuccess {
         try await client.callReducer(SetFragileReducer(itemid: itemid, value: value))
+    }
+
+    @discardableResult
+    public func setItemAttributes(itemid: UInt64, attributes: [String]) async throws -> ReducerSuccess {
+        try await client.callReducer(SetItemAttributesReducer(itemid: itemid, attributes: attributes))
+    }
+
+    @discardableResult
+    public func setItemColors(itemid: UInt64, colorsjson: String) async throws -> ReducerSuccess {
+        try await client.callReducer(SetItemColorsReducer(itemid: itemid, colorsjson: colorsjson))
     }
 
     @discardableResult

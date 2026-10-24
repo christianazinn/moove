@@ -26,6 +26,8 @@ final class ScanSession {
         let widthM: Double
         let heightM: Double
         let depthM: Double
+        /// RoomPlan attributes as type-prefixed raw values ("ChairLegType.star"), #110.
+        var attributes: [String] = []
         /// Added by photo because RoomPlan didn't detect it: no size or position,
         /// so it's in the inventory but not in the 3D room.
         var manual = false
@@ -78,7 +80,8 @@ final class ScanSession {
                 category: String(describing: object.category),
                 widthM: Double(object.dimensions.x),
                 heightM: Double(object.dimensions.y),
-                depthM: Double(object.dimensions.z)
+                depthM: Double(object.dimensions.z),
+                attributes: Self.attributeStrings(object)
             )
         }
         phase = .reviewing
@@ -158,9 +161,106 @@ final class ScanSession {
             objects: objects.map {
                 ScanObject(scanObjectId: $0.id.uuidString, category: $0.category,
                            widthM: $0.widthM, heightM: $0.heightM, depthM: $0.depthM,
-                           photoUrl: photoUrls[$0.id])
+                           photoUrl: photoUrls[$0.id], attributes: $0.attributes)
             }
         ))
         phase = imported ? .finished : .failed(store.lastError ?? "Couldn't save the scan")
+    }
+}
+
+// MARK: - RoomPlan attributes (#110)
+
+extension ScanSession {
+    /// RoomPlan's iOS 17 object attributes as type-prefixed values ("ChairType.swivel",
+    /// "ChairLegType.star", "TableShapeType.circularElliptic") for `import_scan_v2`, which
+    /// the voxel builders read. Spelled out per case rather than via reflection so the
+    /// strings can't drift; `unidentified` says nothing, so it's left out.
+    nonisolated static func attributeStrings(_ object: CapturedRoom.Object) -> [String] {
+        object.attributes.compactMap { attribute -> String? in
+            switch attribute {
+            case let a as ChairType: value(a).map { "ChairType.\($0)" }
+            case let a as ChairArmType: value(a).map { "ChairArmType.\($0)" }
+            case let a as ChairBackType: value(a).map { "ChairBackType.\($0)" }
+            case let a as ChairLegType: value(a).map { "ChairLegType.\($0)" }
+            case let a as SofaType: value(a).map { "SofaType.\($0)" }
+            case let a as TableType: value(a).map { "TableType.\($0)" }
+            case let a as TableShapeType: value(a).map { "TableShapeType.\($0)" }
+            case let a as StorageType: value(a).map { "StorageType.\($0)" }
+            default: nil
+            }
+        }
+    }
+
+    private nonisolated static func value(_ a: ChairType) -> String? {
+        switch a {
+        case .dining: "dining"
+        case .stool: "stool"
+        case .swivel: "swivel"
+        case .unidentified: nil
+        @unknown default: nil
+        }
+    }
+
+    private nonisolated static func value(_ a: ChairArmType) -> String? {
+        switch a {
+        case .existing: "existing"
+        case .missing: "missing"
+        @unknown default: nil
+        }
+    }
+
+    private nonisolated static func value(_ a: ChairBackType) -> String? {
+        switch a {
+        case .existing: "existing"
+        case .missing: "missing"
+        @unknown default: nil
+        }
+    }
+
+    private nonisolated static func value(_ a: ChairLegType) -> String? {
+        switch a {
+        case .four: "four"
+        case .star: "star"
+        case .unidentified: nil
+        @unknown default: nil
+        }
+    }
+
+    private nonisolated static func value(_ a: SofaType) -> String? {
+        switch a {
+        case .lShaped: "lShaped"
+        case .lShapedExtension: "lShapedExtension"
+        case .rectangular: "rectangular"
+        case .singleSeat: "singleSeat"
+        case .unidentified: nil
+        @unknown default: nil
+        }
+    }
+
+    private nonisolated static func value(_ a: TableType) -> String? {
+        switch a {
+        case .coffee: "coffee"
+        case .dining: "dining"
+        case .unidentified: nil
+        @unknown default: nil
+        }
+    }
+
+    private nonisolated static func value(_ a: TableShapeType) -> String? {
+        switch a {
+        case .circularElliptic: "circularElliptic"
+        case .lShaped: "lShaped"
+        case .rectangular: "rectangular"
+        case .unidentified: nil
+        @unknown default: nil
+        }
+    }
+
+    private nonisolated static func value(_ a: StorageType) -> String? {
+        switch a {
+        case .cabinet: "cabinet"
+        case .shelf: "shelf"
+        @unknown default: nil
+        }
     }
 }
