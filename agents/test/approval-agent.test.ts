@@ -40,7 +40,7 @@ function fakeConn(rows: { approvals: Approval[]; events?: AgentEvent[] }) {
   const conn = {
     db: {
       approval: { iter: () => approvals.values(), id: { find: (id: bigint) => approvals.get(id) }, onInsert: noop, onUpdate: noop },
-      user: { identity: { find: () => user }, onInsert: noop, onUpdate: noop },
+      workerUser: { iter: () => [user].filter(Boolean).values(), onInsert: noop },
       listing: { id: { find: () => ({ title: "Oak desk" }) } },
       deal: { id: { find: () => undefined } },
       agentEvent: { iter: () => events.values() },

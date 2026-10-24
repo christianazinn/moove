@@ -44,7 +44,7 @@ function fakeConn(o: Opts = {}) {
       approval: { iter: () => approvals.values(), onInsert: on("approval.insert"), onUpdate: on("approval.update") },
       item: { iter: () => items.values(), id: { find: (id: bigint) => items.get(id) }, onInsert: on("item.insert"), onUpdate: on("item.update") },
       comp: { iter: () => [][Symbol.iterator]() },
-      user: { identity: { find: () => user } },
+      workerUser: { iter: () => [user].filter(Boolean).values() },
     },
     reducers: {
       requestApproval: async (a: { owner: unknown; kind: string; refId: bigint; amountCents: bigint; summary: string }) => {

@@ -1,9 +1,17 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import type { Identity } from 'spacetimedb';
 import { DbConnection, tables } from './module_bindings/index.js';
+import type { User } from './module_bindings/types.js';
 import { config } from './config.js';
 
 export type Conn = DbConnection;
+
+// `user` is private (#41 part B): the worker reads every row through the `worker_user` view,
+// which has no index accessors, so look owners up by scanning it.
+export function findUser(conn: Conn, identity: Identity): User | undefined {
+  for (const u of conn.db.workerUser.iter()) if (u.identity.isEqual(identity)) return u;
+  return undefined;
+}
 
 function savedToken(): string | undefined {
   if (config.workerToken) return config.workerToken;

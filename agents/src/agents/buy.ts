@@ -1,6 +1,6 @@
 import type { Identity } from 'spacetimedb';
 import type { Agent } from './types.js';
-import type { Conn } from '../spacetime.js';
+import { findUser, type Conn } from '../spacetime.js';
 import type { Approval, Deal, ShoppingItem } from '../module_bindings/types.js';
 import { logEvent } from '../events.js';
 import { visaCheckout } from '../checkout.js';
@@ -121,7 +121,7 @@ function dealsFor(conn: Conn, itemId: bigint): Deal[] {
 }
 
 function thresholdFor(conn: Conn, owner: Identity): bigint {
-  return conn.db.user.identity.find(owner)?.approvalThresholdCents ?? DEFAULT_THRESHOLD_CENTS;
+  return findUser(conn, owner)?.approvalThresholdCents ?? DEFAULT_THRESHOLD_CENTS;
 }
 
 function latestApproval(conn: Conn, dealId: bigint): Approval | undefined {

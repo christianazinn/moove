@@ -1,6 +1,6 @@
 import type { Identity } from 'spacetimedb';
 import type { Agent } from './types.js';
-import type { Conn } from '../spacetime.js';
+import { findUser, type Conn } from '../spacetime.js';
 import type { AgentEvent, Approval } from '../module_bindings/types.js';
 import { logEvent } from '../events.js';
 import { selectApprovalGateway, toBindingMessage, type ApprovalGateway } from '../integrations/auth0.js';
@@ -109,7 +109,7 @@ export const approvalAgent: Agent = {
 
     async function handle(a: Approval, g: ApprovalGateway): Promise<void> {
       const bindingMessage = bindingFor(conn, a);
-      const user = conn.db.user.identity.find(a.owner);
+      const user = findUser(conn, a.owner);
       const auth0Sub = user?.auth0Sub ?? '';
       if (!auth0Sub) {
         waitingForSub.add(a.id);
@@ -222,7 +222,7 @@ export const approvalAgent: Agent = {
         consider(a);
       }
     };
-    conn.db.user.onInsert((_ctx, u) => retryOwner(u.identity, u.auth0Sub));
-    conn.db.user.onUpdate((_ctx, _old, u) => retryOwner(u.identity, u.auth0Sub));
+    // A view has no primary key, so a changed user row arrives as a delete + insert.
+    conn.db.workerUser.onInsert((_ctx, u) => retryOwner(u.identity, u.auth0Sub));
   },
 };
