@@ -7,6 +7,7 @@ import { logEvent } from '../events.js';
 import { structuredCall } from '../integrations/anthropic.js';
 import { chooseEbay, dollars, simulatedEbay, type EbayPoster } from '../integrations/ebay.js';
 import { buildDraftPrompt, clampPrice, finalizeCopy, LISTING_SYSTEM } from './listingPrompt.js';
+import { afterExpiry, approvalExpiry } from './approval-expiry.js';
 
 // Real eBay (sandbox) once scripts/ebay-setup.ts has filled in the EBAY_* keys, otherwise the
 // labeled simulation (#11, #32). Fixed at startup so a draft's `simulated` flag matches how it posts.
@@ -29,6 +30,7 @@ export const ListingDraft = z.object({
 const drafting = new Set<bigint>(); // item ids
 const advancing = new Set<bigint>(); // listing ids
 const approvalRequested = new Set<bigint>(); // listing ids; the approval row can arrive before the status update
+const reasked = new Set<bigint>(); // expired approval ids already re-asked this run (#186)
 
 function hasListing(conn: Conn, itemId: bigint): boolean {
   for (const l of conn.db.listing.iter()) if (l.itemId === itemId) return true;
@@ -150,6 +152,37 @@ async function post(conn: Conn, l: Listing): Promise<void> {
   }
 }
 
+// #186: nobody answered and the worker expired the approval. Ask again while the item is still
+// sorted to sell, at most APPROVAL_MAX_REASKS times. Decided from the approval rows (the latest one
+// is pending again once the re-ask lands), so a restart doesn't ask twice; `reasked` covers the gap
+// before the new row reaches the cache.
+async function reaskAfterExpiry(conn: Conn, l: Listing): Promise<void> {
+  const ref = { owner: l.owner, agent: 'listing', refTable: 'listing', refId: l.id };
+  const next = afterExpiry(conn.db.approval.iter(), 'listing', l.id, approvalExpiry.maxReasks);
+  if (next.action === 'none') return;
+  const it = conn.db.item.id.find(l.itemId);
+  if (next.action === 'give_up' || it?.disposition !== 'sell') {
+    if (advancing.has(l.id)) return;
+    advancing.add(l.id);
+    const why =
+      next.action === 'give_up'
+        ? `the approval expired ${next.expiredCount} times without an answer`
+        : 'the approval expired and the item is no longer sorted to sell';
+    if (await setStatus(conn, l, 'rejected')) logEvent(conn, { ...ref, kind: 'approval', message: `Not posting: ${why}` });
+    advancing.delete(l.id);
+    return;
+  }
+  if (reasked.has(next.expired)) return;
+  reasked.add(next.expired);
+  try {
+    await conn.reducers.requestApproval({ owner: l.owner, kind: 'listing', refId: l.id, amountCents: l.priceCents, summary: `Sell "${l.title}" for ${dollars(l.priceCents)}` });
+    logEvent(conn, { ...ref, kind: 'approval', message: `The approval expired without an answer, asking again (${next.attempt} of ${approvalExpiry.maxReasks})`, data: { expiredApprovalId: next.expired } });
+  } catch (err) {
+    reasked.delete(next.expired); // a later update retries
+    logEvent(conn, { ...ref, kind: 'error', message: `Could not ask for approval again: ${String(err)}` });
+  }
+}
+
 // Moves one listing forward: draft -> (awaiting_approval ->) posted, or rejected.
 async function advance(conn: Conn, l: Listing): Promise<void> {
   if (advancing.has(l.id)) return;
@@ -180,6 +213,10 @@ async function advance(conn: Conn, l: Listing): Promise<void> {
       return;
     }
     if (a.status === 'pending') return;
+    if (a.status === 'expired') {
+      await reaskAfterExpiry(conn, l);
+      return;
+    }
     advancing.add(l.id);
     if (a.status === 'approved' && a.amountCents === l.priceCents) {
       logEvent(conn, { ...ref, kind: 'approval', message: `Approved by the user, posting` });

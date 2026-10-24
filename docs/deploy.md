@@ -41,6 +41,7 @@ env file on a Droplet), never in `fly.toml`, an app spec in git, or the image.
 | `AUTH0_CIBA_CLIENT_SECRET` | **yes** | Phone approvals (CIBA). |
 | `AUTH0_DOMAIN`, `AUTH0_CIBA_CLIENT_ID`, `AUTH0_AUDIENCE` | no | Leave all Auth0 vars empty to use only the in-app approvals inbox. (`AUTH0_CLIENT_ID/SECRET` belong to iOS; the worker doesn't use them.) |
 | `APPROVAL_THRESHOLD_CENTS_DEFAULT`, `APPROVAL_SIM_AUTO_APPROVE_SEC` | no | `10000`, `0`. |
+| `APPROVAL_EXPIRE_HOURS`, `APPROVAL_MAX_REASKS` | no | `12`, `2` (#186: stale pending approvals expire and get re-asked; `0` hours = off). |
 
 Easiest way to carry over the laptop config: start from `.env.local` (copy it by hand on Christian's
 machine, don't paste it anywhere shared), then override `SPACETIME_URI`, `SPACETIME_DB_NAME`,

@@ -88,6 +88,13 @@ import Testing
         denied.kind = .purchase
         #expect(denied.outcomeText == "You denied it. Nothing was bought.")
         #expect(denied.accessibilitySummary.hasPrefix("Buy, $410, denied."))
+        // #186: the worker expires unanswered approvals and the agents ask again.
+        var expired = a
+        expired.status = .expired
+        #expect(expired.outcomeText == "Nobody answered in time, so it expired. The listing agent asks again if it still applies.")
+        expired.kind = .purchase
+        #expect(expired.outcomeText?.hasPrefix("Nobody answered in time, so it expired. Nothing was bought") == true)
+        #expect(expired.accessibilitySummary.hasPrefix("Buy, $410, expired."))
     }
 
     @Test func dealSummaryAndFraudBlockedIsNotChoosable() {

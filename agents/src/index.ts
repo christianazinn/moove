@@ -12,6 +12,7 @@ import { pricingAgent, setCompsSource } from './agents/pricing.js';
 import { installPaidComps, paidCompsSource, pricingPaysX402, startCompsPaywall } from './integrations/paid-comps.js';
 import { listingAgent } from './agents/listing.js';
 import { approvalAgent } from './agents/approval.js';
+import { approvalExpiryAgent } from './agents/approval-expiry.js';
 import { sortAgent } from './agents/sort.js';
 import { shoppingListAgent } from './agents/shopping.js';
 import { buyAgent } from './agents/buy.js';
@@ -24,7 +25,7 @@ import { replayGuardError, replayMode } from './integrations/anthropic.js';
 import { config } from './config.js';
 
 // Register agents here as they land (vision, pricing, sort, listing, buy, fraud, ...).
-const agents: Agent[] = [visionAgent, sweepAgent, pricingAgent, sortAgent, listingAgent, approvalAgent, shoppingListAgent, buyAgent, fraudAgent, sam3dAgent];
+const agents: Agent[] = [visionAgent, sweepAgent, pricingAgent, sortAgent, listingAgent, approvalAgent, approvalExpiryAgent, shoppingListAgent, buyAgent, fraudAgent, sam3dAgent];
 
 // #17: never replay or record Claude answers against the live DB.
 const replayRefusal = replayGuardError(replayMode(), config.spacetimeUri);

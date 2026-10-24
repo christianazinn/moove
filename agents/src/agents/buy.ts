@@ -7,6 +7,7 @@ import { visaCheckout } from '../checkout.js';
 import { CARD_CHECKOUT_SOURCES, rankDeals, sanitizeText, sellerInfo, type DealSource, type RankedDeal } from '../integrations/deals.js';
 import { approvalGate, dollars } from '../integrations/visa.js';
 import { createDealSource } from '../integrations/deals-apify.js';
+import { afterExpiry, approvalExpiry } from './approval-expiry.js';
 
 // Buy agent (#15). For each open shopping_item:
 //   1. search deals (live Apify, else labeled sample data), rank them by
@@ -271,6 +272,24 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
   if (blocked) {
     settled.add(key);
     logEvent(conn, { ...ref, kind: 'error', message: `Not buying "${d.title}": ${blocked}`, data: { refused: true, remainingCents: visa.remaining(AGENT) } });
+    return;
+  }
+
+  // #186: the approval expired unanswered. Everything above (still chosen, fraud, caps) still holds,
+  // so ask again, at most APPROVAL_MAX_REASKS times. Keyed by the expired row and decided from the
+  // approval rows, so a restart (the re-ask's pending row is then the latest) doesn't ask twice.
+  const afterExp = afterExpiry(conn.db.approval.iter(), 'purchase', d.id, approvalExpiry.maxReasks);
+  if (afterExp.action === 'reask') {
+    const title = sanitizeText(d.title, 80).replace(/["$]/g, '');
+    const asked = await requestOnce(approvalRequested, `${key}:after-expired:${afterExp.expired}`, () =>
+      conn.reducers.requestApproval({ owner: s.owner, kind: 'purchase', refId: d.id, amountCents: d.priceCents, summary: `Pay ${dollars(d.priceCents)} to ${d.source} for: ${title}` })
+    );
+    if (asked) logEvent(conn, { ...ref, kind: 'approval', message: `The approval expired without an answer, asking again (${afterExp.attempt} of ${approvalExpiry.maxReasks})`, data: { expiredApprovalId: afterExp.expired } });
+    return;
+  }
+  if (afterExp.action === 'give_up') {
+    settled.add(key);
+    logEvent(conn, { ...ref, kind: 'approval', message: `Not buying "${d.title}": the approval expired ${afterExp.expiredCount} times without an answer` });
     return;
   }
 
