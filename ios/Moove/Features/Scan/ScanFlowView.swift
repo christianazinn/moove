@@ -74,7 +74,11 @@ struct ScanFlowView: View {
             ContentUnavailableView {
                 Label("\(session.objects.count) items added", systemImage: "checkmark.circle.fill")
             } description: {
-                Text("Agents are identifying and pricing them now.")
+                if let problem = session.uploadProblem {
+                    Text("Photos couldn't be uploaded (\(problem)), so agents can't identify items yet. The room is saved, and the 3D view works on this device.")
+                } else {
+                    Text("Agents are identifying and pricing them now.")
+                }
             } actions: {
                 Button("See inventory") { dismiss() }.buttonStyle(.borderedProminent)
             }

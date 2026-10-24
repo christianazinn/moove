@@ -33,6 +33,8 @@ final class ScanSession {
     private(set) var objects: [DetectedObject] = []
     private(set) var photos: [UUID: URL] = [:]
     private(set) var geometry: RoomGeometry?
+    /// Set when some files couldn't reach the worker's upload server.
+    private(set) var uploadProblem: String?
     let folder: URL
 
     init() {
@@ -85,35 +87,42 @@ final class ScanSession {
         let total = 2 + photos.count
         var done = 0
         phase = .uploading(done: 0, total: total)
-        do {
-            func send(_ file: URL, _ type: String) async throws -> String {
-                let url = try await uploader.upload(file, contentType: type)
+        uploadProblem = nil
+        func send(_ file: URL, _ type: String) async -> String? {
+            defer {
                 done += 1
                 phase = .uploading(done: done, total: total)
-                return url
             }
-            let usdzUrl = try await send(roomUSDZ, "model/vnd.usdz+zip")
-            let jsonUrl = try await send(roomJSON, "application/json")
-            var photoUrls: [UUID: String] = [:]
-            for (id, file) in photos { photoUrls[id] = try await send(file, "image/jpeg") }
+            guard uploadProblem == nil else { return nil }  // server is down; don't wait out each timeout
+            do {
+                return try await uploader.upload(file, contentType: type)
+            } catch {
+                uploadProblem = error.localizedDescription
+                return nil
+            }
+        }
+        // If the worker's upload server is unreachable, still import the scan:
+        // room files fall back to this device's copies (only the app reads them),
+        // and photos are left off so the vision agent never gets a URL it can't fetch.
+        let usdzUrl = await send(roomUSDZ, "model/vnd.usdz+zip") ?? roomUSDZ.absoluteString
+        let jsonUrl = await send(roomJSON, "application/json") ?? roomJSON.absoluteString
+        var photoUrls: [UUID: String] = [:]
+        for (id, file) in photos { photoUrls[id] = await send(file, "image/jpeg") }
 
-            await store.importScan(ScanImport(
-                roomName: roomName,
-                usdzUrl: usdzUrl,
-                capturedRoomJsonUrl: jsonUrl,
-                objects: objects.map {
-                    ScanObject(scanObjectId: $0.id.uuidString, category: $0.category,
-                               widthM: $0.widthM, heightM: $0.heightM, depthM: $0.depthM,
-                               photoUrl: photoUrls[$0.id])
-                }
-            ))
-            if let error = store.lastError {
-                phase = .failed(error)
-            } else {
-                phase = .finished
+        await store.importScan(ScanImport(
+            roomName: roomName,
+            usdzUrl: usdzUrl,
+            capturedRoomJsonUrl: jsonUrl,
+            objects: objects.map {
+                ScanObject(scanObjectId: $0.id.uuidString, category: $0.category,
+                           widthM: $0.widthM, heightM: $0.heightM, depthM: $0.depthM,
+                           photoUrl: photoUrls[$0.id])
             }
-        } catch {
-            phase = .failed("Upload failed: \(error.localizedDescription). The scan is saved on this device.")
+        ))
+        if let error = store.lastError {
+            phase = .failed(error)
+        } else {
+            phase = .finished
         }
     }
 }
