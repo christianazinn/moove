@@ -120,7 +120,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.ios == 'true'
     runs-on: macos-15
-    timeout-minutes: 30  # ~15-19 min observed (macOS runner speed varies)
+    timeout-minutes: 30  # ~19-24 min observed with the XXXL + dark passes (macOS runner speed varies)
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode and a simulator
@@ -154,31 +154,40 @@ jobs:
           # Only the commerce suite gates CI for now: MooveSmokeTests (#161) still has two tests that time
           # out on the slower CI runner, and running both suites goes past ~15 min.
           # DevpostShotsTests (#242, ~2 min) walks the Offline demo and saves the Devpost shots.
+          DARK=MooveUITests/CommerceUITests/testCommerceScreensInDarkMode
           xcodebuild test -scheme Moove -destination "id=$SIM_UDID" -only-testing:MooveUITests/CommerceUITests \
-            -only-testing:MooveUITests/DevpostShotsTests \
+            -only-testing:MooveUITests/DevpostShotsTests -skip-testing:$DARK \
             -resultBundlePath "$RUNNER_TEMP/MooveUITests.xcresult" CODE_SIGNING_ALLOWED=NO
+          # Dark mode (#15): `-AppleInterfaceStyle` and XCUIDevice.appearance don't take on the CI Simulator,
+          # so switch the whole Simulator and rerun just that test on the same build (~2 min).
+          xcrun simctl ui "$SIM_UDID" appearance dark
+          xcodebuild test-without-building -scheme Moove -destination "id=$SIM_UDID" -only-testing:$DARK \
+            -resultBundlePath "$RUNNER_TEMP/MooveUITests-dark.xcresult" CODE_SIGNING_ALLOWED=NO
       - name: Export screenshots
         if: always()
         run: |
           mkdir -p "$RUNNER_TEMP/all" "$RUNNER_TEMP/shots"
+          mkdir -p "$RUNNER_TEMP/all-dark"
           xcrun xcresulttool export attachments --path "$RUNNER_TEMP/MooveUITests.xcresult" --output-path "$RUNNER_TEMP/all" || true
+          xcrun xcresulttool export attachments --path "$RUNNER_TEMP/MooveUITests-dark.xcresult" --output-path "$RUNNER_TEMP/all-dark" || true
           # Keep only the tests' named screenshots (not XCTest's automatic snapshots or the screen recording),
           # renamed "<Test class>/<shot name>.png".
-          python3 - "$RUNNER_TEMP/all" "$RUNNER_TEMP/shots" <<'PY'
+          python3 - "$RUNNER_TEMP/shots" "$RUNNER_TEMP/all" "$RUNNER_TEMP/all-dark" <<'PY'
           import json, os, shutil, sys
-          src, dst = sys.argv[1], sys.argv[2]
-          try:
-              tests = json.load(open(os.path.join(src, "manifest.json")))
-          except OSError:
-              sys.exit(0)
-          for test in tests:
-              cls = test["testIdentifier"].split("/")[0]
-              for a in test["attachments"]:
-                  name, f = a["suggestedHumanReadableName"], a["exportedFileName"]
-                  if not f.endswith(".png") or name.startswith("UI Snapshot"):
-                      continue
-                  os.makedirs(os.path.join(dst, cls), exist_ok=True)
-                  shutil.copy(os.path.join(src, f), os.path.join(dst, cls, name.split("_0_")[0] + ".png"))
+          dst = sys.argv[1]
+          for src in sys.argv[2:]:
+              try:
+                  tests = json.load(open(os.path.join(src, "manifest.json")))
+              except OSError:
+                  continue
+              for test in tests:
+                  cls = test["testIdentifier"].split("/")[0]
+                  for a in test["attachments"]:
+                      name, f = a["suggestedHumanReadableName"], a["exportedFileName"]
+                      if not f.endswith(".png") or name.startswith("UI Snapshot"):
+                          continue
+                      os.makedirs(os.path.join(dst, cls), exist_ok=True)
+                      shutil.copy(os.path.join(src, f), os.path.join(dst, cls, name.split("_0_")[0] + ".png"))
           PY
           find "$RUNNER_TEMP/shots" -type f
       - uses: actions/upload-artifact@v4
@@ -198,6 +207,8 @@ jobs:
         if: always()
         with:
           name: ios-ui-xcresult
-          path: ${{ runner.temp }}/MooveUITests.xcresult
+          path: |
+            ${{ runner.temp }}/MooveUITests.xcresult
+            ${{ runner.temp }}/MooveUITests-dark.xcresult
           if-no-files-found: warn
           retention-days: 3
