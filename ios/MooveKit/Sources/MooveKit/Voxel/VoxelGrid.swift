@@ -94,17 +94,49 @@ public struct VoxelItemSpec: Sendable, Hashable {
     public var widthM: Double
     public var depthM: Double
     public var heightM: Double
+    // Added by the voxel-models agent (optional, defaulted so existing callers compile):
+    /// Stable per-item identity (scanObjectId or item id). Seeds the small details, so two
+    /// scanned tables differ while the same item always looks the same.
+    public var id: String?
+    /// Vision-agent material ("oak", "mesh", "laminate", ...): palette and style hints.
+    public var material: String?
+    /// Brand ("IKEA", "Herman Miller", ...): style hints.
+    public var brand: String?
+    /// 1 (broken) to 5 (like new): wear (fading, scuffs, stains, a missing knob or slat).
+    public var condition: Int?
+    /// RoomPlan (iOS 17) object attributes as type-prefixed raw values, e.g. "ChairType.stool",
+    /// "ChairLegType.star", "SofaType.lShaped", "TableShapeType.circularElliptic", "StorageType.shelf".
+    /// They win over name keywords, which win over size heuristics.
+    public var attributes: [String]
+    /// Measured from scan photos: overrides the keyword palette for the main material / accent.
+    public var primaryColor: VoxelColor?
+    public var secondaryColor: VoxelColor?
 
-    public init(category: String, name: String, widthM: Double, depthM: Double, heightM: Double) {
+    public init(category: String, name: String, widthM: Double, depthM: Double, heightM: Double,
+                id: String? = nil, material: String? = nil, brand: String? = nil, condition: Int? = nil,
+                attributes: [String] = [], primaryColor: VoxelColor? = nil, secondaryColor: VoxelColor? = nil) {
         self.category = category
         self.name = name
         self.widthM = widthM
         self.depthM = depthM
         self.heightM = heightM
+        self.id = id
+        self.material = material
+        self.brand = brand
+        self.condition = condition
+        self.attributes = attributes
+        self.primaryColor = primaryColor
+        self.secondaryColor = secondaryColor
     }
 
     public init(_ item: LayoutItem) {
-        self.init(category: item.category, name: item.name, widthM: item.widthM, depthM: item.depthM, heightM: item.heightM)
+        self.init(category: item.category, name: item.name, widthM: item.widthM, depthM: item.depthM, heightM: item.heightM,
+                  id: String(item.id))
+    }
+
+    public init(_ item: Item) {
+        self.init(category: item.category, name: item.name, widthM: item.widthM, depthM: item.depthM, heightM: item.heightM,
+                  id: item.scanObjectId ?? String(item.id), material: item.material, brand: item.brand, condition: item.condition)
     }
 }
 

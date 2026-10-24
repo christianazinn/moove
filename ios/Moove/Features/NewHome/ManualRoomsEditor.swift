@@ -14,10 +14,20 @@ struct ManualRoomsEditor: View {
     var body: some View {
         Form {
             Section {
+                PageHeader(
+                    eyebrow: "06 — New home",
+                    title: "Sketch your new place",
+                    lede: "Type each room as width × depth in meters. Moove arranges them around a hallway."
+                )
+                .listRowInsets(EdgeInsets(top: 8, leading: 4, bottom: 8, trailing: 4))
+                .listRowBackground(Color.clear)
+            }
+            Section {
                 TextField("Home name", text: $homeName)
-                    .font(.system(size: 17, weight: .semibold))
+                    .monoText(15, weight: .bold)
+                    .frame(minHeight: 44)
             } header: {
-                Text("Home").eyebrow()
+                Text("Home").eyebrow().textCase(nil)
             }
             .listRowBackground(Theme.surface)
             Section {
@@ -25,7 +35,7 @@ struct ManualRoomsEditor: View {
                     .frame(height: 200)
                     .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
             } footer: {
-                Text("\(plan.rooms.count) rooms · \(plan.totalAreaM2, format: .number.precision(.fractionLength(0))) m² · laid out around a hallway; only the sizes matter")
+                Text("\(plan.rooms.count) rooms · \(plan.totalAreaM2, format: .number.precision(.fractionLength(0))) m² · only the sizes matter")
                     .monoMeta()
             }
             .listRowBackground(Theme.surface)
@@ -41,10 +51,11 @@ struct ManualRoomsEditor: View {
                 }
                 .buttonStyle(.pill(.outline, compact: true))
             } header: {
-                Text("Rooms · meters").eyebrow()
+                Text("Rooms · meters").eyebrow().textCase(nil)
             }
             .listRowBackground(Theme.surface)
         }
+        .listRowSeparatorTint(Theme.line)
         .navigationTitle("Room sizes")
         .navigationBarTitleDisplayMode(.inline)
         .mooveScreen()
@@ -65,7 +76,7 @@ private struct RoomRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 TextField("Name", text: $room.name)
-                    .font(.mono(14.5, weight: .bold))
+                    .monoText(14.5, weight: .bold)
                 Picker("Type", selection: $room.kind) {
                     ForEach(RoomKind.allCases.filter { $0 != .hallway }, id: \.self) { Text($0.label).tag($0) }
                 }
@@ -77,24 +88,27 @@ private struct RoomRow: View {
             }
             HStack(spacing: 16) {
                 dimension("W", value: $room.widthM)
-                Text("×").font(.mono(13)).foregroundStyle(Theme.faint)
+                Text("×").monoText(13).foregroundStyle(Theme.muted).accessibilityHidden(true)
                 dimension("D", value: $room.depthM)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 6)
     }
 
     private func dimension(_ label: String, value: Binding<Double>) -> some View {
         HStack(spacing: 6) {
-            Text(label).font(.mono(11.5)).foregroundStyle(Theme.faint)
+            Text(label).monoText(11.5).foregroundStyle(Theme.muted)
             TextField(label, value: value, format: .number.precision(.fractionLength(1)))
-                .font(.mono(14))
+                .monoText(14)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.center)
-                .frame(width: 52, height: 30)
+                .accessibilityLabel(label == "W" ? "Width in meters" : "Depth in meters")
+                .frame(width: 56, height: 36)
                 .background(Theme.bg, in: RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line))
-            Stepper(label, value: value, in: 0.5...30, step: 0.5).labelsHidden()
+            Stepper(label, value: value, in: 0.5...30, step: 0.5)
+                .labelsHidden()
+                .accessibilityLabel(label == "W" ? "Width" : "Depth")
         }
     }
 }
