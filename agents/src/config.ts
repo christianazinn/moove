@@ -43,6 +43,8 @@ export const config = {
     // Per worker run, covering fal + the Claude image pick + image searches (~$0.07 per item).
     maxUsd: Number(env('SAM3D_MAX_USD', '2.00')),
     concurrency: Number(env('SAM3D_CONCURRENCY', '2')),
+    // After fal says it can't run (no balance, rate limit, outage), wait this long before retrying.
+    retryLaterSec: Number(env('SAM3D_RETRY_LATER_SEC', '600')),
     // SAM 3D tries on one item before giving up (next-best image on each retry).
     maxAttempts: Math.max(1, Number(env('SAM3D_MAX_ATTEMPTS', '2'))),
     // Estimated cost of one Claude image pick (MODEL_VISION, up to ~8 images), for the spend cap.
