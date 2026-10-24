@@ -85,7 +85,7 @@ struct ListingDetailView: View {
                     EmptyView()
                 }
                 VStack(alignment: .leading, spacing: 10) {
-                    if let url = listing.url.flatMap(URL.init(string:)) {
+                    if let url = listing.viewURL(uploadBase: store.uploadBaseURL) {
                         Button { openURL(url) } label: {
                             Label(listing.simulated ? "View simulated listing page" : "View on eBay", systemImage: "safari")
                                 .frame(maxWidth: .infinity)
