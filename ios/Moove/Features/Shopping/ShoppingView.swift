@@ -1,29 +1,27 @@
 import SwiftUI
 import MooveKit
 
-/// What the new home still needs (#15). The shopping agent writes the list, the user edits it
-/// (add, swipe to remove), the buy agent finds deals, and the chosen deal checks out through Visa,
-/// after the user approves anything over their threshold.
+/// What the new home still needs (#15), as a storefront: a hero banner with the best saving,
+/// an asymmetric grid of item cards, and shelves of deals (best, budget, local pickup, and the ones
+/// the fraud screen blocked). The shopping agent writes the list, the user edits it (add, long-press
+/// to remove), the buy agent finds deals, and the chosen deal checks out through Visa after the
+/// user approves anything over their threshold. Layout logic: MooveKit `SyncSnapshot.storefront()`.
 struct ShoppingView: View {
     @Environment(MooveStore.self) private var store
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showAdd = false
 
     var body: some View {
         let items = store.shoppingItems
         let approvals = store.snapshot.pendingPurchaseApprovals
         let state = store.commerceState(hasRows: !items.isEmpty)
-        // A plain List (not a ScrollView) so rows keep swipe-to-delete; the theme comes from clear
-        // row backgrounds, gutter insets and rule-colored separators.
-        List {
-            Section {
-                PageHeader(
-                    eyebrow: "07 — Shopping",
-                    title: "What the new place needs.",
-                    lede: "The shopping agent writes the list, you edit it, and the buy agent finds deals and checks out with Visa."
-                )
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-                .shoppingChromeRow()
+        let front = store.snapshot.storefront()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                PageHeader(eyebrow: "07 — Shopping", title: "What the new place needs.")
+                    .padding(.horizontal, Theme.gutter)
+                    .padding(.top, 16)
+                    .padding(.bottom, 20)
                 if state != .content {
                     CommercePlaceholder(
                         state: state,
@@ -33,46 +31,16 @@ struct ShoppingView: View {
                         Button("Add item", systemImage: "plus") { showAdd = true }
                             .buttonStyle(.pill(.primary, compact: true))
                     }
-                    .padding(.top, 24)
-                    .shoppingChromeRow()
+                    .padding(.horizontal, Theme.gutter)
+                    .padding(.top, 4)
+                } else {
+                    storefront(front, items: items, approvals: approvals)
                 }
             }
-            .listSectionSeparator(.hidden)
-            if !approvals.isEmpty {
-                Section {
-                    ListHeader(title: "Needs you", count: "\(approvals.count)")
-                        .padding(.top, 32)
-                        .shoppingChromeRow()
-                    ForEach(approvals) { approval in
-                        PurchaseApprovalCard(approval: approval)
-                            .shoppingLedgerRow()
-                    }
-                }
-                .listSectionSeparator(.hidden)
-            }
-            if !items.isEmpty {
-                Section {
-                    ListHeader(title: "Still to buy", count: "\(items.filter { $0.status != .bought }.count)")
-                        .padding(.top, 32)
-                        .shoppingChromeRow()
-                    ForEach(items) { item in
-                        NavigationLink(value: ShoppingRoute(itemId: item.id)) { ShoppingItemRow(item: item) }
-                            .accessibilityIdentifier("shopping.item.\(item.id)")
-                            .shoppingLedgerRow()
-                    }
-                    .onDelete { offsets in remove(offsets.map { items[$0] }) }
-                    Text("Swipe to remove anything you don't need. Agents only buy what's on this list.")
-                        .monoMeta()
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 12)
-                        .padding(.bottom, 32)
-                        .shoppingChromeRow()
-                }
-                .listSectionSeparator(.hidden)
-            }
+            .frame(maxWidth: 880)
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 40)
         }
-        .listStyle(.plain)
-        .environment(\.defaultMinListRowHeight, 0)
         .navigationTitle("Shopping")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: ShoppingRoute.self) { ShoppingItemDetailView(itemId: $0.itemId) }
@@ -84,31 +52,61 @@ struct ShoppingView: View {
         }
         .sheet(isPresented: $showAdd) { AddShoppingItemSheet() }
         .mooveScreen()
-        .animation(.default, value: items)
-        .animation(.default, value: approvals)
+        .animation(reduceMotion ? nil : .default, value: items)
+        .animation(reduceMotion ? nil : .default, value: approvals)
+    }
+
+    @ViewBuilder
+    private func storefront(_ front: ShoppingStorefront, items: [ShoppingItem], approvals: [Approval]) -> some View {
+        let heroItem = front.hero.pick.flatMap { p in items.first { $0.id == p.itemId } }
+            ?? items.first { $0.status != .bought }
+        Group {
+            if let pick = front.hero.pick {
+                NavigationLink(value: ShoppingRoute(itemId: pick.itemId)) {
+                    StorefrontHeroBanner(hero: front.hero, item: heroItem)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("shopping.hero")
+            } else {
+                StorefrontHeroBanner(hero: front.hero, item: heroItem)
+                    .accessibilityIdentifier("shopping.hero")
+            }
+        }
+        .padding(.horizontal, Theme.gutter)
+
+        if !approvals.isEmpty {
+            ListHeader(title: "Needs you", count: "\(approvals.count)")
+                .padding(.top, 32)
+                .padding(.horizontal, Theme.gutter)
+            ForEach(approvals) { approval in
+                PurchaseApprovalCard(approval: approval)
+                    .ruled()
+                    .padding(.horizontal, Theme.gutter)
+            }
+        }
+
+        ListHeader(title: "Still to buy", count: "\(front.hero.stillNeeded)")
+            .padding(.top, 32)
+            .padding(.bottom, 14)
+            .padding(.horizontal, Theme.gutter)
+        StorefrontBento(rows: front.rows) { remove([$0]) }
+            .padding(.horizontal, Theme.gutter)
+
+        ForEach(front.shelves) { shelf in
+            StorefrontShelfView(shelf: shelf).padding(.top, 36)
+        }
+
+        Text("Long-press a card to remove it. Agents only buy what's on this list.")
+            .monoMeta()
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 28)
+            .padding(.horizontal, Theme.gutter)
     }
 
     private func remove(_ doomed: [ShoppingItem]) {
         Task {
             for item in doomed { await store.removeShoppingItem(item) }
         }
-    }
-}
-
-private extension View {
-    /// A non-interactive row (heading, note): no separator, page background, gutter insets.
-    func shoppingChromeRow() -> some View {
-        listRowInsets(EdgeInsets(top: 0, leading: Theme.gutter, bottom: 0, trailing: Theme.gutter))
-            .listRowSeparator(.hidden)
-            .listRowBackground(Theme.bg)
-    }
-
-    /// An item row: page background and a full-width rule-colored separator.
-    func shoppingLedgerRow() -> some View {
-        listRowInsets(EdgeInsets(top: 0, leading: Theme.gutter, bottom: 0, trailing: Theme.gutter))
-            .listRowBackground(Theme.bg)
-            .listRowSeparatorTint(Theme.line)
-            .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
     }
 }
 
@@ -134,55 +132,6 @@ struct ShoppingThumbnail: View {
                         .accessibilityHidden(true)
                 }
             }
-    }
-}
-
-struct ShoppingItemRow: View {
-    @Environment(MooveStore.self) private var store
-    let item: ShoppingItem
-
-    var body: some View {
-        let deals = store.snapshot.deals(for: item.id)
-        let chosen = store.snapshot.chosenDeal(for: item)
-        let payment = chosen.flatMap { store.snapshot.visaPayment(for: $0.id) }
-        HStack(alignment: .top, spacing: 16) {
-            ShoppingThumbnail(spec: ShoppingThumbnails.spec(for: item), bought: item.status == .bought)
-            VStack(alignment: .leading, spacing: 5) {
-                AdaptiveLine {
-                    Text(item.name).blockTitle().lineLimit(2)
-                    Spacer(minLength: 8)
-                    if let chosen { Text(chosen.formattedPrice).rowValue().amountText() }
-                }
-                ShoppingStatusChip(status: item.status)
-                if !item.reason.isEmpty {
-                    Text(item.reason).sansText(14).foregroundStyle(Theme.muted).lineLimit(3)
-                }
-                HStack(spacing: 8) {
-                    if let chosen {
-                        Text(chosen.source).monoMeta()
-                    } else if !deals.isEmpty {
-                        Text("\(deals.count) deals · pick one").monoMeta()
-                    }
-                    Spacer(minLength: 0)
-                    if let payment { VisaRailBadge(badge: VisaPaymentBadge(payment)) }
-                }
-                if payment?.status == .failed {
-                    CommerceProblem(text: "Checkout failed. Nothing was charged. Pick another deal.")
-                }
-            }
-        }
-        .padding(.vertical, 16)
-        .frame(minHeight: 44)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spoken(chosen: chosen, payment: payment, dealCount: deals.count))
-    }
-
-    private func spoken(chosen: Deal?, payment: Payment?, dealCount: Int) -> String {
-        var parts = [item.name, item.status.label]
-        if let chosen { parts.append("\(chosen.formattedPrice) from \(chosen.source)") } else if dealCount > 0 { parts.append("\(dealCount) deals, pick one") }
-        if let payment { parts.append(VisaPaymentBadge(payment).accessibilitySummary(amount: payment.formattedAmount)) }
-        if payment?.status == .failed { parts.append("checkout failed, nothing was charged") }
-        return parts.joined(separator: ", ")
     }
 }
 
@@ -218,12 +167,13 @@ extension ShoppingStatus {
 /// Status as a colored dot and mono label; the dot pulses while the agent searches.
 struct ShoppingStatusChip: View {
     let status: ShoppingStatus
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "circle.fill")
                 .font(.system(size: 7))
-                .symbolEffect(.pulse, isActive: status == .searching)
+                .symbolEffect(.pulse, isActive: status == .searching && !reduceMotion)
                 .accessibilityHidden(true)
             Text(status.label).monoText(12.5)
         }

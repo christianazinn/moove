@@ -5,6 +5,7 @@ import MooveKit
 /// found (chosen one marked), each with its Visa payment rows.
 struct ShoppingItemDetailView: View {
     @Environment(MooveStore.self) private var store
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let itemId: UInt64
 
     var body: some View {
@@ -24,13 +25,18 @@ struct ShoppingItemDetailView: View {
         return ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Text("07 — Shopping").eyebrow().padding(.bottom, 12)
-                HStack(alignment: .center, spacing: 16) {
-                    ShoppingThumbnail(spec: ShoppingThumbnails.spec(for: item), bought: item.status == .bought, size: 72)
-                    Text(item.name)
-                        .pageTitle()
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityAddTraits(.isHeader)
-                }
+                StorefrontImage(spec: ShoppingThumbnails.spec(for: item), tint: StorefrontTint.color(for: item.id),
+                                height: dynamicTypeSize.isAccessibilitySize ? 200 : 240, bought: item.status == .bought)
+                    .overlay(alignment: .bottomLeading) {
+                        if let price = (snapshot.chosenDeal(for: item) ?? snapshot.topPick(for: item))?.formattedPrice {
+                            PriceChip(text: price, large: true).padding(12)
+                        }
+                    }
+                    .padding(.bottom, 18)
+                Text(item.name)
+                    .pageTitle()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
                 ShoppingStatusChip(status: item.status).padding(.top, 10)
                 if !item.reason.isEmpty {
                     Text(item.reason)
@@ -48,9 +54,13 @@ struct ShoppingItemDetailView: View {
 
                 if !deals.isEmpty {
                     ListHeader(title: "Deals", count: "\(deals.count)").padding(.top, 40)
-                    ForEach(deals) { deal in
-                        DealRow(item: item, deal: deal, isChosen: deal.id == item.chosenDealId)
+                    let ribbons = snapshot.dealRibbons(for: item)
+                    VStack(spacing: 12) {
+                        ForEach(deals) { deal in
+                            DealRow(item: item, deal: deal, isChosen: deal.id == item.chosenDealId, ribbon: ribbons[deal.id])
+                        }
                     }
+                    .padding(.top, 14)
                     Group {
                         if deals.contains(where: \.isSample) {
                             Text("SAMPLE deals are hand-made demo data, not live listings.")
@@ -163,6 +173,7 @@ struct DealRow: View {
     let item: ShoppingItem
     let deal: Deal
     let isChosen: Bool
+    var ribbon: StorefrontRibbon? = nil
     @State private var working = false
     @State private var failed = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -172,88 +183,138 @@ struct DealRow: View {
         let large = dynamicTypeSize.isAccessibilitySize
         let locked = store.snapshot.isCheckoutLocked(item)
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 14) {
-                ShoppingThumbnail(spec: ShoppingThumbnails.spec(for: deal, item: item), size: 56)
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        if isChosen {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 13))
-                                .foregroundStyle(Theme.accentStrong)
-                        }
-                        Text(deal.title).blockTitle().lineLimit(large ? 8 : 3).fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 8)
-                        if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
-                    }
-                    AdaptiveLine {
-                        Text(deal.formattedPrice).monoText(16, weight: .bold).foregroundStyle(Theme.text).amountText()
-                        Text(deal.source).monoMeta()
-                        Spacer(minLength: 8)
-                        Label(deal.supportsCardCheckout ? "Visa checkout" : "Message seller",
-                              systemImage: deal.supportsCardCheckout ? "creditcard" : "envelope")
-                            .monoMeta()
-                            .lineLimit(large ? 2 : 1)
-                    }
-                    if !deal.sellerDetails.isEmpty {
-                        Text(deal.sellerDetails).sansText(14).foregroundStyle(Theme.muted).lineLimit(large ? 8 : 3)
-                    }
-                    if let level = deal.fraudLevel, let score = deal.fraudScore {
-                        FraudChip(level: level, score: score)
-                        if level != .low {
-                            ForEach(deal.fraudReasons, id: \.self) { reason in
-                                Text("· \(reason)").monoMeta().fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    } else {
-                        Text("Not fraud-screened yet").monoMeta()
-                    }
-                }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel((isChosen ? "Chosen deal. " : "") + deal.accessibilitySummary
-                                + (deal.fraudReasons.isEmpty || deal.fraudLevel == .low ? "" : ". " + deal.fraudReasons.joined(separator: ". ")))
-            .accessibilityIdentifier("deal.\(deal.id)")
+            summary(large: large)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spokenSummary)
+                .accessibilityIdentifier("deal.\(deal.id)")
             ForEach(payments) { VisaPaymentRow(payment: $0) }
             if failed {
                 CommerceProblem(text: "Couldn't send your choice. Check the connection and try again.")
             }
-            // At accessibility sizes "View" and the Choose button / Blocked tag stack instead of
-            // squeezing "View" to "Vi…".
-            let actions = large ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
-            actions {
-                if let url = deal.link {
-                    Link(destination: url) {
-                        Label("View", systemImage: "arrow.up.right.square")
-                    }
-                    .buttonStyle(.pill(.text, compact: true))
-                    .accessibilityLabel("View the listing at \(deal.source)")
-                }
-                Spacer()
+            actions(large: large, locked: locked)
+        }
+        .padding(12)
+        .background(cardFill, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
+            .strokeBorder(cardBorder, lineWidth: isChosen || !deal.isChoosable ? 1.5 : 1))
+    }
+
+    private var cardFill: Color { deal.isChoosable ? Theme.surface.opacity(0.55) : Theme.dangerSoft.opacity(0.5) }
+
+    private var cardBorder: Color {
+        if isChosen { return Theme.accentStrong }
+        return deal.isChoosable ? Theme.line : Theme.danger
+    }
+
+    private var spokenSummary: String {
+        var text = isChosen ? "Chosen deal. " : ""
+        if let ribbon { text += "\(ribbon.label). " }
+        text += deal.accessibilitySummary
+        if !deal.fraudReasons.isEmpty, deal.fraudLevel != .low {
+            text += ". " + deal.fraudReasons.joined(separator: ". ")
+        }
+        return text
+    }
+
+    /// The product-card top: a big picture beside (or, at accessibility sizes, over) the details.
+    private func summary(large: Bool) -> some View {
+        let layout = large ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+                           : AnyLayout(HStackLayout(alignment: .top, spacing: 14))
+        return layout {
+            dealImage(large: large)
+            info(large: large)
+        }
+    }
+
+    private func dealImage(large: Bool) -> some View {
+        let tint: Color = deal.isChoosable ? StorefrontTint.color(for: deal.id) : Theme.dangerSoft
+        return StorefrontImage(spec: ShoppingThumbnails.spec(for: deal, item: item), tint: tint, height: large ? 160 : 108)
+            .frame(width: large ? nil : 108)
+            .overlay(alignment: .topLeading) {
+                if let ribbon { RibbonTag(ribbon: ribbon).scaleEffect(0.85, anchor: .topLeading).padding(4) }
+            }
+    }
+
+    private func info(large: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if isChosen {
-                    MonoTag(text: "Chosen", tone: Theme.accentStrong).fixedSize()
-                } else if item.status != .bought {
-                    if !deal.isChoosable {
-                        // The worker refuses fraud-blocked deals, so the app doesn't offer them.
-                        MonoTag(text: "Blocked: likely fraud", tone: Theme.danger)
-                            .fixedSize()
-                            .accessibilityLabel("Blocked, likely fraud. The agent won't buy this deal.")
-                            .accessibilityIdentifier("deal.blocked.\(deal.id)")
-                    } else {
-                        // Disabled while a hold or a purchase approval is pending: that one finishes (or is denied) first.
-                        Button { choose() } label: {
-                            if working { ProgressView() } else { Text("Choose") }
-                        }
-                        .buttonStyle(.pill(.outline, compact: true))
-                        .disabled(working || locked)
-                        .accessibilityLabel("Choose this deal, \(deal.formattedPrice) from \(deal.source)")
-                        .accessibilityHint(locked ? "Locked while a hold or an approval is pending for this item" : "")
-                        .accessibilityIdentifier("deal.choose.\(deal.id)")
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.accentStrong)
+                }
+                Text(deal.title).blockTitle().lineLimit(large ? 8 : 3).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
+            }
+            AdaptiveLine {
+                priceText()
+                Text(deal.source).monoMeta()
+                Spacer(minLength: 8)
+                Label(deal.supportsCardCheckout ? "Visa checkout" : "Message seller",
+                      systemImage: deal.supportsCardCheckout ? "creditcard" : "envelope")
+                    .monoMeta()
+                    .lineLimit(large ? 2 : 1)
+            }
+            if !deal.sellerDetails.isEmpty {
+                Text(deal.sellerDetails).sansText(14).foregroundStyle(Theme.muted).lineLimit(large ? 8 : 3)
+            }
+            if let level = deal.fraudLevel, let score = deal.fraudScore {
+                FraudChip(level: level, score: score)
+                if level != .low {
+                    ForEach(deal.fraudReasons, id: \.self) { reason in
+                        Text("· \(reason)").monoMeta().fixedSize(horizontal: false, vertical: true)
                     }
+                }
+            } else {
+                Text("Not fraud-screened yet").monoMeta()
+            }
+        }
+    }
+
+    private func actions(large: Bool, locked: Bool) -> some View {
+        // At accessibility sizes "View" and the Choose button / Blocked tag stack instead of
+        // squeezing "View" to "Vi…".
+        let layout = large ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+        return layout {
+            if let url = deal.link {
+                Link(destination: url) {
+                    Label("View", systemImage: "arrow.up.right.square")
+                }
+                .buttonStyle(.pill(.text, compact: true))
+                .accessibilityLabel("View the listing at \(deal.source)")
+            }
+            Spacer()
+            if isChosen {
+                MonoTag(text: "Chosen", tone: Theme.accentStrong).fixedSize()
+            } else if item.status != .bought {
+                if !deal.isChoosable {
+                    // The worker refuses fraud-blocked deals, so the app doesn't offer them.
+                    MonoTag(text: "Blocked: likely fraud", tone: Theme.danger)
+                        .fixedSize()
+                        .accessibilityLabel("Blocked, likely fraud. The agent won't buy this deal.")
+                        .accessibilityIdentifier("deal.blocked.\(deal.id)")
+                } else {
+                    // Disabled while a hold or a purchase approval is pending: that one finishes (or is denied) first.
+                    Button { choose() } label: {
+                        if working { ProgressView() } else { Text("Choose") }
+                    }
+                    .buttonStyle(.pill(.primary, compact: true))
+                    .disabled(working || locked)
+                    .accessibilityLabel("Choose this deal, \(deal.formattedPrice) from \(deal.source)")
+                    .accessibilityHint(locked ? "Locked while a hold or an approval is pending for this item" : "")
+                    .accessibilityIdentifier("deal.choose.\(deal.id)")
                 }
             }
         }
-        .padding(.vertical, 16)
-        .ruled()
+    }
+
+    private func priceText() -> some View {
+        Text(deal.formattedPrice)
+            .monoText(20, weight: .bold, maxScale: 1.6)
+            .foregroundStyle(deal.isChoosable ? Theme.text : Theme.muted)
+            .strikethrough(!deal.isChoosable)
+            .amountText()
     }
 
     private func choose() {
