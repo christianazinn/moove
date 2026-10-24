@@ -21,7 +21,7 @@ import { config } from '../config.js';
 import type { EventKind } from '../events.js';
 import { loadPhoto, type ImageInput } from '../integrations/photos.js';
 import { cleanUntrusted } from '../untrusted.js';
-import { OVER_CAP_NOTE, takePaidCall } from './budget.js';
+import { OVER_CAP_NOTE, OverCapError, takePaidCall } from './budget.js';
 import { findFloorPlanInPhotos, type ListingPhoto, type PhotoPlanScan } from './floorplanFinder.js';
 
 type Log = (kind: EventKind, message: string, data?: unknown) => void;
@@ -297,16 +297,17 @@ async function photoFloorPlans(
   }
 
   log('plan', `Looking for a floor plan among ${photos.length} listing photos`, { photos: photos.length });
-  if (!takePaidCall()) {
-    log('error', OVER_CAP_NOTE);
-    return { images: [], note: `${NO_PLAN_NOTE} ${OVER_CAP_NOTE}` };
-  }
   try {
     const r = await findFloorPlanInPhotos(photos, { log, loadImage: load, classify: deps.classify });
     const n = r.images.length;
     log('result', n ? `Found ${n} floor plan${n === 1 ? '' : 's'} in the listing photos` : 'No floor plan in the listing photos; estimating from beds/baths/sqft', summary(r.scan));
     return { images: r.images, note: n ? found(n) : none(r.scan.checked), scan: r.scan };
   } catch (err) {
+    // The budget slot is taken inside findFloorPlanInPhotos (a recorded LLM_REPLAY answer takes none).
+    if (err instanceof OverCapError) {
+      log('error', OVER_CAP_NOTE);
+      return { images: [], note: `${NO_PLAN_NOTE} ${OVER_CAP_NOTE}` };
+    }
     log('error', `Floor-plan search in the listing photos failed: ${(err instanceof Error ? err.message : String(err)).slice(0, 200)}`);
     return { images: [], note: `${NO_PLAN_NOTE} Checking the listing photos for one failed.` };
   }

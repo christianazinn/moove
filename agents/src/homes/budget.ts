@@ -4,6 +4,8 @@
 // HOMES_MAX_PAID_CALLS per HOMES_SPEND_WINDOW_H. Paid steps log a tool_call with `paid: true`, and
 // on start the worker re-counts those from agent_event (like sam3d's priorSpendUsd), so a restart
 // doesn't reset the cap. Over the cap the step is skipped and the app estimates the plan instead.
+// Claude steps answered from an LLM_REPLAY recording cost nothing: they take no slot and log
+// `paid: false`, so rehearsals don't use up the demo's budget (hasRecordedAnswer in anthropic.ts).
 import { config } from '../config.js';
 
 let stamps: number[] = [];
@@ -19,6 +21,13 @@ export function takePaidCall(nowMs = Date.now(), max = config.homes.maxPaidCalls
 }
 
 export const OVER_CAP_NOTE = 'Skipped: the worker has used its listing-import budget for now (HOMES_MAX_PAID_CALLS).';
+
+/** Thrown by a paid step that was skipped over the cap (the caller turns it into OVER_CAP_NOTE). */
+export class OverCapError extends Error {
+  constructor() {
+    super(OVER_CAP_NOTE);
+  }
+}
 
 /** Re-counts paid homes steps already logged (agent_event data `{requestId, detail: {paid: true}}`). */
 export function seedHomesBudget(

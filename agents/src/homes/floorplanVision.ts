@@ -10,7 +10,7 @@
 import { z } from 'zod';
 import { config } from '../config.js';
 import type { EventKind } from '../events.js';
-import { structuredCall, type ImageInput } from '../integrations/anthropic.js';
+import { hasRecordedAnswer, structuredCall, type ImageInput } from '../integrations/anthropic.js';
 import { OVER_CAP_NOTE, takePaidCall } from './budget.js';
 import { cleanUntrusted, untrustedBlock, UNTRUSTED_RULE } from '../untrusted.js';
 
@@ -513,19 +513,31 @@ export type PlanContext = { address: string | null; beds: number | null; baths: 
 /** 1-4 floor-plan images -> a validated FloorPlan, or null with a note. Never throws. */
 export async function readFloorPlan(
   images: ImageInput[],
-  opts: { context: PlanContext; log: Log; call?: (args: Parameters<typeof structuredCall>[0]) => Promise<PlanReading> }
+  opts: {
+    context: PlanContext;
+    log: Log;
+    call?: (args: Parameters<typeof structuredCall>[0]) => Promise<PlanReading>;
+    isRecorded?: (args: Parameters<typeof structuredCall>[0]) => boolean;
+  }
 ): Promise<{ floorPlan: FloorPlan | null; notes: string[] }> {
   const imgs = images.slice(0, 4);
   const { log } = opts;
-  if (!takePaidCall()) {
+  const args = { model: config.models.vision, system: SYSTEM, text: prompt(opts.context, imgs.length), images: imgs, schema: PlanReading, effort: 'medium' as const };
+  // An LLM_REPLAY recording costs nothing, so it takes no budget slot (and isn't re-counted on restart).
+  const recorded = (opts.isRecorded ?? hasRecordedAnswer)(args);
+  if (!recorded && !takePaidCall()) {
     log('error', OVER_CAP_NOTE);
     return { floorPlan: null, notes: [`${OVER_CAP_NOTE} The app estimates the plan instead.`] };
   }
-  log('tool_call', `Reading ${imgs.length} floor-plan image(s) with Claude vision (${config.models.vision})`, { images: imgs.length, paid: true });
+  log(
+    'tool_call',
+    `${recorded ? '[REPLAYED] ' : ''}Reading ${imgs.length} floor-plan image(s) with Claude vision (${config.models.vision})`,
+    { images: imgs.length, paid: !recorded, ...(recorded ? { replayed: true } : {}) }
+  );
   let reading: PlanReading;
   try {
     const call = opts.call ?? ((a: Parameters<typeof structuredCall>[0]) => structuredCall(a) as Promise<PlanReading>);
-    reading = await call({ model: config.models.vision, system: SYSTEM, text: prompt(opts.context, imgs.length), images: imgs, schema: PlanReading, effort: 'medium' });
+    reading = await call(args);
   } catch (err) {
     log('error', `Floor-plan reading failed: ${(err instanceof Error ? err.message : String(err)).slice(0, 200)}`);
     return { floorPlan: null, notes: ["Couldn't read the floor plan (Claude vision unavailable), so the app estimates one."] };
