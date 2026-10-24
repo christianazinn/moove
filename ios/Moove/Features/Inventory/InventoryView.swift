@@ -13,6 +13,8 @@ struct InventoryView: View {
     /// Fix-it rename from a row's long-press menu.
     @State private var renaming: Item?
     @State private var newName = ""
+    /// Row whose "Delete item" is waiting on the confirm.
+    @State private var deleting: Item?
 
     var body: some View {
         let rooms = store.snapshot.roomsNewestFirst(store.visibleRooms)
@@ -51,6 +53,15 @@ struct InventoryView: View {
             TextField("Name", text: $newName)
             Button("Save") { Task { await store.renameItem(item, to: newName) } }
             Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog("Delete \(deleting?.name ?? "item")?",
+                            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                            titleVisibility: .visible, presenting: deleting) { item in
+            Button("Delete", role: .destructive) { Task { await store.deleteItem(item) } }
+                .accessibilityIdentifier("inventory.confirmDelete")
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("It's removed from this room for everyone sharing it. This can't be undone.")
         }
         #if DEBUG
         // Screenshot/UI-test hook: MOOVE_OPEN_SHEET=share|join.
@@ -130,10 +141,16 @@ struct InventoryView: View {
                 ItemThumbnail(item: item, size: 56)
             }
             .accessibilityElement(children: .combine)
-            // Fix-it (long press): rename, what is it, turn, remove a misread scan item.
-            .contextMenu { ItemFixMenu(item: item) { startRename(item) } }
+            // Fix-it (long press): rename, what is it, turn, remove a misread scan item. Delete asks first.
+            .contextMenu {
+                ItemFixMenu(item: item) { startRename(item) }
+                Divider()
+                Button("Delete item", systemImage: "trash", role: .destructive) { deleting = item }
+                    .accessibilityIdentifier("inventory.delete.\(item.id)")
+            }
             .accessibilityAction(named: "Rename") { startRename(item) }
             .accessibilityAction(named: "Turn around") { Task { await store.turn(item) } }
+            .accessibilityAction(named: "Delete") { deleting = item }
             .accessibilityIdentifier("inventory.item.\(item.id)")
         }
     }

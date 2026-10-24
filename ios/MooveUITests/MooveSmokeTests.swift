@@ -179,6 +179,28 @@ final class MooveSmokeTests: XCTestCase {
         snap("05-join-error")
     }
 
+    func testDeleteItemFromInventory() {
+        launch()
+        open(tab: "Items", segment: "Inventory")
+        let rows = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'inventory.item.'"))
+        let first = rows.firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: slow), "an item row")
+        let id = first.identifier.replacingOccurrences(of: "inventory.item.", with: "")
+        let name = first.label
+        first.press(forDuration: 1.2)
+        let delete = app.buttons["inventory.delete.\(id)"]
+        XCTAssertTrue(delete.waitForExistence(timeout: slow), "Delete item in the long-press menu")
+        snap("06-inventory-menu")
+        delete.tap()
+        let confirm = app.buttons["inventory.confirmDelete"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: slow), "asks before deleting")
+        snap("06-inventory-confirm")
+        confirm.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["inventory.item.\(id)"].waitForNonExistence(timeout: slow),
+                      "row gone after delete: \(name)")
+        snap("06-inventory-deleted")
+    }
+
     func testSettingsShowsDataSourceAndSignsOut() {
         launch()
         let settings = app.navigationBars.buttons["Settings"].firstMatch
