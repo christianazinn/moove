@@ -43,7 +43,23 @@ export function describeItem(it: ItemDesc): string {
 
 // Listing words that almost always mean "not the item itself". \b keeps "with 4 inserts" (a shelf
 // sold with its inserts) while dropping "Kallax insert".
-const JUNK = /\b(insert|parts|for parts|parts only|broken|wanted|wtb|iso|bundle|lot of|replacement)\b/gi;
+const JUNK = new RegExp(
+  '\\b(' +
+    [
+      'insert', 'parts', 'for parts', 'parts only', 'broken', 'wanted', 'wtb', 'iso', 'bundle', 'lot of', 'replacement',
+      // damaged units (Rio's caches, Oct 24: "DAMAGED", "not working")
+      'damaged', 'not working', 'for repair',
+      // one piece of the item, not the item ("Aeron Chair Seat Mesh Only"); "local pickup only" is fine
+      '(?:seat|back|backrest|arms?|armrests?|base|cylinder|casters?|wheels?|shade|cushions?|covers?|legs?|remote|mesh|top|glass|doors?|drawers?|knobs?|handles?)(?: mesh)? only',
+      // hardware sold for an item ("Assembly Bolts (Set Of 4 Screws)", "Arm Filler")
+      'bolts?', 'screws?', 'filler',
+      // toys, collectibles and media that share the item's word (the "chair" cache: dollhouse
+      // chairs, a Barbie patio set, a CD, a movie promo cup topper)
+      'dollhouse', 'miniatures?', 'barbie', 'toys?', 'figurines?', 'action figure', 'cds?', 'dvds?', 'vinyl', 'posters?', 'promos?',
+    ].join('|') +
+    ')\\b',
+  'gi'
+);
 
 export type Dropped = { comp: Comp; why: string };
 
@@ -53,7 +69,8 @@ export function preFilter(comps: Comp[], it: ItemDesc): { kept: Comp[]; dropped:
   const kept: Comp[] = [];
   const dropped: Dropped[] = [];
   for (const c of comps) {
-    const hits = [...c.title.matchAll(JUNK)].map(m => m[1].toLowerCase()).filter(w => !new RegExp(`\\b${w}\\b`).test(own));
+    // singular or plural counts as the item's own word ("CD rack" keeps "holds 200 CDs")
+    const hits = [...c.title.matchAll(JUNK)].map(m => m[1].toLowerCase()).filter(w => !new RegExp(`\\b${w.replace(/s$/, '')}s?\\b`).test(own));
     if (hits.length) dropped.push({ comp: c, why: `title says "${hits[0]}"` });
     else kept.push(c);
   }
