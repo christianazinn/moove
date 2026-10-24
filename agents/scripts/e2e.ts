@@ -16,7 +16,8 @@
 //     Opt in with E2E_LLM=auto (a miss calls the API once and records it) or E2E_LLM=record / --live.
 //   - x402: X402_SIMULATE=1 for the worker, so CDP keys never sign Base Sepolia payments. Opt in with
 //     E2E_REAL_X402=1 (the commerce stages then fail, since they assert simulated rows).
-//   - Visa is always the simulated provider; Apify and fal are never called (APIFY_TOKEN/FAL_KEY blanked).
+//   - Visa is always the simulated provider; Apify, fal, Pangram, eBay and Auth0 CIBA are never called
+//     (their keys are blanked, so listings use the simulated eBay and approvals stay in-app).
 // The worker stage and the table header say which modes ran.
 //
 // Usage (from agents/): npm run e2e [-- --replay | --live] [-- --keep]   (--keep leaves the worker running)
@@ -151,6 +152,10 @@ function startWorker(): { child: ChildProcess; log: string; ready: Promise<void>
     BUY_FRAUD_BLOCK: String(FRAUD_BLOCK),
     BUY_AUTO_CHOOSE: "0",
     PANGRAM_URL: "", // no AI-text detector call: fraud scores stay rule-based and deterministic
+    PANGRAM_TOKEN: "",
+    EBAY_CLIENT_SECRET: "", // listings post to the labeled simulated eBay, never the sandbox
+    EBAY_REFRESH_TOKEN: "",
+    AUTH0_CIBA_CLIENT_SECRET: "", // no Guardian pushes: approvals are decided in-app by the test
     X402_SEED_BUDGETS: "0",
     VISA_SEED_BUDGETS: "0",
     FAL_KEY: "",

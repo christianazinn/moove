@@ -20,10 +20,18 @@ import { sweepAgent } from './agents/sweep.js';
 import { sam3dAgent } from './agents/sam3d.js';
 import type { Agent } from './agents/types.js';
 import { checkSpendCaps } from './integrations/caps.js';
+import { replayGuardError, replayMode } from './integrations/anthropic.js';
+import { config } from './config.js';
 
 // Register agents here as they land (vision, pricing, sort, listing, buy, fraud, ...).
 const agents: Agent[] = [visionAgent, sweepAgent, pricingAgent, sortAgent, listingAgent, approvalAgent, shoppingListAgent, buyAgent, fraudAgent, sam3dAgent];
 
+// #17: never replay or record Claude answers against the live DB.
+const replayRefusal = replayGuardError(replayMode(), config.spacetimeUri);
+if (replayRefusal) {
+  console.error(`[agents] REFUSING TO START: ${replayRefusal}`);
+  process.exit(1);
+}
 // Bad spend caps (non-numeric, negative) warn loudly here at boot and fall back to the defaults.
 checkSpendCaps();
 startUploadServer();
