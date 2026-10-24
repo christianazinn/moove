@@ -64,15 +64,21 @@ public struct PropPlacer: Sendable {
         return .furniture
     }
 
-    public func place(_ placements: [Placement], items: [LayoutItem], extraRoom: String? = nil) -> [Placement] {
-        place(placements, specs: Dictionary(items.map { ($0.id, VoxelItemSpec($0)) }, uniquingKeysWith: { a, _ in a }), extraRoom: extraRoom)
+    public func place(_ placements: [Placement], items: [LayoutItem], extraRoom: String? = nil, scanned: Set<UInt64> = []) -> [Placement] {
+        place(placements, specs: Dictionary(items.map { ($0.id, VoxelItemSpec($0)) }, uniquingKeysWith: { a, _ in a }), extraRoom: extraRoom, scanned: scanned)
     }
 
     /// Returns `placements` with props moved onto surfaces and wall items hung (other placements
     /// unchanged, same order). Items in `specs` with no placement are added when `extraRoom`
     /// names a room (a scan's props, which RoomPlan doesn't locate) and they find a spot there.
     /// Props that fit no surface keep their floor spot; wall items with no free wall do too.
-    public func place(_ placements: [Placement], specs: [UInt64: VoxelItemSpec], extraRoom: String? = nil) -> [Placement] {
+    ///
+    /// `scanned`: ids whose placement is where a scan saw them. They keep their x/y: a scanned
+    /// prop only goes up onto a surface whose footprint holds its spot (within
+    /// `scannedReachM`), else it stays put; a scanned wall item stays on its nearest wall at
+    /// the same spot along it (only its height is adjusted). Empty for solver-made layouts.
+    public func place(_ placements: [Placement], specs: [UInt64: VoxelItemSpec], extraRoom: String? = nil,
+                      scanned: Set<UInt64> = []) -> [Placement] {
         var out = placements
         var built: [UInt64: (grid: VoxelGrid, surfaces: [VoxelSurface])] = [:]
         func model(_ id: UInt64, wall: Bool = false) -> (grid: VoxelGrid, surfaces: [VoxelSurface])? {
@@ -124,7 +130,12 @@ public struct PropPlacer: Sendable {
             return out[a].itemId < out[b].itemId
         }
         var unplacedMissing = Set(missing)
-        for i in propIdx {
+        // Scanned props first, so the others make room around them.
+        for i in propIdx where scanned.contains(out[i].itemId) {
+            guard let m = model(out[i].itemId) else { continue }
+            if let q = scannedSpot(out[i], grid: m.grid, surfaces: &surfaces) { out[i] = q }
+        }
+        for i in propIdx where !scanned.contains(out[i].itemId) {
             let p = out[i]
             guard let spec = specs[p.itemId], let m = model(p.itemId) else { continue }
             let kind = VoxelModels.kind(spec)
@@ -151,7 +162,8 @@ public struct PropPlacer: Sendable {
         for i in out.indices where roles[i] == .wall {
             let p = out[i]
             guard let m = model(p.itemId, wall: true), let room = plan.room(named: p.room) ?? plan.room(at: PlanPoint(p.x, p.y)) else { continue }
-            if let done = hang(p, grid: m.grid, in: room, solids: solids[room.name] ?? [], hung: hung[room.name] ?? []) {
+            if let done = hang(p, grid: m.grid, in: room, solids: solids[room.name] ?? [], hung: hung[room.name] ?? [],
+                               keepSpot: scanned.contains(p.itemId)) {
                 out[i] = done.placement
                 hung[room.name, default: []].append((done.rect, done.bottom, done.top))
                 unplacedMissing.remove(p.itemId)
@@ -272,6 +284,38 @@ public struct PropPlacer: Sendable {
         return nil
     }
 
+    /// How far outside a surface's footprint a scanned prop's spot may be and still sit on it.
+    static let scannedReachM = 0.15
+
+    /// A scanned prop on the surface whose footprint holds its scanned (x, y), at that x/y and
+    /// rotation (the surface nearest its scanned height, or the lowest one when the scan put
+    /// it near the floor). Nil when no surface is under it. Marks the spot used.
+    func scannedSpot(_ p: Placement, grid: VoxelGrid, surfaces: inout [Surface]) -> Placement? {
+        let V = Self.V, reach = Self.scannedReachM
+        let target = p.elevationM ?? 0
+        var best: (j: Int, local: (Double, Double), height: Double)?
+        for j in surfaces.indices where surfaces[j].parent.room == p.room && surfaces[j].parent.itemId != p.itemId {
+            let sf = surfaces[j]
+            if let c = sf.s.clearance, grid.ny > c { continue }
+            let axes = OrientedRect(center: .init(0, 0), halfWidth: 0, halfDepth: 0, rotationDeg: sf.parent.rotationDeg).axes
+            let rel = PlanPoint(p.x, p.y) - PlanPoint(sf.parent.x, sf.parent.y)
+            let lx = rel.dot(axes.x), lz = rel.dot(axes.z)
+            let r = sf.local
+            guard lx >= r.x0 - reach, lx <= r.x1 + reach, lz >= r.z0 - reach, lz <= r.z1 + reach else { continue }
+            let h = (sf.parent.elevationM ?? 0) + Double(sf.s.y) * V
+            if let b = best, abs(b.height - target) <= abs(h - target) { continue }
+            best = (j, (lx, lz), h)
+        }
+        guard let best else { return nil }
+        let hw = Double(grid.nx) * V / 2, hd = Double(grid.nz) * V / 2
+        surfaces[best.j].used.append((best.local.0 - hw, best.local.1 - hd, best.local.0 + hw, best.local.1 + hd))
+        var q = p
+        q.elevationM = Self.mm(best.height)
+        q.onTopOf = surfaces[best.j].parent.itemId
+        q.wallMounted = nil
+        return q
+    }
+
     // MARK: Wall items
 
     struct Hung {
@@ -286,7 +330,7 @@ public struct PropPlacer: Sendable {
     /// windows, furniture below and other hung items; slides along the wall when blocked.
     /// Too tall to hang under the visible wall: leans on the floor against it.
     func hang(_ p: Placement, grid: VoxelGrid, in room: FloorPlanRoom, solids: [(rect: OrientedRect, bottom: Double, top: Double)],
-              hung: [(rect: OrientedRect, bottom: Double, top: Double)]) -> Hung? {
+              hung: [(rect: OrientedRect, bottom: Double, top: Double)], keepSpot: Bool = false) -> Hung? {
         let V = Self.V
         let w = Double(grid.nx) * V, d = Double(grid.nz) * V, h = Double(grid.ny) * V
         let ccw = room.signedArea >= 0 ? room.polygon : room.polygon.reversed()
@@ -304,6 +348,8 @@ public struct PropPlacer: Sendable {
         let lean = wallTopM - h < Self.minHangBottomM
         let wanted = p.elevationM ?? (hangCenterM - h / 2)
         let bottom0 = lean ? 0 : min(max(wanted, Self.minHangBottomM), wallTopM - h)
+        // A scanned piece: its own (nearest) wall, at its spot along it.
+        if keepSpot { edges = Array(edges.prefix(1)) }
         for (a, b) in edges {
             let len = (b - a).length
             let dir = (b - a) * (1 / len)
@@ -316,14 +362,14 @@ public struct PropPlacer: Sendable {
             let t0 = min(max((center - a).dot(dir), tMin), tMax)
             var ts: [Double] = [t0]
             var k = 1.0
-            while t0 - k * V >= tMin - 1e-9 || t0 + k * V <= tMax + 1e-9 {
+            while !keepSpot && (t0 - k * V >= tMin - 1e-9 || t0 + k * V <= tMax + 1e-9) {
                 if t0 + k * V <= tMax + 1e-9 { ts.append(t0 + k * V) }
                 if t0 - k * V >= tMin - 1e-9 { ts.append(t0 - k * V) }
                 k += 1
             }
             for t in ts {
                 let lo: Double = t - w / 2 - V, hi: Double = t + w / 2 + V
-                if blocked.contains(where: { (s: (Double, Double)) -> Bool in hi > s.0 && lo < s.1 }) { continue }
+                if !keepSpot && blocked.contains(where: { (s: (Double, Double)) -> Bool in hi > s.0 && lo < s.1 }) { continue }
                 let c = a + dir * t + inward * off
                 let rect = OrientedRect(center: c, halfWidth: w / 2, halfDepth: d / 2, rotationDeg: LayoutSolver.rotationDeg(facing: inward))
                 var bottom = bottom0
@@ -333,7 +379,7 @@ public struct PropPlacer: Sendable {
                     if s.top > bottom - 0.03 && s.bottom < bottom + h { bottom = s.top + 0.05 }
                 }
                 guard ok, bottom + h <= wallTopM + 1e-9 || lean else { continue }
-                if hung.contains(where: { $0.rect.overlaps(rect.inflated(by: 0.04)) && $0.bottom < bottom + h && bottom < $0.top }) { continue }
+                if !keepSpot, hung.contains(where: { $0.rect.overlaps(rect.inflated(by: 0.04)) && $0.bottom < bottom + h && bottom < $0.top }) { continue }
                 var q = p
                 q.x = c.x; q.y = c.y
                 q.rotationDeg = rect.rotationDeg
