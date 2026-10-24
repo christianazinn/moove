@@ -209,8 +209,8 @@ test('no token: never calls Apify, replays cache, then the curated fixtures', as
 });
 
 test('createDealSource: DEALS_SOURCE / APIFY_TOKEN selection', () => {
-  assert.equal(createDealSource({}).name, 'fixture replay');
-  assert.equal(createDealSource({ DEALS_SOURCE: 'fixtures', APIFY_TOKEN: 'x' }).name, 'fixture replay');
+  assert.equal(createDealSource({}).name, 'sample data (hand-made fixtures)');
+  assert.equal(createDealSource({ DEALS_SOURCE: 'fixtures', APIFY_TOKEN: 'x' }).name, 'sample data (hand-made fixtures)');
   assert.match(createDealSource({ APIFY_TOKEN: 'x' }).name, /^Apify live listings \(fb, craigslist, ebay\)/);
   assert.match(createDealSource({ APIFY_TOKEN: 'x', DEALS_APIFY_SOURCES: 'ebay, bogus,fb' }).name, /\(ebay, fb\)/);
   const noToken = createDealSource({ DEALS_SOURCE: 'apify' });

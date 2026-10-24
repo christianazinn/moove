@@ -54,9 +54,10 @@ test('fixture source replays at least 3 labeled deals for demo-house essentials'
   assert.deepEqual(await src.search({ name: 'Grand piano', category: 'instrument' }), []);
 });
 
-test('replayed deals are labeled in seller_info', async () => {
+test('hand-made fixture deals are labeled sample data, not cached replay', async () => {
   const [d] = rankDeals(await fixtureDealSource().search({ name: 'Mattress', category: 'mattress' }));
-  assert.match(sellerInfo(d), /cached replay/);
+  assert.match(sellerInfo(d), /sample data/);
+  assert.doesNotMatch(sellerInfo(d), /cached replay/);
 });
 
 test('unknown distances say "distance unknown", not the 25 mi ranking placeholder', () => {

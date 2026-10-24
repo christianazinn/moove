@@ -94,7 +94,7 @@ import Testing
         let hold = VisaPaymentBadge(visa(1, deal: 1, .pending))
         #expect(hold.state == .hold && hold.simulated && hold.railLabel == "SIMULATED")
         let paid = VisaPaymentBadge(visa(2, deal: 1, .settled, simulated: false))
-        #expect(paid.state == .paid && paid.railLabel == "Visa sandbox · test card")
+        #expect(paid.state == .paid && paid.railLabel == "SANDBOX")
         #expect(VisaPaymentBadge(visa(3, deal: 1, .failed)).state == .failed)
     }
 
@@ -152,10 +152,27 @@ import Testing
         approval.status = .approved
         s.approvals[0] = approval
         #expect(s.checkout(for: item) == .checkingOut(s.deals[0]))
+        // An approval for a different amount doesn't clear the purchase.
+        var stale = approval
+        stale.amountCents = 39_000
+        s.approvals[0] = stale
+        #expect(s.checkout(for: item) == .notApproved(stale))
+        s.approvals[0] = approval
 
+        #expect(!s.hasPendingVisaPayment(for: item))
         let hold = visa(20, deal: 10, .pending)
         s.payments = [hold]
         #expect(s.checkout(for: item) == .payment(hold))
+        #expect(s.hasPendingVisaPayment(for: item))
+        s.payments = [visa(21, deal: 10, .failed)]
+        #expect(!s.hasPendingVisaPayment(for: item))
+    }
+
+    @Test func sampleBadgeIsSeparateFromReplay() {
+        let sample = deal(1, seller: "IKEA · new · ships · score 0.71 · sample data")
+        #expect(sample.isSample && !sample.isReplay)
+        #expect(sample.sellerDetails == "IKEA · new · ships · score 0.71")
+        #expect(!deal(2, seller: "FB · good · cached replay").isSample)
     }
 
     // MARK: Fixtures
@@ -164,7 +181,7 @@ import Testing
         let s = DemoFixtures.demo(owner: "me")
         #expect(s.myShoppingItems.count >= 3)
         for item in s.myShoppingItems { #expect(s.deals(for: item.id).count >= 3) }
-        #expect(s.deals.allSatisfy { $0.isReplay })
+        #expect(s.deals.allSatisfy { $0.isSample })
         #expect(s.pendingPurchaseApprovals.count == 1)
         let states = s.myShoppingItems.map { s.checkout(for: $0) }
         #expect(states.contains { if case .needsApproval = $0 { true } else { false } })

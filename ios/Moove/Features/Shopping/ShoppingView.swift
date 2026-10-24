@@ -164,7 +164,7 @@ struct PurchaseApprovalCard: View {
                     .foregroundStyle(.secondary)
                 if let item { Text(item.name).font(.caption.weight(.semibold)).foregroundStyle(.secondary) }
                 Spacer()
-                if deal?.isReplay == true { ReplayBadge() }
+                if deal?.isSample == true { ReplayBadge(sample: true) } else if deal?.isReplay == true { ReplayBadge() }
             }
             Text(deal?.title ?? approval.summary).font(.subheadline.weight(.semibold)).lineLimit(3)
             HStack {
@@ -218,16 +218,18 @@ struct PurchaseApprovalCard: View {
     }
 }
 
-/// Deals replayed from cached fixtures, not live listings (seller_info says "cached replay").
+/// REPLAY: deals from a cached real search ("cached replay"). SAMPLE: hand-made demo deals ("sample data").
 struct ReplayBadge: View {
+    var sample = false
+
     var body: some View {
-        Text("REPLAY")
+        Text(sample ? "SAMPLE" : "REPLAY")
             .font(.caption2.weight(.bold))
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .foregroundStyle(.purple)
             .overlay(Capsule().strokeBorder(.purple.opacity(0.6)))
-            .accessibilityLabel("Cached replay, not a live listing")
+            .accessibilityLabel(sample ? "Sample data, not a live listing" : "Cached replay, not a live listing")
     }
 }
 
@@ -278,9 +280,13 @@ struct VisaRailBadge: View {
                 .background(.orange, in: .capsule)
                 .accessibilityLabel("Simulated payment, no money moved")
         } else {
-            Label(badge.railLabel, systemImage: "creditcard")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.blue)
+            Text(badge.railLabel)
+                .font(.caption2.weight(.heavy))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .foregroundStyle(.white)
+                .background(.blue, in: .capsule)
+                .accessibilityLabel("Visa sandbox payment, test card, no real money")
         }
     }
 }

@@ -83,15 +83,20 @@ public struct Deal: Codable, Sendable, Hashable, Identifiable {
         self.createdAt = createdAt
     }
 
-    /// Replayed from cached fixtures rather than live listings; the UI shows a REPLAY badge.
+    /// Replayed from a cached real search rather than live listings; the UI shows a REPLAY badge.
     public var isReplay: Bool { sellerInfo.range(of: "cached replay", options: .caseInsensitive) != nil }
 
-    /// `sellerInfo` without the replay marker (the badge says it instead).
+    /// Hand-made sample deals (the worker's offline fixtures); the UI shows a SAMPLE badge.
+    public var isSample: Bool { sellerInfo.range(of: "sample data", options: .caseInsensitive) != nil }
+
+    private static let markers = ["cached replay", "sample data"]
+
+    /// `sellerInfo` without the replay/sample marker (the badge says it instead).
     public var sellerDetails: String {
         sellerInfo
             .components(separatedBy: " · ")
             .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty && $0.range(of: "cached replay", options: .caseInsensitive) == nil }
+            .filter { part in !part.isEmpty && !Self.markers.contains { part.range(of: $0, options: .caseInsensitive) != nil } }
             .joined(separator: " · ")
     }
 
@@ -139,7 +144,8 @@ public struct VisaPaymentBadge: Sendable, Hashable {
     }
 
     /// Simulated payments are never presented as real (CLAUDE.md hard rule).
-    public var railLabel: String { simulated ? "SIMULATED" : "Visa sandbox · test card" }
+    /// Real CyberSource sandbox calls say SANDBOX: a test card, no real money.
+    public var railLabel: String { simulated ? "SIMULATED" : "SANDBOX" }
 }
 
 /// Where one shopping item is in the find -> choose -> approve -> pay flow.
@@ -201,6 +207,11 @@ extension SyncSnapshot {
         return all.first { $0.status == .settled } ?? all.first { $0.status == .pending } ?? all.first
     }
 
+    /// A Visa hold is in flight on one of the item's deals; choosing another deal now would be ignored.
+    public func hasPendingVisaPayment(for item: ShoppingItem) -> Bool {
+        deals(for: item.id).contains { deal in visaPayments(for: deal.id).contains { $0.status == .pending } }
+    }
+
     public func checkout(for item: ShoppingItem) -> ShoppingCheckout {
         guard let deal = chosenDeal(for: item) else {
             return deals.contains { $0.shoppingItemId == item.id } ? .chooseDeal : .findingDeals
@@ -212,7 +223,8 @@ extension SyncSnapshot {
             switch approval.status {
             case .pending: return .needsApproval(approval)
             case .denied, .expired: return .notApproved(approval)
-            case .approved: return .checkingOut(deal)
+            // An approval only counts for exactly this price (the worker checks the same).
+            case .approved: return approval.amountCents == deal.priceCents ? .checkingOut(deal) : .notApproved(approval)
             }
         }
         return .checkingOut(deal)

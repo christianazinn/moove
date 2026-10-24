@@ -75,6 +75,8 @@ export interface BackendResult {
   /** Processor status string, e.g. AUTHORIZED, PENDING, REVERSED, DECLINED. */
   processorStatus: string;
   reason?: string;
+  /** HTTP status of the processor call (acceptance backend only), kept as evidence in event data. */
+  httpStatus?: number;
 }
 
 export interface CheckoutBackend {
@@ -106,7 +108,8 @@ const centsToAmount = (c: bigint): string => `${c / 100n}.${(c % 100n).toString(
 
 export const CYBERSOURCE_SANDBOX_HOST = 'apitest.cybersource.com';
 // Public Visa test card from the CyberSource test-data guide. Sandbox only; never a real PAN.
-const VISA_TEST_CARD = { number: '4111111111111111', expirationMonth: '12', expirationYear: '2031', securityCode: '123' };
+// Same shape as CyberSource's own REST samples (cybersource-rest-samples-node), which send no CVV.
+const VISA_TEST_CARD = { number: '4111111111111111', expirationMonth: '12', expirationYear: '2031' };
 
 export interface AcceptanceConfig {
   merchantId: string;
@@ -136,7 +139,6 @@ export function cybersourceSignedHeaders(
   const headers: Record<string, string> = {
     'v-c-merchant-id': cfg.merchantId,
     date: httpDate,
-    'v-c-date': httpDate,
     'content-type': 'application/json;charset=utf-8',
     accept: 'application/hal+json;charset=utf-8',
   };
@@ -179,7 +181,7 @@ export function createAcceptanceBackend(cfg: AcceptanceConfig): CheckoutBackend 
     }
     // 201 carries both approvals and soft declines (status DECLINED); 400 is INVALID_REQUEST or a
     // hard decline; 401 is a signature problem; 5xx is CyberSource being down.
-    if (res.status === 201 || (res.status === 400 && json.status === 'DECLINED')) return json;
+    if (res.status === 201 || (res.status === 400 && json.status === 'DECLINED')) return { ...json, __http: res.status };
     const reason = json.errorInformation?.message ?? json.message ?? json.response?.rmsg ?? json.reason ?? text.slice(0, 200);
     throw new VisaApiError(`CyberSource ${res.status} on ${path}: ${reason}`, res.status, json);
   }
@@ -200,19 +202,21 @@ export function createAcceptanceBackend(cfg: AcceptanceConfig): CheckoutBackend 
         orderInformation: {
           amountDetails: { totalAmount: centsToAmount(req.amountCents), currency: req.currency },
           billTo: {
-            firstName: 'Moove',
-            lastName: 'Demo',
-            address1: '2299 Piedmont Ave',
-            locality: 'Berkeley',
+            // CyberSource's sample test billing address.
+            firstName: 'John',
+            lastName: 'Doe',
+            address1: '1 Market St',
+            locality: 'san francisco',
             administrativeArea: 'CA',
-            postalCode: '94720',
+            postalCode: '94105',
             country: 'US',
-            email: 'demo@example.com',
+            email: 'test@cybs.com',
+            phoneNumber: '4158880000',
           },
         },
       });
       const ok = j.status === 'AUTHORIZED';
-      return { id: String(j.id ?? ''), status: ok ? 'authorized' : 'declined', processorStatus: String(j.status ?? ''), reason: ok ? undefined : declineReason(j) };
+      return { id: String(j.id ?? ''), status: ok ? 'authorized' : 'declined', processorStatus: String(j.status ?? ''), reason: ok ? undefined : declineReason(j), httpStatus: j.__http };
     },
     async capture(authId, amountCents, reference) {
       const j = await call(`/pts/v2/payments/${encodeURIComponent(authId)}/captures`, {
@@ -221,7 +225,7 @@ export function createAcceptanceBackend(cfg: AcceptanceConfig): CheckoutBackend 
       });
       // PENDING = queued for settlement in the next batch; TRANSMITTED for online-capture merchants.
       const ok = j.status === 'PENDING' || j.status === 'TRANSMITTED';
-      return { id: String(j.id ?? ''), status: ok ? 'captured' : 'declined', processorStatus: String(j.status ?? ''), reason: ok ? undefined : declineReason(j) };
+      return { id: String(j.id ?? ''), status: ok ? 'captured' : 'declined', processorStatus: String(j.status ?? ''), reason: ok ? undefined : declineReason(j), httpStatus: j.__http };
     },
     async void(authId, amountCents, reference, reason) {
       // Releasing an uncaptured hold is an authorization reversal (/voids is for captures).
@@ -230,7 +234,7 @@ export function createAcceptanceBackend(cfg: AcceptanceConfig): CheckoutBackend 
         reversalInformation: { amountDetails: { totalAmount: centsToAmount(amountCents) }, reason: reason.slice(0, 100) },
       });
       const ok = j.status === 'REVERSED';
-      return { id: String(j.id ?? ''), status: ok ? 'voided' : 'declined', processorStatus: String(j.status ?? ''), reason: ok ? undefined : declineReason(j) };
+      return { id: String(j.id ?? ''), status: ok ? 'voided' : 'declined', processorStatus: String(j.status ?? ''), reason: ok ? undefined : declineReason(j), httpStatus: j.__http };
     },
   };
 }
@@ -308,6 +312,15 @@ export class CardSpendLedger {
   remaining(agent: string): bigint {
     const left = this.capPerAgentCents - this.spentBy(agent);
     return left > 0n ? left : 0n;
+  }
+  /** Why `reserve` would refuse this amount right now, without reserving anything. */
+  check(agent: string, cents: bigint): string | undefined {
+    if (cents <= 0n) return `amount must be positive, got ${cents}`;
+    if (cents > this.maxPerPurchaseCents) return `${dollars(cents)} is over the per-purchase max of ${dollars(this.maxPerPurchaseCents)}`;
+    if (this.spentBy(agent) + cents > this.capPerAgentCents) {
+      return `${dollars(cents)} would exceed the ${agent} card budget (${dollars(this.remaining(agent))} of ${dollars(this.capPerAgentCents)} left)`;
+    }
+    return undefined;
   }
   reserve(agent: string, cents: bigint): void {
     if (cents <= 0n) throw new VisaSpendRefused(`amount must be positive, got ${cents}`);
@@ -436,6 +449,10 @@ export class VisaCheckout {
   remaining(agent: string): bigint {
     return this.ledger.remaining(agent);
   }
+  /** Why a purchase of this amount would be refused by the card caps (checked before asking the user). */
+  spendBlocker(agent: string, cents: bigint): string | undefined {
+    return this.ledger.check(agent, cents);
+  }
   /** Counts spend recorded before this process started, so a restart doesn't reset the cap. */
   seedSpent(agent: string, cents: bigint): void {
     this.ledger.seed(agent, cents);
@@ -510,6 +527,10 @@ export class VisaCheckout {
         if (!(err instanceof VisaApiError) || !fb || fb === backend) throw err;
         await this.event(ctx, backend, 'error', `${tag(backend)} ${err.message}; falling back to the ${fb.simulated ? 'simulated' : fb.provider} checkout`, {
           httpStatus: err.httpStatus,
+          // Processor request id + reason, for support tickets (never credentials).
+          requestId: (err.body as Record<string, unknown> | undefined)?.id,
+          processorStatus: (err.body as Record<string, unknown> | undefined)?.status,
+          processorReason: (err.body as Record<string, unknown> | undefined)?.reason,
           fallback: fb.provider,
         });
         backend = fb;
@@ -531,7 +552,8 @@ export class VisaCheckout {
         owner: ctx.owner,
         agent: ctx.agent,
         rail: 'visa',
-        purpose: ctx.purpose,
+        // Sandbox charges say so in the spending log itself, not only in event data.
+        purpose: backend.sandbox ? `[Visa sandbox] ${ctx.purpose}` : ctx.purpose,
         payee: backend.sandbox ? `${backend.payee} (for ${ctx.merchant})` : `${ctx.merchant} (${backend.payee})`,
         amountUsdMicros: ctx.amountCents * 10_000n,
         txHash,
@@ -554,7 +576,7 @@ export class VisaCheckout {
     }
     const hold: Hold = { authId: r.id, paymentId, amountCents: ctx.amountCents, provider: backend.provider, simulated: backend.simulated };
     this.holds.set(holdKey(hold), { backend, open: true });
-    await this.event(ctx, backend, 'payment', `${tag(backend)} Hold of ${dollars(ctx.amountCents)} placed for ${ctx.purpose}`, { authId: r.id, processorStatus: r.processorStatus, paymentId: paymentId.toString(), mandate });
+    await this.event(ctx, backend, 'payment', `${tag(backend)} Hold of ${dollars(ctx.amountCents)} placed for ${ctx.purpose}`, { authId: r.id, processorStatus: r.processorStatus, httpStatus: r.httpStatus, paymentId: paymentId.toString(), mandate });
     return hold;
   }
 
@@ -592,7 +614,7 @@ export class VisaCheckout {
     entry.open = false;
     try {
       await this.sink.updatePayment(hold.paymentId, 'settled', '');
-      await this.event(ctx, backend, 'payment', `${tag(backend)} Paid ${dollars(hold.amountCents)} for ${ctx.purpose}`, { authId: hold.authId, captureId: r.id, processorStatus: r.processorStatus, paymentId: hold.paymentId.toString() });
+      await this.event(ctx, backend, 'payment', `${tag(backend)} Paid ${dollars(hold.amountCents)} for ${ctx.purpose}`, { authId: hold.authId, captureId: r.id, processorStatus: r.processorStatus, httpStatus: r.httpStatus, paymentId: hold.paymentId.toString() });
     } catch (err) {
       console.warn(`[visa] captured ${hold.authId} but could not record it: ${(err as Error).message}`);
     }
@@ -708,7 +730,7 @@ export function selectBackend(env: VisaEnv, fetchImpl?: typeof globalThis.fetch)
 export function createVisaCheckout(sink: VisaSink, env: VisaEnv = process.env, fetchImpl?: typeof globalThis.fetch): VisaCheckout {
   const { backend, note } = selectBackend(env, fetchImpl);
   if (note) console.warn(`[visa] using the SIMULATED checkout: ${note}`);
-  const ledger = new CardSpendLedger(usdToCents(env.VISA_SPEND_CAP_USD, 500), usdToCents(env.VISA_MAX_PER_PURCHASE_USD, 300));
+  const ledger = new CardSpendLedger(usdToCents(env.VISA_SPEND_CAP_USD, 1500), usdToCents(env.VISA_MAX_PER_PURCHASE_USD, 750));
   const fallback = backend.simulated ? undefined : createSimulatedBackend({ delayMs: Number(env.VISA_SIM_DELAY_MS ?? '400') });
   return new VisaCheckout({ sink, backend, ledger, fallback });
 }

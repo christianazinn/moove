@@ -1,7 +1,7 @@
 import Foundation
 
 /// Offline demo for the Shopping screen (#15): what the new home still needs, the buy agent's
-/// replayed deals (labeled "cached replay", like the worker's fixture deal source), one purchase
+/// replayed deals (labeled "sample data", like the worker's fixture deal source), one purchase
 /// waiting on approval, and one simulated Visa checkout that already settled.
 ///
 /// Ids stay below the inventory fixture's max so `FixtureBackend` never reuses them for new rows.
@@ -19,7 +19,7 @@ extension DemoFixtures {
         func deal(_ id: UInt64, _ itemId: UInt64, _ source: String, _ title: String, _ cents: Int64, _ url: String,
                   _ seller: String, fraud: Double? = nil, ai: Double? = nil, reasons: [String] = []) -> Deal {
             Deal(id: id, owner: owner, shoppingItemId: itemId, source: source, title: title, priceCents: cents, url: url,
-                 sellerInfo: "\(seller) · cached replay", fraudScore: fraud, aiTextScore: ai, fraudReasons: reasons,
+                 sellerInfo: "\(seller) · sample data", fraudScore: fraud, aiTextScore: ai, fraudReasons: reasons,
                  createdAt: ago(30))
         }
 

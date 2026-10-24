@@ -9,7 +9,7 @@ import { approvalGate, dollars } from '../integrations/visa.js';
 import { createDealSource } from '../integrations/deals-apify.js';
 
 // Buy agent (#15). For each open shopping_item:
-//   1. search deals (fixture replay until the shared Apify client from #6 exists), rank them by
+//   1. search deals (live Apify, else labeled sample data), rank them by
 //      price, condition and distance, and write the top ones as `deal` rows
 //   2. recommend the best one with choose_deal (the user can pick another in the app)
 //   3. for the chosen deal: skip it if fraud screening (#18) flagged it; marketplace sellers get a
@@ -22,19 +22,22 @@ const AGENT = 'buy';
 const DEFAULT_THRESHOLD_CENTS = BigInt(process.env.APPROVAL_THRESHOLD_CENTS_DEFAULT || '10000');
 const MAX_DEALS = 5;
 const FRAUD_BLOCK = Number(process.env.BUY_FRAUD_BLOCK ?? '0.7');
-// 0 = only rank; the user must choose a deal in the app before anything is bought.
-const AUTO_CHOOSE = (process.env.BUY_AUTO_CHOOSE ?? '1') !== '0';
+// Default 0: the agent ranks and recommends, and nothing is bought until the user chooses a deal
+// in the app. 1 = the agent also chooses its recommendation (purchases at or under the threshold then
+// happen without the user touching anything).
+const AUTO_CHOOSE = process.env.BUY_AUTO_CHOOSE === '1';
 // 1 = wait for the fraud screen (#18) to score a deal before buying it. Off until a fraud agent runs.
 const REQUIRE_FRAUD_SCORE = process.env.BUY_REQUIRE_FRAUD_SCORE === '1';
 
 // The one place the deal source is chosen: live Apify search (DEALS_SOURCE / APIFY_TOKEN), else
-// the labeled fixture replay. See integrations/deals-apify.ts.
+// the labeled sample data. See integrations/deals-apify.ts.
 const dealSource: DealSource = createDealSource(process.env);
 
 const searching = new Set<bigint>(); // shopping item ids searched this session
 const busyItems = new Set<bigint>(); // shopping item ids in checkout
 const settled = new Set<string>(); // keys that reached a final outcome this session
 const approvalRequested = new Set<string>();
+const ignoredChoice = new Set<string>();
 
 const keyOf = (s: ShoppingItem) => `${s.id}:${s.chosenDealId}`;
 
@@ -71,7 +74,7 @@ async function search(conn: Conn, s: ShoppingItem): Promise<void> {
   try {
     await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'searching' });
     logEvent(conn, { ...ref, kind: 'plan', message: `Looking for deals on "${s.name}"` });
-    logEvent(conn, { ...ref, kind: 'tool_call', message: `Searching ${dealSource.name}${dealSource.replay ? ' (cached replay, not live)' : ''} for "${s.name}"`, data: { source: dealSource.name, replay: dealSource.replay, query: { name: s.name, category: s.category } } });
+    logEvent(conn, { ...ref, kind: 'tool_call', message: `Searching ${dealSource.name}${dealSource.replay ? ' (not live)' : ''} for "${s.name}"`, data: { source: dealSource.name, replay: dealSource.replay, query: { name: s.name, category: s.category } } });
     const ranked = rankDeals(await dealSource.search({ name: s.name, category: s.category })).slice(0, MAX_DEALS);
     if (!ranked.length) {
       await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'open' });
@@ -84,10 +87,10 @@ async function search(conn: Conn, s: ShoppingItem): Promise<void> {
     logEvent(conn, {
       ...ref,
       kind: 'result',
-      message: `Found ${ranked.length} deals for "${s.name}", best: ${ranked[0].title} at ${dollars(ranked[0].priceCents)} (${ranked[0].source})${dealSource.replay ? ' [replay]' : ''}`,
-      data: { replay: dealSource.replay, ranking: ranked.map(d => ({ source: d.source, title: d.title, priceCents: d.priceCents, score: d.score, why: d.why })) },
+      message: `Found ${ranked.length} deals for "${s.name}", best: ${ranked[0].title} at ${dollars(ranked[0].priceCents)} (${ranked[0].source})${ranked[0].sample ? ' [sample data]' : ranked[0].replay ? ' [cached replay]' : ''}`,
+      data: { replay: ranked[0].replay, sample: !!ranked[0].sample, ranking: ranked.map(d => ({ source: d.source, title: d.title, priceCents: d.priceCents, score: d.score, why: d.why })) },
     });
-    if (AUTO_CHOOSE) await recommend(conn, s, ranked);
+    await recommend(conn, s, ranked);
   } catch (err) {
     logEvent(conn, { ...ref, kind: 'error', message: `Deal search failed: ${String(err)}` });
   }
@@ -104,8 +107,8 @@ async function recommend(conn: Conn, s: ShoppingItem, ranked: RankedDeal[]): Pro
   if (!pick || !row) return;
   const cur = conn.db.shoppingItem.id.find(s.id);
   if (!cur || cur.chosenDealId !== 0n) return; // the user already chose
-  await conn.reducers.chooseDeal({ shoppingItemId: s.id, dealId: row.id });
-  logEvent(conn, { owner: s.owner, agent: AGENT, kind: 'result', refTable: 'deal', refId: row.id, message: `Recommended ${row.title} at ${dollars(row.priceCents)}: ${pick.why}` });
+  if (AUTO_CHOOSE) await conn.reducers.chooseDeal({ shoppingItemId: s.id, dealId: row.id });
+  logEvent(conn, { owner: s.owner, agent: AGENT, kind: 'result', refTable: 'deal', refId: row.id, message: `Recommended ${row.title} at ${dollars(row.priceCents)}: ${pick.why}${AUTO_CHOOSE ? ' (chosen automatically)' : '. Choose it in the app to buy'}` });
 }
 
 function draftSellerMessage(d: Deal): string {
@@ -143,7 +146,14 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
       if (s.status !== 'bought') await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'bought' });
       return;
     }
-    if (st === 'pending') return; // a hold in flight or from an earlier run; never double-charge
+    if (st === 'pending') {
+      // A hold in flight or from an earlier run; never double-charge. Say so if the user picked another deal.
+      if (other.id !== d.id && !ignoredChoice.has(key)) {
+        ignoredChoice.add(key);
+        logEvent(conn, { ...ref, kind: 'result', message: `Not switching to "${d.title}" yet: a Visa hold on "${other.title}" is still in progress` });
+      }
+      return;
+    }
   }
   if (paymentState(conn, d.id) === 'failed') {
     settled.add(key);
@@ -165,6 +175,15 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
     return;
   }
 
+  // Never ask the user to approve something the card caps would refuse anyway.
+  const visa = visaCheckout(conn);
+  const blocked = visa.spendBlocker(AGENT, d.priceCents);
+  if (blocked) {
+    settled.add(key);
+    logEvent(conn, { ...ref, kind: 'error', message: `Not buying "${d.title}": ${blocked}`, data: { refused: true, remainingCents: visa.remaining(AGENT) } });
+    return;
+  }
+
   const threshold = thresholdFor(conn, s.owner);
   const gate = approvalGate(d.priceCents, threshold, latestApproval(conn, d.id));
   if (!gate.ok) {
@@ -182,7 +201,6 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
     return;
   }
 
-  const visa = visaCheckout(conn);
   const unscreened = d.fraudScore < 0 ? ' Not fraud-screened yet.' : '';
   logEvent(conn, { ...ref, kind: 'plan', message: `Checking out "${d.title}" for ${dollars(d.priceCents)} via Visa${gate.approvalId ? ', approved by the user' : `, under the ${dollars(threshold)} approval threshold`}.${unscreened}` });
   const r = await visa.purchase({

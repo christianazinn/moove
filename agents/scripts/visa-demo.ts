@@ -13,7 +13,12 @@ const sink: VisaSink = {
     return nextId++;
   },
   updatePayment: async (id, status) => console.log(`payment #${id} -> ${status}`),
-  logAgentEvent: async (e) => console.log(`agent_event [${e.kind}] ${e.message}`),
+  logAgentEvent: async (e) => {
+    // Evidence only: processor ids and statuses, never credentials.
+    const { authId, captureId, reversalId, processorStatus, processorReason, requestId, httpStatus, provider, sandbox, simulated } = e.data as Record<string, unknown>;
+    const ev = Object.fromEntries(Object.entries({ httpStatus, processorStatus, processorReason, requestId, authId, captureId, reversalId }).filter(([, v]) => v !== undefined));
+    console.log(`agent_event [${e.kind}] ${e.message}`, { provider, sandbox, simulated, ...ev });
+  },
 };
 
 const visa = createVisaCheckout(sink);

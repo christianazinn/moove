@@ -43,7 +43,9 @@ struct ShoppingItemDetailView: View {
                 } header: {
                     Text("Deals · \(deals.count)")
                 } footer: {
-                    if deals.contains(where: \.isReplay) {
+                    if deals.contains(where: \.isSample) {
+                        Text("SAMPLE deals are hand-made demo data, not live listings.")
+                    } else if deals.contains(where: \.isReplay) {
                         Text("REPLAY deals come from a cached search, not live listings.")
                     }
                 }
@@ -84,7 +86,8 @@ struct ShoppingCheckoutView: View {
             PurchaseApprovalCard(approval: approval)
         case .notApproved(let approval):
             Label(approval.status == .expired ? "The approval expired. Nothing was bought."
-                                              : "You denied this purchase. Nothing was bought.",
+                  : approval.status == .approved ? "The price changed after you approved. Nothing was bought."
+                  : "You denied this purchase. Nothing was bought.",
                   systemImage: "xmark.circle")
                 .foregroundStyle(.secondary)
         case .checkingOut:
@@ -113,7 +116,7 @@ struct DealRow: View {
                 }
                 Text(deal.title).font(.subheadline.weight(.semibold)).lineLimit(2)
                 Spacer()
-                if deal.isReplay { ReplayBadge() }
+                if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(deal.priceCents.usd).font(.headline.monospacedDigit())
@@ -147,10 +150,11 @@ struct DealRow: View {
                 if isChosen {
                     Text("Chosen").font(.caption.weight(.semibold)).foregroundStyle(.green)
                 } else if item.status != .bought {
+                    // Disabled while a hold is in flight: the agent finishes (or releases) it first.
                     Button("Choose") { choose() }
                         .font(.caption.weight(.semibold))
                         .buttonStyle(.bordered)
-                        .disabled(working)
+                        .disabled(working || store.snapshot.hasPendingVisaPayment(for: item))
                 }
             }
         }

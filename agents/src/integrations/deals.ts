@@ -1,6 +1,6 @@
 // Deal search for the buy agent (#15). Live search belongs to the shared Apify client (#6); until
-// it lands, `fixtureDealSource` replays a hand-curated set from fixtures/deals.json and labels every
-// result as a replay. Swap in an Apify-backed DealSource without touching the agent.
+// it is unavailable, `fixtureDealSource` serves a hand-made sample set from fixtures/deals.json and labels
+// every result "sample data" (real cached Apify results say "cached replay" instead).
 //
 // Everything a deal source returns is untrusted text from the open web: it is sanitized here, never
 // put into an LLM prompt as instructions, and only used as data (title, price, url, seller).
@@ -22,6 +22,8 @@ export interface DealCandidate {
   /** `visa`: a merchant we can pay by card. `seller_message`: marketplace seller, the agent drafts a message instead. */
   checkout: 'visa' | 'seller_message';
   replay: boolean;
+  /** Hand-made demo data, not from any real search. Labeled "sample data". */
+  sample?: boolean;
 }
 
 export interface DealQuery {
@@ -96,7 +98,7 @@ export function fixtureDealSource(rows?: FixtureRow[]): DealSource {
     return (JSON.parse(readFileSync(path, 'utf8')) as { deals: FixtureRow[] }).deals;
   };
   return {
-    name: 'fixture replay',
+    name: 'sample data (hand-made fixtures)',
     replay: true,
     async search(q) {
       const all = load();
@@ -108,6 +110,7 @@ export function fixtureDealSource(rows?: FixtureRow[]): DealSource {
       return scored
         .filter(x => JSON.stringify(x.r.keywords) === groupKey)
         .map(x => toCandidate(x.r, true))
+        .map((c): DealCandidate | undefined => (c ? { ...c, sample: true } : undefined))
         .filter((c): c is DealCandidate => !!c);
     },
   };
@@ -164,6 +167,6 @@ export function sellerInfo(d: RankedDeal): string {
     ...(d.seller.includes('distance unknown') ? [] : [distanceLabel(d)]),
     d.checkout === 'visa' ? 'Visa checkout' : 'message seller',
     `score ${d.score.toFixed(2)}`,
-    ...(d.replay ? ['cached replay'] : []),
+    ...(d.sample ? ['sample data'] : d.replay ? ['cached replay'] : []),
   ].join(' · ');
 }

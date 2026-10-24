@@ -140,7 +140,7 @@ test("acceptance authorize posts a sandbox auth-only request on the test card", 
   assert.equal(b.sandbox, true);
 
   const r = await b.authorize({ reference: "moove-deal-12", amountCents: 12_345n, currency: "USD", description: "bed" });
-  assert.deepEqual(r, { id: "7000000000000000000001", status: "authorized", processorStatus: "AUTHORIZED", reason: undefined });
+  assert.deepEqual(r, { id: "7000000000000000000001", status: "authorized", processorStatus: "AUTHORIZED", reason: undefined, httpStatus: 201 });
   const req = server.seen[0];
   assert.equal(req.url, "https://apitest.cybersource.com/pts/v2/payments");
   assert.equal(req.body.processingInformation.capture, false);
@@ -532,7 +532,7 @@ test("selectBackend picks the backend from env", () => {
 
 test("createVisaCheckout budgets: defaults, and an explicit 0 cap means no spending", async () => {
   const { sink } = memorySink();
-  assert.equal(createVisaCheckout(sink, {}).remaining("buy"), 50_000n);
+  assert.equal(createVisaCheckout(sink, {}).remaining("buy"), 150_000n);
   const zero = createVisaCheckout(sink, { VISA_SPEND_CAP_USD: "0", VISA_SIM_DELAY_MS: "0" });
   assert.equal(zero.remaining("buy"), 0n);
   assert.equal((await zero.purchase(ctx({ amountCents: 100n }))).status, "refused");
