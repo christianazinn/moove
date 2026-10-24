@@ -38,6 +38,28 @@ const busyItems = new Set<bigint>(); // shopping item ids in checkout
 const settled = new Set<string>(); // keys that reached a final outcome this session
 const approvalRequested = new Set<string>();
 const ignoredChoice = new Set<string>();
+const retries = new Map<string, number>(); // key -> transient failures so far
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = Number(process.env.BUY_RETRY_DELAY_MS ?? '60000');
+
+// Transient failures (network, 5xx, a reducer call failing mid-reconnect) don't end a purchase: nothing
+// was charged, the budget was released, and the item is tried again later, a few times at most.
+function retryLater(conn: Conn, s: ShoppingItem, key: string, why: string): void {
+  const n = retries.get(key) ?? 0;
+  const ref = { owner: s.owner, agent: AGENT, refTable: 'deal', refId: s.chosenDealId };
+  if (n >= MAX_RETRIES) {
+    settled.add(key);
+    logEvent(conn, { ...ref, kind: 'error', message: `Giving up on checkout after ${n + 1} tries: ${why}` });
+    return;
+  }
+  retries.set(key, n + 1);
+  const delay = RETRY_DELAY_MS * (n + 1);
+  logEvent(conn, { ...ref, kind: 'error', message: `Checkout hit a temporary problem (${why}); will try again in ${Math.round(delay / 1000)}s`, data: { retry: n + 1, of: MAX_RETRIES } });
+  setTimeout(() => {
+    const cur = conn.db.shoppingItem.id.find(s.id);
+    if (cur && keyOf(cur) === key) step(conn, cur);
+  }, delay).unref?.();
+}
 
 const keyOf = (s: ShoppingItem) => `${s.id}:${s.chosenDealId}`;
 
@@ -123,8 +145,7 @@ async function checkout(conn: Conn, s: ShoppingItem): Promise<void> {
   try {
     await checkoutChosen(conn, s, key);
   } catch (err) {
-    settled.add(key);
-    logEvent(conn, { owner: s.owner, agent: AGENT, kind: 'error', refTable: 'deal', refId: s.chosenDealId, message: `Checkout failed: ${String(err)}` });
+    retryLater(conn, s, key, String(err));
   } finally {
     busyItems.delete(s.id);
   }
@@ -233,6 +254,8 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
   } else if (r.status === 'unknown') {
     settled.add(key);
     logEvent(conn, { ...ref, kind: 'error', message: `Capture of "${d.title}" may or may not have gone through${label}; the payment stays pending until someone checks the processor`, data: { authId: r.hold?.authId, reconcile: true } });
+  } else if (r.retryable) {
+    retryLater(conn, s, key, r.reason ?? r.status);
   } else if (r.status !== 'waiting' && r.status !== 'needs_approval') {
     settled.add(key);
     logEvent(conn, { ...ref, kind: 'result', message: `Did not buy "${d.title}": ${r.status}${r.reason ? ` (${r.reason})` : ''}`, data: { provider: r.provider, simulated: r.simulated } });

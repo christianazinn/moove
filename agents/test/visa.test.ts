@@ -518,9 +518,13 @@ test("selectBackend picks the backend from env", () => {
   assert.equal(vic.backend.simulated, true);
   assert.match(vic.note!, /vic is not implemented/);
 
+  // Explicitly asked for the sandbox but it can't run: fail loudly, never quietly simulate.
   const missing = selectBackend({ VISA_PROVIDER: "acceptance" });
-  assert.equal(missing.backend.simulated, true);
+  assert.equal(missing.backend.simulated, false);
   assert.match(missing.note!, /keys are missing/);
+  const explicitBadHost = selectBackend({ ...ENV_KEYS, VISA_PROVIDER: "acceptance", VISA_ACCEPTANCE_HOST: "api.cybersource.com" });
+  assert.equal(explicitBadHost.backend.simulated, false);
+  // Keys alone (no VISA_PROVIDER) with a bad host still degrade to the labeled simulation.
 
   const badHost = selectBackend({ ...ENV_KEYS, VISA_ACCEPTANCE_HOST: "api.cybersource.com" });
   assert.equal(badHost.backend.simulated, true);
@@ -606,4 +610,46 @@ test("seeded spend from earlier runs counts toward the cap", async () => {
   const r = await visa.purchase(ctx());
   assert.equal(r.status, "refused");
   assert.equal(s.calls.authorize, 0);
+});
+
+// ---------- explicit provider: no silent fallback ----------
+
+test("explicit VISA_PROVIDER=acceptance: a 401 from bad keys is a failed checkout, never simulated", async () => {
+  const { sink, payments, events } = memorySink();
+  const server = fakeCybersource({ authorize: { status: 401, body: { response: { rmsg: "Authentication Failed" } } } });
+  const visa = createVisaCheckout(sink, { ...ENV_KEYS, VISA_PROVIDER: "acceptance", VISA_FALLBACK_SIMULATED: "1", VISA_SIM_DELAY_MS: "0" }, server.fetch);
+  const r = await visa.purchase(ctx());
+  assert.equal(r.status, "declined");
+  assert.equal(r.simulated, false);
+  assert.equal(r.retryable, false);
+  assert.equal(payments.length, 0);
+  assert.ok(events.some((e) => e.kind === "error" && /401/.test(e.message)));
+  assert.ok(!events.some((e) => /\[SIMULATED\]/.test(e.message)));
+  assert.equal(visa.remaining("buy"), 150_000n);
+});
+
+test("explicit VISA_PROVIDER=acceptance with missing keys fails every checkout loudly", async () => {
+  const { sink, payments, events } = memorySink();
+  const visa = createVisaCheckout(sink, { VISA_PROVIDER: "acceptance", VISA_SIM_DELAY_MS: "0" });
+  const r = await visa.purchase(ctx());
+  assert.equal(r.status, "declined");
+  assert.match(r.reason!, /keys are missing; not falling back/);
+  assert.equal(payments.length, 0);
+  assert.ok(events.some((e) => e.kind === "error"));
+});
+
+test("explicit provider: a 502 is retryable and does not fall back unless VISA_FALLBACK_SIMULATED=1", async () => {
+  const { sink, payments } = memorySink();
+  const server = fakeCybersource({ authorize: { status: 502, body: { status: "SERVER_ERROR", reason: "SYSTEM_ERROR", id: "req-1" } } });
+  const strict = createVisaCheckout(sink, { ...ENV_KEYS, VISA_PROVIDER: "acceptance", VISA_SIM_DELAY_MS: "0" }, server.fetch);
+  const r = await strict.purchase(ctx());
+  assert.equal(r.status, "declined");
+  assert.equal(r.retryable, true);
+  assert.equal(payments.length, 0);
+  assert.equal(strict.remaining("buy"), 150_000n);
+
+  const lenient = createVisaCheckout(sink, { ...ENV_KEYS, VISA_PROVIDER: "acceptance", VISA_FALLBACK_SIMULATED: "1", VISA_SIM_DELAY_MS: "0" }, server.fetch);
+  const r2 = await lenient.purchase(ctx());
+  assert.equal(r2.status, "captured");
+  assert.equal(r2.simulated, true);
 });

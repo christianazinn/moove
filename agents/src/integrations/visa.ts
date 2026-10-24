@@ -92,6 +92,22 @@ export interface CheckoutBackend {
   void(authId: string, amountCents: bigint, reference: string, reason: string): Promise<BackendResult>;
 }
 
+/** The provider was explicitly requested but can't run (missing keys, bad host). Never falls back. */
+export class VisaConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'VisaConfigError';
+  }
+}
+
+/** 401/403: the keys or account are wrong. Surfaced as a failed checkout, never as a simulated one. */
+export const isAuthError = (err: unknown): boolean => err instanceof VisaApiError && (err.httpStatus === 401 || err.httpStatus === 403);
+
+/** Worth trying again later: a transport error or a 5xx/timeout, not a decline, auth or config problem. */
+export const isTransient = (err: unknown): boolean =>
+  (err instanceof VisaApiError && !isAuthError(err) && (err.httpStatus === 0 || err.httpStatus === 408 || err.httpStatus === 429 || err.httpStatus >= 500)) ||
+  (err instanceof TypeError && /fetch failed|network|socket|ECONN|ETIMEDOUT/i.test(err.message));
+
 /** Thrown for transport/auth failures (not declines), so the caller can fall back. */
 export class VisaApiError extends Error {
   constructor(
@@ -171,7 +187,13 @@ export function createAcceptanceBackend(cfg: AcceptanceConfig): CheckoutBackend 
   async function call(path: string, payload: object): Promise<Record<string, any>> {
     const body = JSON.stringify(payload);
     const headers = cybersourceSignedHeaders({ ...cfg, host }, 'POST', path, body, now());
-    const res = await fetchImpl(`https://${host}${path}`, { method: 'POST', headers, body });
+    let res: Response;
+    try {
+      res = await fetchImpl(`https://${host}${path}`, { method: 'POST', headers, body });
+    } catch (err) {
+      // DNS, TLS, reset, offline: a transport failure (status 0), retryable.
+      throw new VisaApiError(`CyberSource unreachable on ${path}: ${(err as Error).message}`, 0, undefined);
+    }
     const text = await res.text();
     let json: Record<string, any> = {};
     try {
@@ -406,6 +428,8 @@ export interface PurchaseResult {
   /** `unknown`: the capture call failed in transit; the payment row stays pending until reconciled. */
   status: 'captured' | 'declined' | 'voided' | 'refused' | 'needs_approval' | 'waiting' | 'unknown';
   reason?: string;
+  /** A transient failure before any hold was placed: nothing to undo, safe to try again later. */
+  retryable?: boolean;
   hold?: Hold;
   captureId?: string;
   provider: VisaProvider;
@@ -472,7 +496,7 @@ export class VisaCheckout {
       hold = await this.authorize(ctx);
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      return { status: err instanceof VisaSpendRefused ? 'refused' : 'declined', reason, ...label };
+      return { status: err instanceof VisaSpendRefused ? 'refused' : 'declined', reason, retryable: isTransient(err), ...label };
     }
     const holdLabel = { provider: hold.provider, simulated: hold.simulated };
 
@@ -524,7 +548,8 @@ export class VisaCheckout {
         r = await backend.authorize(req);
       } catch (err) {
         const fb = this.fallback;
-        if (!(err instanceof VisaApiError) || !fb || fb === backend) throw err;
+        // Never hide broken keys or config behind a simulated label: 401/403 always surface.
+        if (!(err instanceof VisaApiError) || isAuthError(err) || !fb || fb === backend) throw err;
         await this.event(ctx, backend, 'error', `${tag(backend)} ${err.message}; falling back to the ${fb.simulated ? 'simulated' : fb.provider} checkout`, {
           httpStatus: err.httpStatus,
           // Processor request id + reason, for support tickets (never credentials).
@@ -687,6 +712,7 @@ export interface VisaEnv {
   VISA_SPEND_CAP_USD?: string;
   VISA_MAX_PER_PURCHASE_USD?: string;
   VISA_SIM_DELAY_MS?: string;
+  VISA_FALLBACK_SIMULATED?: string;
 }
 
 export const hasAcceptanceKeys = (env: VisaEnv): boolean =>
@@ -699,6 +725,14 @@ const usdToCents = (s: string | undefined, d: number): bigint => {
 };
 
 /** Picks the backend. Falls back to simulated (with a reason) whenever the real one can't run. */
+/** Stands in for an explicitly requested provider that can't run: every call fails loudly. */
+export function createMisconfiguredBackend(provider: VisaProvider, why: string): CheckoutBackend {
+  const fail = async (): Promise<BackendResult> => {
+    throw new VisaConfigError(`VISA_PROVIDER=${provider} is set but ${why}; not falling back to simulated`);
+  };
+  return { provider, simulated: false, sandbox: provider === 'acceptance', payee: `${provider} (misconfigured)`, authorize: fail, capture: fail, void: fail };
+}
+
 export function selectBackend(env: VisaEnv, fetchImpl?: typeof globalThis.fetch): { backend: CheckoutBackend; note?: string } {
   const sim = createSimulatedBackend({ delayMs: Number(env.VISA_SIM_DELAY_MS ?? '400') });
   const wanted = (env.VISA_PROVIDER || (hasAcceptanceKeys(env) ? 'acceptance' : 'simulated')) as VisaProvider;
@@ -711,7 +745,12 @@ export function selectBackend(env: VisaEnv, fetchImpl?: typeof globalThis.fetch)
     }
   }
   if (wanted !== 'acceptance') return { backend: sim, note: `unknown VISA_PROVIDER '${wanted}'` };
-  if (!hasAcceptanceKeys(env)) return { backend: sim, note: 'VISA_ACCEPTANCE_* keys are missing' };
+  const explicit = env.VISA_PROVIDER === 'acceptance';
+  if (!hasAcceptanceKeys(env)) {
+    return explicit
+      ? { backend: createMisconfiguredBackend('acceptance', 'VISA_ACCEPTANCE_* keys are missing'), note: 'VISA_ACCEPTANCE_* keys are missing' }
+      : { backend: sim, note: 'VISA_ACCEPTANCE_* keys are missing' };
+  }
   try {
     return {
       backend: createAcceptanceBackend({
@@ -723,14 +762,18 @@ export function selectBackend(env: VisaEnv, fetchImpl?: typeof globalThis.fetch)
       }),
     };
   } catch (err) {
-    return { backend: sim, note: (err as Error).message };
+    const why = (err as Error).message;
+    return explicit ? { backend: createMisconfiguredBackend('acceptance', why), note: why } : { backend: sim, note: why };
   }
 }
 
 export function createVisaCheckout(sink: VisaSink, env: VisaEnv = process.env, fetchImpl?: typeof globalThis.fetch): VisaCheckout {
   const { backend, note } = selectBackend(env, fetchImpl);
-  if (note) console.warn(`[visa] using the SIMULATED checkout: ${note}`);
+  if (note) console.warn(backend.simulated ? `[visa] using the SIMULATED checkout: ${note}` : `[visa] CHECKOUT WILL FAIL: ${note}`);
   const ledger = new CardSpendLedger(usdToCents(env.VISA_SPEND_CAP_USD, 1500), usdToCents(env.VISA_MAX_PER_PURCHASE_USD, 750));
-  const fallback = backend.simulated ? undefined : createSimulatedBackend({ delayMs: Number(env.VISA_SIM_DELAY_MS ?? '400') });
+  // Falling back to simulated on a 5xx/network error is opt-in once a provider is explicitly chosen
+  // (VISA_FALLBACK_SIMULATED=1), and on by default only when the provider was picked from the keys.
+  const fallbackAllowed = env.VISA_FALLBACK_SIMULATED === '1' || (!env.VISA_PROVIDER && env.VISA_FALLBACK_SIMULATED !== '0');
+  const fallback = backend.simulated || !fallbackAllowed ? undefined : createSimulatedBackend({ delayMs: Number(env.VISA_SIM_DELAY_MS ?? '400') });
   return new VisaCheckout({ sink, backend, ledger, fallback });
 }
