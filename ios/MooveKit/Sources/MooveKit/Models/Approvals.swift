@@ -7,7 +7,8 @@ public enum ApprovalKind: String, Codable, Sendable, CaseIterable {
 public enum ApprovalStatus: String, Codable, Sendable, CaseIterable {
     case pending, approved, denied, expired
 
-    /// Statuses `decide_approval` accepts (owner only, #42). Nothing sets `expired` any more.
+    /// Statuses `decide_approval` accepts (owner only, #42). `expired` is set only by the worker's
+    /// `expire_approval` after `APPROVAL_EXPIRE_HOURS` without an answer (#186).
     public static let decisions: [ApprovalStatus] = [.approved, .denied]
 }
 
