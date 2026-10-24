@@ -275,6 +275,17 @@ const layout = table(
   }
 );
 
+// Runtime settings the worker announces to every client (#2: the upload URL changes whenever the
+// tunnel restarts; reading it here means no app rebuild). Keys: SERVICE_KEYS.
+const serviceConfig = table(
+  { name: 'service_config', public: true },
+  {
+    key: t.string().primaryKey(),
+    value: t.string(),
+    updatedAt: t.timestamp(),
+  }
+);
+
 const agentEvent = table(
   { name: 'agent_event', public: true },
   {
@@ -307,6 +318,7 @@ const spacetimedb = schema({
   newHome,
   layout,
   agentEvent,
+  serviceConfig,
 });
 export default spacetimedb;
 
@@ -440,6 +452,25 @@ export const setApprovalThreshold = spacetimedb.reducer(
 
 // On maincloud only the pinned identity can register (#44). Elsewhere the first caller becomes the
 // worker and after that only existing workers can add more; to reset, republish with --delete-data.
+// upload_base_url: where the app POSTs /upload (the worker's PUBLIC_UPLOAD_BASE_URL)
+// worker_version: git sha the worker runs; worker_started_at: ISO time it (re)started
+const SERVICE_KEYS = ['upload_base_url', 'worker_version', 'worker_started_at'] as const;
+
+export const setServiceConfig = spacetimedb.reducer(
+  { key: t.string(), value: t.string() },
+  (ctx, { key, value }) => {
+    requireWorker(ctx);
+    oneOf('key', key, SERVICE_KEYS);
+    if (value.length > 512) throw new SenderError('value too long');
+    if (key === 'upload_base_url' && value !== '' && !/^https?:\/\/[^\s/]+(?::\d+)?\/?$/i.test(value)) {
+      throw new SenderError('upload_base_url must be an http(s) origin');
+    }
+    const row = { key, value, updatedAt: ctx.timestamp };
+    if (ctx.db.serviceConfig.key.find(key)) ctx.db.serviceConfig.key.update(row);
+    else ctx.db.serviceConfig.insert(row);
+  }
+);
+
 export const registerWorker = spacetimedb.reducer({ label: t.string() }, (ctx, { label }) => {
   const pinned = pinnedWorkers(ctx);
   if (pinned) {

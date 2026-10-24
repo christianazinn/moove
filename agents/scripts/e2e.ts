@@ -15,7 +15,7 @@
 // Usage (from agents/): npm run e2e [-- --replay | --live] [-- --keep]   (--keep leaves the worker running)
 import "./env.js";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { createWriteStream, existsSync, mkdirSync, rmSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { deflateSync, crc32 } from "node:zlib";
 import path from "node:path";
 import type { Identity } from "spacetimedb";
@@ -65,8 +65,19 @@ async function until<T>(what: string, get: () => T | undefined | false | null, t
   }
 }
 
-// A deterministic 96x64 PNG "room photo" (same bytes every run, so the sweep's recorded answer replays).
-function roomPng(): Buffer {
+// The sweep's "room photo" is a committed file: its bytes are part of the recorded answer's key, and
+// zlib output differs between Node versions, so it must not be regenerated per run.
+const ROOM_PNG = path.join("fixtures", "e2e", "room.png");
+function roomPhoto(): Buffer {
+  if (!existsSync(ROOM_PNG)) {
+    mkdirSync(path.dirname(ROOM_PNG), { recursive: true });
+    writeFileSync(ROOM_PNG, generateRoomPng());
+  }
+  return readFileSync(ROOM_PNG);
+}
+
+// A 96x64 PNG: a brown desk and a dark floor lamp on a light wall.
+function generateRoomPng(): Buffer {
   const w = 96, h = 64;
   const raw = Buffer.alloc((w * 3 + 1) * h);
   for (let y = 0; y < h; y++) {
@@ -187,6 +198,14 @@ await stage("app user connects + register_user", async () => {
   return { detail: `user ${me.toHexString().slice(0, 12)}…, approval threshold -1 (always ask)` };
 });
 
+await stage("service_config: worker announced its upload URL", async () => {
+  const want = `http://localhost:${PORT}`;
+  const row = await until("upload_base_url", () => conn!.db.serviceConfig.key.find("upload_base_url"), 15_000);
+  if (row.value !== want) throw new Error(`upload_base_url=${row.value}, want ${want}`);
+  const v = conn!.db.serviceConfig.key.find("worker_version");
+  return { detail: `upload_base_url=${row.value}, worker_version=${v?.value ?? "?"}` };
+});
+
 const items = () => (conn ? [...conn.db.item.iter()].filter(it => me && it.owner.isEqual(me)) : []);
 
 const scanId = await stage("scan: import_scan_v2 (9 demo objects + RoomPlan attributes)", async () => {
@@ -238,7 +257,7 @@ await stage("sort: keep/sell/donate/trash, sentimental left to the user", async 
 
 await stage("sweep: room photo -> named/added items", async () => {
   if (!conn || scanId === undefined) throw new Error("no scan");
-  const res = await fetch(`http://localhost:${PORT}/upload`, { method: "POST", headers: { "content-type": "image/png" }, body: new Uint8Array(roomPng()) });
+  const res = await fetch(`http://localhost:${PORT}/upload`, { method: "POST", headers: { "content-type": "image/png" }, body: new Uint8Array(roomPhoto()) });
   if (!res.ok) throw new Error(`upload: HTTP ${res.status} ${await res.text()}`);
   const { url } = (await res.json()) as { url: string };
   await conn.reducers.addScanPhoto({ scanId, url });
