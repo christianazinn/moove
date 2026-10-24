@@ -52,7 +52,13 @@ import Testing
         .clothes: ("clothes", "clothes"), .electronics: ("electronics", "laptop"), .decor: ("decor", "vase"),
         .appliance: ("appliance", "coffee maker"), .fan: ("appliance", "box fan"), .beanBag: ("sofa", "bean bag"),
         .mirror: ("decor", "mirror"), .quiltRack: ("decor", "quilt rack"), .framedPhotos: ("decor", "framed photos"),
-        .box: ("storage", "storage bin"),
+        .box: ("box", "cardboard box"),
+        .motorcycle: ("motorcycle", "motorcycle"), .stroller: ("stroller", "stroller"), .wheelchair: ("wheelchair", "wheelchair"),
+        .grill: ("grill", "grill"), .lawnMower: ("lawn mower", "lawn mower"), .crib: ("crib", "crib"), .ladder: ("ladder", "ladder"),
+        .trunk: ("trunk", "trunk"), .basket: ("basket", "laundry basket"), .trashCan: ("trash can", "trash can"),
+        .toolbox: ("toolbox", "toolbox"), .petCrate: ("pet crate", "pet crate"), .petBed: ("pet bed", "dog bed"),
+        .catTree: ("cat tree", "cat tree"), .clock: ("clock", "wall clock"), .toy: ("toy", "stuffed animal"),
+        .rack: ("coat rack", "coat rack"),
     ]
 
     static func triangles(_ spec: VoxelItemSpec) -> Int { VoxelMesher.mesh(VoxelModels.build(spec)).triangleCount }

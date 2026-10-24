@@ -54,6 +54,25 @@ extension VoxelModels {
         case .lamp: Envelope(short: 0.08...0.9, long: 0.1...1.0, height: 0.15...2.3)
         case .ottoman: Envelope(short: 0.3...1.2, long: 0.3...1.8, height: 0.2...0.6)
         case .bench: Envelope(short: 0.25...0.9, long: 0.6...2.6, height: 0.25...1.0)
+        // the detector's remaining categories: wide on purpose (a step stool-sized "ladder" and an
+        // extension ladder, a bassinet and a crib), only a clearly wrong size re-routes
+        case .motorcycle: Envelope(short: 0.35...1.2, long: 1.2...2.7, height: 0.6...1.7)
+        case .stroller: Envelope(short: 0.3...0.9, long: 0.4...1.3, height: 0.4...1.3)
+        case .wheelchair: Envelope(short: 0.4...0.9, long: 0.5...1.3, height: 0.5...1.25)
+        case .grill: Envelope(short: 0.25...1.0, long: 0.35...2.0, height: 0.2...1.6)
+        case .lawnMower: Envelope(short: 0.3...1.3, long: 0.45...2.4, height: 0.25...1.3)
+        case .crib: Envelope(short: 0.35...1.1, long: 0.6...1.6, height: 0.5...1.4)
+        case .ladder: Envelope(short: 0.03...1.0, long: 0.25...1.2, height: 0.4...3.2)
+        case .trunk: Envelope(short: 0.2...0.9, long: 0.3...1.5, height: 0.15...0.95)
+        case .basket: Envelope(short: 0.12...0.8, long: 0.15...1.0, height: 0.08...0.95)
+        case .trashCan: Envelope(short: 0.15...0.8, long: 0.15...1.0, height: 0.2...1.3)
+        case .toolbox: Envelope(short: 0.1...0.8, long: 0.25...1.6, height: 0.08...1.6)
+        case .petCrate: Envelope(short: 0.25...1.0, long: 0.35...1.4, height: 0.2...1.1)
+        case .petBed: Envelope(short: 0.25...1.2, long: 0.3...1.6, height: 0.04...0.5)
+        case .catTree: Envelope(short: 0.25...1.0, long: 0.3...1.3, height: 0.35...2.5)
+        case .clock: Envelope(short: 0.0...0.6, long: 0.08...0.8, height: 0.06...2.4)
+        case .toy: Envelope(short: 0.0...1.2, long: 0.05...1.6, height: 0.04...1.6)
+        case .rack: Envelope(short: 0.12...0.8, long: 0.25...2.0, height: 0.2...2.1)
         case .decor:
             // a pillow / cushion is thin one way (it may stand up against a sofa back) and never tall
             isPillow(n) ? Envelope(short: 0.0...1.0, long: 0.2...1.3, height: 0.04...0.6) : nil

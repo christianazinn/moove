@@ -43,7 +43,9 @@ public struct PropPlacer: Sendable {
     static let propCategories: Set<String> = ["decor", "lamp", "light", "lighting", "books", "book", "photos", "electronics", "trading_cards", "plant", "plants"]
     /// Builders that are furniture (or floor things) at any size.
     static let floorKinds: Set<VoxelModels.Kind> = [.sofa, .bed, .mattress, .desk, .chair, .table, .dresser, .bookshelf, .rug, .appliance, .beanBag, .quiltRack, .box,
-                                                         .guitar, .piano, .keyboard, .drums, .vacuum, .scooter, .bag, .fitness, .board]
+                                                         .guitar, .piano, .keyboard, .drums, .vacuum, .scooter, .bag, .fitness, .board,
+                                                         .motorcycle, .stroller, .wheelchair, .grill, .lawnMower, .crib, .ladder, .trunk, .basket,
+                                                         .trashCan, .toolbox, .petCrate, .petBed, .catTree, .rack]
 
     /// `elevationM`: a known height (a scanned wall-mounted TV is a wall item whatever its name).
     public static func role(of spec: VoxelItemSpec, elevationM: Double? = nil) -> Role {
@@ -54,6 +56,8 @@ public struct PropPlacer: Sendable {
         let d = spec.depthM.isFinite && spec.depthM > 0 ? spec.depthM : kind.defaultSize.1
         switch kind {
         case .art, .mirror: return .wall
+        // a wall clock hangs like art; a grandfather clock stands, an alarm / mantel clock is a prop
+        case .clock where !Canvas.isStandingClock(name, heightM: h) && !Canvas.isTableClock(name): return .wall
         case .framedPhotos where h > 0.3: return .wall
         case .tv where name.word("wall") || name.has("mounted", "wall-mount") || (elevationM ?? 0) > 0.3: return .wall
         default: break
