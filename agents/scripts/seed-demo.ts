@@ -6,7 +6,8 @@
 // Skips if this user already has a "Bedroom" (prints its join code) unless --force, which imports another.
 // --wait[=SEC] waits (default 90s) for the worker to price the items and prints the estimates.
 // The user's token lives in .user-token.<db> (SEED_USER_TOKEN_FILE overrides), so re-runs are the same user.
-// Usage (from agents/): npm run seed:demo [-- --force] [-- --wait]
+// Refuses a maincloud URI unless --maincloud is passed.
+// Usage (from agents/): npm run seed:demo [-- --force] [-- --wait] [-- --maincloud]
 import "./env.js";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import type { Identity } from "spacetimedb";
@@ -18,6 +19,16 @@ import { DEMO_HOME, DEMO_OBJECTS, DEMO_ROOM_NAME, demoQuery } from "./demo-room.
 const force = process.argv.includes("--force");
 const waitArg = process.argv.find((a) => a === "--wait" || a.startsWith("--wait="));
 const waitSec = waitArg ? Number(waitArg.split("=")[1] ?? 90) : 0;
+if (!Number.isFinite(waitSec) || waitSec < 0) {
+  console.error(`bad ${waitArg}: use --wait or --wait=SEC`);
+  process.exit(1);
+}
+// .env.example points SPACETIME_URI at maincloud, so a bare run from a copied .env.local would write the
+// live demo database. Seeding it takes an explicit --maincloud.
+if (/maincloud/i.test(config.spacetimeUri) && !process.argv.includes("--maincloud")) {
+  console.error(`refusing to seed ${config.spacetimeUri} without --maincloud (set SPACETIME_URI=ws://localhost:3000 for a local DB)`);
+  process.exit(1);
+}
 const tokenFile = process.env.SEED_USER_TOKEN_FILE || `.user-token.${config.spacetimeDb}`;
 const dollars = (c: bigint) => `$${(Number(c) / 100).toFixed(0)}`;
 
@@ -64,7 +75,7 @@ try {
   const existing = myBedrooms();
   let room: Room;
   if (existing.length && !force) {
-    room = existing[existing.length - 1];
+    room = existing.reduce((a, b) => (b.id > a.id ? b : a)); // newest; iter() order isn't by id
     console.log(`\nAlready seeded: "${room.name}" (room #${room.id}, ${itemsIn(room).length} items). Use --force to import another.`);
   } else {
     if (!conn.db.user.identity.find(identity)) await conn.reducers.registerUser({ auth0Sub: "", name: "Demo Student", email: "demo@moove.app" });

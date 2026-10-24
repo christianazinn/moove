@@ -21,6 +21,7 @@ Every item name is exactly the pricing agent's query (`queryFor`: brand + name, 
 
 Behavior:
 - Skips if this user already has a "Bedroom" and prints its join code. `--force` imports another one.
+- Refuses a maincloud `SPACETIME_URI` (the `.env.example` default) unless `--maincloud` is passed, so a bare run can't write the live database.
 - `--wait` (or `--wait=SEC`, default 90) waits for the worker to price the items and prints the estimates. Exits 1 if they aren't all priced.
 - The user's token is saved to `agents/.user-token.<db>` (gitignored), so re-runs act as the same user. `SEED_USER_TOKEN_FILE` points it at another token file.
 - `npm run comps:prefetch -- --dry` lists which demo queries are cached. Without `--dry` it fetches the missing ones live (Apify spend only, capped per actor by `APIFY_MAX_USD_PER_RUN`). If you rename a demo item, run it and commit the new fixture.
@@ -43,7 +44,7 @@ SPACETIME_URI=ws://localhost:3000 SPACETIME_DB_NAME=moove-demo npm run seed:demo
 ### Seed maincloud (Christian only)
 Only Christian touches maincloud, and only once the module there is current. From `agents/`:
 ```sh
-SPACETIME_URI=wss://maincloud.spacetimedb.com SPACETIME_DB_NAME=moove npm run seed:demo -- --wait
+SPACETIME_URI=wss://maincloud.spacetimedb.com SPACETIME_DB_NAME=moove npm run seed:demo -- --maincloud --wait
 ```
 The live worker must be running against maincloud for `--wait` to see prices. Note the printed join code for the demo phones.
 
