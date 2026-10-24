@@ -9,18 +9,31 @@ public struct LayoutItem: Sendable, Hashable, Identifiable {
     public var widthM: Double
     public var depthM: Double
     public var heightM: Double
+    /// Measured from the scan's photos (`ScanColors`); the voxel model uses them over its keyword palette.
+    public var primaryColor: VoxelColor?
+    public var secondaryColor: VoxelColor?
 
-    public init(id: UInt64, name: String, category: String, widthM: Double, depthM: Double, heightM: Double) {
+    public init(id: UInt64, name: String, category: String, widthM: Double, depthM: Double, heightM: Double,
+                primaryColor: VoxelColor? = nil, secondaryColor: VoxelColor? = nil) {
         self.id = id
         self.name = name
         self.category = category
         self.widthM = widthM
         self.depthM = depthM
         self.heightM = heightM
+        self.primaryColor = primaryColor
+        self.secondaryColor = secondaryColor
     }
 
     public init(_ item: Item) {
         self.init(id: item.id, name: item.name, category: item.category, widthM: item.widthM, depthM: item.depthM, heightM: item.heightM)
+    }
+
+    /// The item with its scanned colors (matched by `scanObjectId`), if `colors` has any for it.
+    public init(_ item: Item, colors: ScanColors?) {
+        let c = colors?.colors(for: item)
+        self.init(id: item.id, name: item.name, category: item.category, widthM: item.widthM, depthM: item.depthM, heightM: item.heightM,
+                  primaryColor: c?.primary, secondaryColor: c?.secondary)
     }
 }
 

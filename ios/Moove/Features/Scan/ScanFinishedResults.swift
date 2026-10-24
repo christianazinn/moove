@@ -8,6 +8,8 @@ struct ScanFinishedResults: View {
     @Environment(MooveStore.self) private var store
     /// Name the scan was saved under; the newest room with this name is the one just scanned.
     var roomName: String
+    /// Colors sampled from the scan's camera frames (`ScanSession.colors`), if ready.
+    var colors: ScanColors? = nil
     var onSelect: (Item) -> Void = { _ in }
 
     @State private var geometry: RoomGeometry?
@@ -24,7 +26,7 @@ struct ScanFinishedResults: View {
     var body: some View {
         Group {
             if let room, !items.isEmpty {
-                ScanResultsView(room: room, items: items, comps: store.snapshot.comps, geometry: geometry, onSelect: onSelect)
+                ScanResultsView(room: room, items: items, comps: store.snapshot.comps, geometry: geometry, colors: colors, onSelect: onSelect)
             } else {
                 HStack(spacing: 10) {
                     ProgressView().tint(Theme.accentStrong)

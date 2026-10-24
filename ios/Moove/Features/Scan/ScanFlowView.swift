@@ -40,7 +40,7 @@ struct ScanFlowView: View {
         switch session.phase {
         case .capturing:
             ZStack(alignment: .top) {
-                RoomCaptureContainer(stopRequested: $stopRequested) { result in
+                RoomCaptureContainer(stopRequested: $stopRequested, recorder: session.frameRecorder) { result in
                     switch result {
                     case .success(let room): session.captured(room)
                     case .failure(let error): session.phase = .failed(error.localizedDescription)
@@ -93,7 +93,7 @@ struct ScanFlowView: View {
                          ?? "Agents are identifying and pricing them now.")
                         .lede()
                         .padding(.top, 10)
-                    ScanFinishedResults(roomName: session.roomName)
+                    ScanFinishedResults(roomName: session.roomName, colors: session.colors)
                         .padding(.top, 28)
                     Button("See inventory") { dismiss() }
                         .buttonStyle(.pill(.primary))

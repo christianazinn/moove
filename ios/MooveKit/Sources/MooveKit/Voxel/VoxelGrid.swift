@@ -131,7 +131,7 @@ public struct VoxelItemSpec: Sendable, Hashable {
 
     public init(_ item: LayoutItem) {
         self.init(category: item.category, name: item.name, widthM: item.widthM, depthM: item.depthM, heightM: item.heightM,
-                  id: String(item.id))
+                  id: String(item.id), primaryColor: item.primaryColor, secondaryColor: item.secondaryColor)
     }
 
     public init(_ item: Item) {
