@@ -9,10 +9,19 @@ public struct SyncSnapshot: Sendable, Equatable {
     public var scans: [Scan] = []
     public var items: [Item] = []
     public var comps: [Comp] = []
+    public var newHomes: [NewHome] = []
+    public var layouts: [Layout] = []
 
     public init(me: IdentityHex? = nil) { self.me = me }
 
     public func comps(for itemId: UInt64) -> [Comp] { comps.filter { $0.itemId == itemId } }
+
+    /// The user's current new home: the most recently created one they own.
+    public var myNewHome: NewHome? {
+        newHomes.filter { $0.owner == me }.max { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
+    }
+
+    public func layouts(for newHomeId: UInt64) -> [Layout] { layouts.filter { $0.newHomeId == newHomeId } }
 }
 
 /// One object from a RoomPlan scan, ready to become an `items` row.
@@ -74,4 +83,7 @@ public protocol SyncBackend: AnyObject, Sendable {
     func addItemPhoto(itemId: UInt64, url: String) async throws
     func setDisposition(itemId: UInt64, disposition: Disposition) async throws
     func setSentimental(itemId: UInt64, maybeSentimental: Bool) async throws
+
+    func createNewHome(name: String, source: NewHomeSource, floorPlanJson: String) async throws
+    func saveLayout(newHomeId: UInt64, name: String, placementsJson: String) async throws
 }

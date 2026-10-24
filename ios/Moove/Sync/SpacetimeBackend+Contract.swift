@@ -43,4 +43,12 @@ extension SpacetimeBackend {
     func setSentimental(itemId: UInt64, maybeSentimental: Bool) async throws {
         throw Failure.reducerFailed("setSentimental: waiting on the SpacetimeDB module (#2)")
     }
+
+    func createNewHome(name: String, source: NewHomeSource, floorPlanJson: String) async throws {
+        throw Failure.reducerFailed("createNewHome: waiting on the SpacetimeDB module (#2)")
+    }
+
+    func saveLayout(newHomeId: UInt64, name: String, placementsJson: String) async throws {
+        throw Failure.reducerFailed("saveLayout: waiting on the SpacetimeDB module (#2)")
+    }
 }
