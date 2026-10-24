@@ -253,13 +253,17 @@ public enum VoxelModels {
         if n.has("bean bag", "beanbag", "bean-bag", "pouf", "floor cushion") { return .beanBag }
         if n.has("sectional", "sofa", "couch", "loveseat", "futon", "settee", "armchair") { return .sofa }
         if n.has("bookcase", "bookshelf", "book shelf", "shelving", "shelf unit", "étagère") { return .bookshelf }
-        // the vision agent's specific names ("black standing desk") beat a broad category ("furniture");
-        // order matters: a "desk lamp" is a lamp, a "desk chair" a chair, a "desk with drawers" a desk
-        if n.word("lamp", "lamps", "sconce", "lantern") { return .lamp }
-        if n.word("chair", "chairs", "stool", "stools", "recliner") { return .chair }
-        if n.has("tv stand", "tv console", "tv cabinet", "tv unit", "media console", "entertainment center") { return .dresser }
-        if n.has("desk", "workstation", "computer armoire", "roll top", "rolltop", "roll-top", "dressing table")
-            || n.word("vanity", "secretary") { return .desk }
+        // the vision agent's specific names ("black standing desk") beat a broad category ("furniture"),
+        // but not a small-object one: a "coffee table book" stays books, a "TV remote" electronics.
+        // Order matters: a "desk lamp" is a lamp, a "desk chair" a chair, a "desk with drawers" a desk
+        let small = smallCategories.contains(cat) || (cat == "electronics" && !isTV(n))
+        if !small {
+            if n.word("lamp", "lamps", "sconce", "lantern") { return .lamp }
+            if n.word("chair", "chairs", "stool", "stools", "recliner") { return .chair }
+            if n.has("tv stand", "tv console", "tv cabinet", "tv unit", "media console", "entertainment center") { return .dresser }
+            if n.has("desk", "workstation", "computer armoire", "roll top", "rolltop", "roll-top", "dressing table")
+                || n.word("vanity", "secretary") { return .desk }
+        }
         if n.has("dresser", "chest of drawers", "nightstand", "night stand", "bedside", "sideboard", "credenza", "armoire", "wardrobe")
             || n.word("drawers", "cabinet") { return .dresser }
         if n.word("rug") || n.has("carpet") { return .rug }
@@ -267,18 +271,22 @@ public enum VoxelModels {
         if n.has("mirror") { return .mirror }
         if n.has("frame") && n.has("photo", "picture", "portrait") { return .framedPhotos }
         if n.has("fridge", "refrigerator", "freezer") { return .appliance }
-        if n.has("dishwasher") { return .dishwasher }
-        if n.has("washing machine") || (n.word("washer", "dryer") && !n.has("hair dryer", "pressure washer")) { return .appliance }
-        if n.has("microwave") { return .microwave }
-        if n.word("stove", "range", "oven", "cooktop") && !n.has("toaster oven", "dutch oven") { return .stove }
+        if !small {
+            if n.has("dishwasher") { return .dishwasher }
+            if n.has("washing machine") || (n.word("washer", "dryer") && !n.has("hair dryer", "pressure washer")) { return .appliance }
+            if n.has("microwave") { return .microwave }
+            if n.word("stove", "range", "oven", "cooktop") && !n.has("toaster oven", "dutch oven") { return .stove }
+        }
         if n.word("fan", "fans") { return .fan }
-        if n.word("bike", "bicycle", "e-bike", "ebike") { return .bike }
-        if n.has("suitcase", "luggage", "carry-on", "carry on") { return .suitcase }
-        if n.has("ottoman", "footstool", "foot stool", "pouf") { return .ottoman }
-        if n.word("bench", "settle") { return .bench }
-        if n.has("bed frame", "bunk bed", "daybed", "platform bed", "headboard") || n.word("bed") { return .bed }
-        if n.word("tv", "television", "tvs") { return .tv }
-        if n.word("table", "tables") { return .table }
+        if !small {
+            if n.word("bike", "bicycle", "e-bike", "ebike") { return .bike }
+            if n.has("suitcase", "luggage", "carry-on", "carry on") { return .suitcase }
+            if n.has("ottoman", "footstool", "foot stool", "pouf") { return .ottoman }
+            if n.word("bench", "settle") { return .bench }
+            if n.has("bed frame", "bunk bed", "daybed", "platform bed", "headboard") || n.word("bed") { return .bed }
+            if isTV(n) { return .tv }
+            if n.word("table", "tables") { return .table }
+        }
         switch cat {
         case "sofa", "couch": return .sofa
         case "bed": return .bed
@@ -298,7 +306,7 @@ public enum VoxelModels {
         case "rug": return .rug
         case "kitchenware", "kitchen": return .kitchenware
         case "clothes", "clothing": return .clothes
-        case "electronics": return n.word("tv", "television") ? .tv : .electronics
+        case "electronics": return isTV(n) ? .tv : .electronics
         case "appliance", "appliances", "refrigerator", "fridge", "washer", "dryer", "washerdryer", "washer_dryer": return .appliance
         case "stove", "oven", "range": return .stove
         case "dishwasher": return .dishwasher
@@ -319,6 +327,18 @@ public enum VoxelModels {
         default: return size.map(shapeKind) ?? .box
         }
     }
+
+    /// The name is a TV itself, not a TV accessory ("TV remote", "TV antenna").
+    static func isTV(_ n: VName) -> Bool {
+        n.word("tv", "television", "tvs") && !n.word("remote", "remotes", "antenna", "cable", "cables", "stick", "box")
+    }
+
+    /// Categories that already name a small object; furniture words in the name ("coffee table
+    /// book", "chair cushion") describe it rather than make it furniture.
+    static let smallCategories: Set<String> = [
+        "books", "book", "art", "photos", "kitchenware", "kitchen", "clothes", "clothing", "plant", "plants",
+        "binder", "trading_cards", "decor",
+    ]
 
     /// Last resort for a broad category ("furniture", "other") whose name has no keyword: the
     /// likeliest piece for the scanned (w, d, h) in meters. Small or odd shapes stay boxes.
