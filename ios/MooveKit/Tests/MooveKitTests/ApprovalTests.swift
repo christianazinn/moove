@@ -69,7 +69,7 @@ import Testing
 
     @Test func approvalForAStalePriceRejects() async throws {
         var seed = DemoFixtures.inventory(owner: "me")
-        seed.listings[0].priceCents = 39_000 // price changed after the approval was requested
+        seed.listings[seed.listings.firstIndex { $0.id == 200 }!].priceCents = 39_000 // price changed after the approval was requested
         let backend = FixtureBackend(identity: "me", seed: seed)
         _ = try await backend.connect(token: nil)
         try await backend.decideApproval(approvalId: 300, status: .approved)
@@ -78,12 +78,12 @@ import Testing
 
     @Test func cannotDecideTwiceOrSomeoneElses() async throws {
         let backend = try await connectedDemo()
-        try await backend.decideApproval(approvalId: 301, status: .approved)
+        try await backend.decideApproval(approvalId: 300, status: .approved)
         await #expect(throws: FixtureBackend.Failure.alreadyDecided) {
-            try await backend.decideApproval(approvalId: 301, status: .denied)
+            try await backend.decideApproval(approvalId: 300, status: .denied)
         }
         await #expect(throws: FixtureBackend.Failure.invalidStatus) {
-            try await backend.decideApproval(approvalId: 300, status: .expired)
+            try await backend.decideApproval(approvalId: 85, status: .expired)
         }
         await #expect(throws: FixtureBackend.Failure.noSuchApproval) {
             try await backend.decideApproval(approvalId: 9_999, status: .approved)

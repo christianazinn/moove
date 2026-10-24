@@ -43,7 +43,15 @@ public enum DemoFixtures {
             Comp(id: 102, itemId: 11, source: "fb", title: "Herman Miller office chair", priceCents: 42_500, url: "https://www.facebook.com/marketplace/"),
         ]
         // As if the listing agent (#11) had run. All simulated: the demo never posts to eBay.
+        // 198 and 199 are earlier attempts the agent replaced (200 and 203 are the current ones):
+        // one the user denied, one whose post failed, so the "Not posted" group has real rows.
         s.listings = [
+            Listing(id: 198, owner: owner, itemId: 11, title: "Herman Miller Aeron Chair Size B - Excellent",
+                    description: "Size B Aeron, fully loaded.\n\nFirst draft, priced at the top of the comps.",
+                    priceCents: 48_000, status: .rejected, updatedAt: Date.now.addingTimeInterval(-50 * 60)),
+            Listing(id: 199, owner: owner, itemId: 21, title: "Frigidaire Mini Fridge 3.2 cu ft",
+                    description: "Compact fridge with freezer section.",
+                    priceCents: 7_000, status: .failed, updatedAt: Date.now.addingTimeInterval(-40 * 60)),
             Listing(id: 200, owner: owner, itemId: 11, title: "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition",
                     description: "Fully adjustable Aeron in size B with lumbar support. Mesh seat and back are intact with no tears.\n\nLight wear on the armrests. Smoke-free home.\n\nLocal pickup in SF, or I can ship.",
                     priceCents: 41_000, status: .awaitingApproval),
@@ -64,9 +72,10 @@ public enum DemoFixtures {
             Approval(id: 300, owner: owner, kind: .listing, refId: 200, amountCents: 41_000,
                      summary: "Sell \"Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition\" for $410",
                      requestedAt: now.addingTimeInterval(-6 * 60)),
-            Approval(id: 301, owner: owner, kind: .purchase, refId: 310, amountCents: 24_000,
-                     summary: "Buy a queen mattress (Casper, like new) from Craigslist for $240",
-                     requestedAt: now.addingTimeInterval(-2 * 60)),
+            // The user turned down the first, pricier Aeron draft; the agent re-priced it (listing 200).
+            Approval(id: 301, owner: owner, kind: .listing, refId: 198, amountCents: 48_000,
+                     summary: "Sell \"Herman Miller Aeron Chair Size B - Excellent\" for $480", status: .denied,
+                     requestedAt: now.addingTimeInterval(-55 * 60), updatedAt: now.addingTimeInterval(-50 * 60)),
             Approval(id: 302, owner: owner, kind: .purchase, refId: 311, amountCents: 18_900,
                      summary: "Buy a 3-seat sofa from FB Marketplace for $189", status: .denied,
                      requestedAt: now.addingTimeInterval(-3 * 3600), updatedAt: now.addingTimeInterval(-170 * 60)),
@@ -75,7 +84,7 @@ public enum DemoFixtures {
                      requestedAt: now.addingTimeInterval(-26 * 3600), updatedAt: now.addingTimeInterval(-25 * 3600)),
         ]
         s.payments = payments(owner: owner)
-        s.agentEvents = paymentEvents(owner: owner)
+        s.agentEvents = paymentEvents(owner: owner) + listingEvents(owner: owner)
         return s
     }
 
@@ -143,6 +152,27 @@ public enum DemoFixtures {
                        message: "No USDC payment option on Base Sepolia for https://comps.example/x402/report",
                        dataJson: #"{\#(rail("failed", remaining: 4_975_000)),"url":"https://comps.example/x402/report"}"#,
                        createdAt: ago(9)),
+        ]
+    }
+}
+
+extension DemoFixtures {
+    /// The listing agent's notes on the two listings that didn't post (198 denied, 199 failed),
+    /// so the Listings screen can say why. Same wording as agents/src/agents/listing.ts.
+    public static func listingEvents(owner: IdentityHex, now: Date = .now) -> [AgentEvent] {
+        func ago(_ minutes: Double) -> Date { now.addingTimeInterval(-minutes * 60) }
+        return [
+            AgentEvent(id: 620, owner: owner, agent: "listing", kind: .approval,
+                       message: "$480 is over the $100 threshold, asking for approval", refTable: "listing", refId: 198,
+                       createdAt: ago(55)),
+            AgentEvent(id: 621, owner: owner, agent: "listing", kind: .approval,
+                       message: "Not posting: denied", refTable: "listing", refId: 198, createdAt: ago(50)),
+            AgentEvent(id: 622, owner: owner, agent: "listing", kind: .plan,
+                       message: "Posting \"Frigidaire Mini Fridge 3.2 cu ft\" to eBay at $70 (simulated)",
+                       refTable: "listing", refId: 199, createdAt: ago(41)),
+            AgentEvent(id: 623, owner: owner, agent: "listing", kind: .error,
+                       message: "Posting failed: eBay needs at least one public https photo URL (simulated)",
+                       refTable: "listing", refId: 199, dataJson: #"{"simulated":true}"#, createdAt: ago(40)),
         ]
     }
 }

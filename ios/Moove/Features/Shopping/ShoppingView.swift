@@ -11,6 +11,7 @@ struct ShoppingView: View {
     var body: some View {
         let items = store.shoppingItems
         let approvals = store.snapshot.pendingPurchaseApprovals
+        let state = store.commerceState(hasRows: !items.isEmpty)
         // A plain List (not a ScrollView) so rows keep swipe-to-delete; the theme comes from clear
         // row backgrounds, gutter insets and rule-colored separators.
         List {
@@ -23,20 +24,15 @@ struct ShoppingView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 8)
                 .shoppingChromeRow()
-                if items.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Nothing to buy yet").blockTitle()
-                        Text("Once your new home is set up, the shopping agent lists what it still needs. You can add things too.")
-                            .monoMeta()
-                            .fixedSize(horizontal: false, vertical: true)
+                if state != .content {
+                    CommercePlaceholder(
+                        state: state,
+                        emptyTitle: "Nothing to buy yet",
+                        emptyDetail: "Set up your new home in New Home and the shopping agent lists what it still needs. You can add things yourself too."
+                    ) {
                         Button("Add item", systemImage: "plus") { showAdd = true }
                             .buttonStyle(.pill(.primary, compact: true))
-                            .padding(.top, 14)
                     }
-                    .padding(.vertical, 28)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .ruled(.top)
-                    .ruled()
                     .padding(.top, 24)
                     .shoppingChromeRow()
                 }
@@ -66,6 +62,7 @@ struct ShoppingView: View {
                     .onDelete { offsets in remove(offsets.map { items[$0] }) }
                     Text("Swipe to remove anything you don't need. Agents only buy what's on this list.")
                         .monoMeta()
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 12)
                         .padding(.bottom, 32)
                         .shoppingChromeRow()
@@ -81,6 +78,7 @@ struct ShoppingView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Add item", systemImage: "plus") { showAdd = true }
+                    .accessibilityLabel("Add an item to the shopping list")
             }
         }
         .sheet(isPresented: $showAdd) { AddShoppingItemSheet() }
@@ -117,6 +115,27 @@ struct ShoppingRoute: Hashable {
     let itemId: UInt64
 }
 
+/// A voxel drawing of a shopping item or deal (#15 piece 2), with a check when it's bought.
+struct ShoppingThumbnail: View {
+    let spec: VoxelItemSpec
+    var bought = false
+    var size: CGFloat = 56
+
+    var body: some View {
+        VoxelThumbnail(spec: spec, size: size)
+            .overlay(alignment: .bottomTrailing) {
+                if bought {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Theme.accentStrong)
+                        .background(Circle().fill(Theme.bg))
+                        .offset(x: 4, y: 4)
+                        .accessibilityHidden(true)
+                }
+            }
+    }
+}
+
 struct ShoppingItemRow: View {
     @Environment(MooveStore.self) private var store
     let item: ShoppingItem
@@ -124,17 +143,18 @@ struct ShoppingItemRow: View {
     var body: some View {
         let deals = store.snapshot.deals(for: item.id)
         let chosen = store.snapshot.chosenDeal(for: item)
+        let payment = chosen.flatMap { store.snapshot.visaPayment(for: $0.id) }
         HStack(alignment: .top, spacing: 16) {
-            IconTile(systemName: item.status == .bought ? "checkmark" : "cart")
+            ShoppingThumbnail(spec: ShoppingThumbnails.spec(for: item), bought: item.status == .bought)
             VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                AdaptiveLine {
                     Text(item.name).blockTitle().lineLimit(2)
                     Spacer(minLength: 8)
-                    if let chosen { Text(chosen.priceCents.usd).rowValue() }
+                    if let chosen { Text(chosen.formattedPrice).rowValue().amountText() }
                 }
                 ShoppingStatusChip(status: item.status)
                 if !item.reason.isEmpty {
-                    Text(item.reason).sansText(14).foregroundStyle(Theme.muted).lineLimit(2)
+                    Text(item.reason).sansText(14).foregroundStyle(Theme.muted).lineLimit(3)
                 }
                 HStack(spacing: 8) {
                     if let chosen {
@@ -143,14 +163,25 @@ struct ShoppingItemRow: View {
                         Text("\(deals.count) deals · pick one").monoMeta()
                     }
                     Spacer(minLength: 0)
-                    if let chosen, let payment = store.snapshot.visaPayment(for: chosen.id) {
-                        VisaRailBadge(badge: VisaPaymentBadge(payment))
-                    }
+                    if let payment { VisaRailBadge(badge: VisaPaymentBadge(payment)) }
+                }
+                if payment?.status == .failed {
+                    CommerceProblem(text: "Checkout failed. Nothing was charged. Pick another deal.")
                 }
             }
         }
         .padding(.vertical, 16)
         .frame(minHeight: 44)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spoken(chosen: chosen, payment: payment, dealCount: deals.count))
+    }
+
+    private func spoken(chosen: Deal?, payment: Payment?, dealCount: Int) -> String {
+        var parts = [item.name, item.status.label]
+        if let chosen { parts.append("\(chosen.formattedPrice) from \(chosen.source)") } else if dealCount > 0 { parts.append("\(dealCount) deals, pick one") }
+        if let payment { parts.append(VisaPaymentBadge(payment).accessibilitySummary(amount: payment.formattedAmount)) }
+        if payment?.status == .failed { parts.append("checkout failed, nothing was charged") }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -208,42 +239,45 @@ struct PurchaseApprovalCard: View {
     @State private var confirmDeny = false
     @State private var working = false
     @State private var approvedCount = 0
+    @State private var failed = false
 
     var body: some View {
-        let deal = store.snapshot.deals.first { $0.id == approval.refId }
+        let deal = store.snapshot.deal(for: approval)
         let item = deal.flatMap { d in store.snapshot.shoppingItems.first { $0.id == d.shoppingItemId } }
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Label {
-                    Text("Buy").monoText(11.5, weight: .bold, maxScale: 1.6).tracking(0.5)
-                } icon: {
-                    Image(systemName: "cart").font(.system(size: 10))
-                }
-                .labelStyle(.titleAndIcon)
-                .textCase(.uppercase)
-                .foregroundStyle(Theme.muted)
-                if let item { Text(item.name).monoMeta().lineLimit(1) }
-                Spacer(minLength: 8)
-                if deal?.isSample == true { ReplayBadge(sample: true) } else if deal?.isReplay == true { ReplayBadge() }
-            }
-            Text(deal?.title ?? approval.summary).blockTitle().lineLimit(3)
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(approval.amountCents.usd)
-                    .monoText(22, weight: .bold, maxScale: 1.6)
-                    .foregroundStyle(Theme.text)
-                if let deal { Text("from \(deal.source)").monoMeta() }
-                Spacer(minLength: 8)
-                Text(approval.requestedAt, format: .relative(presentation: .named)).monoMeta()
-            }
-            if let deal, deal.priceCents != approval.amountCents {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle").font(.system(size: 12)).accessibilityHidden(true)
-                    Text("Price changed to \(deal.priceCents.usd) since this was requested. Approving won't buy it.")
-                        .fixedSize(horizontal: false, vertical: true)
+                    Label {
+                        Text("Buy").monoText(11.5, weight: .bold, maxScale: 1.6).tracking(0.5)
+                    } icon: {
+                        Image(systemName: "cart").font(.system(size: 10))
+                    }
+                    .labelStyle(.titleAndIcon)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Theme.muted)
+                    if let item { Text(item.name).monoMeta().lineLimit(1) }
+                    Spacer(minLength: 8)
+                    if deal?.isSample == true { ReplayBadge(sample: true) } else if deal?.isReplay == true { ReplayBadge() }
                 }
-                .monoText(12.5)
-                .foregroundStyle(Theme.ochreInk)
-                .accessibilityElement(children: .combine)
+                HStack(alignment: .top, spacing: 14) {
+                    if let deal { ShoppingThumbnail(spec: ShoppingThumbnails.spec(for: deal, item: item), size: 48) }
+                    Text(deal?.title ?? approval.summary).blockTitle().fixedSize(horizontal: false, vertical: true)
+                }
+                AdaptiveLine {
+                    Text(approval.formattedAmount)
+                        .monoText(22, weight: .bold, maxScale: 1.6)
+                        .foregroundStyle(Theme.text)
+                        .amountText()
+                    if let deal { Text("from \(deal.source)").monoMeta() }
+                    Spacer(minLength: 8)
+                    Text(approval.requestedAt, format: .relative(presentation: .named)).monoMeta()
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(approval.accessibilitySummary + (deal.map { ". \($0.accessibilitySummary)" } ?? ""))
+            if let deal, deal.priceCents != approval.amountCents {
+                CommerceProblem(text: "Price changed to \(deal.formattedPrice) since this was requested. Approving won't buy it.",
+                                tint: Theme.ochreInk)
             }
             if let level = deal?.fraudLevel, let score = deal?.fraudScore {
                 FraudChip(level: level, score: score)
@@ -252,22 +286,31 @@ struct PurchaseApprovalCard: View {
                 .sansText(14)
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
+            if failed {
+                CommerceProblem(text: "Couldn't send your decision. Check the connection and try again.")
+            }
             HStack(spacing: 10) {
                 Button(role: .destructive) { confirmDeny = true } label: {
                     Label("Deny", systemImage: "xmark").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.pill(.danger))
+                .accessibilityLabel("Deny \(approval.formattedAmount)")
                 Button { decide(approve: true) } label: {
-                    Label("Approve", systemImage: "checkmark").frame(maxWidth: .infinity)
+                    if working {
+                        ProgressView().tint(Theme.accentInk).frame(maxWidth: .infinity)
+                    } else {
+                        Label("Approve", systemImage: "checkmark").frame(maxWidth: .infinity)
+                    }
                 }
                 .buttonStyle(.pill(.primary))
+                .accessibilityLabel("Approve \(approval.formattedAmount)")
             }
             .padding(.top, 4)
             .disabled(working)
         }
         .padding(.vertical, 18)
         .confirmationDialog("Deny this purchase?", isPresented: $confirmDeny, titleVisibility: .visible) {
-            Button("Deny \(approval.amountCents.usd)", role: .destructive) { decide(approve: false) }
+            Button("Deny \(approval.formattedAmount)", role: .destructive) { decide(approve: false) }
         } message: {
             Text("The agent won't buy this.")
         }
@@ -276,8 +319,11 @@ struct PurchaseApprovalCard: View {
 
     private func decide(approve: Bool) {
         working = true
+        failed = false
         Task {
-            if await store.decide(approval, approve: approve), approve { approvedCount += 1 }
+            let ok = await store.decide(approval, approve: approve)
+            if ok, approve { approvedCount += 1 }
+            failed = !ok
             working = false
         }
     }
@@ -289,6 +335,7 @@ struct ReplayBadge: View {
 
     var body: some View {
         MonoTag(text: sample ? "Sample" : "Replay", tone: Theme.muted)
+            .fixedSize()
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(sample ? "Sample data, not a live listing" : "Cached replay, not a live listing")
     }
@@ -321,32 +368,27 @@ struct FraudChip: View {
             Image(systemName: level == .low ? "checkmark.shield" : "exclamationmark.shield")
                 .font(.system(size: 11))
                 .accessibilityHidden(true)
-            Text("\(level.label) · \(score.formatted(.number.precision(.fractionLength(2))))").monoText(12.5)
+            Text("\(level.label) · \(score.formatted(.number.precision(.fractionLength(2))))")
+                .monoText(12.5)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(level.tint)
-        .lineLimit(1)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(level.label), score \(score.formatted(.number.precision(.fractionLength(2)))) out of 1")
     }
 }
 
 /// SIMULATED for simulated payments (never presented as real), otherwise the Visa sandbox label.
-/// Simulated is a filled ochre pill so it can't be mistaken for the outlined sandbox tag.
+/// Simulated is the shared filled pill so it can't be mistaken for the outlined sandbox tag.
 struct VisaRailBadge: View {
     let badge: VisaPaymentBadge
 
     var body: some View {
         if badge.simulated {
-            Text(badge.railLabel)
-                .monoText(10.5, weight: .bold, maxScale: 1.6)
-                .tracking(0.5)
-                .lineLimit(1)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .foregroundStyle(Theme.bg)
-                .background(Theme.ochreInk, in: .capsule)
-                .accessibilityLabel("Simulated payment, no money moved")
+            SimulatedBadge(spoken: "Simulated payment, no money moved")
         } else {
             MonoTag(text: badge.railLabel, tone: Theme.muted)
+                .fixedSize()
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Visa sandbox payment, test card, no real money")
         }
@@ -377,23 +419,24 @@ struct VisaPaymentRow: View {
 
     var body: some View {
         let badge = VisaPaymentBadge(payment)
-        HStack(spacing: 10) {
+        AdaptiveLine(spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "circle.fill")
                     .font(.system(size: 7))
                     .symbolEffect(.pulse, isActive: badge.state == .hold)
                     .accessibilityHidden(true)
-                Text(badge.stateLabel).monoText(12.5)
+                Text(badge.stateLabel).monoText(12.5).lineLimit(1)
             }
             .foregroundStyle(badge.state.tint)
             Text(payment.formattedAmount)
                 .rowValue()
                 .strikethrough(badge.state == .failed)
+                .amountText()
             Spacer(minLength: 8)
             VisaRailBadge(badge: badge)
         }
-        .lineLimit(1)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(badge.accessibilitySummary(amount: payment.formattedAmount))
     }
 }
 

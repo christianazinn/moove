@@ -2,7 +2,7 @@ import SwiftUI
 import MooveKit
 
 /// Everything the listing agent (#11) is selling: drafting, waiting on the
-/// user's approval, live, and sold.
+/// user's approval, live, sold, and what didn't post (with the agent's reason).
 struct ListingsView: View {
     @Environment(MooveStore.self) private var store
 
@@ -16,6 +16,7 @@ struct ListingsView: View {
 
     var body: some View {
         let listings = store.snapshot.listings.sorted { $0.updatedAt > $1.updatedAt }
+        let state = store.commerceState(hasRows: !listings.isEmpty)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 PageHeader(
@@ -23,8 +24,13 @@ struct ListingsView: View {
                     title: "Your listings.",
                     lede: "What the listing agent is selling for you: drafting, waiting on your OK, live and sold."
                 )
-                if listings.isEmpty {
-                    emptyState.padding(.top, 32)
+                if state != .content {
+                    CommercePlaceholder(
+                        state: state,
+                        emptyTitle: "No listings yet",
+                        emptyDetail: "Sort an item to Sell in Review. Once it's priced, the listing agent drafts an eBay listing and it shows up here."
+                    )
+                    .padding(.top, 32)
                 } else {
                     totals(listings).padding(.top, 28)
                 }
@@ -34,10 +40,19 @@ struct ListingsView: View {
                         ListHeader(title: group.title, count: "\(rows.count)")
                             .padding(.top, 40)
                         ForEach(rows) { listing in
-                            NavigationLink(value: listing.id) { ListingRow(listing: listing, item: item(for: listing)) }
-                                .buttonStyle(.plain)
+                            NavigationLink(value: ListingRoute(listingId: listing.id)) {
+                                ListingRow(listing: listing, item: item(for: listing),
+                                           problem: store.snapshot.problem(for: listing))
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
+                }
+                if listings.contains(where: \.simulated) {
+                    Text("SIMULATED listings were never sent to eBay. The demo's eBay poster is simulated unless sandbox keys are set.")
+                        .monoMeta()
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 12)
                 }
             }
             .padding(.horizontal, Theme.gutter)
@@ -46,22 +61,9 @@ struct ListingsView: View {
         }
         .navigationTitle("Listings")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(for: UInt64.self) { ListingDetailView(listingId: $0) }
+        .navigationDestination(for: ListingRoute.self) { ListingDetailView(listingId: $0.listingId) }
         .mooveScreen()
         .animation(.default, value: listings)
-    }
-
-    private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("No listings yet").blockTitle()
-            Text("Items sorted to Sell show up here once the listing agent writes them.").monoMeta()
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.vertical, 28)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .ruled(.top)
-        .ruled()
-        .accessibilityElement(children: .combine)
     }
 
     private func item(for listing: Listing) -> Item? {
@@ -72,15 +74,20 @@ struct ListingsView: View {
     private func totals(_ listings: [Listing]) -> some View {
         let live = listings.filter { $0.status == .posted }
         let sold = listings.filter { $0.status == .sold }
+        let listed = live.map(\.priceCents).reduce(0, +)
+        let soldCents = sold.map(\.priceCents).reduce(0, +)
         return HStack(spacing: 0) {
             StatFigure(label: "Live", value: "\(live.count)")
                 .padding(.vertical, 18).padding(.trailing, 14)
+                .accessibilityLabel("\(live.count) posted")
             Rectangle().fill(Theme.line).frame(width: 1)
-            StatFigure(label: "Listed", value: live.map(\.priceCents).reduce(0, +).usd)
+            StatFigure(label: "Listed", value: CentsFormat.usd(listed))
                 .padding(.vertical, 18).padding(.horizontal, 14)
+                .accessibilityLabel("Listed, \(CentsFormat.usd(listed))")
             Rectangle().fill(Theme.line).frame(width: 1)
-            StatFigure(label: "Sold", value: sold.map(\.priceCents).reduce(0, +).usd, tint: Theme.accentStrong)
+            StatFigure(label: "Sold", value: CentsFormat.usd(soldCents), tint: Theme.accentStrong)
                 .padding(.vertical, 18).padding(.leading, 14)
+                .accessibilityLabel("Sold, \(CentsFormat.usd(soldCents))")
         }
         .fixedSize(horizontal: false, vertical: true)
         .ruled(.top)
@@ -88,21 +95,31 @@ struct ListingsView: View {
     }
 }
 
+/// Its own route type, so it can't collide with another screen's `UInt64` destination when the
+/// commerce screens share one navigation stack (proposal #129).
+struct ListingRoute: Hashable {
+    let listingId: UInt64
+}
+
 /// A ledger row: photo, bold mono title, status, price and simulated tag on the right.
 struct ListingRow: View {
     let listing: Listing
     let item: Item?
+    var problem: String? = nil
 
     var body: some View {
         HStack(spacing: 16) {
             if let item { ItemThumbnail(item: item, size: 56) } else { IconTile(systemName: "tag") }
             VStack(alignment: .leading, spacing: 5) {
-                Text(listing.title).blockTitle().lineLimit(2)
-                ListingStatusChip(status: listing.status)
+                Text(listing.title).blockTitle().lineLimit(3)
+                ListingStatusChip(status: listing.status, simulated: listing.simulated)
+                if let problem {
+                    Text(problem).monoMeta().lineLimit(3)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 6) {
-                Text(listing.priceCents.usd).rowValue()
+                Text(listing.formattedPrice).rowValue().amountText()
                 if listing.simulated { SimulatedTag() }
             }
             .layoutPriority(1)
@@ -115,6 +132,9 @@ struct ListingRow: View {
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .ruled()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(listing.accessibilitySummary + (problem.map { ". \($0)" } ?? ""))
+        .accessibilityAddTraits(.isButton)
     }
 }
 

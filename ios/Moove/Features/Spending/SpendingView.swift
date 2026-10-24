@@ -9,6 +9,7 @@ struct SpendingView: View {
 
     var body: some View {
         let log = store.snapshot.spendingLog()
+        let state = store.commerceState(hasRows: !log.isEmpty)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 PageHeader(
@@ -16,16 +17,24 @@ struct SpendingView: View {
                     title: "Where the money went.",
                     lede: "Every payment the agents make, live, with each agent's budget and any spend it was refused."
                 )
-                if log.isEmpty {
-                    emptyState.padding(.top, 32)
+                if state != .content {
+                    CommercePlaceholder(
+                        state: state,
+                        emptyTitle: "No payments yet",
+                        emptyDetail: "Agents pay when they price an item (comps over x402) or buy something on your Shopping list (Visa). Sort an item to Sell, or choose a deal in Shopping, and the payment shows up here live."
+                    )
+                    .padding(.top, 32)
                 } else {
                     SpendingTotals(log: log).padding(.top, 28)
-                    ListHeader(title: "Budgets", count: "\(log.budgets.count)").padding(.top, 40)
-                    ForEach(log.budgets) { AgentBudgetRow(budget: $0) }
+                    if !log.budgets.isEmpty {
+                        ListHeader(title: "Budgets", count: "\(log.budgets.count)").padding(.top, 40)
+                        ForEach(log.budgets) { AgentBudgetRow(budget: $0) }
+                    }
                     ListHeader(title: "Activity", count: "\(log.entries.count)").padding(.top, 40)
                     ForEach(log.entries) { entry in
                         switch entry {
-                        case .payment(let payment): PaymentRow(payment: payment)
+                        case .payment(let payment):
+                            PaymentRow(payment: payment, failureReason: store.snapshot.failureReason(for: payment))
                         case .refusal(let event): RefusalRow(event: event)
                         case .failedAttempt(let event): FailedAttemptRow(event: event)
                         }
@@ -41,24 +50,11 @@ struct SpendingView: View {
         .mooveScreen()
         .animation(.default, value: log.entries)
     }
-
-    private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("No payments yet").blockTitle()
-            Text("When agents pay for data or services, each payment shows up here live.").monoMeta()
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.vertical, 28)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .ruled(.top)
-        .ruled()
-        .accessibilityElement(children: .combine)
-    }
 }
 
 private extension String {
     /// "pricing" -> "Pricing agent".
-    var agentLabel: String { prefix(1).uppercased() + String(dropFirst()) + " agent" }
+    var agentLabel: String { agentDisplayName }
 }
 
 private extension Date {
@@ -70,15 +66,19 @@ struct SpendingTotals: View {
     let log: SpendingLog
 
     var body: some View {
+        let refused = log.budgets.map(\.refusals).reduce(0, +)
         HStack(spacing: 0) {
             StatFigure(label: "Spent", value: UsdMicros.format(log.realSpentUsdMicros))
                 .padding(.vertical, 18).padding(.trailing, 14)
+                .accessibilityLabel("Spent for real, \(UsdMicros.format(log.realSpentUsdMicros))")
             Rectangle().fill(Theme.line).frame(width: 1)
             StatFigure(label: "Simulated", value: UsdMicros.format(log.simulatedSpentUsdMicros), tint: Theme.ochreInk)
                 .padding(.vertical, 18).padding(.horizontal, 14)
+                .accessibilityLabel("Simulated, \(UsdMicros.format(log.simulatedSpentUsdMicros)), no money moved")
             Rectangle().fill(Theme.line).frame(width: 1)
-            StatFigure(label: "Refused", value: "\(log.budgets.map(\.refusals).reduce(0, +))", tint: Theme.danger)
+            StatFigure(label: "Refused", value: "\(refused)", tint: Theme.danger)
                 .padding(.vertical, 18).padding(.leading, 14)
+                .accessibilityLabel("\(refused) \(refused == 1 ? "payment" : "payments") refused by spend caps")
         }
         .fixedSize(horizontal: false, vertical: true)
         .ruled(.top)
@@ -91,7 +91,7 @@ struct AgentBudgetRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
+            AdaptiveLine(spacing: 12) {
                 Text(budget.agent.agentLabel).blockTitle()
                 Spacer(minLength: 8)
                 if budget.isEstimate {
@@ -100,16 +100,17 @@ struct AgentBudgetRow: View {
                     Text("\(UsdMicros.format(budget.spentUsdMicros)) spent of \(UsdMicros.format(budget.capUsdMicros)) cap (est.)")
                         .monoText(13.5)
                         .foregroundStyle(Theme.text)
-                        .multilineTextAlignment(.trailing)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("\(UsdMicros.format(budget.remainingUsdMicros)) left")
                         .monoText(13.5)
                         .foregroundStyle(budget.isExhausted ? Theme.danger : Theme.text)
-                        .lineLimit(1)
+                        .amountText()
                 }
             }
             ProgressView(value: budget.fractionUsed)
                 .tint(budget.isExhausted ? Theme.danger : budget.fractionUsed > 0.8 ? Theme.ochre : Theme.accent)
+                .accessibilityHidden(true)
             HStack(spacing: 6) {
                 if budget.isEstimate {
                     Text("Your payments only")
@@ -124,40 +125,63 @@ struct AgentBudgetRow: View {
                 }
             }
             .monoMeta()
+            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 16)
         .ruled()
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spoken)
+    }
+
+    private var spoken: String {
+        var parts = [budget.agent.agentLabel]
+        parts.append(budget.isEstimate
+            ? "\(UsdMicros.format(budget.spentUsdMicros)) spent of a \(UsdMicros.format(budget.capUsdMicros)) cap, estimated"
+            : "\(UsdMicros.format(budget.remainingUsdMicros)) left of \(UsdMicros.format(budget.capUsdMicros))")
+        if budget.simulatedUsdMicros > 0 { parts.append("\(UsdMicros.format(budget.simulatedUsdMicros)) of it simulated") }
+        if budget.refusals > 0 { parts.append("\(budget.refusals) refused") }
+        return parts.joined(separator: ", ")
     }
 }
 
 struct PaymentRow: View {
     let payment: Payment
+    var failureReason: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(payment.formattedAmount)
-                    .monoText(16, weight: .bold)
-                    .strikethrough(payment.status == .failed)
-                    .foregroundStyle(payment.status == .failed ? Theme.muted : Theme.text)
-                if payment.simulated { SimulatedPaymentBadge() }
-                Spacer(minLength: 8)
-                Text(payment.createdAt.ago).monoMeta()
+            VStack(alignment: .leading, spacing: 6) {
+                AdaptiveLine {
+                    Text(payment.formattedAmount)
+                        .monoText(16, weight: .bold)
+                        .strikethrough(payment.status == .failed)
+                        .foregroundStyle(payment.status == .failed ? Theme.muted : Theme.text)
+                        .amountText()
+                    if payment.simulated {
+                        SimulatedBadge()
+                    } else if payment.rail == .visa {
+                        MonoTag(text: payment.railTag, tone: Theme.muted)
+                    }
+                    Spacer(minLength: 8)
+                    Text(payment.createdAt.ago).monoMeta()
+                }
+                Text(payment.purpose)
+                    .sansText(15)
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(3)
+                AdaptiveLine(spacing: 6) {
+                    Text("\(payment.agent.agentLabel) · \(payment.rail.label)")
+                    Spacer(minLength: 8)
+                    PaymentStatusChip(status: payment.status)
+                }
+                .monoMeta()
+                if payment.status == .failed {
+                    CommerceProblem(text: failureReason ?? "The payment didn't go through. No money moved.")
+                }
             }
-            Text(payment.purpose)
-                .sansText(15)
-                .foregroundStyle(Theme.text)
-                .lineLimit(2)
-            HStack(spacing: 6) {
-                Text(payment.agent.agentLabel)
-                Text("·").foregroundStyle(Theme.faint)
-                Text(payment.rail.label)
-                Spacer(minLength: 8)
-                PaymentStatusChip(status: payment.status)
-            }
-            .monoMeta()
-            .lineLimit(1)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(payment.accessibilitySummary + (failureReason.map { " \($0)" } ?? ""))
+            // Only real x402 payments with a tx hash link out (`explorerURL` is nil when simulated).
             if let url = payment.explorerURL, let hash = payment.txHash {
                 Link(destination: url) {
                     Label("Basescan \(hash.shortHash)", systemImage: "arrow.up.right.square")
@@ -165,6 +189,8 @@ struct PaymentRow: View {
                         .foregroundStyle(Theme.accentStrong)
                         .frame(minHeight: 44, alignment: .leading)
                 }
+                .accessibilityLabel("View the transaction on Basescan")
+                .accessibilityHint("Opens sepolia.basescan.org")
             }
         }
         .padding(.top, 16)
@@ -186,13 +212,14 @@ struct RefusalRow: View {
                 .frame(width: 20)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                AdaptiveLine {
                     Text("Refused").monoText(14.5, weight: .bold).foregroundStyle(Theme.danger)
                     if let amount = data.amountUsdMicros {
                         Text(UsdMicros.format(amount))
                             .monoText(14.5)
                             .strikethrough()
                             .foregroundStyle(Theme.muted)
+                            .amountText()
                     }
                     if event.isSimulated { SimulatedPaymentBadge() }
                     Spacer(minLength: 8)
@@ -201,7 +228,7 @@ struct RefusalRow: View {
                 Text(event.message)
                     .sansText(15)
                     .foregroundStyle(Theme.text)
-                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 6) {
                     Text(event.agent.agentLabel)
                     if let remaining = data.remainingUsdMicros {
@@ -209,12 +236,13 @@ struct RefusalRow: View {
                     }
                 }
                 .monoMeta()
+                Text("Nothing was signed or paid.").monoMeta()
             }
         }
         .padding(.vertical, 16)
         .ruled()
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(event.isSimulated ? "Simulated payment" : "Payment") refused by spend cap. \(event.message)")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(data.amountUsdMicros.map { UsdMicros.format($0) + ", " } ?? "")\(event.isSimulated ? "simulated, " : "")refused by the spend cap, no money moved. \(event.message)")
     }
 }
 
@@ -230,7 +258,7 @@ struct FailedAttemptRow: View {
                 .frame(width: 20)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                AdaptiveLine {
                     Text("Failed attempt").monoText(14.5, weight: .bold).foregroundStyle(Theme.ochreInk)
                     if event.isSimulated { SimulatedPaymentBadge() }
                     Spacer(minLength: 8)
@@ -239,30 +267,20 @@ struct FailedAttemptRow: View {
                 Text(event.message)
                     .sansText(15)
                     .foregroundStyle(Theme.text)
-                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("\(event.agent.agentLabel) · no payment made").monoMeta()
             }
         }
         .padding(.vertical, 16)
         .ruled()
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Failed payment attempt, no payment made. \(event.message). \(event.agent.agentLabel).")
     }
 }
 
-/// CLAUDE.md hard rule (Coinbase track): simulated payments are never presented as real.
-/// A filled ochre pill, so it stands out from outlined tags.
+/// The SIMULATED pill on payment rows (see `SimulatedBadge`).
 struct SimulatedPaymentBadge: View {
-    var body: some View {
-        Text("SIMULATED")
-            .monoText(10.5, weight: .bold, maxScale: 1.6)
-            .tracking(0.5)
-            .lineLimit(1)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .foregroundStyle(Theme.bg)
-            .background(Theme.ochreInk, in: .capsule)
-            .accessibilityLabel("Simulated payment, no money moved")
-    }
+    var body: some View { SimulatedBadge(spoken: "Simulated payment, no money moved") }
 }
 
 /// Status as a colored dot and mono label; the dot pulses while pending.
