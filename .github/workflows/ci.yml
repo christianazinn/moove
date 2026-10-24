@@ -1,0 +1,53 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  node:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [spacetime, agents]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Typecheck and test (skips until package.json exists)
+        working-directory: ${{ matrix.dir }}
+        run: |
+          if [ ! -f package.json ]; then echo "no package.json yet, skipping"; exit 0; fi
+          npm ci || npm install
+          npm run --if-present typecheck
+          npm run --if-present test
+
+  moovekit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift test (skips until ios/MooveKit exists)
+        run: |
+          if [ ! -f ios/MooveKit/Package.swift ]; then echo "no MooveKit yet, skipping"; exit 0; fi
+          docker run --rm -v "$PWD/ios/MooveKit:/pkg" -w /pkg swift:6.1 swift test
+
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build app (skips until ios/project.yml exists)
+        run: |
+          if [ ! -f ios/project.yml ]; then echo "no project.yml yet, skipping"; exit 0; fi
+          brew install xcodegen
+          cd ios && xcodegen
+          xcodebuild -scheme Moove -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
