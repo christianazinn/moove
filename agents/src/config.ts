@@ -20,6 +20,13 @@ export const config = {
   uploadDir: env('UPLOAD_DIR', 'uploads'),
   // What phones/the worker use to fetch uploads; set to your LAN IP for devices.
   publicUploadBaseUrl: env('PUBLIC_UPLOAD_BASE_URL', 'http://localhost:8787'),
+  apify: {
+    token: env('APIFY_TOKEN'),
+    // Comma-separated subset of: ebay, fb, craigslist
+    sources: env('APIFY_SOURCES', 'ebay,fb').split(',').map(s => s.trim()).filter(Boolean),
+    maxUsdPerRun: Number(env('APIFY_MAX_USD_PER_RUN', '0.10')),
+    city: { fb: env('MARKET_CITY_FB', 'sanfrancisco'), craigslist: env('MARKET_CITY_CRAIGSLIST', 'sfbay') },
+  },
   models: {
     vision: env('MODEL_VISION', 'claude-sonnet-5-5'),
     fast: env('MODEL_FAST', 'claude-haiku-5-5'),
