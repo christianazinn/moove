@@ -247,6 +247,13 @@ final class MooveStore {
         return await setItemAttributes(by90 ? ItemFix.rotating90(attrs) : ItemFix.turningAround(attrs), for: item)
     }
 
+    /// Adds an item by hand to one of the user's rooms (`add_item`). With a photo, vision names
+    /// and prices it; without one, pricing uses the name.
+    @discardableResult
+    func addItem(roomId: UInt64, name: String, category: String, size: (w: Double, h: Double, d: Double), photoUrl: String?) async -> Bool {
+        await run { try await $0.addItem(roomId: roomId, name: name, category: category, widthM: size.w, heightM: size.h, depthM: size.d, photoUrl: photoUrl) }
+    }
+
     /// "Not a real item": `delete_item`.
     @discardableResult
     func deleteItem(_ item: Item) async -> Bool {

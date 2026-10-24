@@ -166,6 +166,12 @@ extension SpacetimeBackend {
         try await call(MooveBindings.DeleteItemReducer(itemid: itemId))
     }
 
+    func addItem(roomId: UInt64, name: String, category: String, widthM: Double, heightM: Double, depthM: Double, photoUrl: String?) async throws {
+        let object = MooveBindings.ScanObjectInput(scanObjectId: "", name: name, category: category,
+                                                   widthM: widthM, heightM: heightM, depthM: depthM, photoUrl: photoUrl ?? "")
+        try await call(MooveBindings.AddItemReducer(roomid: roomId, object: object))
+    }
+
     func setItemAttributes(itemId: UInt64, attributes: [String]) async throws {
         try await call(MooveBindings.SetItemAttributesReducer(itemid: itemId, attributes: attributes))
     }

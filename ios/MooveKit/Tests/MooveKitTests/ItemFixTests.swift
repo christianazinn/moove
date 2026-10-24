@@ -140,6 +140,31 @@ import Testing
         #expect(!snap.items.contains { $0.id == pillow.id })
     }
 
+    @Test func fixtureAddsAnItemByHand() async throws {
+        let backend = try await demoBackend()
+        let room = try #require(await firstSnapshot(backend).rooms.first)
+        let size = ManualItem.defaultSize(category: "bike")
+        try await backend.addItem(roomId: room.id, name: " Road bike ", category: "bike", widthM: size.w, heightM: size.h, depthM: size.d, photoUrl: nil)
+        try await backend.addItem(roomId: room.id, name: "", category: "lamp", widthM: 0.4, heightM: 1.6, depthM: 0.4, photoUrl: "https://w/files/l.jpg")
+        let items = await firstSnapshot(backend).items
+        let bike = try #require(items.first { $0.name == "Road bike" })
+        #expect(bike.roomId == room.id && bike.scanObjectId == nil && bike.photoUrls.isEmpty)
+        #expect(bike.widthM > 1 && bike.heightM > 0.5, "a bike-sized default")
+        let lamp = try #require(items.first { $0.category == "lamp" && $0.photoUrls == ["https://w/files/l.jpg"] })
+        #expect(lamp.name == "lamp", "an empty name falls back to the category, like the module")
+        await #expect(throws: FixtureBackend.Failure.noSuchRoom) {
+            try await backend.addItem(roomId: 9999, name: "x", category: "chair", widthM: 0.5, heightM: 0.9, depthM: 0.5, photoUrl: nil)
+        }
+    }
+
+    @Test func manualItemSizesAreSensible() {
+        for k in ManualItem.kinds {
+            let s = ManualItem.defaultSize(category: k.category)
+            #expect(s.w > 0 && s.h > 0 && s.d > 0 && max(s.w, s.h, s.d) < 4, "\(k.label) \(s)")
+        }
+        #expect(ManualItem.defaultSize(category: "bed").d > 1.8)
+    }
+
     @Test func fixtureChecksLikeTheModule() async throws {
         let backend = try await demoBackend()
         let item = try #require(await firstSnapshot(backend).items.first)
@@ -157,5 +182,24 @@ import Testing
         // duplicates collapse, order kept
         try await backend.setItemAttributes(itemId: item.id, attributes: ["UserKind.table", "StorageType.cabinet", "UserKind.table"])
         #expect(await firstSnapshot(backend).items.first { $0.id == item.id }?.attributes == ["UserKind.table", "StorageType.cabinet"])
+    }
+}
+
+@Suite struct ManualItemTests {
+    @Test func theNamePointsToAKind() {
+        #expect(ManualItem.suggestedKind(for: "Road bike")?.label == "Bike")
+        #expect(ManualItem.suggestedKind(for: "IKEA Kallax bookshelf")?.label == "Bookshelf")
+        #expect(ManualItem.suggestedKind(for: "floor lamp")?.label == "Lamp")
+        #expect(ManualItem.suggestedKind(for: "xy") == nil)
+        #expect(ManualItem.suggestedKind(for: "Grandma's thing") == nil)
+    }
+
+    @Test func handAddedItemsSayWhereTheyCameFrom() {
+        let added = Item(id: 1, owner: "me", roomId: 1, name: "Road bike", category: "bike", widthM: 1.7, heightM: 1.0, depthM: 0.6)
+        #expect(added.origin == .manual)
+        #expect(added.originTag(inSharedRoom: false) == .addedByYou)
+        var scanned = added
+        scanned.scanObjectId = "8AD7F4CA"
+        #expect(scanned.origin == .scan)
     }
 }
