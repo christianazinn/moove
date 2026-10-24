@@ -386,7 +386,13 @@ await stage("buy: deals found and fraud-screened", async () => {
     return ds.length && ds.every(d => d.fraudScore >= 0) ? ds : undefined;
   }, 120_000);
   const flagged = deals.filter(d => d.fraudScore >= 0.3);
-  return { detail: `${deals.length} deals, ${flagged.length} flagged >= 0.3${flagged[0] ? ` (e.g. "${flagged[0].title}": ${flagged[0].fraudReasons.join("; ")})` : ""}` };
+  // The planted demo scam (fixtures/deals.json, "planted": true) rides along on "Desk chair".
+  const chair = [...conn!.db.shoppingItem.iter()].find(s => me && s.owner.isEqual(me) && s.name.toLowerCase() === "desk chair");
+  const planted = chair && deals.find(d => d.shoppingItemId === chair.id && d.sellerInfo.startsWith("Planted demo scam"));
+  if (chair && !planted) throw new Error(`no planted demo scam deal on "Desk chair"`);
+  if (planted && (!/sample data$/.test(planted.sellerInfo) || planted.fraudScore < FRAUD_BLOCK)) throw new Error(`planted demo scam: ${planted.fraudScore.toFixed(2)}, "${planted.sellerInfo}"`);
+  const plantedNote = planted ? `; planted demo scam scored ${planted.fraudScore.toFixed(2)}` : "";
+  return { detail: `${deals.length} deals, ${flagged.length} flagged >= 0.3${flagged[0] ? ` (e.g. "${flagged[0].title}": ${flagged[0].fraudReasons.join("; ")})` : ""}${plantedNote}` };
 });
 
 await stage("purchase: choose card deal -> approve -> simulated Visa payment", async () => {
