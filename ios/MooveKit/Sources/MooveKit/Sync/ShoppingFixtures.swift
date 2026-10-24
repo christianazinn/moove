@@ -105,7 +105,12 @@ extension DemoFixtures {
         // Over the $100 approval threshold, so the buy agent asked first: the user denied the pricier
         // KIVIK sofa (then chose the Wayfair one), approved the mattress (bought below), and the
         // Wayfair sofa is waiting. Summaries use the buy agent's wording (`FixtureBackend.runBuyAgent`).
+        // The first KIVIK ask (299) got no answer overnight, so it expired after 12 h (#186) and the
+        // buy agent asked again (302), which the user then denied. History shows it as Expired.
         s.approvals += [
+            Approval(id: 299, owner: owner, kind: .purchase, refId: 70, amountCents: 69_900,
+                     summary: "Buy \"KIVIK sofa, Tibbleby beige/gray\" from ikea for $699.00", status: .expired,
+                     requestedAt: ago(12 * 60 + 10), updatedAt: ago(10)),
             Approval(id: 302, owner: owner, kind: .purchase, refId: 70, amountCents: 69_900,
                      summary: "Buy \"KIVIK sofa, Tibbleby beige/gray\" from ikea for $699.00", status: .denied,
                      requestedAt: ago(10), updatedAt: ago(8)),
@@ -129,6 +134,9 @@ extension DemoFixtures {
 
         // What the buy agent said about that failure (same wording as agents/src/agents/buy.ts).
         s.agentEvents += [
+            AgentEvent(id: 629, owner: owner, agent: "buy", kind: .approval,
+                       message: "The approval expired without an answer, asking again (1 of 2)",
+                       refTable: "deal", refId: 70, dataJson: #"{"expiredApprovalId":299}"#, createdAt: ago(10)),
             AgentEvent(id: 630, owner: owner, agent: "buy", kind: .plan,
                        message: "Checking out \"5x7 flatweave area rug, cream/gray\" for $89.99 via Visa, under the $100 approval threshold.",
                        refTable: "deal", refId: 80, createdAt: ago(15.2)),

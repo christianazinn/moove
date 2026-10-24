@@ -63,3 +63,43 @@ extension SyncSnapshot {
         return listings.first { $0.id == approval.refId }
     }
 }
+
+/// The worker's approval-expiry defaults (`agents/src/agents/approval-expiry.ts`, #186/#214): a pending
+/// approval expires after `APPROVAL_EXPIRE_HOURS` without an answer, and the listing or buy agent asks
+/// again at most `APPROVAL_MAX_REASKS` times. The app can't read the worker's env, so it mirrors them.
+public enum ApprovalExpiry {
+    public static let hours = 12
+    public static let maxReasks = 2
+    /// The first ask plus the re-asks.
+    public static var maxAsks: Int { maxReasks + 1 }
+}
+
+/// Where one approval sits among the asks for the same listing or deal (#186). The agents re-ask with a
+/// new approval row on the same `refId`, so rows group by owner, kind and `refId`, ordered by id (the
+/// worker's `afterExpiry` treats the highest id as the latest).
+public struct ApprovalAsks: Sendable, Equatable {
+    /// 1 for the first ask, 2 after one expiry, and so on. Counts expired asks, like the agents' cap.
+    public var askNumber: Int
+    /// Earlier asks for the same listing or deal that expired, newest first.
+    public var expiredBefore: [Approval]
+    /// A newer approval exists for the same listing or deal: the agent asked again.
+    public var askedAgain: Bool
+
+    public var isReask: Bool { askNumber > 1 }
+}
+
+extension SyncSnapshot {
+    /// Every approval for the same listing or deal as `approval`, oldest first.
+    public func approvalGroup(for approval: Approval) -> [Approval] {
+        approvals.filter { $0.owner == approval.owner && $0.kind == approval.kind && $0.refId == approval.refId }
+            .sorted { $0.id < $1.id }
+    }
+
+    /// The re-ask count and the expired asks before `approval`.
+    public func asks(for approval: Approval) -> ApprovalAsks {
+        let group = approvalGroup(for: approval)
+        let expired = group.filter { $0.id < approval.id && $0.status == .expired }
+        return ApprovalAsks(askNumber: expired.count + 1, expiredBefore: expired.reversed(),
+                            askedAgain: group.contains { $0.id > approval.id })
+    }
+}
