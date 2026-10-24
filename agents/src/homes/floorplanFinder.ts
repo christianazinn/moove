@@ -97,7 +97,7 @@ export async function findFloorPlanInPhotos(
     return r.status === 'fulfilled' ? [{ ...c, image: r.value }] : [];
   });
   if (!usable.length) throw new Error(`none of the ${candidates.length} listing photos could be loaded`);
-  log('tool_call', `Classifying ${usable.length} listing photo(s) with Claude (${config.models.fast})`, { photos: usable.length, model: config.models.fast });
+  log('tool_call', `Classifying ${usable.length} listing photo(s) with Claude (${config.models.fast})`, { photos: usable.length, model: config.models.fast, paid: true });
   const verdicts = await (opts.classify ?? defaultClassify)({
     model: config.models.fast,
     system: SYSTEM,

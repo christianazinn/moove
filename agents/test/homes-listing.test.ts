@@ -7,9 +7,9 @@ import { extractZillowFacts, findFloorPlanImages, zillowRunUrl } from "../src/ho
 const quiet = () => {};
 
 test("Zillow homedetails link -> address, no fetch", () => {
-  const p = parseListingUrl("https://www.zillow.com/homedetails/418-Alder-St-APT-3B-Portland-OR-97204/2061234567_zpid/?utm=x");
+  const p = parseListingUrl("https://www.zillow.com/homedetails/418-Example-St-APT-3B-Portland-OR-97204/2061234567_zpid/?utm=x");
   assert.equal(p.site, "zillow");
-  assert.equal(p.address, "418 Alder St Apt 3B, Portland, OR 97204");
+  assert.equal(p.address, "418 Example St Apt 3B, Portland, OR 97204");
   assert.equal(p.note, null);
 });
 
@@ -79,16 +79,16 @@ test("body validation", () => {
 
 test("link only: address from the link, no plan, method facts", async () => {
   const r = await importHome(
-    { url: "https://www.zillow.com/homedetails/418-Alder-St-APT-3B-Portland-OR-97204/2061234567_zpid/" },
+    { url: "https://www.zillow.com/homedetails/418-Example-St-APT-3B-Portland-OR-97204/2061234567_zpid/" },
     { log: quiet, scrapeZillow: () => assert.fail("scraper must not run without useScraper") }
   );
-  assert.equal(r.address, "418 Alder St Apt 3B, Portland, OR 97204");
-  assert.equal(r.name, "418 Alder St Apt 3B");
+  assert.equal(r.address, "418 Example St Apt 3B, Portland, OR 97204");
+  assert.equal(r.name, "418 Example St Apt 3B");
   assert.equal(r.site, "zillow");
   assert.equal(r.floorPlan, null);
   assert.equal(r.method, "facts");
   assert.equal(r.simulated, false);
-  assert.equal(r.listingUrl, "https://www.zillow.com/homedetails/418-Alder-St-APT-3B-Portland-OR-97204/2061234567_zpid/");
+  assert.equal(r.listingUrl, "https://www.zillow.com/homedetails/418-Example-St-APT-3B-Portland-OR-97204/2061234567_zpid/");
   assert.ok(r.notes.some(n => /not opened/.test(n)));
 });
 
@@ -142,7 +142,7 @@ test("scraper path: facts + scraped floor plan, labeled", async () => {
       log: quiet,
       apifyToken: "t",
       scrapeZillow: async () => ({
-        address: "418 Alder St Apt 3B, Portland, OR 97204",
+        address: "418 Example St Apt 3B, Portland, OR 97204",
         beds: 2,
         baths: 1,
         sqft: 850,
@@ -155,7 +155,7 @@ test("scraper path: facts + scraped floor plan, labeled", async () => {
     }
   );
   assert.equal(r.method, "scraper");
-  assert.equal(r.address, "418 Alder St Apt 3B, Portland, OR 97204");
+  assert.equal(r.address, "418 Example St Apt 3B, Portland, OR 97204");
   assert.equal(r.beds, 2);
   assert.ok(r.floorPlan);
   assert.ok(r.notes.includes("Fetched with an Apify Zillow scraper"));
@@ -166,7 +166,7 @@ test("zillow actor helpers", () => {
   assert.equal(zillowRunUrl("https://evil.com/homedetails/x"), null);
   assert.equal(zillowRunUrl("http://www.zillow.com/x"), null);
   const row = {
-    listingAddress: { full: "67 Morton St APT 6E, New York, NY 10014" },
+    listingAddress: { full: "123 Example St APT 6E, New York, NY 10014" },
     bedrooms: 2,
     bathrooms: 1,
     livingArea: 900,
@@ -178,6 +178,6 @@ test("zillow actor helpers", () => {
     floorPlans: [{ photos: [{ url: "https://photos.zillowstatic.com/fp/plan2.jpg" }] }],
   };
   const f = extractZillowFacts(row);
-  assert.deepEqual([f.address, f.beds, f.baths, f.sqft], ["67 Morton St APT 6E, New York, NY 10014", 2, 1, 900]);
+  assert.deepEqual([f.address, f.beds, f.baths, f.sqft], ["123 Example St APT 6E, New York, NY 10014", 2, 1, 900]);
   assert.deepEqual(findFloorPlanImages(row).sort(), ["https://photos.zillowstatic.com/fp/plan.jpg", "https://photos.zillowstatic.com/fp/plan2.jpg"]);
 });

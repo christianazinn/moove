@@ -1,6 +1,6 @@
 # Security & responsible AI
 
-How Moove protects users' data and money, what is built today, and what is still open. Written for judges (Visa "trust & responsibility", Coinbase "controls and known limitations", Anthropic "where it could go wrong", Armadin security) and for the team. Task: #17. Last updated Fri Oct 23 night.
+How Moove protects users' data and money, what is built today, and what is still open. Written for judges (Visa "trust & responsibility", Coinbase "controls and known limitations", Anthropic "where it could go wrong", Armadin security) and for the team. Task: #17. Last updated Sat Oct 24, early morning (follow-up pass over everything merged after #38).
 
 **Status labels:** ✅ built and tested · 🟡 partly built · ⏳ pending (linked issue).
 
@@ -24,6 +24,8 @@ How Moove protects users' data and money, what is built today, and what is still
 | T6 | Photos leak the home address. Upload URLs are guessable or listable, or the endpoint stores anything | `agents/src/upload.ts` | ✅ EXIF/GPS stripped, random names, no listing, type + size checks. ⏳ auth on upload |
 | T7 | Secrets committed, logged, or shipped in the app | repo, CI, `ios/` | ✅ gitleaks on every PR + full history, `.env.local` only, iOS holds only public Auth0 config |
 | T8 | Worker SSRF: the worker fetches photo URLs that clients supply | `agents/` | ✅ own uploads are read from disk, other hosts need `ALLOWED_PHOTO_HOSTS` (default none) + https + public addresses only, no redirects, 15 MB cap, 15 s timeout ([#44](https://github.com/christianazinn/moove/issues/44)) |
+| T9 | Anyone who reaches the upload port makes the worker spend: `POST /homes/import` (no auth yet) can start Apify Zillow runs and Claude vision reads | `agents/src/homes/` | ✅ capped at `HOMES_MAX_PAID_CALLS` (30) per `HOMES_SPEND_WINDOW_H` (24 h), and the cap survives restarts; concurrent imports of one link share a run. ⏳ auth on the endpoint (with upload auth) |
+| T10 | The app uploads to whatever `upload_base_url` says (#122) | `ios/MooveKit` `ServiceConfig`, `spacetime/` | 🟡 only the worker can write it, and the app now refuses `user@`, query, fragment and plain http to a non-local host. ⏳ the worker isn't pinned on databases other than `moove`, and the module regex is looser than the app's check ([#146](https://github.com/christianazinn/moove/issues/146)) |
 
 Out of scope for a hackathon: DoS against maincloud, a compromised laptop, an Auth0 tenant takeover.
 
@@ -88,6 +90,74 @@ The pricing agent's comp relevance filter (`agents/src/agents/comp-filter.ts`, H
 
 ### Simulated actions are labeled
 Anything not real says so in the data (`simulated: true` on `listing` and `payment`), in event messages (`[SIMULATED]`, `(simulated)`), and in the UI. Today that covers the simulated eBay posts (whenever eBay sandbox keys are absent), and the simulated x402 rail (no CDP keys or `X402_SIMULATE=1`). ⏳ Visa checkout labelling arrives with #40 (simulated until the Starter Pack is wired). Real x402 payments link to the Base Sepolia explorer.
+
+## Follow-up pass (Sat Oct 24): everything merged after #38
+Scope: the 48 PRs merged after #38 (`b6ee593..origin/main`):
+- listing import (#89, #112, #116)
+- service_config (#122, #126)
+- room photo sweep (#92)
+- scan import v2 and item attributes/colors (#117, #121)
+- SAM 3D (#65, #84)
+- LLM replay and the E2E test (#118, #120)
+- the gitleaks ignore file (#127)
+- the commerce agents
+
+Tests for every fix are in `agents/test/security-followup.test.ts` and `ios/MooveKit/Tests/MooveKitTests/ServiceConfigTests.swift`. Each one failed on `main` before its fix.
+
+**Fixed:**
+- **Listing import spend cap** (`agents/src/homes/budget.ts`).
+  - The paid steps are an Apify Zillow run, a listing-photo classification and a floor-plan vision read. Each one takes one slot of `HOMES_MAX_PAID_CALLS` per `HOMES_SPEND_WINDOW_H`.
+  - Paid steps log `paid: true`, and the worker re-counts them from `agent_event` on start, like SAM 3D's spend cap.
+  - Over the cap, the import still answers with a note and the app estimates the plan.
+  - Before this, anyone could cycle zpids or re-send floor-plan URLs and get unlimited $0.10 actor runs and Claude calls.
+- **One paid run per link at a time.** The cache is only written when a run ends, so two concurrent imports of the same Zillow link used to start two actor runs. They now share one.
+- **Pasted-link addresses are cleaned.** The address decoded from the link, and a typed one, goes through `cleanUntrusted` before it becomes the home name and an `agent_event` message. It can't carry bidi, zero-width or control characters or `<tags>`. The vision prompt already cleaned and fenced it.
+- **Floor-plan bounds.**
+  - A drawn layout rescales rooms from the model's boxes. That could produce a room 135 m across, and validation let it through.
+  - `planIssues` now rejects sides over 20 m, which falls back to the packed layout.
+  - Doors and windows are capped at 8 per room.
+- **SAM 3D: `FAL_KEY` stays on fal.** fal's reply includes `status_url` and `response_url`. We sent our `Authorization: Key …` header to them with no host check. Now both must be https on `*.fal.run`.
+- **App: upload origin.** `ServiceConfig.uploadBaseURL` refuses `user@host`, a query and a fragment. Plain http is allowed only to localhost, `*.local`, loopback or a private IPv4 address. For anything else the app falls back to the build's URL.
+- **Fixture PII.**
+  - Two realistic addresses in the listing-import tests became `Example St` placeholders. One was a real NYC building and unit.
+  - A planted scam email on a real provider's domain now uses `example.invalid`.
+
+**Proposed (contract change, backend lane): [#146](https://github.com/christianazinn/moove/issues/146)**
+- Pin the worker identity on databases other than `moove`. A `moove-demo` published to maincloud would be first-caller-wins, and that caller could redirect uploads.
+- Tighten the module's `upload_base_url` rule to match the app's.
+- Require item sizes to be finite and within 0-30 m. A room member can store `1e300`, and the app's truck estimate then traps.
+- Cap the number of objects per `import_scan(_v2)` call, and string lengths.
+- Validate `set_item_model` URLs.
+
+**Checked, no change needed:**
+- **Listing links are never fetched.**
+  - Site detection is suffix-safe: `zillow.com.evil.com`, `evil.com/zillow.com` and `user@` links all fail it.
+  - Only `https://www.zillow.com/<path>` reaches the actor.
+  - Listing and floor-plan photos load through `photos.ts`, limited to `photos.zillowstatic.com`.
+  - User floor-plan URLs need `ALLOWED_PHOTO_HOSTS` or must be our own uploads.
+- **Apify per-run caps:** `maxItems=1`, `maxTotalChargeUsd`, a 120 s timeout, and the token goes in a header.
+- **Listing text and floor-plan images** reach Claude cleaned, fenced and schema-forced. Classifier picks, room names, counts and sizes are bounded in code.
+- **New reducers check the sender.**
+  - Worker-only: `set_service_config`, `add_sweep_item`, `apply_sweep_match`, `set_sweep_status`, `record_ciba_decision`.
+  - Room access: `add_scan_photo` (12 per scan), `set_item_attributes` (32, `Type.value`), `set_item_colors` (`#RRGGBB`), `import_scan_v2`.
+  - Owner-only: `rotate_join_code`, `remove_member`.
+- **No new upload types.** GLB files and the simulated-listing HTML are served, never accepted.
+- **LLM cassettes** (`agents/fixtures/llm/*.json`) store only `{model, output}`: no prompt, photo, key or header. A replayed answer is still schema-checked and vetted in code like a live one.
+- **No secrets in the tree or fixtures.** The 64-hex values are Base Sepolia tx hashes, and the 40-hex ones are public testnet addresses. The comps and deals caches carry no seller names, and the e2e room photo has no metadata.
+- **`.gitleaksignore`** lists exactly the two empty `FAL_KEY=` false positives (`7007d94b…:81` and `e7d7e512…:149`). `.gitleaks.toml` has only the two narrow Auth0 client-id allowlists.
+
+**Still open:**
+- **`npm run e2e` run locally.** Another agent is fixing `agents/scripts/e2e.ts` on `aiden/e2e-commerce-checks`.
+  - The e2e worker gets the developer's `.env.local`. It blanks `FAL_KEY` and `APIFY_TOKEN` and forces Visa to simulated.
+  - CDP keys pass through without `X402_SIMULATE=1`, so a dev with CDP keys **signs real (testnet) x402 payments**. eBay sandbox, Pangram and Auth0 CIBA keys pass through too.
+  - The default `LLM_REPLAY=auto` makes a **live Claude call on a cassette miss**, and writes a new tracked file under `fixtures/llm`.
+  - CI is safe: it runs `--replay`, which fails closed, and has no secrets.
+- **`LLM_REPLAY` on a deployed worker.** With `replay` or `auto`, any matching file in `LLM_REPLAY_DIR` stands in for the model. Don't set it on the maincloud worker. A guard that refuses replay against maincloud would make that a rule rather than a habit.
+- **SAM 3D web images** (`product-images.ts`).
+  - Unless `PRODUCT_IMAGE_HOSTS` is set, they can come from any public https host. That leaves the resolve-then-fetch DNS-rebinding window open.
+  - A body without a content-length is read whole before the size check.
+  - Impact is low: it's a blind fetch, and non-image bytes are dropped.
+- **`/homes/import` and `/upload` still have no auth.** Imports put street addresses in the public `new_home` and `agent_event` tables (part of T1, #41).
 
 ## Pending (with issues)
 - ⏳ **Private tables with per-user views** (#41 part B, deferred; the gate itself is in, off): [#41](https://github.com/christianazinn/moove/issues/41). Flip `REQUIRE_AUTH0`, make tables private, and expose `my_*` views filtered by `ctx.sender` (comps join through the caller's items via the indexed `comp.item_id`; an `owner` column on `comp` is optional). This also closes the public `join_code` hole. Auth0 login (#1) has merged, but the app still falls back to anonymous SpacetimeDB tokens (Guest), so the gate stays off until that fallback goes.

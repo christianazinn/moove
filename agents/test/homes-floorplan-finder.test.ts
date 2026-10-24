@@ -8,7 +8,7 @@ import { scrapeZillow } from "../src/homes/zillowApify.js";
 import { MAX_CANDIDATES, MAX_CANDIDATES_FULL_SIZE, type PhotoVerdicts } from "../src/homes/floorplanFinder.js";
 import type { ImageInput } from "../src/integrations/photos.js";
 
-const ZURL = "https://www.zillow.com/homedetails/418-Alder-St-Portland-OR-97204/2061234567_zpid/";
+const ZURL = "https://www.zillow.com/homedetails/418-Example-St-Portland-OR-97204/2061234567_zpid/";
 const img = (n: number, size: number) => `https://photos.zillowstatic.com/fp/p${n}-cc_ft_${size}.jpg`;
 
 /** A listing photo with Zillow mixedSources (small + large jpeg). */
@@ -18,7 +18,7 @@ const photo = (n: number, caption?: string) => ({
 });
 
 function row(extra: Record<string, unknown>) {
-  return { listingAddress: { full: "418 Alder St, Portland, OR 97204" }, bedrooms: 2, bathrooms: 1, livingArea: 850, ...extra };
+  return { listingAddress: { full: "418 Example St, Portland, OR 97204" }, bedrooms: 2, bathrooms: 1, livingArea: 850, ...extra };
 }
 
 /** Loader that encodes the URL as the image data, so tests can tell images apart. */
