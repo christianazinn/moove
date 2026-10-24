@@ -298,6 +298,13 @@ export function priorSpendUsd(
 export const sam3dAgent: Agent = {
   name: 'sam3d',
   start(conn) {
+    // Same as pricing and vision: a model build a dead worker left `running` goes back to pending
+    // (it may pay fal again; SAM3D_MAX_USD bounds that). Done even when the agent is off.
+    for (const it of conn.db.item.iter()) {
+      if (it.modelStatus === 'running' && !inFlight.has(it.id)) {
+        conn.reducers.setItemStage({ itemId: it.id, stage: 'pending', field: 'model' });
+      }
+    }
     if (!config.sam3d.enabled) {
       console.log('[sam3d] FAL_KEY not set: 3D models from photos are off (items stay pending)');
       return;

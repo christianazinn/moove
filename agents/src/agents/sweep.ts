@@ -177,6 +177,10 @@ export const sweepAgent: Agent = {
         }, SETTLE_MS)
       );
     };
+    // A sweep a dead worker left `running` goes back to pending; the onUpdate below schedules it.
+    for (const s of conn.db.scan.iter()) {
+      if (s.sweepStatus === 'running' && !inFlight.has(s.id)) void conn.reducers.setSweepStatus({ scanId: s.id, status: 'pending' });
+    }
     for (const s of conn.db.scan.iter()) if (s.sweepStatus === 'pending') schedule(s.id);
     conn.db.scan.onUpdate((_ctx, _old, s) => {
       if (s.sweepStatus === 'pending') schedule(s.id);
