@@ -10,7 +10,7 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 - Judged on usefulness, technical design, ease of reuse, and product feedback. Not judged on code volume or money spent. Real money is not required. **Label simulated actions**, keep credentials private, and don't manage other people's funds.
 - Submit:
   - [x] project summary (who it's for, what it does, which Coinbase tools)
-  - [ ] demo + repo with setup instructions (repo + setup done in the doc below, and pricing now pays over x402 since #46. Still missing: the demo video, and the live in-app log, which runs on Offline demo data until #10 lands)
+  - [ ] demo + repo with setup instructions (repo + setup done in the doc below, and pricing now pays over x402 since #46. The live in-app log is wired: #28 maps `payment` and `agent_event` into the live iOS backend (`ios/Moove/Sync/SpacetimeBackend+Contract.swift`), pending verification on a device. Still missing: the demo video)
   - [x] **architecture diagram**, controls and known limitations (whole-app security controls: [`docs/security.md`](security.md))
   - [x] **builder feedback** (biggest blocker, how we worked around it, the missing capability we want most)
 
@@ -25,18 +25,19 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 - SpacetimeDB must be the core real-time backend, used meaningfully and not as an add-on. They like live shared state, agent coordination, marketplaces and live dashboards.
 - [ ] Demo the two-phone live sync and the live spending log, and show the agents coordinating through tables.
   - Agents coordinating through tables: **done on the worker side** (vision -> pricing -> listing -> approval, each step an `agent_event` row; `spacetime/src/index.ts`).
-  - Two-phone live sync and the live spending log in the app: **blocked on open PR #28** (#10). The Swift SDK spike passed and Rio has wired the glue on #28, but on `main` `ios/Moove/Sync/SpacetimeBackend+Contract.swift` is still a stub, so the app runs on the Offline demo backend.
+  - Live data in the app, including the spending log: **wired on `main`** (#28). `ios/Moove/Sync/SpacetimeBackend+Contract.swift` subscribes per identity and maps every table, including `payment`, `agent_event`, `shopping_item` and `deal`. Live updates were checked against a local server, not yet on a device.
+  - Two-phone live sync: share / join a room is in open PR #78 (#10). Not yet tested on two phones.
 
 **Apify** ($5k pool for the top 5, plus $400 Best Actor)
 - Use Apify meaningfully. Best Actor means building and publishing an Actor during the event (stretch: a "moving comps" Actor).
-- [x] Name the Actors in the README (done: `caffein.dev~ebay-sold-listings`, `apify~facebook-marketplace-scraper`, optional `ivanvs~craigslist-scraper`; deal-search actors in open PR #52/#40).
-- [ ] Show live scraping in the demo. The pricing agent runs live when `APIFY_TOKEN` is set and replays labeled caches otherwise. Commit good real caches for the demo items to `agents/fixtures/comps/` (none are committed yet).
+- [x] Name the Actors in the README (done: `caffein.dev~ebay-sold-listings`, `apify~facebook-marketplace-scraper`, optional `ivanvs~craigslist-scraper`; plus the buy agent's deal search in `agents/src/integrations/deals-apify.ts` (#40): `apify~facebook-marketplace-scraper`, `ivanvs~craigslist-scraper-pay-per-result`, `automation-lab~ebay-scraper`).
+- [ ] Show live scraping in the demo. The pricing agent runs live when `APIFY_TOKEN` is set and replays labeled caches otherwise. Real caches for the demo items are committed: comps in `agents/fixtures/comps/` (#61, #63) and live deal searches for every demo shopping item in `agents/fixtures/deals-live-*.json` (#74, #79). Still to do: a live scrape on stage.
 - Best Actor: not entering (no Actor published).
 
 **Visa: Reimagining Shopping** ($5,000)
 - Judged on innovation 25%, UX 25%, technical execution 20%, commerce impact 15%, trust & responsibility 15%.
-- [ ] Use the Visa Starter Pack tooling for checkout (#15). Built (#40): Visa Acceptance (CyberSource) REST sandbox backend, tested only against a fake server (no keys). VIC is a seam only. The demo runs `VISA_PROVIDER=simulated` (labeled).
-- [ ] Show privacy, transparency, approvals and fraud checks (trust & responsibility write-up: [`docs/security.md`](security.md)). On `main`: transparency (every step an `agent_event`), listing approvals (#12), the purchase-approval push text (#53), and upload hardening with EXIF/GPS stripping (#38). Purchase approvals themselves and a basic fraud-score block are in PR #40. Real fraud screening (#18) isn't built.
+- [ ] Use the Visa Starter Pack tooling for checkout (#15). Built (#40): Visa Acceptance (CyberSource) REST sandbox backend, tested against a fake server. Real sandbox calls (keys in place) fail with HTTP 502 SYSTEM_ERROR because the sandbox merchant has no card processor enabled; the fix is in the Business Center or via CyberSource support (#15). VIC is a seam only. The demo runs `VISA_PROVIDER=simulated` (labeled).
+- [ ] Show privacy, transparency, approvals and fraud checks (trust & responsibility write-up: [`docs/security.md`](security.md)). On `main`: transparency (every step an `agent_event`), listing approvals (#12), the purchase-approval push text (#53), and upload hardening with EXIF/GPS stripping (#38). Purchase approvals and the auth-hold re-check (#40). Fraud screening for deals (#64, #18): price outliers vs. comps and other deals, off-platform payment wording, new sellers and duplicate listings, combined into one score with reasons (`agents/src/agents/fraud.ts`). The buy agent won't buy a deal at or above `BUY_FRAUD_BLOCK` (0.7). AI-text detection is a Pangram hook (`agents/src/integrations/aitext.ts`), off unless `PANGRAM_URL` is set.
 
 **Anthropic** ($5k credits, plus 1 year of Max 20x)
 - Name a specific community (to be decided), show a real problem we've lived, make it work, and use Claude thoughtfully, including knowing where it could go wrong for users.
@@ -46,8 +47,8 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 ## Tier 2
 - **Auth0 (MLH)**: use any Auth0 API. We use login, plus Auth0 for AI Agents async authorization for approvals.
   - [x] CIBA approvals built (#12, `agents/src/integrations/auth0.ts`), but tested only against stubbed HTTP, not a real tenant.
-  - [x] Login (#25): Auth0 Web Auth in the app, with the ID token as the SpacetimeDB connection token. Not yet demoed end to end on a phone against the live backend (that also needs #10). If `MOOVE_BUNDLE_ID` changes, the callback URL must be added in the Auth0 dashboard (`ios/CLAUDE.md`).
-- **CRS Credit**: the Identity/Fraud Innovation prize, if the fraud screening (#18) uses the CRS sandbox. (#18 isn't built yet.)
+  - [x] Login (#25): Auth0 Web Auth in the app, with the ID token as the SpacetimeDB connection token. `register_user` is wired on the live backend (#28), but login hasn't been demoed end to end on a phone yet. If `MOOVE_BUNDLE_ID` changes, the callback URL must be added in the Auth0 dashboard (`ios/CLAUDE.md`).
+- **CRS Credit**: the Identity/Fraud Innovation prize, if the fraud screening uses the CRS sandbox. Fraud screening is built (#64), but it's rule-based and doesn't call CRS, so we don't qualify as built.
 - **Best Planet-First Hack** (overall prize): the resell / donate-over-trash story. The Summary screen (#16) shows a rough kg-kept-out-of-landfill figure, labeled as an estimate.
 - **Notability**: keep the build notes there if someone wants it.
 
