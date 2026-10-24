@@ -1,0 +1,102 @@
+{
+  "_note": "Cached live Apify search (active listings) for the buy agent (#15), fetched with a real APIFY_TOKEN and trimmed to the fields we use. FB seller names and eBay seller handles removed (privacy). Served for the demo 'Nightstand' shopping item (search text was 'Nightstand'). Rows read back from this file are labeled as a cached replay.",
+  "query": "Nightstand",
+  "fetchedAt": "2026-10-24T05:33:33.937Z",
+  "actors": {
+    "fb": "apify~facebook-marketplace-scraper",
+    "ebay": "automation-lab~ebay-scraper"
+  },
+  "errors": [],
+  "rows": [
+    {
+      "source": "fb",
+      "title": "Nightstand",
+      "priceCents": 1000,
+      "url": "https://www.facebook.com/marketplace/item/1161289416281889/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Nightstand",
+      "priceCents": 2500,
+      "url": "https://www.facebook.com/marketplace/item/1114138434851277/",
+      "seller": "FB Marketplace seller, San Leandro, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Rustic Dark Wood and Black Metal Nightstand with Outlets 15x15x24”",
+      "priceCents": 2500,
+      "url": "https://www.facebook.com/marketplace/item/4414340265484758/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "nightstand/ storage cabinet",
+      "priceCents": 1800,
+      "url": "https://www.facebook.com/marketplace/item/1799547137908864/",
+      "seller": "FB Marketplace seller, Oakland, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "2Pcs Nightstand End Table Side Table with 2 Fabric Drawers Bedside Table Bedroom",
+      "priceCents": 3984,
+      "url": "https://www.ebay.com/itm/375582346001",
+      "seller": "eBay seller, 99.4% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Bonnet by Sears 2-Drawer Nightstand French Provincial Beige, 24x18x24",
+      "priceCents": 15000,
+      "url": "https://www.ebay.com/itm/366651133967",
+      "seller": "eBay seller, 100% positive, +$61.66 delivery",
+      "condition": "good",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Dresser for Bedroom 4-Drawers Chest of Drawers Wood Nightstand Storage Organizer",
+      "priceCents": 13899,
+      "url": "https://www.ebay.com/itm/387635933343",
+      "seller": "eBay seller, 99.4% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "White Floating Night stand with Drawer Wall Mounted Bedroom Stand With LED",
+      "priceCents": 11900,
+      "url": "https://www.ebay.com/itm/406936499238",
+      "seller": "eBay seller, 98% positive, Free delivery",
+      "condition": "like_new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Modern 3 Tier Side End Table Nightstand with Charging Station & Storage Shelf",
+      "priceCents": 2399,
+      "url": "https://www.ebay.com/itm/267714368619",
+      "seller": "eBay seller, 99.1% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    }
+  ]
+}

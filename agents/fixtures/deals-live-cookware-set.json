@@ -1,0 +1,102 @@
+{
+  "_note": "Cached live Apify search (active listings) for the buy agent (#15), fetched with a real APIFY_TOKEN and trimmed to the fields we use. FB seller names and eBay seller handles removed (privacy). Served for the demo 'Cookware set' shopping item (search text was 'Cookware set'). Rows read back from this file are labeled as a cached replay.",
+  "query": "Cookware set",
+  "fetchedAt": "2026-10-24T05:34:21.896Z",
+  "actors": {
+    "fb": "apify~facebook-marketplace-scraper",
+    "ebay": "automation-lab~ebay-scraper"
+  },
+  "errors": [],
+  "rows": [
+    {
+      "source": "fb",
+      "title": "Professional 10 Piece Cookware Set",
+      "priceCents": 5000,
+      "url": "https://www.facebook.com/marketplace/item/1643545177475965/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "24 Pieces Ceramic Pots and Pans Set",
+      "priceCents": 14000,
+      "url": "https://www.facebook.com/marketplace/item/2896298170706541/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Made-In Cookware Set",
+      "priceCents": 30000,
+      "url": "https://www.facebook.com/marketplace/item/1692409375164044/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Bergner 3-Piece Stainless Steel Cookware Set",
+      "priceCents": 3000,
+      "url": "https://www.facebook.com/marketplace/item/1452413297101128/",
+      "seller": "FB Marketplace seller, Oakland, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "12-Piece Cookware Set, Made Of Stainless Steel, Non-Stick, Kitchen Cookware Set",
+      "priceCents": 2904,
+      "url": "https://www.ebay.com/itm/318717211098",
+      "seller": "eBay seller, 100% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Pots and Pans Set Nonstick Kitchen Induction Cookware Set Granite Coated Pot Set",
+      "priceCents": 5599,
+      "url": "https://www.ebay.com/itm/376378443134",
+      "seller": "eBay seller, 99.2% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "7 pc Nonstick Cookware Set, Non-Toxic Pots, Pans, Oven, Utensils - Gold Granite",
+      "priceCents": 5865,
+      "url": "https://www.ebay.com/itm/236332681141",
+      "seller": "eBay seller, 99.6% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "13PCS Cookware Set Nonstick Pots and Pans Home Kitchen Cooking Stainless Steel",
+      "priceCents": 2849,
+      "url": "https://www.ebay.com/itm/237100379184",
+      "seller": "eBay seller, 96.3% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Gotham Steel Nonstick Pots and Pans 20 Pcs Set Ceramic Cookware Bakeware Kitchen",
+      "priceCents": 6100,
+      "url": "https://www.ebay.com/itm/137118746862",
+      "seller": "eBay seller, 97.2% positive, Free delivery in 2-4 days",
+      "condition": "unknown",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    }
+  ]
+}
