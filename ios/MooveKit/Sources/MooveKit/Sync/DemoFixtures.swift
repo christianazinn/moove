@@ -188,6 +188,15 @@ extension DemoFixtures {
         )
     }
 
+    /// What the offline photo sweep "finds" in the demo bedroom (#181): an item RoomPlan
+    /// has no category for, with an estimated size, priced and sorted as if the agents ran.
+    public static let sweepFind = Item(
+        id: 0, owner: "demo", roomId: 0, name: "Acoustic guitar", category: "instrument",
+        widthM: 0.4, heightM: 1.0, depthM: 0.12, material: "spruce", brand: "Yamaha", condition: 4,
+        estValueCents: 9_000, disposition: .keep, dispositionReason: "Found in the room photos; easy to carry, worth keeping.",
+        fragile: true
+    )
+
     /// Code for the roommate's room in the offline demo (#10): enter it in "Join a room".
     public static let roommateJoinCode = "DEMO42"
 

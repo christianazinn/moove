@@ -91,6 +91,8 @@ struct ScanHomeView: View {
                     // scan does after sampling (here the demo room's fixture colors).
                     demoFinished = true
                     await store.saveScanColors(DemoFixtures.scanColors(), roomName: demo.roomName)
+                    // Offline there's no worker: play the room photo sweep so the demo shows it.
+                    await store.simulateSweep(roomName: demo.roomName)
                 }
             } label: {
                 Label(loadingDemo ? "Loading…" : "Load demo scan", systemImage: "tray.and.arrow.down")

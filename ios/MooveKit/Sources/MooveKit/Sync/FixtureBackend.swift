@@ -187,6 +187,35 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         }
     }
 
+    /// Offline stand-in for the worker's photo sweep (#92/#181) on the demo bedroom: the scan
+    /// goes `pending` → `running` → `done`, and the sweep "finds" one thing RoomPlan missed,
+    /// added the way `add_sweep_item` adds it (`scan_object_id = "photo:<scan id>"`, no box,
+    /// so it's listed in Items but not placed in the 3D room). `step` paces the statuses.
+    public func simulateSweep(scanId: UInt64, step: Duration = .milliseconds(1200)) async throws {
+        func set(_ status: Scan.SweepStatus) throws {
+            try mutateAuthed { s, _ in
+                guard let i = s.scans.firstIndex(where: { $0.id == scanId }) else { throw Failure.noSuchScan }
+                s.scans[i].sweepStatus = status
+            }
+        }
+        try set(.pending)
+        try await Task.sleep(for: step)
+        try set(.running)
+        try await Task.sleep(for: step * 2)
+        try mutateAuthed { s, me in
+            guard let i = s.scans.firstIndex(where: { $0.id == scanId }) else { throw Failure.noSuchScan }
+            s.scans[i].sweepStatus = .done
+            let found = DemoFixtures.sweepFind
+            guard !s.items.contains(where: { $0.scanObjectId == "photo:\(scanId)" && $0.name == found.name }) else { return }
+            var item = found
+            item.id = takeId()
+            item.owner = me
+            item.roomId = s.scans[i].roomId
+            item.scanObjectId = "photo:\(scanId)"
+            s.items.append(item)
+        }
+    }
+
     /// `MAX_SCAN_PHOTOS` in the module.
     public static let maxScanPhotos = 12
 
