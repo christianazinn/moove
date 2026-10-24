@@ -12,6 +12,7 @@ public struct SyncSnapshot: Sendable, Equatable {
     public var newHomes: [NewHome] = []
     public var layouts: [Layout] = []
     public var listings: [Listing] = []
+    public var approvals: [Approval] = []
 
     public init(me: IdentityHex? = nil) { self.me = me }
 
@@ -90,4 +91,7 @@ public protocol SyncBackend: AnyObject, Sendable {
 
     func createNewHome(name: String, source: NewHomeSource, floorPlanJson: String) async throws
     func saveLayout(newHomeId: UInt64, name: String, placementsJson: String) async throws
+
+    /// Owner decision on a pending approval (#12): `.approved` or `.denied`.
+    func decideApproval(approvalId: UInt64, status: ApprovalStatus) async throws
 }
