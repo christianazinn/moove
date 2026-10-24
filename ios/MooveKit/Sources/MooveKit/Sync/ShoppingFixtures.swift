@@ -70,11 +70,13 @@ extension DemoFixtures {
                  fraud: 0.03, ai: 0.15),
             deal(75, 52, "ikea", "MARKUS office chair, Vissle dark gray", 22_999,
                  "https://www.ikea.com/us/en/search/?q=markus", "IKEA · new · ships · Visa checkout · score 0.61"),
-            deal(76, 52, "craigslist", "Herman Miller Aeron size B", 9_500,
-                 "https://sfbay.craigslist.org/search/fua?query=aeron",
-                 "Craigslist, SF · good · 14 mi · message seller · score 0.58",
-                 fraud: 0.81, ai: 0.74,
-                 reasons: ["Price is 75% under comparable listings", "Seller asks for payment before pickup"]),
+            // The planted demo scam, same as the worker's (agents/fixtures/deals.json, "planted": true),
+            // with the score and reasons its real fraud rules give it, so offline and live tell one story.
+            deal(76, 52, "craigslist", "Herman Miller Aeron, brand new, $95, Zelle only, ship only", 9_500,
+                 "https://example.invalid/moove-demo/planted-scam-aeron",
+                 "Planted demo scam (not a real listing) · new · ships · message seller · score 0.42",
+                 fraud: 0.85,
+                 reasons: ["asks for payment by Zelle", "shipping only, no meetup"]),
 
             deal(77, 53, "ikea", "LISABO table, ash veneer, 140x78 cm", 19_999,
                  "https://www.ikea.com/us/en/search/?q=lisabo%20table", "IKEA · new · ships · Visa checkout · score 0.66",

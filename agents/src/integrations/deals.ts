@@ -24,6 +24,11 @@ export interface DealCandidate {
   replay: boolean;
   /** Hand-made demo data, not from any real search. Labeled "sample data". */
   sample?: boolean;
+  /**
+   * A planted demo scam from fixtures/deals.json (always also `sample`): served only for the item
+   * names in its `plantedFor`, always written, so the demo can show the fraud block live.
+   */
+  planted?: boolean;
 }
 
 export interface DealQuery {
@@ -77,7 +82,9 @@ export function toCandidate(raw: Record<string, unknown>, replay: boolean): Deal
   };
 }
 
-type FixtureRow = Record<string, unknown> & { keywords?: string[] };
+type FixtureRow = Record<string, unknown> & { keywords?: string[]; planted?: boolean; plantedFor?: string[] };
+
+const itemName = (q: DealQuery) => q.name.trim().toLowerCase();
 
 function matchScore(q: DealQuery, keywords: string[]): number {
   const hay = ` ${q.name} ${q.category} `.toLowerCase();
@@ -102,15 +109,17 @@ export function fixtureDealSource(rows?: FixtureRow[]): DealSource {
     replay: true,
     async search(q) {
       const all = load();
-      const scored = all.map(r => ({ r, s: matchScore(q, r.keywords ?? []) })).filter(x => x.s > 0);
-      if (!scored.length) return [];
-      const top = Math.max(...scored.map(x => x.s));
+      // Planted demo scams only show up for the exact item names they were planted for.
+      const planted = all.filter(r => r.planted && (r.plantedFor ?? []).some(n => n.toLowerCase() === itemName(q)));
+      const scored = all.filter(r => !r.planted).map(r => ({ r, s: matchScore(q, r.keywords ?? []) })).filter(x => x.s > 0);
+      const top = Math.max(0, ...scored.map(x => x.s));
       // Keep the whole group sharing the best keyword set.
-      const groupKey = JSON.stringify(scored.find(x => x.s === top)!.r.keywords);
-      return scored
-        .filter(x => JSON.stringify(x.r.keywords) === groupKey)
-        .map(x => toCandidate(x.r, true))
-        .map((c): DealCandidate | undefined => (c ? { ...c, sample: true } : undefined))
+      const groupKey = top ? JSON.stringify(scored.find(x => x.s === top)!.r.keywords) : '';
+      return [
+        ...scored.filter(x => JSON.stringify(x.r.keywords) === groupKey).map(x => ({ c: toCandidate(x.r, true), planted: false })),
+        ...planted.map(r => ({ c: toCandidate(r, true), planted: true })),
+      ]
+        .map(({ c, planted }): DealCandidate | undefined => (c ? { ...c, sample: true, ...(planted ? { planted: true } : {}) } : undefined))
         .filter((c): c is DealCandidate => !!c);
     },
   };

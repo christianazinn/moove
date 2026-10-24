@@ -263,7 +263,7 @@ import Testing
 
     @Test func marketplaceAndFlaggedDealsAreNeverPaid() async throws {
         let backend = try await connectedDemo()
-        try await backend.chooseDeal(shoppingItemId: 52, dealId: 76) // craigslist, fraud 0.81
+        try await backend.chooseDeal(shoppingItemId: 52, dealId: 76) // craigslist, planted scam, fraud 0.85
         let s = await latest(backend)
         #expect(s.visaPayments(for: 76).isEmpty && s.purchaseApproval(for: 76) == nil)
         #expect(s.shoppingItems.first { $0.id == 52 }?.status == .found)

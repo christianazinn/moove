@@ -307,7 +307,7 @@ await stage(`x402 budget: calls past the $${X402_CAP_USDC} pricing cap refused b
   if (settled.length !== affordable || total > cap) throw new Error(`${settled.length} settled x402 payments totalling ${total} micros, want ${affordable} within the ${cap}-micro cap`);
   const evs = pricingEvents();
   for (const { e, d } of refused) {
-    if (!/^Refused x402 payment for .*would exceed the pricing budget/.test(e.message)) throw new Error(`unexpected refusal message: ${e.message}`);
+    if (!/^(\[SIMULATED\] )?Refused x402 payment for .*would exceed the pricing budget/.test(e.message)) throw new Error(`unexpected refusal message: ${e.message}`);
     if (d.refused !== true || BigInt(String(d.remainingUsdMicros)) >= X402_QUOTE_MICROS) throw new Error(`refusal data wrong: ${e.dataJson}`);
     // Refused before paying: no "Paying ..." step and no payment row for that item, and it was still priced.
     if (evs.some(x => x.e.refId === e.refId && x.d.outcome === "paying")) throw new Error(`item ${e.refId}: refused, but a "paying" step was logged for it`);
@@ -474,14 +474,20 @@ await stage("spending log: payment rows complete + simulated, [SIMULATED] events
     (p.rail === "visa" ? !p.txHash.startsWith("sim_") : p.payee !== "simulated"));
   if (bad.length) throw new Error(`${bad.length} bad payment row(s): ${bad.slice(0, 3).map(p => JSON.stringify({ agent: p.agent, rail: p.rail, amount: String(p.amountUsdMicros), status: p.status, simulated: p.simulated, payee: p.payee, txHash: p.txHash })).join(" ")}`);
   if (pays.some(p => p.status === "pending")) throw new Error("a payment is still pending after checkout finished");
-  const payEvents = [...conn!.db.agentEvent.iter()]
-    .filter(e => me && e.owner.isEqual(me) && e.kind === "payment")
+  // Every money step on a rail, of any kind: payments, "Paying ..." tool calls, refusals,
+  // failures and Visa's "Not charging yet" approval waits.
+  const railEvents = [...conn!.db.agentEvent.iter()]
+    .filter(e => me && e.owner.isEqual(me))
     .map(e => ({ e, d: parseData(e.dataJson) }))
     .filter(({ d }) => d.rail === "x402" || d.rail === "visa");
-  const unlabeled = payEvents.filter(({ e, d }) => d.simulated !== true || !e.message.startsWith("[SIMULATED] "));
-  if (unlabeled.length) throw new Error(`${unlabeled.length} payment event(s) not labeled simulated: ${unlabeled.slice(0, 3).map(x => x.e.message).join(" | ")}`);
+  const unlabeled = railEvents.filter(({ e, d }) => d.simulated !== true || !e.message.startsWith("[SIMULATED] "));
+  if (unlabeled.length) throw new Error(`${unlabeled.length} rail event(s) not labeled simulated: ${unlabeled.slice(0, 3).map(x => x.e.message).join(" | ")}`);
+  const kinds = new Map<string, number>();
+  for (const { e } of railEvents) kinds.set(e.kind, (kinds.get(e.kind) ?? 0) + 1);
+  if (!railEvents.some(({ e, d }) => d.rail === "x402" && e.kind === "error" && d.refused === true)) throw new Error("no x402 refusal event to check (the budget stage should have made one)");
   const by = (r: string) => pays.filter(p => p.rail === r).map(p => p.status).join("/");
-  return { detail: `${pays.length} rows (x402 ${by("x402")}; visa ${by("visa")}), all simulated; ${payEvents.length} payment events, all "[SIMULATED] ..."` };
+  const kindList = [...kinds].map(([k, n]) => `${n} ${k}`).join(", ");
+  return { detail: `${pays.length} rows (x402 ${by("x402")}; visa ${by("visa")}), all simulated; ${railEvents.length} rail events (${kindList}), all "[SIMULATED] ..."` };
 });
 
 await stage("agent log: no unexpected errors", async () => {

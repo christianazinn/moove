@@ -249,7 +249,8 @@ test("simulated rail labels every payment and event as simulated", async () => {
   assert.equal(payment!.simulated, true);
   assert.equal(payment!.txHash, "");
   assert.equal(payments[0].simulated, true);
-  assert.match(events.at(-1)!.message, /^\[SIMULATED\]/);
+  for (const e of events) assert.match(e.message, /^\[SIMULATED\] /);
+  assert.match(events[0].message, /^\[SIMULATED\] Paying \$0\.01 for /);
   const cap = usdToMicros(1);
   assert.deepEqual(events.map((e) => e.kind), ["tool_call", "payment"]);
   assertRailData(events[0], { outcome: "paying", remaining: cap - 10_000n, cap, simulated: true });
@@ -257,6 +258,15 @@ test("simulated rail labels every payment and event as simulated", async () => {
   assert.equal(d.payee, "simulated");
   assert.equal(d.amountUsdMicros, "10000");
   assert.equal(d.url, "https://paid.example/comps");
+});
+
+test("simulated rail labels a budget refusal", async () => {
+  const { sink, events } = memorySink();
+  const rail = new X402Rail({ sink, ledger: new SpendLedger(usdToMicros(0.001), usdToMicros(0.1)), fetch: (async () => new Response("{}")) as typeof globalThis.fetch });
+  await assert.rejects(rail.paidFetch({ ...ctx, quotedUsdMicros: 10_000n }, "https://paid.example/comps"), SpendRefusedError);
+  assert.equal(events.length, 1);
+  assert.match(events[0].message, /^\[SIMULATED\] Refused x402 payment for /);
+  assertRailData(events[0], { outcome: "refused", remaining: usdToMicros(0.001), cap: usdToMicros(0.001), simulated: true });
 });
 
 test("simulated rail: a non-2xx endpoint records no settled payment and restores the budget", async () => {

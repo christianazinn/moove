@@ -14,6 +14,7 @@
 // row says `simulated: true`. Never present those as real payments.
 
 import { x402HTTPClient } from "@x402/core/client";
+import { simulatedLabel } from "./simulated.js";
 import type { PaymentPayload, PaymentRequired, PaymentRequirements } from "@x402/core/types";
 import { usdCapFromEnv } from "./caps.js";
 
@@ -386,12 +387,14 @@ export class X402Rail {
     };
   }
 
+  // Every step on the simulated rail is visibly labeled (track rule), including refusals and the
+  // "Paying ..." step; real-mode messages are left as they are.
   private event(ctx: PaidCallContext, kind: AgentEventRecord["kind"], message: string, data: Record<string, unknown>) {
     return this.sink.logAgentEvent({
       owner: ctx.owner,
       agent: ctx.agent,
       kind,
-      message,
+      message: this.simulated ? simulatedLabel(message) : message,
       refTable: ctx.refTable ?? "",
       refId: ctx.refId ?? 0n,
       dataJson: JSON.stringify(data),

@@ -19,6 +19,7 @@
 
 import crypto from 'node:crypto';
 import { usdCapFromEnv } from './caps.js';
+import { simulatedLabel } from './simulated.js';
 
 export type VisaProvider = 'acceptance' | 'simulated' | 'vic';
 
@@ -722,7 +723,8 @@ export class VisaCheckout {
       owner: ctx.owner,
       agent: ctx.agent,
       kind,
-      message,
+      // Simulated checkout steps are always labeled, including "Not charging yet" and refusals.
+      message: b.simulated ? simulatedLabel(message) : message,
       refTable: ctx.refTable,
       refId: ctx.refId,
       data: {

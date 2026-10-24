@@ -1,6 +1,7 @@
 import type { Identity } from 'spacetimedb';
 import type { Conn } from './spacetime.js';
 import { logEvent } from './events.js';
+import { simulatedLabel } from './integrations/simulated.js';
 import { createX402Rail, type PaymentSink, type X402Rail } from './integrations/x402.js';
 
 // Writes x402 payments and their agent steps through the record_payment / log_agent_event
@@ -19,11 +20,12 @@ export function spacetimeSink(conn: Conn): PaymentSink {
             `amountUsdMicros=${p.amountUsdMicros} simulated=${p.simulated} txHash=${p.txHash || '(none)'}`,
         );
         try {
+          const message = `Couldn't record x402 payment for ${p.purpose}: ${reason}`;
           logEvent(conn, {
             owner: p.owner as Identity,
             agent: p.agent,
             kind: 'error',
-            message: `Couldn't record x402 payment for ${p.purpose}: ${reason}`,
+            message: p.simulated ? simulatedLabel(message) : message,
             refTable: p.refTable,
             refId: p.refId,
             data: { rail: 'x402', txHash: p.txHash, amountUsdMicros: p.amountUsdMicros, status: p.status, simulated: p.simulated, error: reason },
