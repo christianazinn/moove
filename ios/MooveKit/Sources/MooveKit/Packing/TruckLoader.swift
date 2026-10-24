@@ -159,6 +159,16 @@ public struct TruckLoad: Sendable, Hashable {
     public var boxCount: Int { placements.filter(\.item.isBox).count }
 
     public static let empty = TruckLoad(truck: .cargoVan, placements: [], unloaded: [], fill: 0)
+
+    /// Shown on both the 2D truck card and the 3D view when real shapes needed a bigger truck
+    /// than the volume estimate (`planned`): "Fits a cargo van by volume; packs best in a 10 ft truck."
+    /// Nil when the load fits the planned truck.
+    public func sizeNote(planned: TruckSize) -> String? {
+        guard truck != planned else { return nil }
+        let a = planned.label, b = truck.label.lowercased()
+        let article = a.lowercased().first.map { "aeiou".contains($0) } == true ? "an" : "a"
+        return "Fits \(article) \(a.lowercased()) by volume; packs best in a \(b)."
+    }
 }
 
 /// Loads the plan's truck like movers do, as a greedy 3D "extreme point" packer:

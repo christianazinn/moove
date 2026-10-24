@@ -8,7 +8,8 @@ import MooveKit
 struct TruckView: View {
     let plan: PackingPlan
     let items: [Item]
-    @State private var load: TruckLoad?
+    /// The Pack card's load when it has one, so both screens show the same truck.
+    @State var load: TruckLoad? = nil
     @State private var flyInToken = 0
     @State private var selected: TruckPlacement?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -38,6 +39,7 @@ struct TruckView: View {
         .navigationTitle("Truck in 3D")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: plan) {
+            guard load == nil else { return }
             let plan = plan, items = items
             load = await Task.detached(priority: .userInitiated) { TruckLoader.load(plan: plan, items: items) }.value
         }
@@ -46,7 +48,7 @@ struct TruckView: View {
     // MARK: Legend
 
     private func legend(_ load: TruckLoad) -> some View {
-        let upsized = load.truck != plan.truck.truck
+        let note = load.sizeNote(planned: plan.truck.truck)
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text("Load plan").eyebrow()
@@ -57,8 +59,8 @@ struct TruckView: View {
             Text("\(load.furnitureCount) furniture · \(load.boxCount) boxes · loaded cab first, open-first box by the door")
                 .monoMeta()
                 .fixedSize(horizontal: false, vertical: true)
-            if upsized {
-                Text("These shapes don't fit a \(plan.truck.truck.label.lowercased()), so this is a \(load.truck.label.lowercased()).")
+            if let note {
+                Text(note)
                     .monoMeta()
                     .foregroundStyle(Theme.ochreInk)
                     .fixedSize(horizontal: false, vertical: true)

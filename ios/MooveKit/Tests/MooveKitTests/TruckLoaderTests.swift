@@ -173,6 +173,35 @@ import Testing
         #expect(load.placements.isEmpty && load.unloaded.isEmpty && load.fill == 0)
     }
 
+    @Test func boughtPiecesAreDeliveredNotLoaded() {
+        let s = DemoFixtures.demo(owner: "me")
+        let withBought = PackingPlanner.plan(items: s.items, bought: s.boughtPieces)
+        #expect(!withBought.delivered.isEmpty)
+        let a = TruckLoader.load(plan: withBought, items: s.items)
+        let b = TruckLoader.load(plan: PackingPlanner.plan(items: s.items), items: s.items)
+        #expect(a == b, "bought pieces ship to the new place, so the load is the same")
+        #expect(!a.placements.contains { p in withBought.delivered.contains { $0.name == p.item.name } })
+    }
+
+    /// The 3D truck is the plan's truck unless that truck genuinely can't hold the load.
+    @Test func loaderKeepsThePlannedTruckUnlessItCantFit() {
+        let demo = DemoFixtures.demo(owner: "me")
+        for (items, bought) in [(demoItems, [BoughtPiece]()), (demo.items, demo.boughtPieces), (bigMove, [])] {
+            let plan = PackingPlanner.plan(items: items, bought: bought)
+            let load = TruckLoader.load(plan: plan, items: items)
+            let inPlanned = TruckLoader.load(plan: plan, items: items, truck: plan.truck.truck)
+            if inPlanned.unloaded.isEmpty {
+                #expect(load.truck == plan.truck.truck)
+                #expect(load.sizeNote(planned: plan.truck.truck) == nil)
+            } else {
+                #expect(load.truck != plan.truck.truck, "stepped up because \(inPlanned.unloaded.count) pieces didn't fit")
+                #expect(load.sizeNote(planned: plan.truck.truck) != nil)
+            }
+        }
+        let note = TruckLoad(truck: .ft10, placements: [], unloaded: [], fill: 0).sizeNote(planned: .cargoVan)
+        #expect(note == "Fits a cargo van by volume; packs best in a 10 ft truck.")
+    }
+
     @Test func truckShellAndBoxesBuild() {
         for size in TruckSize.allCases {
             let f = VoxelTruck.frame(size)
