@@ -34,9 +34,9 @@ struct ScanHomeView: View {
                 Button {
                     loadingDemo = true
                     Task {
-                        await store.importScan(DemoFixtures.scanImport())
+                        let imported = await store.importScan(DemoFixtures.scanImport())
                         loadingDemo = false
-                        if store.lastError == nil { tab = "inventory" }
+                        if imported { tab = "inventory" }
                     }
                 } label: {
                     Label(loadingDemo ? "Loading…" : "Load demo scan", systemImage: "tray.and.arrow.down")
