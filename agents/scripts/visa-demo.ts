@@ -1,7 +1,8 @@
 // One Visa checkout end to end, without SpacetimeDB: authorize a hold, re-check, capture, and print
-// the payment row + every agent_event. Uses the CyberSource sandbox when VISA_ACCEPTANCE_* keys are
-// set (test card, no real money), otherwise the labeled simulated backend.
-// Usage: npm run visa:demo [-- <amount in dollars>]   e.g. npm run visa:demo -- 89.99
+// the payment row + every agent_event. Uses the backend VISA_PROVIDER picks: the Authorize.net sandbox
+// (AUTHORIZENET_* keys) or the CyberSource sandbox (VISA_ACCEPTANCE_* keys), test card, no real money,
+// otherwise the labeled simulated backend.
+// Usage: npm run visa:demo [-- <amount in dollars>]   e.g. VISA_PROVIDER=authorizenet npm run visa:demo -- 1.00
 import "./env.js";
 import { createVisaCheckout, dollars, type VisaSink } from "../src/integrations/visa.js";
 
