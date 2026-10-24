@@ -38,7 +38,7 @@ Merged to `main` via PR with green CI, issue closed, and `docs/data-model.md` up
 
 ## Status (as built)
 - **Worker:** `agents/src/agents/approval.ts` + `agents/src/integrations/auth0.ts` (real CIBA via plain `fetch`, plus an opt-in, labeled simulated approver). See `agents/CLAUDE.md`. Without Auth0 config the worker leaves approvals pending for the in-app inbox; it never approves on its own.
-- **Binding message:** Auth0 allows max 64 chars of letters, digits, spaces and `+-_.,:#`, so the example above is invalid. We send e.g. `Moove: sell Herman Miller chair for 420.00 USD`.
+- **Binding message:** Auth0 allows max 64 chars of letters, digits, spaces and `+-_.,:#`, so the example above is invalid. We send e.g. `Moove: sell 420.00 USD: Herman Miller chair` or `Moove: buy 179.99 USD: 8in memory foam mattress` (amount first, title from the listing or deal row).
 - **iOS:** `ios/Moove/Features/Approvals/` (Approvals tab with pending badge, approve/deny with confirm, history) + MooveKit `Approval` model, `SyncSnapshot.approvals`, fixtures, tests. Works in fixture mode; the live `decideApproval` is a stub like every other reducer in `SpacetimeBackend+Contract.swift` until the Swift bindings are generated.
 - **Tested** (scratch harness on a fake connection): below threshold posts directly; above threshold without Auth0 never posts; CIBA denied -> listing `rejected`; CIBA approved -> posted; push expiry or in-app decision mid-poll -> the worker does not decide.
 - **Not yet tested against a real tenant** (no Auth0 credentials yet). CIBA may be plan-gated (Enterprise or add-on).
