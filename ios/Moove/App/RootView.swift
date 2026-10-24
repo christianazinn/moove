@@ -37,6 +37,9 @@ struct RootView: View {
             NavigationStack { screen(ShoppingView()) }
                 .tag("shopping")
                 .tabItem { Label("Shopping", systemImage: "cart") }
+            NavigationStack { screen(PackView()) }
+                .tag("pack")
+                .tabItem { Label("Pack", systemImage: "archivebox") }
             NavigationStack { screen(SummaryView()) }
                 .tag("summary")
                 .tabItem { Label("Summary", systemImage: "chart.bar.doc.horizontal") }
