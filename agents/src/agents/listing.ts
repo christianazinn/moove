@@ -11,7 +11,8 @@ import { chooseEbay, dollars, simulatedEbay, type EbayPoster } from '../integrat
 // labeled simulation (#11, #32). Fixed at startup so a draft's `simulated` flag matches how it posts.
 const ebay: EbayPoster = chooseEbay();
 
-const DEFAULT_THRESHOLD_CENTS = 10_000n;
+// Fallback when the owner has no user row; the user's approval_threshold_cents wins (#12).
+const DEFAULT_THRESHOLD_CENTS = BigInt(process.env.APPROVAL_THRESHOLD_CENTS_DEFAULT || '10000');
 // Demo nicety: flip posted simulated listings to `sold` after this many seconds (0 = never).
 const SOLD_AFTER_SEC = Number(process.env.LISTING_SIM_SOLD_AFTER_SEC ?? '0');
 
