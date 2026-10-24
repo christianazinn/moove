@@ -21,6 +21,7 @@ import { config } from '../config.js';
 import type { EventKind } from '../events.js';
 import { loadPhoto, type ImageInput } from '../integrations/photos.js';
 import { cleanUntrusted } from '../untrusted.js';
+import { OVER_CAP_NOTE, takePaidCall } from './budget.js';
 import { findFloorPlanInPhotos, type ListingPhoto, type PhotoPlanScan } from './floorplanFinder.js';
 
 type Log = (kind: EventKind, message: string, data?: unknown) => void;
@@ -188,22 +189,33 @@ async function runActor(url: string, token: string, fetchImpl: typeof fetch): Pr
   return row as Record<string, any>;
 }
 
+type ScrapeOpts = {
+  token: string;
+  log: Log;
+  fetch?: typeof fetch;
+  loadImage?: (url: string) => Promise<ImageInput>;
+  cacheDir?: string;
+  classify?: Parameters<typeof findFloorPlanInPhotos>[1]['classify'];
+};
+
+// The same listing imported twice at once (a double tap, a retry) shares one paid run: the cache is
+// only written when a run finishes, up to 150 s later.
+const inFlight = new Map<string, Promise<ScrapeResult>>();
+
 /** Runs (or replays) the Zillow actor for one listing and loads its floor-plan images. */
-export async function scrapeZillow(
-  listingUrl: string,
-  opts: {
-    token: string;
-    log: Log;
-    fetch?: typeof fetch;
-    loadImage?: (url: string) => Promise<ImageInput>;
-    cacheDir?: string;
-    classify?: Parameters<typeof findFloorPlanInPhotos>[1]['classify'];
-  }
-): Promise<ScrapeResult> {
+export async function scrapeZillow(listingUrl: string, opts: ScrapeOpts): Promise<ScrapeResult> {
   const url = zillowRunUrl(listingUrl);
   if (!url) throw new Error('not a zillow.com link');
-  const { log } = opts;
   const file = path.join(opts.cacheDir ?? CACHE_DIR, `${cacheKey(url)}.json`);
+  const running = inFlight.get(file);
+  if (running) return running;
+  const p = scrapeOnce(url, file, opts).finally(() => inFlight.delete(file));
+  inFlight.set(file, p);
+  return p;
+}
+
+async function scrapeOnce(url: string, file: string, opts: ScrapeOpts): Promise<ScrapeResult> {
+  const { log } = opts;
   const notes: string[] = [];
   let facts: ZillowFacts;
   let cachedScan: PhotoPlanScan | undefined;
@@ -216,7 +228,8 @@ export async function scrapeZillow(
     notes.push(`Replayed a cached Apify Zillow result${cached.fetchedAt ? ` from ${cached.fetchedAt.slice(0, 10)}` : ''}.`);
     log('tool_call', `[REPLAYED] Apify Zillow scraper result for ${url}`, { actor: config.apify.zillowActor });
   } else {
-    log('tool_call', `Running Apify ${config.apify.zillowActor} for ${url} (cap $${config.apify.maxUsdPerRun})`, { actor: config.apify.zillowActor, maxUsd: config.apify.maxUsdPerRun });
+    if (!takePaidCall()) throw new Error(OVER_CAP_NOTE);
+    log('tool_call', `Running Apify ${config.apify.zillowActor} for ${url} (cap $${config.apify.maxUsdPerRun})`, { actor: config.apify.zillowActor, maxUsd: config.apify.maxUsdPerRun, paid: true });
     facts = extractZillowFacts(await runActor(url, opts.token, opts.fetch ?? fetch));
     writeCache(file, { ...facts, fetchedAt: new Date().toISOString() });
   }
@@ -284,6 +297,10 @@ async function photoFloorPlans(
   }
 
   log('plan', `Looking for a floor plan among ${photos.length} listing photos`, { photos: photos.length });
+  if (!takePaidCall()) {
+    log('error', OVER_CAP_NOTE);
+    return { images: [], note: `${NO_PLAN_NOTE} ${OVER_CAP_NOTE}` };
+  }
   try {
     const r = await findFloorPlanInPhotos(photos, { log, loadImage: load, classify: deps.classify });
     const n = r.images.length;

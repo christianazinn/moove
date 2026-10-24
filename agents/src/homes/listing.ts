@@ -14,6 +14,8 @@ import { logEvent, type EventKind } from '../events.js';
 import { loadImage, type ImageInput } from '../integrations/anthropic.js';
 import type { Conn } from '../spacetime.js';
 import { readFloorPlan, summarizePlan, type FloorPlan } from './floorplanVision.js';
+import { cleanUntrusted } from '../untrusted.js';
+import { seedHomesBudget } from './budget.js';
 import { scrapeZillow } from './zillowApify.js';
 
 export type Site = 'zillow' | 'redfin' | 'realtor' | 'apartments' | 'streeteasy' | 'other';
@@ -228,7 +230,10 @@ export function parseListingUrl(url: string): ParsedListing {
   } catch {
     // a malformed slug just means no address
   }
-  if (out.address === '') out.address = null;
+  // The slug is decoded user input: no bidi/zero-width/control characters or tags into the home name
+  // or the public agent_event log.
+  out.address = out.address ? cleanUntrusted(out.address, 160) || null : null;
+  out.building = out.building ? cleanUntrusted(out.building, 120) || null : null;
   if (out.address === null && out.note === null) {
     out.note =
       out.site === 'other'
@@ -295,6 +300,8 @@ export function parseImportBody(body: unknown): ImportRequest {
 let eventSink: { conn: Conn; owner: Identity } | undefined;
 export function attachHomesEvents(conn: Conn, owner: Identity): void {
   eventSink = { conn, owner };
+  const n = seedHomesBudget(conn.db.agentEvent.iter());
+  console.log(`[homes] paid import steps in the last ${config.homes.spendWindowH} h: ${n} of ${config.homes.maxPaidCalls}`);
 }
 
 function requestLog(requestId: string): HomesLog {
@@ -332,7 +339,7 @@ export async function importHome(body: unknown, deps: ImportDeps = {}): Promise<
   const log = deps.log ?? requestLog(randomUUID());
   const notes: string[] = [];
   const url = req.url?.trim() || null;
-  let address = req.address?.trim() || null;
+  let address = req.address ? cleanUntrusted(req.address, 160) || null : null;
   let beds = req.beds ?? null;
   let baths = req.baths ?? null;
   let sqft = req.sqft ?? null;
