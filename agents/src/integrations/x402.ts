@@ -403,7 +403,7 @@ export class X402Rail {
 }
 
 /** Only pay in USDC on Base Sepolia, and take the cheapest such option. */
-function pickRequirements(pr: PaymentRequired): PaymentRequirements | undefined {
+export function pickRequirements(pr: PaymentRequired): PaymentRequirements | undefined {
   return pr.accepts
     .filter((a) => a.network === BASE_SEPOLIA && a.asset.toLowerCase() === USDC_BASE_SEPOLIA.toLowerCase())
     .sort((a, b) => (BigInt(a.amount) < BigInt(b.amount) ? -1 : 1))[0];
