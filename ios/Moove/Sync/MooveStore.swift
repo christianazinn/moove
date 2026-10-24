@@ -153,6 +153,22 @@ final class MooveStore {
         await run { try await $0.addItemPhoto(itemId: itemId, url: url) }
     }
 
+    /// The scan just imported into room `roomName`, once it reaches the snapshot
+    /// (waits up to ~5 s, like `saveScanColors`).
+    func newestScan(inRoomNamed roomName: String) async -> Scan? {
+        for attempt in 0..<20 {
+            if let room = newestRoom(named: roomName),
+               let scan = snapshot.scans.filter({ $0.roomId == room.id }).max(by: { $0.id < $1.id }) { return scan }
+            if attempt < 19 { try? await Task.sleep(for: .milliseconds(250)) }
+        }
+        return nil
+    }
+
+    @discardableResult
+    func addScanPhoto(scanId: UInt64, url: String) async -> Bool {
+        await run { try await $0.addScanPhoto(scanId: scanId, url: url) }
+    }
+
     func setDisposition(_ disposition: Disposition, for item: Item) async {
         await run { try await $0.setDisposition(itemId: item.id, disposition: disposition) }
     }
