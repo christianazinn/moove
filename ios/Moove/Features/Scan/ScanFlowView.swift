@@ -184,8 +184,12 @@ struct ScanFlowView: View {
                         HStack(spacing: 16) {
                             photoThumb(object)
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(object.manual ? "New item" : object.category.capitalized).blockTitle()
+                                Text(title(object)).blockTitle()
                                 Text(dims(object)).monoMeta()
+                                if object.category == ObjectSanity.relabelCategory, !object.manual {
+                                    // Unrecognized, or a size its label can't have (#182).
+                                    Text("Moove names it from its photo").monoMeta()
+                                }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             if session.autoPhotos.contains(object.id) {
@@ -282,9 +286,14 @@ struct ScanFlowView: View {
     /// "Chair, 0.5 by 0.5 by 0.9 meters, photographed automatically".
     private func accessibilityLabel(_ o: ScanSession.DetectedObject, done: Bool) -> String {
         let f = { (v: Double) in v.formatted(.number.precision(.fractionLength(1))) }
-        let name = o.manual ? "New item, added by photo" : "\(o.category.capitalized), \(f(o.widthM)) by \(f(o.depthM)) by \(f(o.heightM)) meters"
+        let name = o.manual ? "New item, added by photo" : "\(title(o)), \(f(o.widthM)) by \(f(o.depthM)) by \(f(o.heightM)) meters"
         let state = !done ? "no photo yet" : session.autoPhotos.contains(o.id) ? "photographed automatically from the scan" : "photographed"
         return "\(name), \(state)"
+    }
+
+    private func title(_ o: ScanSession.DetectedObject) -> String {
+        if o.manual { return "New item" }
+        return o.category == ObjectSanity.relabelCategory ? "Unidentified item" : o.category.capitalized
     }
 
     private func dims(_ o: ScanSession.DetectedObject) -> String {
