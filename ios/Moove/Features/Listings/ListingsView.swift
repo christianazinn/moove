@@ -80,22 +80,12 @@ struct ListingsView: View {
         let sold = listings.filter { $0.status == .sold }
         let listed = live.map(\.priceCents).reduce(0, +)
         let soldCents = sold.map(\.priceCents).reduce(0, +)
-        return HStack(spacing: 0) {
-            StatFigure(label: "Live", value: "\(live.count)")
-                .padding(.vertical, 18).padding(.trailing, 14)
-                .accessibilityLabel("\(live.count) posted")
-            Rectangle().fill(Theme.line).frame(width: 1)
-            StatFigure(label: "Listed", value: CentsFormat.usd(listed))
-                .padding(.vertical, 18).padding(.horizontal, 14)
-                .accessibilityLabel("Listed, \(CentsFormat.usd(listed))")
-            Rectangle().fill(Theme.line).frame(width: 1)
-            StatFigure(label: "Sold", value: CentsFormat.usd(soldCents), tint: Theme.accentStrong)
-                .padding(.vertical, 18).padding(.leading, 14)
-                .accessibilityLabel("Sold, \(CentsFormat.usd(soldCents))")
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .ruled(.top)
-        .ruled()
+        return StatStrip(figures: [
+            .init(label: "Live", value: "\(live.count)", spoken: "\(live.count) posted"),
+            .init(label: "Listed", value: CentsFormat.usd(listed), spoken: "Listed, \(CentsFormat.usd(listed))"),
+            .init(label: "Sold", value: CentsFormat.usd(soldCents), tint: Theme.accentStrong,
+                  spoken: "Sold, \(CentsFormat.usd(soldCents))"),
+        ])
     }
 }
 
@@ -110,23 +100,33 @@ struct ListingRow: View {
     let listing: Listing
     let item: Item?
     var problem: String? = nil
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        // At accessibility sizes the price and SIMULATED pill move under the title, which otherwise
+        // gets a third of the row and breaks mid-word ("Lamina / te").
+        let stacked = dynamicTypeSize.isAccessibilitySize
         HStack(spacing: 16) {
             if let item { ItemThumbnail(item: item, size: 56) } else { IconTile(systemName: "tag") }
             VStack(alignment: .leading, spacing: 5) {
-                Text(listing.title).blockTitle().lineLimit(3)
+                Text(listing.title).blockTitle().lineLimit(stacked ? 6 : 3)
                 ListingStatusChip(status: listing.status, simulated: listing.simulated)
                 if let problem {
-                    Text(problem).monoMeta().lineLimit(3)
+                    Text(problem).monoMeta().lineLimit(stacked ? 6 : 3)
+                }
+                if stacked {
+                    Text(listing.formattedPrice).rowValue().amountText()
+                    if listing.simulated { SimulatedTag() }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            VStack(alignment: .trailing, spacing: 6) {
-                Text(listing.formattedPrice).rowValue().amountText()
-                if listing.simulated { SimulatedTag() }
+            if !stacked {
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(listing.formattedPrice).rowValue().amountText()
+                    if listing.simulated { SimulatedTag() }
+                }
+                .layoutPriority(1)
             }
-            .layoutPriority(1)
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .regular))
                 .foregroundStyle(Theme.faint)

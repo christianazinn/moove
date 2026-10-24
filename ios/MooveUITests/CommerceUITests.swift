@@ -14,18 +14,12 @@ final class CommerceUITests: XCTestCase {
     private var app: XCUIApplication!
 
     func testSellAndBuyFlowOnOfflineDemo() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        // Same launch as MooveSmokeTests: UserDefaults argument domain + fresh-install reset.
-        app.launchArguments += ["-moove.backendKind", "fixture", "-moove.auth.guest", "YES"]
-        app.launchEnvironment["MOOVE_UI_TEST_RESET"] = "1"
-        app.launch()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 30), "tab bar")
+        launchOfflineDemo()
 
         // Sell & Buy tab and its four segments, in order.
         let sellBuy = app.tabBars.buttons["Sell & Buy"]
         XCTAssertTrue(sellBuy.waitForExistence(timeout: 10), "no Sell & Buy tab")
-        sellBuy.tap()
+        select(tab: sellBuy)
         let listingsTab = segment("Listings")
         let shoppingTab = segment("Shopping")
         let approvalsTab = segment("Approvals")
@@ -123,10 +117,131 @@ final class CommerceUITests: XCTestCase {
         shot("7-spending-new-payment")
     }
 
+    /// #140 claimed Dynamic Type support: the largest accessibility text size, one read-only pass.
+    func testCommerceScreensAtLargestAccessibilityText() {
+        launchOfflineDemo(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        tourCommerceScreens(prefix: "a11y-xxxl")
+    }
+
+    /// #140 claimed dark-mode contrast: the same read-only pass in dark mode.
+    func testCommerceScreensInDarkMode() {
+        // `-AppleInterfaceStyle Dark` is ignored on iOS, and this alone doesn't take on the CI Simulator,
+        // so CI also runs this test by itself after `simctl ui appearance dark`.
+        XCUIDevice.shared.appearance = .dark
+        addTeardownBlock { @MainActor in XCUIDevice.shared.appearance = .light }
+        launchOfflineDemo()
+        tourCommerceScreens(prefix: "dark")
+    }
+
     // MARK: Helpers
+
+    private func launchOfflineDemo(_ extra: [String] = []) {
+        app = XCUIApplication()
+        // Same launch as MooveSmokeTests: UserDefaults argument domain + fresh-install reset.
+        app.launchArguments += ["-moove.backendKind", "fixture", "-moove.auth.guest", "YES"] + extra
+        app.launchEnvironment["MOOVE_UI_TEST_RESET"] = "1"
+        launchRetryingOnce()
+        continueAfterFailure = false
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 30), "tab bar")
+    }
+
+    /// Screenshots every commerce screen ("<prefix>-<screen>") and checks the key controls exist and
+    /// are hittable. Read-only: nothing is approved or bought, so it stays short.
+    private func tourCommerceScreens(prefix: String) {
+        let sellBuy = app.tabBars.buttons["Sell & Buy"]
+        XCTAssertTrue(sellBuy.waitForExistence(timeout: 10), "no Sell & Buy tab")
+        select(tab: sellBuy)
+        let tabs = ["Listings", "Shopping", "Approvals", "Spending"].map(segment)
+        for s in tabs { XCTAssertTrue(s.waitForExistence(timeout: 10), "missing segment \(s)") }
+        let (listingsTab, shoppingTab, approvalsTab, spendingTab) = (tabs[0], tabs[1], tabs[2], tabs[3])
+        shot("\(prefix)-0-sell-and-buy")
+
+        tapSegment(listingsTab)
+        XCTAssertTrue(app.staticTexts["Your listings."].waitForExistence(timeout: 10))
+        shot("\(prefix)-1-listings")
+        let posted = byId("listing.201")
+        XCTAssertTrue(scrollTo(posted), "listing row not hittable")
+        XCTAssertTrue(posted.label.localizedCaseInsensitiveContains("simulated"), posted.label)
+        shot("\(prefix)-1-listings-simulated")
+
+        tapSegment(shoppingTab)
+        XCTAssertTrue(app.staticTexts["What the new place needs."].waitForExistence(timeout: 10))
+        shot("\(prefix)-2-shopping")
+        let deskChair = byId("shopping.item.52")
+        XCTAssertTrue(scrollTo(deskChair), "Desk chair not hittable")
+        deskChair.tap()
+        XCTAssertTrue(scrollTo(byId("deal.blocked.76")), "Blocked: likely fraud not hittable")
+        shot("\(prefix)-2-desk-chair-blocked")
+        XCTAssertTrue(scrollTo(byId("deal.choose.74")), "Choose not hittable")
+        shot("\(prefix)-2-desk-chair-choose")
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(back.waitForExistence(timeout: 5))
+        back.tap()
+
+        XCTAssertTrue(approvalsTab.waitForExistence(timeout: 10))
+        tapSegment(approvalsTab)
+        XCTAssertTrue(app.staticTexts["Your go-ahead."].waitForExistence(timeout: 10))
+        shot("\(prefix)-3-approvals")
+        XCTAssertTrue(scrollTo(byId("approval.approve.300")), "Approve not hittable")
+        shot("\(prefix)-3-approvals-approve")
+
+        tapSegment(spendingTab)
+        XCTAssertTrue(app.staticTexts["Where the money went."].waitForExistence(timeout: 10))
+        shot("\(prefix)-4-spending")
+        let simulated = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'payment.' AND label CONTAINS ', simulated,'")).firstMatch
+        XCTAssertTrue(scrollTo(simulated), "SIMULATED payment row not hittable")
+        shot("\(prefix)-4-spending-simulated")
+        XCTAssertTrue(scrollTo(byId("payment.basescan.500")), "Basescan link not hittable")
+        shot("\(prefix)-4-spending-basescan")
+    }
+
+    /// CI's simulator sometimes fails the first launch with "Application 'app.moove.Moove' does not
+    /// have a process ID" after a slow (~90 s) boot. Only that launch failure is tolerated, once; any
+    /// other issue during the first launch, or a second failed launch, still fails the test.
+    private func launchRetryingOnce() {
+        continueAfterFailure = true  // so an expected launch failure doesn't end the test; set false after
+        let options = XCTExpectedFailure.Options()
+        options.isStrict = false
+        options.issueMatcher = { $0.compactDescription.contains("does not have a process ID") }
+        XCTExpectFailure("CI simulator launch flake, retried once", options: options) {
+            app.launch()
+        }
+        if app.state != .runningForeground {
+            app.terminate()
+            app.launch()
+        }
+    }
+
+    /// On the iOS 26 Liquid Glass tab bar, a tap that lands while the app is still settling after
+    /// launch is sometimes dropped (CI showed the app still on Scan, the "Sell & Buy" tab unselected).
+    /// Tap, wait for the tab to report Selected, and tap again if it didn't take.
+    private func select(tab: XCUIElement) {
+        let selected = NSPredicate(format: "isSelected == true")
+        for _ in 0..<3 where !tab.isSelected {
+            tab.tap()
+            _ = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: selected, object: tab)], timeout: 5)
+        }
+        XCTAssertTrue(tab.isSelected, "\(tab.label) tab never got selected")
+    }
 
     private func segment(_ title: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", title, "\(title) ·")).firstMatch
+    }
+
+    /// The segment picker scrolls sideways (at large text sizes "Spending" starts off screen), so swipe
+    /// it until the segment is fully on screen, then tap. Frames, not `isHittable`: that fails outright
+    /// for an element with no on-screen point.
+    private func tapSegment(_ s: XCUIElement) {
+        let screen = app.windows.firstMatch.frame
+        for _ in 0..<4 where !(s.frame.minX >= screen.minX && s.frame.maxX <= screen.maxX) {
+            let y = s.frame.midY
+            let mid = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: screen.midX, dy: y))
+            let dx = s.frame.minX > screen.midX ? -screen.width * 0.4 : screen.width * 0.4
+            mid.press(forDuration: 0.05, thenDragTo: mid.withOffset(CGVector(dx: dx, dy: 0)))
+        }
+        XCTAssertTrue(s.isHittable, "segment \(s.label) not hittable")
+        s.tap()
     }
 
     private func byId(_ id: String) -> XCUIElement {
