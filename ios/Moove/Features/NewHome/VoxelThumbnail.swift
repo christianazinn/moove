@@ -67,3 +67,20 @@ enum VoxelSpriteCache {
     .padding()
     .background(Theme.bg)
 }
+
+#Preview("Extra categories (#183)") {
+    let specs: [(String, String)] = [
+        ("guitar", "Acoustic guitar"), ("guitar", "Electric guitar"), ("piano", "Upright piano"), ("piano", "Grand piano"),
+        ("keyboard instrument", "Keyboard"), ("drums", "Drum kit"), ("vacuum", "Upright vacuum"), ("vacuum", "Robot vacuum"),
+        ("monitor", "Monitor"), ("scooter", "Kick scooter"), ("scooter", "Electric scooter"), ("bag", "Backpack"),
+        ("bag", "Duffel bag"), ("golf clubs", "Golf bag"), ("treadmill", "Treadmill"), ("exercise bike", "Exercise bike"),
+        ("skateboard", "Skateboard"), ("surfboard", "Surfboard"), ("air purifier", "Air purifier"), ("bicycle", "Bicycle"),
+    ]
+    LazyVGrid(columns: Array(repeating: GridItem(.fixed(60)), count: 5), spacing: 8) {
+        ForEach(specs.indices, id: \.self) { i in
+            VoxelThumbnail(spec: VoxelItemSpec(category: specs[i].0, name: specs[i].1, widthM: 0, depthM: 0, heightM: 0))
+        }
+    }
+    .padding()
+    .background(Theme.bg)
+}

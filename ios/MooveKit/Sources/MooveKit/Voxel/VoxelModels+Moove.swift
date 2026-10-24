@@ -8,6 +8,9 @@ extension Canvas {
     // MARK: appliances
 
     func appliance(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
+        if name.has("purifier", "humidifier", "heater", "radiator", "air conditioner", "portable ac", "water dispenser", "water cooler") {
+            airUnit(X, Y, Z, name); return
+        }
         if name.has("washer", "dryer", "washing machine", "laundry") { washer(X, Y, Z, name); return }
         if name.has("fridge", "refrigerator", "freezer") || D(Y) * voxelM >= 0.6 { fridge(X, Y, Z, name); return }
         countertopAppliance(X, Y, Z, name)
@@ -59,6 +62,57 @@ extension Canvas {
         }
         // brand badge
         set(X / 2, Y - 3, zf, isDark ? 0xB0B4B8 : 0x8F8D88, flat: true)
+    }
+
+    /// Free-standing room appliances (#183): a water dispenser (cabinet, taps, a blue jug on
+    /// top), an oil-filled radiator (fins on little wheels), a small space heater (glowing grille),
+    /// a round humidifier (clear tank, mist nozzle), or an air purifier / portable AC / dehumidifier
+    /// tower (grille on top, slatted vents, a status light; the AC has an exhaust hose at the back).
+    func airUnit(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
+        let body = colorFromName(name, P.white)
+        let cx = D(X - 1) / 2, cz = D(Z - 1) / 2
+        if name.has("water dispenser", "water cooler") {
+            let jugH = max(2, rd(D(Y) * 0.3)), cabH = Y - jugH
+            box(0, 0, 0, X, cabH, Z) { _, y, _ in y == 0 ? shade(body, 0.8) : body }
+            let ty = rd(D(cabH) * 0.7)
+            set(X / 2 - 1, ty, Z - 1, 0x2D6CC0); set(X / 2 + 1, ty, Z - 1, 0xC23B2E)
+            box(X / 2 - 1, ty - 2, Z - 1, X / 2 + 2, ty - 1, Z, 0x5A5E62) // drip tray
+            cyl(cx, cz, max(1, D(min(X, Z)) * 0.4), cabH, Y, 0x9FC1D6, flat: true)
+            return
+        }
+        if name.has("radiator", "oil heater", "oil-filled") {
+            for x in upTo(0, X) where x % 2 == 0 || x == X - 1 { box(x, 1, 1, x + 1, Y, max(2, Z - 1), body) }
+            box(0, 2, Z / 2, X, 3, Z / 2 + 1, shade(body, 0.85)) // spine
+            for x in [0, X - 1] { set(x, 0, 1, P.black); set(x, 0, max(1, Z - 2), P.black) }
+            set(X - 1, Y - 2, Z / 2, P.charcoal) // dial
+            return
+        }
+        if name.has("heater") && !name.has("tower") && Y < 12 {
+            box(0, 0, 0, X, Y, Z) { x, y, z in
+                if z == Z - 1 && x > 0 && x < X - 1 && y > 0 && y < Y - 2 { return y % 2 == 0 ? 0xE0782A : 0x5A2A18 }
+                return body
+            }
+            set(X - 2, Y - 1, Z - 1, P.charcoal)
+            return
+        }
+        if name.has("humidifier") && !name.has("dehumidifier") {
+            let R = D(min(X, Z)) / 2, tankTop = max(1, rd(D(Y) * 0.55))
+            cyl(cx, cz, R, 0, Y) { _, y, _, _ in
+                if y == 0 { return shade(body, 0.8) }
+                return y < tankTop ? 0x9FC1D6 : body
+            }
+            set(rd(cx), Y - 1, rd(cz), P.charcoal) // mist nozzle
+            set(rd(cx), tankTop, min(Z - 1, rd(cz + R - 0.5)), 0x7FC4E8, flat: true)
+            return
+        }
+        // tower: purifier / portable AC / dehumidifier
+        box(0, 0, 0, X, Y, Z) { x, y, z in
+            if y == Y - 1 && x > 0 && x < X - 1 && z > 0 && z < Z - 1 { return (x + z) % 2 == 0 ? 0x3A3835 : shade(body, 0.9) }
+            if z == Z - 1 && y > 1 && y < Y / 2 && x > 0 && x < X - 1 { return y % 2 == 0 ? shade(body, 0.8) : body }
+            return y == 0 ? shade(body, 0.75) : body
+        }
+        set(X / 2, Y - 2, Z - 1, 0x5FD07A, flat: true)
+        if name.has("air conditioner", "portable ac") { box(X / 2 - 1, Y / 2, 0, X / 2 + 1, Y / 2 + 2, 1, 0x8F8D88) }
     }
 
     /// Washer / dryer: white cube, porthole door and control strip on the front.
