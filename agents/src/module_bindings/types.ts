@@ -266,3 +266,9 @@ export const Worker = __t.object("Worker", {
 });
 export type Worker = __Infer<typeof Worker>;
 
+export const WorkerRoom = __t.object("WorkerRoom", {});
+export type WorkerRoom = __Infer<typeof WorkerRoom>;
+
+export const WorkerUser = __t.object("WorkerUser", {});
+export type WorkerUser = __Infer<typeof WorkerUser>;
+

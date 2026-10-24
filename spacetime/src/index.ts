@@ -34,8 +34,9 @@ function oneOf(field: string, value: string, allowed: readonly string[]): string
 }
 
 // ---------- tables ----------
+// Private (#41 part B): clients read their own row through `my_user`, the worker through `worker_user`.
 const user = table(
-  { name: 'user', public: true },
+  { name: 'user', public: false },
   {
     identity: t.identity().primaryKey(),
     auth0Sub: t.string(),
@@ -57,8 +58,9 @@ const worker = table(
   }
 );
 
+// Private (#41 part B): join codes are secrets. Clients read `my_room`, the worker `worker_room`.
 const room = table(
-  { name: 'room', public: true },
+  { name: 'room', public: false },
   {
     id: t.u64().primaryKey().autoInc(),
     owner: t.identity().index('btree'),
@@ -518,11 +520,11 @@ function newJoinCode(ctx: Ctx): string {
   }
 }
 
-// ---------- per-user views (#41 part B, step 1 of 2) ----------
-// Step 1 is additive: clients switch their subscriptions to these views (`SELECT * FROM my_room`,
-// `SELECT * FROM my_user`). Step 2 then makes `room` and `user` private, so join codes, emails
-// and Auth0 subjects stop being readable by everyone. Views return the base row types so the
-// generated decoders can be reused (names stay `my_<table>`).
+// ---------- per-user views (#41 part B) ----------
+// `room` and `user` are private, so join codes, emails and Auth0 subjects aren't readable by
+// everyone. Clients subscribe to `my_room` / `my_user` (their own rows plus rooms joined through
+// `room_member`); the worker subscribes to `worker_room` / `worker_user` (every row, empty for
+// anyone else). Views return the base row types so the generated decoders can be reused.
 export const myRoom = spacetimedb.view({ name: 'my_room', public: true }, t.array(room.rowType), ctx => {
   const out = [...ctx.db.room.owner.filter(ctx.sender)];
   for (const m of ctx.db.roomMember.member.filter(ctx.sender)) {
@@ -536,6 +538,14 @@ export const myUser = spacetimedb.view({ name: 'my_user', public: true }, t.arra
   const u = ctx.db.user.identity.find(ctx.sender);
   return u ? [u] : [];
 });
+
+export const workerRoom = spacetimedb.view({ name: 'worker_room', public: true }, t.array(room.rowType), ctx =>
+  ctx.db.worker.identity.find(ctx.sender) ? [...ctx.db.room.iter()] : []
+);
+
+export const workerUser = spacetimedb.view({ name: 'worker_user', public: true }, t.array(user.rowType), ctx =>
+  ctx.db.worker.identity.find(ctx.sender) ? [...ctx.db.user.iter()] : []
+);
 
 export const joinRoom = spacetimedb.reducer({ code: t.string() }, (ctx, { code }) => {
   const r = ctx.db.room.joinCode.find(code.trim().toUpperCase());

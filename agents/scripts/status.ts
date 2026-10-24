@@ -35,7 +35,7 @@ async function check(db: string): Promise<Report> {
             resolve(c);
           })
           .onError(ctx => reject(ctx.event ?? new Error("subscription failed")))
-          .subscribe([tables.serviceConfig, tables.worker, tables.item, tables.room, tables.agentEvent, tables.payment, tables.listing]);
+          .subscribe([tables.serviceConfig, tables.worker, tables.item, tables.scan, tables.agentEvent, tables.payment, tables.listing]);
       })
       .onConnectError((_ctx, err) => reject(err))
       .build();
@@ -61,7 +61,7 @@ async function check(db: string): Promise<Report> {
   const newest = events.reduce((m, e) => Math.max(m, Number(e.createdAt.toMillis())), 0);
   const errors = events.filter(e => e.kind === "error" && Date.now() - Number(e.createdAt.toMillis()) < 3600_000).length;
   lines.push(
-    `data: ${conn.db.room.count()} rooms, ${conn.db.item.count()} items, ${conn.db.listing.count()} listings, ${conn.db.payment.count()} payments, ` +
+    `data: ${conn.db.scan.count()} scans, ${conn.db.item.count()} items, ${conn.db.listing.count()} listings, ${conn.db.payment.count()} payments, ` +
       `${events.length} agent events (newest ${newest ? ago(Date.now() - newest) : "never"}, ${errors} errors in the last hour)`
   );
   conn.disconnect();
