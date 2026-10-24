@@ -121,7 +121,7 @@ struct SummaryView: View {
                     Text(rail.rail == "x402" ? "x402 data payments" : rail.rail == "visa" ? "Visa purchases" : rail.rail)
                         .font(.mono(13.5))
                     if rail.simulatedCents > 0 {
-                        Tag(text: rail.simulatedCents == rail.cents ? "Simulated" : "\(rail.simulatedCents.usd) sim", tone: Theme.ochre)
+                        MonoTag(text: rail.simulatedCents == rail.cents ? "Simulated" : "\(rail.simulatedCents.usd) sim", tone: Theme.ochre)
                     }
                     Spacer()
                     Text(rail.cents.usd).font(.mono(13.5, weight: .bold))
@@ -192,7 +192,7 @@ struct SummaryView: View {
             HStack {
                 Text(title).eyebrow()
                 Spacer()
-                if let tag { Tag(text: tag, tone: Theme.ochre) }
+                if let tag { MonoTag(text: tag, tone: Theme.ochre) }
             }
             content()
         }

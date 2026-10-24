@@ -218,8 +218,8 @@ struct NewHomeDetail: View {
                     .monoMeta()
             }
             Spacer()
-            if !saved { Tag(text: "Not saved", tone: Theme.ochre) }
-            Tag(text: sourceLabel)
+            if !saved { MonoTag(text: "Not saved", tone: Theme.ochre) }
+            MonoTag(text: sourceLabel)
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
