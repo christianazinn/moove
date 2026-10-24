@@ -48,6 +48,7 @@ function fakeConn(items: Item[] = []) {
   };
   const conn = {
     db: {
+      agentEvent: { iter: () => [][Symbol.iterator]() }, // no prior spend
       item: {
         iter: () => rows.values(),
         onInsert: () => {},
