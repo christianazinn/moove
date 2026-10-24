@@ -77,6 +77,12 @@ struct ScanResultsView: View {
                 Text(caption).monoText(13.5).foregroundStyle(Theme.text)
             }
             .padding(.top, 14)
+            if let model, model.scanned, model.estimatedCount > 0 {
+                Text("\(model.estimatedCount) placed by estimate")
+                    .monoMeta()
+                    .padding(.top, 4)
+                    .padding(.leading, 18)
+            }
             if model?.scanned != true {
                 Text("Estimated layout, not scanned positions.")
                     .monoMeta()
@@ -198,20 +204,35 @@ struct EstimatedRoom {
     var depthM: Double
     /// True when the room and positions come from the scan rather than an estimate.
     var scanned = false
+    /// Scanned rooms: items without a scanned position that the layout solver placed.
+    var estimatedCount = 0
 
     /// The scanned room with each item where the scan found it. Unmatched small things and
     /// wall pieces (added by photo, no RoomPlan object) go on the scanned furniture / walls;
-    /// other unmatched items are left out of the 3D view and stay in the list.
+    /// other unmatched items get a floor spot from `LayoutSolver` around the scanned pieces
+    /// (`estimatedCount` of them). Ones that don't fit stay in the list only.
     /// `layoutItems` are `items` as layout items (with their scanned colors); defaults to plain ones.
     static func scanned(name: String, geometry: RoomGeometry, items: [Item], layoutItems: [LayoutItem]? = nil) -> EstimatedRoom {
         let result = geometry.dollhouse(roomName: name, items: items)
         let b = result.plan.bounds
         let layoutItems = layoutItems ?? items.map(LayoutItem.init)
+        // Unmatched furniture (the photo sweep's finds): estimated spots that avoid the scanned pieces.
+        let matched = Set(result.placements.map(\.itemId))
+        let unmatchedFurniture = layoutItems.filter {
+            !matched.contains($0.id) && PropPlacer.role(of: VoxelItemSpec($0)) == .furniture
+        }
+        var placements = result.placements
+        if !unmatchedFurniture.isEmpty {
+            placements = LayoutSolver(plan: result.plan)
+                .solve(unmatchedFurniture, style: .byFunction, around: result.placements, fixedItems: layoutItems)
+                .placements
+        }
+        let estimatedCount = placements.count - result.placements.count
         // RoomPlan doesn't locate small things (lamps, books, art): put them on the scanned
         // furniture and walls so the room looks lived-in. Scanned wall heights are kept.
-        let placements = PropPlacer(plan: result.plan).place(result.placements, items: layoutItems, extraRoom: name)
+        placements = PropPlacer(plan: result.plan).place(placements, items: layoutItems, extraRoom: name)
         return EstimatedRoom(plan: result.plan, items: layoutItems, placements: placements,
-                             widthM: b.width, depthM: b.depth, scanned: true)
+                             widthM: b.width, depthM: b.depth, scanned: true, estimatedCount: estimatedCount)
     }
 
     static func build(name: String, items: [LayoutItem]) -> EstimatedRoom {
