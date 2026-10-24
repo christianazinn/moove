@@ -46,6 +46,7 @@ struct LoginView: View {
             }
             .buttonStyle(.pill(.outline))
             .padding(.top, 10)
+            .accessibilityIdentifier("login.guest")
             Text("Without an account, your data is tied to this device only.")
                 .monoMeta()
                 .frame(maxWidth: .infinity)

@@ -30,9 +30,11 @@ struct RoomVisualizationView: View {
                 if style == .model, #available(iOS 18.0, *) {
                     RoomModelView(geometry: shown, items: items, mode: mode, showLabels: showLabels, selection: $selection)
                         .id(fullWalls)  // rebuild the scene when walls change
+                        .accessibilityIdentifier("room.model")
                 } else {
                     RoomPlanView(geometry: centered, items: items, mode: mode, showLabels: showLabels, selection: $selection)
                         .padding(.bottom, 60)
+                        .accessibilityIdentifier("room.plan")
                 }
             }
             // The 3D scene and the plan canvas draw pixels VoiceOver can't read, so
@@ -74,6 +76,7 @@ struct RoomVisualizationView: View {
                 } label: {
                     Label("Display", systemImage: "paintpalette")
                 }
+                .accessibilityIdentifier("room.display")
             }
         }
         .mooveScreen()
@@ -179,6 +182,8 @@ private struct SelectedObjectCard: View {
         .padding(.vertical, 12)
         .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("room.selection")
     }
 
     private var size: String {
