@@ -60,7 +60,8 @@ struct ScanResultsView: View {
         VStack(alignment: .leading, spacing: 0) {
             Group {
                 if let model {
-                    FloorPlan3DView(plan: model.plan, focusRoom: nil, items: model.items, placements: model.placements, flyInToken: flyInToken)
+                    FloorPlan3DView(plan: model.plan, focusRoom: nil, items: model.items, placements: model.placements, flyInToken: flyInToken,
+                                    wallColor: colors?.wallColor, floorColor: colors?.floorColor)
                         .accessibilityElement()
                         .accessibilityLabel("3D view of \(roomName) with \(items.count) objects")
                         .accessibilityHint("Drag to orbit, pinch to zoom, double-tap to reset")

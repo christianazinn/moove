@@ -13,11 +13,14 @@ final class NewHomeScene {
 
     let root = Entity()
     private(set) var plan: FloorPlan?
+    private var colors: [VoxelColor?] = [nil, nil]
     private var houseTask: Task<Void, Never>?
 
-    func build(_ plan: FloorPlan) {
-        guard plan != self.plan else { return }
+    /// `wallColor` / `floorColor`: colors measured from the scan's photos, when known.
+    func build(_ plan: FloorPlan, wallColor: VoxelColor? = nil, floorColor: VoxelColor? = nil) {
+        guard plan != self.plan || [wallColor, floorColor] != colors else { return }
         self.plan = plan
+        colors = [wallColor, floorColor]
         houseTask?.cancel()
         root.children.removeAll()
         for room in plan.rooms { root.addChild(Self.label(for: room)) }
@@ -26,7 +29,7 @@ final class NewHomeScene {
         let height = Double(Self.cutawayHeightM)
         houseTask = Task { [weak self] in
             let mesh = await Task.detached(priority: .userInitiated) {
-                VoxelMesher.mesh(VoxelHouse.build(plan, cutawayHeightM: height), centered: false)
+                VoxelMesher.mesh(VoxelHouse.build(plan, cutawayHeightM: height, wallColor: wallColor, floorColor: floorColor), centered: false)
             }.value
             guard let self, !Task.isCancelled, self.plan == plan,
                   let house = VoxelEntity.entity(mesh, name: "house") else { return }
