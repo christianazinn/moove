@@ -95,6 +95,11 @@ extension SyncSnapshot {
     }
 }
 
+/// A worker stage on an item (`details_status`, `pricing_status`, `model_status`).
+public enum AgentStage: String, Codable, Sendable {
+    case pending, running, done, failed
+}
+
 public struct Item: Codable, Sendable, Hashable, Identifiable {
     public var id: UInt64
     public var owner: IdentityHex
@@ -122,6 +127,10 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
     public var attributes: [String]
     /// Main / accent colors measured from scan photos (`colors_json`, #110). nil until sampled.
     public var colors: ItemColors?
+    /// Where the vision and pricing agents are with this item (`details_status`,
+    /// `pricing_status`). nil when the backend doesn't say (fixtures, older encodings).
+    public var detailsStatus: AgentStage?
+    public var pricingStatus: AgentStage?
 
     public init(
         id: UInt64, owner: IdentityHex, roomId: UInt64, scanObjectId: String? = nil,
@@ -129,7 +138,8 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
         photoUrls: [String] = [], material: String? = nil, brand: String? = nil, condition: Int? = nil,
         estValueCents: Int64? = nil, disposition: Disposition = .undecided, dispositionSource: DispositionSource = .auto,
         dispositionReason: String? = nil, fragile: Bool = false, maybeSentimental: Bool = false, updatedAt: Date = .now,
-        attributes: [String] = [], colors: ItemColors? = nil
+        attributes: [String] = [], colors: ItemColors? = nil,
+        detailsStatus: AgentStage? = nil, pricingStatus: AgentStage? = nil
     ) {
         self.id = id
         self.owner = owner
@@ -153,6 +163,8 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
         self.updatedAt = updatedAt
         self.attributes = attributes
         self.colors = colors
+        self.detailsStatus = detailsStatus
+        self.pricingStatus = pricingStatus
     }
 
     public var volumeM3: Double { widthM * heightM * depthM }
@@ -247,5 +259,25 @@ public struct Comp: Codable, Sendable, Hashable, Identifiable {
         self.title = title
         self.priceCents = priceCents
         self.url = url
+    }
+}
+
+extension Item {
+    /// What to show where the price goes. Mirrors the worker's gating: pricing waits
+    /// for vision on items with a photo (`agents/src/agents/pricing.ts`).
+    public enum PriceState: Equatable, Sendable {
+        case priced(Int64)
+        /// Vision hasn't finished with the photo yet, so pricing hasn't started.
+        case identifying
+        case pricing
+        /// The pricing agent gave up (no comparable listings, or a lookup error).
+        case unpriced
+    }
+
+    public var priceState: PriceState {
+        if let estValueCents { return .priced(estValueCents) }
+        if pricingStatus == .failed { return .unpriced }
+        if !photoUrls.isEmpty, detailsStatus == .pending || detailsStatus == .running { return .identifying }
+        return .pricing
     }
 }
