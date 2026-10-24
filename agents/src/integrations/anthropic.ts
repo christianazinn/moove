@@ -64,6 +64,13 @@ export function replayMode(raw = process.env.LLM_REPLAY): ReplayMode {
   return v === 'record' || v === 'replay' || v === 'auto' ? v : 'off';
 }
 
+// Replayed or recorded answers must never reach the live DB (#17): a stale cassette would stand in
+// for the model on real users' items. The worker refuses to start with LLM_REPLAY set against maincloud.
+export function replayGuardError(mode: ReplayMode, spacetimeUri: string): string | null {
+  if (mode === 'off' || !/maincloud\.spacetimedb\.com/i.test(spacetimeUri)) return null;
+  return `LLM_REPLAY=${mode} is not allowed against maincloud (${spacetimeUri}): replayed/recorded Claude answers would land on the live DB. Unset LLM_REPLAY (or use a local SpacetimeDB).`;
+}
+
 /** Same model, prompts, images and output schema -> same key. */
 export function replayKey(opts: { model: string; system: string; text: string; images?: ImageInput[]; schema: z.ZodType }): string {
   const h = createHash('sha256');
