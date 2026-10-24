@@ -49,3 +49,48 @@ export const DEMO_COMMERCE_OBJECTS: DemoObject[] = [obj("aeron", "Herman Miller 
 export function demoQuery(o: ScanObjectInput): string {
   return queryFor({ brand: "", name: o.name || o.category, category: o.category } as Item);
 }
+
+// --reset-commerce (seed-demo.ts): what to undo so the chair's approval beat can run again. A user can't
+// re-open a listing (update_listing is worker-only), and set_disposition keep->sell doesn't re-draft an item
+// that already has a listing (the listing agent drafts once per item id). So the only user-side reset is:
+// deny any still-pending approval on the chair's listings, delete the chair, add it back (it re-prices from
+// the committed replay) and tap Sell again. The listing agent then drafts a listing for the new item id (one
+// live Claude call on maincloud) and asks for approval. Pure, so it's tested: it only ever picks the seed
+// user's commerce items in the seed user's room, never another item or another user's rows.
+type ResetItem = { id: bigint; roomId: bigint; scanObjectId: string; owner: { toHexString(): string } };
+type ResetListing = { id: bigint; itemId: bigint; status: string };
+type ResetApproval = { id: bigint; kind: string; refId: bigint; status: string };
+export type CommerceResetPlan = {
+  deny: bigint[]; // pending listing approvals on the chair's listings
+  deleteItemIds: bigint[];
+  readd: DemoObject[]; // every commerce object, added back after the deletes
+  inFlight: bigint[]; // listings mid-post ('posting', #216): they finish posting; the reset doesn't wait
+};
+
+const COMMERCE_IDS = new Set(DEMO_COMMERCE_OBJECTS.map((o) => o.scanObjectId));
+const commerceItemsIn = <T extends ResetItem>(roomId: bigint, ownerHex: string, items: Iterable<T>) =>
+  [...items].filter((i) => i.roomId === roomId && i.owner.toHexString() === ownerHex && COMMERCE_IDS.has(i.scanObjectId));
+
+export function planCommerceReset(roomId: bigint, ownerHex: string, items: Iterable<ResetItem>, listings: Iterable<ResetListing>, approvals: Iterable<ResetApproval>): CommerceResetPlan {
+  const deleteItemIds = commerceItemsIn(roomId, ownerHex, items).map((i) => i.id);
+  const chairListings = [...listings].filter((l) => deleteItemIds.includes(l.itemId));
+  const listingIds = new Set(chairListings.map((l) => l.id));
+  const deny = [...approvals].filter((a) => a.kind === "listing" && a.status === "pending" && listingIds.has(a.refId)).map((a) => a.id);
+  return { deny, deleteItemIds, readd: DEMO_COMMERCE_OBJECTS, inFlight: chairListings.filter((l) => l.status === "posting").map((l) => l.id) };
+}
+
+// The approval a reset waits for: the newest pending listing approval on a commerce item that isn't one
+// the reset deleted.
+export function freshCommerceApproval<A extends ResetApproval>(
+  roomId: bigint,
+  ownerHex: string,
+  deletedItemIds: Iterable<bigint>,
+  items: Iterable<ResetItem>,
+  listings: Iterable<ResetListing>,
+  approvals: Iterable<A>
+): A | undefined {
+  const old = new Set(deletedItemIds);
+  const fresh = new Set(commerceItemsIn(roomId, ownerHex, items).filter((i) => !old.has(i.id)).map((i) => i.id));
+  const ls = new Set([...listings].filter((l) => fresh.has(l.itemId)).map((l) => l.id));
+  return [...approvals].filter((a) => a.kind === "listing" && a.status === "pending" && ls.has(a.refId)).sort((a, b) => (b.id > a.id ? 1 : -1))[0];
+}
