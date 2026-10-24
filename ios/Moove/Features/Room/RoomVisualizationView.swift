@@ -16,6 +16,9 @@ struct RoomVisualizationView: View {
             }
         }
         var identifier: String { "room.\(rawValue)" }
+        /// The picker's choices. RoomPlan's grey boxes (`.model`) are no longer offered: the voxel
+        /// dollhouse is the room's 3D look (Lisa, iPad test), and Plan stays for the floor plan.
+        static let shown: [Style] = [.voxel, .plan]
     }
 
     let geometry: RoomGeometry
@@ -71,7 +74,7 @@ struct RoomVisualizationView: View {
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
-                PillPicker(options: Style.allCases, selection: $style) { $0.label }
+                PillPicker(options: Style.shown, selection: $style) { $0.label }
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel("View")
             }
@@ -114,7 +117,6 @@ struct RoomVisualizationView: View {
                 ForEach(RoomPalette.Mode.allCases) { Text($0.label).tag($0) }
             }
             Toggle("Labels", isOn: $showLabels)
-            Toggle("Full-height walls", isOn: $fullWalls)
         } label: {
             Label("Display", systemImage: "paintpalette")
         }
