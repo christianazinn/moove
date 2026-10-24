@@ -6,6 +6,7 @@ import path from 'node:path';
 import { config } from './config.js';
 import { BadImageError, sanitizeUpload } from './imagemeta.js';
 import { importHome, ImportInputError } from './homes/listing.js';
+import { clientKey, diskQuota, rateLimiter } from './ratelimit.js';
 
 const EXT: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -30,17 +31,22 @@ const FILE_RE = /^\/files\/([A-Za-z0-9][\w-]*\.(\w+))$/;
 //   GET  /healthz                                            -> 200 { "ok": true } (platform health checks)
 //   POST /homes/import  JSON {url?, address?, beds?, ...}     -> 200 new-home draft (#89, homes/listing.ts)
 // Hardening (#17): type allowlist + magic-byte check, size cap, EXIF/GPS stripped from JPEG/PNG,
-// random UUID names (the client's ?name is ignored), no directory listing, nosniff + CSP.
+// random UUID names (the client's ?name is ignored), no directory listing, nosniff + CSP, per-client
+// rate limits on POST (429) and a cap on the upload dir's total size (507), see ratelimit.ts.
 // Not yet: auth on POST (needs Auth0 login from #1; the iOS uploader already sends a Bearer token
 // when it has one). See docs/security.md.
 export function startUploadServer(port = config.uploadPort): Server {
   mkdirSync(config.uploadDir, { recursive: true });
+  const uploadLimit = rateLimiter(config.uploadRatePerMin);
+  const homesLimit = rateLimiter(config.homesRatePerMin);
+  const quota = diskQuota(config.uploadDir, config.uploadDirMaxBytes);
   return createServer(async (req, res) => {
     res.setHeader('x-content-type-options', 'nosniff');
     try {
       const pathname = new URL(req.url ?? '/', 'http://x').pathname;
       if (req.method === 'GET' && pathname === '/healthz') return send(res, 200, { ok: true });
       if (req.method === 'POST' && pathname === '/upload') {
+        if (!uploadLimit(clientKey(req))) return send(res, 429, { error: `over ${config.uploadRatePerMin} uploads a minute; try again shortly` });
         const type = (req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
         // HEIC can carry EXIF/GPS we can't strip cheaply, so it's refused rather than stored as-is.
         if (type === 'image/heic') return send(res, 415, { error: 'HEIC is not accepted (location metadata can\'t be stripped); send image/jpeg' });
@@ -62,11 +68,16 @@ export function startUploadServer(port = config.uploadPort): Server {
         }
         if (size === 0) return send(res, 400, { error: 'empty body' });
         const body = sanitizeUpload(type, Buffer.concat(chunks));
+        if (!quota.fits(body.length)) return send(res, 507, { error: 'upload storage is full (UPLOAD_DIR_MAX_MB)' });
         const name = `${randomUUID()}.${ext}`;
         await writeFile(path.join(config.uploadDir, name), body, { flag: 'wx' });
+        quota.add(body.length);
         return send(res, 201, { url: `${config.publicUploadBaseUrl}/files/${name}` });
       }
-      if (req.method === 'POST' && pathname === '/homes/import') return await homesImport(req, res);
+      if (req.method === 'POST' && pathname === '/homes/import') {
+        if (!homesLimit(clientKey(req))) return send(res, 429, { error: `over ${config.homesRatePerMin} imports a minute; try again shortly` });
+        return await homesImport(req, res);
+      }
       const m = req.method === 'GET' && pathname.match(FILE_RE);
       if (m && TYPE[m[2]] && existsSync(path.join(config.uploadDir, m[1]))) {
         const headers: Record<string, string> = { 'content-type': TYPE[m[2]] };
