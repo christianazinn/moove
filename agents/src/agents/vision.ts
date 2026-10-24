@@ -6,6 +6,8 @@ import { config } from '../config.js';
 import { logEvent } from '../events.js';
 import { renameMisfit } from '../sizefit.js';
 import { loadImage, structuredCall, type ImageInput } from '../integrations/anthropic.js';
+import { isLensablePhoto, lensSearch, type LensResult } from '../integrations/lens.js';
+import { cleanUntrusted, untrustedBlock, UNTRUSTED_RULE } from '../untrusted.js';
 
 const ItemDetails = z.object({
   name: z.string().describe('Short, specific name a buyer would search for. Include the main visible color and any shape or style words, e.g. "white IKEA Kallax 2x4 shelf", "gray L-shaped sectional sofa", "black mesh office chair", "round walnut dining table", "tufted beige headboard bed". These words also drive the item\'s 3D look in the app: when visible, always include one color word and the shape word (round, oval, L-shaped, sectional, corner, standing, tufted, arc, torchiere, platform, cube...).'),
@@ -32,18 +34,55 @@ const inFlight = new Set<bigint>();
 // Rio's scan photographs every object, so a 30-object room would otherwise start 30 vision calls at once.
 const CONCURRENCY = Math.max(1, Number(process.env.VISION_CONCURRENCY ?? 3));
 
+type Details = z.infer<typeof ItemDetails>;
 type Deps = {
   load: (url: string) => Promise<ImageInput>;
-  call: (o: { model: string; system: string; text: string; images: ImageInput[] }) => Promise<z.infer<typeof ItemDetails>>;
+  call: (o: { model: string; system: string; text: string; images: ImageInput[] }) => Promise<Details>;
+  /** Reverse image search on one photo URL (#292). Tests that omit it get no matches. */
+  lens?: (photoUrl: string) => Promise<LensResult>;
 };
 const realDeps: Deps = {
   load: loadImage,
   call: o => structuredCall({ ...o, schema: ItemDetails }),
+  lens: url => lensSearch(url),
 };
 let deps: Deps = realDeps;
-/** Tests swap in a fake photo loader / model call. */
+/** Tests swap in a fake photo loader / model call (and optionally Lens). */
 export function setVisionDeps(d: Deps): void {
   deps = d;
+}
+
+// #292: where the exact model moves the price (electronics, instruments, bikes, anything branded).
+const MODEL_MATTERS = /\b(electronics?|tv|television|monitor|laptop|macbook|computer|pc|phone|iphone|tablet|ipad|camera|lens|speakers?|console|playstation|xbox|nintendo|headphones|projector|printer|keyboard|synth(esizer)?|amp(lifier)?|receiver|guitar|piano|instrument|bike|bicycle|scooter|e-?bike|appliance|vacuum|espresso|mixer|watch|drone)\b/i;
+
+/** Whether a first answer is worth a Google Lens search: not sure of the exact product, and the model matters. */
+export function wantsLens(it: Item, d: Details): boolean {
+  if (!config.lens.enabled || d.identifyConfidence === 'high') return false;
+  if (!it.photoUrls.some(isLensablePhoto)) return false;
+  return d.brand !== '' || MODEL_MATTERS.test(`${d.category} ${d.name}`);
+}
+
+const LENS_SYSTEM = `${UNTRUSTED_RULE} Google Lens found web pages whose images look like this item's photo. Some show the same product, many only something similar. Use a match only when the photos clearly show the same product (same design, shape, color and details): then give its exact product name and model in "name", its brand, and raise identifyConfidence. When no match clearly fits, keep your first answer. Never pick a product the photos contradict.`;
+
+/** Refines a first answer with Google Lens matches, or returns null when Lens found nothing usable. */
+async function refineWithLens(conn: Conn, it: Item, first: Details, images: ImageInput[], text: string): Promise<Details | null> {
+  const photo = [...it.photoUrls].reverse().find(isLensablePhoto)!;
+  const lens = deps.lens ? await deps.lens(photo) : { matches: [], replayed: false, costUsd: 0 };
+  if (lens.refused) {
+    logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'result', message: 'Skipped the Google Lens search: Apify daily spend cap reached', refTable: 'item', refId: it.id, data: { lens: true, refused: true, apifyCap: true } });
+    return null;
+  }
+  logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'tool_call', message: `${lens.replayed ? '[REPLAYED] ' : ''}Google Lens on the item photo: ${lens.matches.length} visual match(es)`, refTable: 'item', refId: it.id, data: { lens: true, replayed: lens.replayed, costUsd: lens.costUsd, matches: lens.matches.length } });
+  if (lens.matches.length === 0) return null;
+  const lines = lens.matches.map(m => [m.title, m.source, m.price].filter(Boolean).map(v => cleanUntrusted(v, 160)).join(' | '));
+  const second = await deps.call({
+    model: config.models.vision,
+    system: `${SYSTEM}\n\n${LENS_SYSTEM}`,
+    text: `${text}\nYour first answer: "${first.name}" (brand "${first.brand}", confidence ${first.identifyConfidence}).\nGoogle Lens visual matches (title | site | price):\n${untrustedBlock('lens-matches', lines)}`,
+    images,
+  });
+  // The second look may sharpen the name and brand, never loosen the safety flags.
+  return { ...second, fragile: first.fragile || second.fragile, maybeSentimental: first.maybeSentimental || second.maybeSentimental };
 }
 
 export function needsVision(it: Item): boolean {
@@ -63,12 +102,19 @@ async function identify(conn: Conn, it: Item): Promise<void> {
       const why = loaded.find(r => r.status === 'rejected')?.reason;
       throw new Error(`none of the photos could be loaded${why ? `: ${why instanceof Error ? why.message : String(why)}` : ''}`);
     }
-    const d = await deps.call({
-      model: config.models.vision,
-      system: SYSTEM,
-      text: `Scan says: category "${it.category}", ${it.widthM.toFixed(2)} x ${it.depthM.toFixed(2)} x ${it.heightM.toFixed(2)} m (W x D x H). Current name: "${it.name}".`,
-      images,
-    });
+    const text = `Scan says: category "${it.category}", ${it.widthM.toFixed(2)} x ${it.depthM.toFixed(2)} x ${it.heightM.toFixed(2)} m (W x D x H). Current name: "${it.name}".`;
+    let d = await deps.call({ model: config.models.vision, system: SYSTEM, text, images });
+    if (wantsLens(it, d)) {
+      // A Lens or second-look failure keeps the first answer; it never fails the item.
+      const refined = await refineWithLens(conn, it, d, images, text).catch(err => {
+        logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'error', message: `Google Lens refinement failed: ${String(err)}`, refTable: 'item', refId: it.id });
+        return null;
+      });
+      if (refined) {
+        logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'result', message: `After Google Lens: "${refined.name}" (${refined.identifyConfidence}, was "${d.name}", ${d.identifyConfidence})`, refTable: 'item', refId: it.id, data: { lens: true, before: d.name, after: refined.name } });
+        d = refined;
+      }
+    }
     // A name that can't fit the measured box (a 1.5 m "pillow", #267) isn't applied: '' keeps the
     // item's name and category; material, condition and the rest still are.
     const misfit = renameMisfit(it, d);
