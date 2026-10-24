@@ -29,5 +29,22 @@
     ],
     "reason": "Dropped Aeron and Herman Miller listings (premium named line, refurbished or luxury-priced, or a seat-only part) and the Aeron seat-only part; kept plain generic office and mesh chairs in a normal us…",
     "model": "claude-haiku-5-5"
+  },
+  "abe0af534f90c156": {
+    "item": "Mesh office chair; category chair; 0.64 x 1.02 x 0.62 m (W x H x D)",
+    "n": 16,
+    "keep": [
+      2,
+      6,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "reason": "Dropped Herman Miller Aeron listings (1,3,4,5,7,8,9) as a premium named product line, including refurbished and local-pickup units, since the item is a generic mesh chair; kept the plain generic mesh…",
+    "model": "claude-haiku-5-5"
   }
 }
