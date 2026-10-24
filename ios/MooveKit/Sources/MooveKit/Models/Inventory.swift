@@ -24,6 +24,25 @@ public enum ModelSource: String, Codable, Sendable {
     case capture, sam3d
 }
 
+/// The SAM 3D agent's progress on an item's model (`item.model_status`).
+public enum ModelStatus: String, Codable, Sendable {
+    case pending, running, done, failed
+}
+
+/// What item detail says about an item's 3D model.
+public enum ModelProgress: Equatable, Sendable {
+    /// A model is on the item (or captured on this phone).
+    case ready(ModelSource?)
+    /// The worker is building one from the photos.
+    case building
+    /// Queued: the worker builds one once vision has looked at the photos.
+    case queued
+    /// The last attempt failed; a clearer photo may help.
+    case failed
+    /// No photos yet, so nothing to build from.
+    case needsPhotos
+}
+
 public struct User: Codable, Sendable, Hashable, Identifiable {
     public var identity: IdentityHex
     public var auth0Sub: String?
@@ -99,6 +118,7 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
     /// 3D model (#65): a USDZ from Object Capture or a GLB from SAM 3D.
     public var modelUrl: String?
     public var modelSource: ModelSource?
+    public var modelStatus: ModelStatus
 
     public init(
         id: UInt64, owner: IdentityHex, roomId: UInt64, scanObjectId: String? = nil,
@@ -106,7 +126,7 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
         photoUrls: [String] = [], material: String? = nil, brand: String? = nil, condition: Int? = nil,
         estValueCents: Int64? = nil, disposition: Disposition = .undecided, dispositionSource: DispositionSource = .auto,
         dispositionReason: String? = nil, fragile: Bool = false, maybeSentimental: Bool = false, updatedAt: Date = .now,
-        modelUrl: String? = nil, modelSource: ModelSource? = nil
+        modelUrl: String? = nil, modelSource: ModelSource? = nil, modelStatus: ModelStatus = .pending
     ) {
         self.id = id
         self.owner = owner
@@ -130,6 +150,19 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
         self.updatedAt = updatedAt
         self.modelUrl = modelUrl
         self.modelSource = modelSource
+        self.modelStatus = modelStatus
+    }
+
+    /// Model state for the UI. `hasLocalModel` is a model captured on this phone that hasn't synced.
+    public func modelProgress(hasLocalModel: Bool = false) -> ModelProgress {
+        if modelUrl != nil { return .ready(modelSource) }
+        if hasLocalModel { return .ready(.capture) }
+        switch modelStatus {
+        case .running: return .building
+        case .failed: return .failed
+        case .done: return photoUrls.isEmpty ? .needsPhotos : .failed // done without a model: nothing usable came back
+        case .pending: return photoUrls.isEmpty ? .needsPhotos : .queued
+        }
     }
 
     public var volumeM3: Double { widthM * heightM * depthM }

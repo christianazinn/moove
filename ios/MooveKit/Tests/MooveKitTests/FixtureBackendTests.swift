@@ -79,4 +79,39 @@ import Testing
         #expect(item?.modelUrl == "https://x/a.usdz")
         #expect(item?.modelSource == .capture)
     }
+
+    @Test func newPhotoRequeuesSam3dButNotCapture() async throws {
+        let backend = FixtureBackend.demo()
+        _ = try await backend.connect(token: nil)
+        try await backend.setItemModel(itemId: 11, url: "https://x/a.glb", source: .sam3d)
+        try await backend.addItemPhoto(itemId: 11, url: "https://x/new.jpg")
+        var it = backend.snapshots().makeAsyncIterator()
+        var item = await it.next()!.items.first { $0.id == 11 }
+        #expect(item?.modelStatus == .pending)
+        #expect(item?.photoUrls.last == "https://x/new.jpg")
+
+        try await backend.setItemModel(itemId: 11, url: "https://x/a.usdz", source: .capture)
+        try await backend.addItemPhoto(itemId: 11, url: "https://x/newer.jpg")
+        it = backend.snapshots().makeAsyncIterator()
+        item = await it.next()!.items.first { $0.id == 11 }
+        #expect(item?.modelStatus == .done)
+    }
+}
+
+@Suite struct ModelProgressTests {
+    private func item(photos: [String] = ["https://x/1.jpg"], url: String? = nil, source: ModelSource? = nil, status: ModelStatus = .pending) -> Item {
+        Item(id: 1, owner: "me", roomId: 1, name: "Chair", category: "chair", widthM: 0.5, heightM: 1, depthM: 0.5,
+             photoUrls: photos, modelUrl: url, modelSource: source, modelStatus: status)
+    }
+
+    @Test func states() {
+        #expect(item(url: "https://x/m.glb", source: .sam3d, status: .done).modelProgress() == .ready(.sam3d))
+        #expect(item(photos: [], status: .pending).modelProgress(hasLocalModel: true) == .ready(.capture))
+        #expect(item(status: .running).modelProgress() == .building)
+        #expect(item(status: .pending).modelProgress() == .queued)
+        #expect(item(status: .failed).modelProgress() == .failed)
+        #expect(item(photos: [], status: .pending).modelProgress() == .needsPhotos)
+        // A newer photo re-queues even a ready SAM 3D model, but the old model still shows.
+        #expect(item(url: "https://x/m.glb", source: .sam3d, status: .pending).modelProgress() == .ready(.sam3d))
+    }
 }
