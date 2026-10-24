@@ -404,31 +404,7 @@ struct StorefrontDealCard: View {
     var body: some View {
         let d = deal.deal
         VStack(alignment: .leading, spacing: 8) {
-            StorefrontImage(spec: ShoppingThumbnails.spec(for: d, item: item),
-                            tint: blocked ? Theme.dangerSoft : StorefrontTint.color(for: deal.itemId), height: 130)
-                .overlay(alignment: .topLeading) {
-                    if blocked {
-                        Label("Blocked", systemImage: "xmark.octagon.fill")
-                            .labelStyle(.titleAndIcon)
-                            .monoText(11, weight: .bold, maxScale: 1.6)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 5)
-                            .foregroundStyle(Theme.bg)
-                            .background(Theme.danger, in: Capsule())
-                            .padding(8)
-                    } else if deal.isLocalPickup, let distance = deal.distanceText {
-                        Label(distance, systemImage: "mappin")
-                            .labelStyle(.titleAndIcon)
-                            .monoText(11, weight: .bold, maxScale: 1.6)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 5)
-                            .background(Theme.bg, in: Capsule())
-                            .padding(8)
-                    }
-                }
-                .overlay(alignment: .topTrailing) {
-                    if d.isSample { ReplayBadge(sample: true).padding(8) } else if d.isReplay { ReplayBadge().padding(8) }
-                }
+            picture
             Text(deal.itemName.uppercased()).monoText(11, weight: .bold).foregroundStyle(Theme.faint).lineLimit(1)
             Text(d.title)
                 .sansText(14, weight: .medium)
@@ -459,13 +435,45 @@ struct StorefrontDealCard: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(blocked ? Theme.dangerSoft.opacity(0.5) : Theme.surface.opacity(0.55),
-                    in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .background(fill, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
             .strokeBorder(blocked ? Theme.danger : Theme.line, lineWidth: blocked ? 1.5 : 1))
         .contentShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken)
+    }
+
+    private var fill: Color { blocked ? Theme.dangerSoft.opacity(0.5) : Theme.surface.opacity(0.55) }
+
+    private var tint: Color { blocked ? Theme.dangerSoft : StorefrontTint.color(for: deal.itemId) }
+
+    private var picture: some View {
+        let d = deal.deal
+        return StorefrontImage(spec: ShoppingThumbnails.spec(for: d, item: item),
+                               tint: tint, height: 130)
+            .overlay(alignment: .topLeading) {
+                if blocked {
+                    Label("Blocked", systemImage: "xmark.octagon.fill")
+                        .labelStyle(.titleAndIcon)
+                        .monoText(11, weight: .bold, maxScale: 1.6)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .foregroundStyle(Theme.bg)
+                        .background(Theme.danger, in: Capsule())
+                        .padding(8)
+                } else if deal.isLocalPickup, let distance = deal.distanceText {
+                    Label(distance, systemImage: "mappin")
+                        .labelStyle(.titleAndIcon)
+                        .monoText(11, weight: .bold, maxScale: 1.6)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Theme.bg, in: Capsule())
+                        .padding(8)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if d.isSample { ReplayBadge(sample: true).padding(8) } else if d.isReplay { ReplayBadge().padding(8) }
+            }
     }
 
     private var spoken: String {
