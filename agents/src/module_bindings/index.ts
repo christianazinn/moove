@@ -50,6 +50,7 @@ import CreateScanReducer from "./create_scan_reducer";
 import DecideApprovalReducer from "./decide_approval_reducer";
 import DeleteItemReducer from "./delete_item_reducer";
 import ImportScanReducer from "./import_scan_reducer";
+import ImportScanV2Reducer from "./import_scan_v_2_reducer";
 import JoinRoomReducer from "./join_room_reducer";
 import LogAgentEventReducer from "./log_agent_event_reducer";
 import RecordCibaDecisionReducer from "./record_ciba_decision_reducer";
@@ -68,6 +69,8 @@ import SetDealFraudReducer from "./set_deal_fraud_reducer";
 import SetDispositionReducer from "./set_disposition_reducer";
 import SetEstValueReducer from "./set_est_value_reducer";
 import SetFragileReducer from "./set_fragile_reducer";
+import SetItemAttributesReducer from "./set_item_attributes_reducer";
+import SetItemColorsReducer from "./set_item_colors_reducer";
 import SetItemDetailsReducer from "./set_item_details_reducer";
 import SetItemModelReducer from "./set_item_model_reducer";
 import SetItemStageReducer from "./set_item_stage_reducer";
@@ -380,6 +383,7 @@ const reducersSchema = __reducers(
   __reducerSchema("decide_approval", DecideApprovalReducer),
   __reducerSchema("delete_item", DeleteItemReducer),
   __reducerSchema("import_scan", ImportScanReducer),
+  __reducerSchema("import_scan_v2", ImportScanV2Reducer),
   __reducerSchema("join_room", JoinRoomReducer),
   __reducerSchema("log_agent_event", LogAgentEventReducer),
   __reducerSchema("record_ciba_decision", RecordCibaDecisionReducer),
@@ -398,6 +402,8 @@ const reducersSchema = __reducers(
   __reducerSchema("set_disposition", SetDispositionReducer),
   __reducerSchema("set_est_value", SetEstValueReducer),
   __reducerSchema("set_fragile", SetFragileReducer),
+  __reducerSchema("set_item_attributes", SetItemAttributesReducer),
+  __reducerSchema("set_item_colors", SetItemColorsReducer),
   __reducerSchema("set_item_details", SetItemDetailsReducer),
   __reducerSchema("set_item_model", SetItemModelReducer),
   __reducerSchema("set_item_stage", SetItemStageReducer),
