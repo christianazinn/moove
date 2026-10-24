@@ -33,12 +33,12 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
   - The caption reads "**N placed by estimate**", and N counts only pieces without a scanned spot.
 - **Report if wrong:** the wall or piece, which camera angle, plus a screenshot. For a misplaced piece, say where it really stood.
 
-### 4. Items → room 3D: Voxel vs 3D
-- **Taps:** Items → Inventory → the new room's **3D** pill. Switch the style picker between **Voxel** and **3D**.
-- **Expected:** Voxel is the dollhouse from check 3. 3D shows RoomPlan's raw boxes. Use the two styles to tell the errors apart:
-  - The **3D box is wrong** (wrong size, spot or label): that's a scan error.
-  - The **3D box is right but the voxel piece is wrong**: that's a model error.
-- **Report if wrong:** the piece, its 3D box (size, spot), what Voxel drew, and which of the two errors it is. Screenshots of both styles from the same angle.
+### 4. Items → room 3D: Voxel vs Plan
+- **Taps:** Items → Inventory → the new room's **3D** pill. Switch the style picker between **Voxel** and **Plan**.
+- **Expected:** Voxel is the dollhouse from check 3. Plan is the floor plan with RoomPlan's raw boxes, top down. Use the two to tell the errors apart:
+  - The **Plan box is wrong** (wrong size, spot or label): that's a scan error.
+  - The **Plan box is right but the voxel piece is wrong**: that's a model error.
+- **Report if wrong:** the piece, its Plan box (size, spot), what Voxel drew, and which of the two errors it is. Screenshots of both.
 
 ### 5. Inventory: origin chips, "was: …", dates, Demo tag
 - **Taps:** Items → Inventory.
