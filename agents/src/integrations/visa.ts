@@ -278,6 +278,14 @@ export function createVicBackend(): CheckoutBackend {
 
 // ---------- guardrails ----------
 
+/** The capture call failed in transit, so whether money moved is unknown. */
+export class CaptureUnknown extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CaptureUnknown';
+  }
+}
+
 export class VisaSpendRefused extends Error {
   constructor(message: string) {
     super(message);
@@ -311,6 +319,10 @@ export class CardSpendLedger {
     }
     this.spent.set(agent, this.spentBy(agent) + cents);
   }
+  /** Counts spend from before this process started (pending/settled payment rows). */
+  seed(agent: string, cents: bigint): void {
+    if (cents > 0n) this.spent.set(agent, this.spentBy(agent) + cents);
+  }
   release(agent: string, cents: bigint): void {
     const next = this.spentBy(agent) - cents;
     this.spent.set(agent, next > 0n ? next : 0n);
@@ -330,6 +342,10 @@ export type GateResult = { ok: true; approvalId?: bigint } | { ok: false; needsA
  * (or with threshold -1, "always ask") it needs an `approved` approval for exactly this amount.
  */
 export function approvalGate(amountCents: bigint, thresholdCents: bigint, approval: ApprovalView | undefined): GateResult {
+  // A user's "no" sticks even if the threshold is raised later.
+  if (approval && (approval.status === 'denied' || approval.status === 'expired')) {
+    return { ok: false, needsApproval: false, reason: `approval ${approval.status}` };
+  }
   const needs = thresholdCents < 0n || amountCents > thresholdCents;
   if (!needs) return { ok: true };
   if (!approval) return { ok: false, needsApproval: true, reason: `${dollars(amountCents)} is over the ${thresholdCents < 0n ? 'always-ask' : dollars(thresholdCents)} threshold` };
@@ -353,7 +369,8 @@ export interface PurchaseContext {
   refTable: string;
   refId: bigint;
   amountCents: bigint;
-  thresholdCents: bigint;
+  /** The owner's approval threshold (-1 = always ask). Pass a getter so re-checks see changes. */
+  thresholdCents: bigint | (() => bigint);
   /** Latest approval for this purchase, read fresh each time (so a late denial is seen). */
   currentApproval: () => ApprovalView | undefined;
   /** Extra re-check right before capture (e.g. the user still has this deal chosen). Return a reason to abort. */
@@ -361,6 +378,8 @@ export interface PurchaseContext {
   /** VIC-style mandate text: what the user asked the agent to buy. */
   consumerPrompt: string;
 }
+
+const thresholdOf = (ctx: PurchaseContext): bigint => (typeof ctx.thresholdCents === 'function' ? ctx.thresholdCents() : ctx.thresholdCents);
 
 export interface Hold {
   authId: string;
@@ -371,7 +390,8 @@ export interface Hold {
 }
 
 export interface PurchaseResult {
-  status: 'captured' | 'declined' | 'voided' | 'refused' | 'needs_approval' | 'waiting';
+  /** `unknown`: the capture call failed in transit; the payment row stays pending until reconciled. */
+  status: 'captured' | 'declined' | 'voided' | 'refused' | 'needs_approval' | 'waiting' | 'unknown';
   reason?: string;
   hold?: Hold;
   captureId?: string;
@@ -416,11 +436,15 @@ export class VisaCheckout {
   remaining(agent: string): bigint {
     return this.ledger.remaining(agent);
   }
+  /** Counts spend recorded before this process started, so a restart doesn't reset the cap. */
+  seedSpent(agent: string, cents: bigint): void {
+    this.ledger.seed(agent, cents);
+  }
 
   /** The whole flow: gate, reserve, authorize, re-check, capture (or void). Never throws for declines. */
   async purchase(ctx: PurchaseContext): Promise<PurchaseResult> {
     const label = { provider: this.backend.provider, simulated: this.backend.simulated };
-    const gate = approvalGate(ctx.amountCents, ctx.thresholdCents, ctx.currentApproval());
+    const gate = approvalGate(ctx.amountCents, thresholdOf(ctx), ctx.currentApproval());
     if (!gate.ok) {
       await this.event(ctx, this.backend, 'approval', `Not charging yet: ${gate.reason}`, { gate: gate.reason });
       return { status: gate.needsApproval ? 'needs_approval' : gate.reason === 'waiting for approval' ? 'waiting' : 'refused', reason: gate.reason, ...label };
@@ -437,7 +461,7 @@ export class VisaCheckout {
 
     // Re-check right before capture: the approval could have been revoked/changed, or the user
     // could have picked another deal, while the authorization was in flight.
-    const again = approvalGate(ctx.amountCents, ctx.thresholdCents, ctx.currentApproval());
+    const again = approvalGate(ctx.amountCents, thresholdOf(ctx), ctx.currentApproval());
     const invalid = !again.ok ? again.reason : ctx.stillValid?.();
     if (invalid) {
       await this.void(ctx, hold, invalid);
@@ -448,7 +472,8 @@ export class VisaCheckout {
       return { status: 'captured', hold, captureId, ...holdLabel };
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      return { status: err instanceof VisaSpendRefused ? 'voided' : 'declined', reason, hold, ...holdLabel };
+      const status = err instanceof VisaSpendRefused ? 'voided' : err instanceof CaptureUnknown ? 'unknown' : 'declined';
+      return { status, reason, hold, ...holdLabel };
     }
   }
 
@@ -541,7 +566,7 @@ export class VisaCheckout {
   async capture(ctx: PurchaseContext, hold: Hold): Promise<string> {
     const entry = this.openHold(hold, 'capture');
     const backend = entry.backend;
-    const gate = approvalGate(hold.amountCents, ctx.thresholdCents, ctx.currentApproval());
+    const gate = approvalGate(hold.amountCents, thresholdOf(ctx), ctx.currentApproval());
     if (!gate.ok) {
       await this.void(ctx, hold, gate.reason);
       throw new VisaSpendRefused(`not captured: ${gate.reason}`);
@@ -551,9 +576,11 @@ export class VisaCheckout {
     try {
       r = await backend.capture(hold.authId, hold.amountCents, `moove-${ctx.refTable}-${ctx.refId}`);
     } catch (err) {
-      await this.event(ctx, backend, 'error', `${tag(backend)} Capture failed for ${ctx.purpose}: ${(err as Error).message}`, { authId: hold.authId });
-      await this.void(ctx, hold, 'capture failed').catch(() => undefined);
-      throw err;
+      // The capture may have gone through before the connection failed. Don't void, don't release
+      // budget, leave the payment row pending: that blocks a repeat purchase until someone reconciles.
+      entry.open = false;
+      await this.event(ctx, backend, 'error', `${tag(backend)} Capture for ${ctx.purpose} failed in transit: ${(err as Error).message}. Left pending for reconciliation`, { authId: hold.authId, reconcile: true });
+      throw new CaptureUnknown((err as Error).message);
     }
     if (r.status !== 'captured') {
       await this.event(ctx, backend, 'error', `${tag(backend)} Capture declined for ${ctx.purpose}: ${r.reason ?? r.processorStatus}`, { authId: hold.authId, processorStatus: r.processorStatus });
@@ -577,7 +604,6 @@ export class VisaCheckout {
     const entry = this.openHold(hold, 'void');
     const backend = entry.backend;
     entry.open = false;
-    this.ledger.release(ctx.agent, hold.amountCents);
     let r: BackendResult | undefined;
     let failure: string | undefined;
     try {
@@ -588,6 +614,8 @@ export class VisaCheckout {
     }
     await this.sink.updatePayment(hold.paymentId, 'failed', '').catch(err => console.warn(`[visa] could not mark payment ${hold.paymentId} failed: ${(err as Error).message}`));
     if (failure === undefined) {
+      // Only a confirmed reversal gives the budget back; a stuck hold keeps counting until it expires.
+      this.ledger.release(ctx.agent, hold.amountCents);
       await this.event(ctx, backend, 'payment', `${tag(backend)} Released the ${dollars(hold.amountCents)} hold for ${ctx.purpose}: ${reason}`, { authId: hold.authId, reversalId: r!.id, processorStatus: r!.processorStatus, voided: true });
     } else {
       await this.event(ctx, backend, 'error', `${tag(backend)} Could not release the hold for ${ctx.purpose}: ${failure} (it expires on its own)`, { authId: hold.authId, voided: false, reason });

@@ -23,11 +23,13 @@ const MAX_DEALS = 5;
 const FRAUD_BLOCK = Number(process.env.BUY_FRAUD_BLOCK ?? '0.7');
 // 0 = only rank; the user must choose a deal in the app before anything is bought.
 const AUTO_CHOOSE = (process.env.BUY_AUTO_CHOOSE ?? '1') !== '0';
+// 1 = wait for the fraud screen (#18) to score a deal before buying it. Off until a fraud agent runs.
+const REQUIRE_FRAUD_SCORE = process.env.BUY_REQUIRE_FRAUD_SCORE === '1';
 
 const dealSource: DealSource = fixtureDealSource();
 
 const searching = new Set<bigint>(); // shopping item ids searched this session
-const busy = new Set<string>(); // `${itemId}:${dealId}` in checkout
+const busyItems = new Set<bigint>(); // shopping item ids in checkout
 const settled = new Set<string>(); // keys that reached a final outcome this session
 const approvalRequested = new Set<string>();
 
@@ -49,12 +51,13 @@ function latestApproval(conn: Conn, dealId: bigint): Approval | undefined {
   return latest;
 }
 
-function paymentState(conn: Conn, dealId: bigint): 'settled' | 'pending' | undefined {
-  let state: 'settled' | 'pending' | undefined;
+function paymentState(conn: Conn, dealId: bigint): 'settled' | 'pending' | 'failed' | undefined {
+  let state: 'settled' | 'pending' | 'failed' | undefined;
   for (const p of conn.db.payment.iter()) {
     if (p.rail !== 'visa' || p.refTable !== 'deal' || p.refId !== dealId) continue;
     if (p.status === 'settled') return 'settled';
     if (p.status === 'pending') state = 'pending';
+    else if (!state) state = 'failed';
   }
   return state;
 }
@@ -102,34 +105,59 @@ async function recommend(conn: Conn, s: ShoppingItem, ranked: RankedDeal[]): Pro
   logEvent(conn, { owner: s.owner, agent: AGENT, kind: 'result', refTable: 'deal', refId: row.id, message: `Recommended ${row.title} at ${dollars(row.priceCents)}: ${pick.why}` });
 }
 
-function draftSellerMessage(s: ShoppingItem, d: Deal): string {
+function draftSellerMessage(d: Deal): string {
   return `Hi! Is your "${sanitizeText(d.title, 80)}" (${dollars(d.priceCents)}) still available? I'm moving nearby and could pick it up this week. Thanks!`;
 }
 
 async function checkout(conn: Conn, s: ShoppingItem): Promise<void> {
   const key = keyOf(s);
-  if (busy.has(key) || settled.has(key)) return;
+  // One checkout per shopping item at a time, whichever deal is chosen.
+  if (busyItems.has(s.id) || settled.has(key)) return;
+  busyItems.add(s.id);
+  try {
+    await checkoutChosen(conn, s, key);
+  } catch (err) {
+    settled.add(key);
+    logEvent(conn, { owner: s.owner, agent: AGENT, kind: 'error', refTable: 'deal', refId: s.chosenDealId, message: `Checkout failed: ${String(err)}` });
+  } finally {
+    busyItems.delete(s.id);
+  }
+  // The user may have picked another deal while this one was in flight.
+  const cur = conn.db.shoppingItem.id.find(s.id);
+  if (cur && keyOf(cur) !== key) step(conn, cur);
+}
+
+async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise<void> {
   const d = conn.db.deal.id.find(s.chosenDealId);
   if (!d || d.shoppingItemId !== s.id) return;
   const ref = { owner: s.owner, agent: AGENT, refTable: 'deal', refId: d.id };
 
-  const paid = paymentState(conn, d.id);
-  if (paid === 'settled') {
+  // Never buy twice for one need: any settled or pending card payment on any of this item's deals stops here.
+  for (const other of dealsFor(conn, s.id)) {
+    const st = paymentState(conn, other.id);
+    if (st === 'settled') {
+      settled.add(key);
+      if (s.status !== 'bought') await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'bought' });
+      return;
+    }
+    if (st === 'pending') return; // a hold in flight or from an earlier run; never double-charge
+  }
+  if (paymentState(conn, d.id) === 'failed') {
     settled.add(key);
-    if (s.status !== 'bought') await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'bought' });
+    logEvent(conn, { ...ref, kind: 'result', message: `An earlier checkout of "${d.title}" failed, not retrying it automatically` });
     return;
   }
-  if (paid === 'pending') return; // a hold from an earlier run; never double-charge
 
   if (d.fraudScore >= FRAUD_BLOCK) {
     settled.add(key);
     logEvent(conn, { ...ref, kind: 'error', message: `Not buying "${d.title}": fraud screen scored it ${d.fraudScore.toFixed(2)} (${d.fraudReasons.join('; ') || 'no reasons given'})` });
     return;
   }
+  if (d.fraudScore < 0 && REQUIRE_FRAUD_SCORE) return; // wait for the fraud screen (#18)
 
   if (!CARD_CHECKOUT_SOURCES.has(d.source)) {
     settled.add(key);
-    const msg = draftSellerMessage(s, d);
+    const msg = draftSellerMessage(d);
     logEvent(conn, { ...ref, kind: 'result', message: `${d.source} sellers can't be paid through an API, so I drafted a message to the seller`, data: { draft: msg, url: d.url } });
     return;
   }
@@ -140,7 +168,9 @@ async function checkout(conn: Conn, s: ShoppingItem): Promise<void> {
     if (gate.needsApproval) {
       if (approvalRequested.has(key)) return;
       approvalRequested.add(key);
-      await conn.reducers.requestApproval({ owner: s.owner, kind: 'purchase', refId: d.id, amountCents: d.priceCents, summary: `Buy "${sanitizeText(d.title, 80)}" from ${d.source} for ${dollars(d.priceCents)}` });
+      // Amount first, and no quotes or $ from scraped text, so a title can't fake the price.
+      const title = sanitizeText(d.title, 80).replace(/["$]/g, '');
+      await conn.reducers.requestApproval({ owner: s.owner, kind: 'purchase', refId: d.id, amountCents: d.priceCents, summary: `Pay ${dollars(d.priceCents)} to ${d.source} for: ${title}` });
       logEvent(conn, { ...ref, kind: 'approval', message: `${gate.reason}, asking for approval` });
     } else if (gate.reason !== 'waiting for approval') {
       settled.add(key);
@@ -149,44 +179,42 @@ async function checkout(conn: Conn, s: ShoppingItem): Promise<void> {
     return;
   }
 
-  busy.add(key);
-  try {
-    const visa = visaCheckout(conn);
-    logEvent(conn, { ...ref, kind: 'plan', message: `Checking out "${d.title}" for ${dollars(d.priceCents)} via Visa (${visa.simulated ? 'simulated' : 'sandbox, test card'}; the result says what actually ran)${gate.approvalId ? ', approved by the user' : `, under the ${dollars(threshold)} approval threshold`}` });
-    const r = await visa.purchase({
-      owner: s.owner,
-      agent: AGENT,
-      purpose: `${s.name}: ${sanitizeText(d.title, 80)}`,
-      merchant: d.source,
-      refTable: 'deal',
-      refId: d.id,
-      amountCents: d.priceCents,
-      thresholdCents: threshold,
-      currentApproval: () => latestApproval(conn, d.id),
-      stillValid: () => {
-        const cur = conn.db.shoppingItem.id.find(s.id);
-        if (!cur) return 'shopping item was removed';
-        if (cur.chosenDealId !== d.id) return 'the user picked a different deal';
-        const deal = conn.db.deal.id.find(d.id);
-        if (!deal || deal.priceCents !== d.priceCents) return 'deal price changed';
-        if (deal.fraudScore >= FRAUD_BLOCK) return `fraud screen scored it ${deal.fraudScore.toFixed(2)}`;
-        return undefined;
-      },
-      consumerPrompt: `Buy ${s.name} (${s.reason}) for no more than ${dollars(d.priceCents)} from ${d.source}`,
-    });
-    if (r.status === 'captured') {
-      settled.add(key);
-      await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'bought' });
-      logEvent(conn, { ...ref, kind: 'result', message: `Bought "${d.title}" for ${dollars(d.priceCents)}${r.simulated ? ' (simulated)' : ' (Visa sandbox, test card)'}`, data: { provider: r.provider, simulated: r.simulated, authId: r.hold?.authId, captureId: r.captureId } });
-    } else if (r.status !== 'waiting' && r.status !== 'needs_approval') {
-      settled.add(key);
-      logEvent(conn, { ...ref, kind: 'result', message: `Did not buy "${d.title}": ${r.status}${r.reason ? ` (${r.reason})` : ''}`, data: { provider: r.provider, simulated: r.simulated } });
-    }
-  } catch (err) {
+  const visa = visaCheckout(conn);
+  const unscreened = d.fraudScore < 0 ? ' Not fraud-screened yet.' : '';
+  logEvent(conn, { ...ref, kind: 'plan', message: `Checking out "${d.title}" for ${dollars(d.priceCents)} via Visa${gate.approvalId ? ', approved by the user' : `, under the ${dollars(threshold)} approval threshold`}.${unscreened}` });
+  const r = await visa.purchase({
+    owner: s.owner,
+    agent: AGENT,
+    purpose: `${s.name}: ${sanitizeText(d.title, 80)}`,
+    merchant: d.source,
+    refTable: 'deal',
+    refId: d.id,
+    amountCents: d.priceCents,
+    // Read fresh at every re-check, so lowering the threshold mid-flight is respected.
+    thresholdCents: () => thresholdFor(conn, s.owner),
+    currentApproval: () => latestApproval(conn, d.id),
+    stillValid: () => {
+      const cur = conn.db.shoppingItem.id.find(s.id);
+      if (!cur) return 'shopping item was removed';
+      if (cur.chosenDealId !== d.id) return 'the user picked a different deal';
+      const deal = conn.db.deal.id.find(d.id);
+      if (!deal) return 'deal was removed';
+      if (deal.fraudScore >= FRAUD_BLOCK) return `fraud screen scored it ${deal.fraudScore.toFixed(2)}`;
+      return undefined;
+    },
+    consumerPrompt: `Buy ${s.name} (${s.reason}) for no more than ${dollars(d.priceCents)} from ${d.source}`,
+  });
+  const label = r.simulated ? ' (simulated)' : ' (Visa sandbox, test card)';
+  if (r.status === 'captured') {
     settled.add(key);
-    logEvent(conn, { ...ref, kind: 'error', message: `Checkout failed: ${String(err)}` });
-  } finally {
-    busy.delete(key);
+    await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'bought' });
+    logEvent(conn, { ...ref, kind: 'result', message: `Bought "${d.title}" for ${dollars(d.priceCents)}${label}`, data: { provider: r.provider, simulated: r.simulated, authId: r.hold?.authId, captureId: r.captureId } });
+  } else if (r.status === 'unknown') {
+    settled.add(key);
+    logEvent(conn, { ...ref, kind: 'error', message: `Capture of "${d.title}" may or may not have gone through${label}; the payment stays pending until someone checks the processor`, data: { authId: r.hold?.authId, reconcile: true } });
+  } else if (r.status !== 'waiting' && r.status !== 'needs_approval') {
+    settled.add(key);
+    logEvent(conn, { ...ref, kind: 'result', message: `Did not buy "${d.title}": ${r.status}${r.reason ? ` (${r.reason})` : ''}`, data: { provider: r.provider, simulated: r.simulated } });
   }
 }
 
