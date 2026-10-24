@@ -133,6 +133,12 @@ export const Listing = __t.object("Listing", {
 });
 export type Listing = __Infer<typeof Listing>;
 
+export const MyRoom = __t.object("MyRoom", {});
+export type MyRoom = __Infer<typeof MyRoom>;
+
+export const MyUser = __t.object("MyUser", {});
+export type MyUser = __Infer<typeof MyUser>;
+
 export const NewHome = __t.object("NewHome", {
   id: __t.u64(),
   owner: __t.identity(),

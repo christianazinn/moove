@@ -87,6 +87,8 @@ import DealRow from "./deal_table";
 import ItemRow from "./item_table";
 import LayoutRow from "./layout_table";
 import ListingRow from "./listing_table";
+import MyRoomRow from "./my_room_table";
+import MyUserRow from "./my_user_table";
 import NewHomeRow from "./new_home_table";
 import PaymentRow from "./payment_table";
 import RoomRow from "./room_table";
@@ -344,6 +346,20 @@ const tablesSchema = __schema({
       { name: 'worker_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, WorkerRow),
+  myRoom: __table({
+    name: 'my_room',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyRoomRow),
+  myUser: __table({
+    name: 'my_user',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyUserRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
