@@ -36,8 +36,23 @@ public struct Reducers: Sendable {
     }
 
     @discardableResult
+    public func addScanPhoto(scanid: UInt64, url: String) async throws -> ReducerSuccess {
+        try await client.callReducer(AddScanPhotoReducer(scanid: scanid, url: url))
+    }
+
+    @discardableResult
     public func addShoppingItem(owner: Identity, nameArg: String, category: String, reason: String) async throws -> ReducerSuccess {
         try await client.callReducer(AddShoppingItemReducer(owner: owner, nameArg: nameArg, category: category, reason: reason))
+    }
+
+    @discardableResult
+    public func addSweepItem(scanid: UInt64, nameArg: String, category: String, widthm: Double, heightm: Double, depthm: Double, material: String, brand: String, condition: String, fragile: Bool, maybesentimental: Bool, photourl: String) async throws -> ReducerSuccess {
+        try await client.callReducer(AddSweepItemReducer(scanid: scanid, nameArg: nameArg, category: category, widthm: widthm, heightm: heightm, depthm: depthm, material: material, brand: brand, condition: condition, fragile: fragile, maybesentimental: maybesentimental, photourl: photourl))
+    }
+
+    @discardableResult
+    public func applySweepMatch(itemid: UInt64, nameArg: String, category: String, material: String, brand: String, condition: String, fragile: Bool, maybesentimental: Bool, photourl: String) async throws -> ReducerSuccess {
+        try await client.callReducer(ApplySweepMatchReducer(itemid: itemid, nameArg: nameArg, category: category, material: material, brand: brand, condition: condition, fragile: fragile, maybesentimental: maybesentimental, photourl: photourl))
     }
 
     @discardableResult
@@ -176,6 +191,11 @@ public struct Reducers: Sendable {
     }
 
     @discardableResult
+    public func setItemModel(itemid: UInt64, url: String, source: String) async throws -> ReducerSuccess {
+        try await client.callReducer(SetItemModelReducer(itemid: itemid, url: url, source: source))
+    }
+
+    @discardableResult
     public func setItemStage(itemid: UInt64, stage: String, field: String) async throws -> ReducerSuccess {
         try await client.callReducer(SetItemStageReducer(itemid: itemid, stage: stage, field: field))
     }
@@ -188,6 +208,11 @@ public struct Reducers: Sendable {
     @discardableResult
     public func setShoppingStatus(shoppingitemid: UInt64, status: String) async throws -> ReducerSuccess {
         try await client.callReducer(SetShoppingStatusReducer(shoppingitemid: shoppingitemid, status: status))
+    }
+
+    @discardableResult
+    public func setSweepStatus(scanid: UInt64, status: String) async throws -> ReducerSuccess {
+        try await client.callReducer(SetSweepStatusReducer(scanid: scanid, status: status))
     }
 
     @discardableResult
@@ -226,11 +251,12 @@ public struct Db: Sendable {
     public let room: Table<RoomRow>
     public let roomMember: Table<RoomMemberRow>
     public let scan: Table<ScanRow>
+    public let scanPhoto: Table<ScanPhotoRow>
     public let shoppingItem: Table<ShoppingItemRow>
     public let user: Table<UserRow>
     public let worker: Table<WorkerRow>
 
-    public init(client: SpacetimeDBClient, reducers: Reducers, agentEvent: Table<AgentEventRow>, approval: Table<ApprovalRow>, comp: Table<CompRow>, deal: Table<DealRow>, item: Table<ItemRow>, layout: Table<LayoutRow>, listing: Table<ListingRow>, newHome: Table<NewHomeRow>, payment: Table<PaymentRow>, room: Table<RoomRow>, roomMember: Table<RoomMemberRow>, scan: Table<ScanRow>, shoppingItem: Table<ShoppingItemRow>, user: Table<UserRow>, worker: Table<WorkerRow>) {
+    public init(client: SpacetimeDBClient, reducers: Reducers, agentEvent: Table<AgentEventRow>, approval: Table<ApprovalRow>, comp: Table<CompRow>, deal: Table<DealRow>, item: Table<ItemRow>, layout: Table<LayoutRow>, listing: Table<ListingRow>, newHome: Table<NewHomeRow>, payment: Table<PaymentRow>, room: Table<RoomRow>, roomMember: Table<RoomMemberRow>, scan: Table<ScanRow>, scanPhoto: Table<ScanPhotoRow>, shoppingItem: Table<ShoppingItemRow>, user: Table<UserRow>, worker: Table<WorkerRow>) {
         self.client = client
         self.reducers = reducers
         self.agentEvent = agentEvent
@@ -245,6 +271,7 @@ public struct Db: Sendable {
         self.room = room
         self.roomMember = roomMember
         self.scan = scan
+        self.scanPhoto = scanPhoto
         self.shoppingItem = shoppingItem
         self.user = user
         self.worker = worker
@@ -271,6 +298,7 @@ public struct Db: Sendable {
         await client.registerTableRowDecoder(RoomRow.self)
         await client.registerTableRowDecoder(RoomMemberRow.self)
         await client.registerTableRowDecoder(ScanRow.self)
+        await client.registerTableRowDecoder(ScanPhotoRow.self)
         await client.registerTableRowDecoder(ShoppingItemRow.self)
         await client.registerTableRowDecoder(UserRow.self)
         await client.registerTableRowDecoder(WorkerRow.self)
@@ -289,6 +317,7 @@ public struct Db: Sendable {
             room: Table<RoomRow>(client: client),
             roomMember: Table<RoomMemberRow>(client: client),
             scan: Table<ScanRow>(client: client),
+            scanPhoto: Table<ScanPhotoRow>(client: client),
             shoppingItem: Table<ShoppingItemRow>(client: client),
             user: Table<UserRow>(client: client),
             worker: Table<WorkerRow>(client: client)
