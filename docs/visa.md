@@ -145,7 +145,7 @@ Agent worker                                          |
   - Simulated rows have `simulated: true`, their messages start with `[SIMULATED]`, and the app shows the SIMULATED badge.
   - Sandbox rows are `simulated: false`, with `sandbox: true` in the event data. Their purposes start with `[Visa sandbox]`, their messages with `[VISA SANDBOX]`, and the app shows VISA SANDBOX.
   - Deal rows say "sample data" (SAMPLE) or "cached replay" (REPLAY) when they aren't live.
-- **Sandbox only, test card only.** `createAcceptanceBackend` refuses any host other than `apitest.cybersource.com`. The only card is the public Visa test card. The app never takes card numbers.
+- **Sandbox only, test card only.** `createAcceptanceBackend` refuses any host other than `apitest.cybersource.com`, and `createAuthorizeNetBackend` any host other than `apitest.authorize.net`. The only card is the public Visa test card. The app never takes card numbers.
 - **Agent reasoning log.** Every step is an `agent_event` row, and the mandate rides in the event data. That includes the plan, search, ranking with reasons, recommendation, approval request, hold, capture, reversal, refusal, retry and error.
 - **Scraped text is data.** Deal text is sanitized (`sanitizeText`) and never put into a Claude prompt. The approval summary puts the amount first and strips `"` and `$` from titles, so a listing title can't fake the price.
 
@@ -165,7 +165,23 @@ VISA_ACCEPTANCE_KEY_ID=...
 VISA_ACCEPTANCE_SECRET=...
 VISA_ACCEPTANCE_HOST=apitest.cybersource.com
 ```
-Run `npm run visa:demo -- 1.00` once to check it. With no `VISA_PROVIDER`, the backend is `acceptance` if all three keys are set, and simulated otherwise.
+Run `npm run visa:demo -- 1.00` once to check it. With no `VISA_PROVIDER`, the backend is `acceptance` if all three keys are set (and no Authorize.net keys are, see below), and simulated otherwise.
+
+### Authorize.net sandbox backend
+Authorize.net is also a Visa Acceptance product, and its sandbox authorizes test cards without a processor setup step, so it is the way around the CyberSource 502. `createAuthorizeNetBackend` in `agents/src/integrations/visa.ts` implements the same `CheckoutBackend` (hold, capture, release) against the JSON API:
+- `POST https://apitest.authorize.net/xml/v1/request.api` with `createTransactionRequest` (`merchantAuthentication`, `refId`, `transactionRequest`, in that order, since the JSON is XML-backed). Any other host is refused.
+- Hold: `authOnlyTransaction` on the public Visa test card (`4111111111111111`, `2031-12`, CVV `123`). Capture: `priorAuthCaptureTransaction` with `refTransId`. Release: `voidTransaction` with `refTransId`. `refId` and `order.invoiceNumber` are the purchase reference cut to 20 characters.
+- `responseCode` 1 is approved; 2 (declined), 3 (error) and 4 (held for review) are declines. `E00007` (bad API login or transaction key) is treated like CyberSource's 401: the checkout fails, with no simulated fallback. A network error is retryable, like CyberSource's.
+- Rows and events are labeled like CyberSource sandbox rows: `simulated: false`, `sandbox: true`, `provider: "authorizenet"`, `[Visa sandbox]` purposes, `[VISA SANDBOX]` messages, payee "Authorize.net sandbox merchant (for ikea)". `visa_checkout` reports `sandbox`, so the app shows VISA SANDBOX.
+
+Get keys from a sandbox account at https://developer.authorize.net/hello_world/sandbox.html (Account > Settings > API Credentials & Keys), then:
+```
+VISA_PROVIDER=authorizenet
+AUTHORIZENET_API_LOGIN_ID=...
+AUTHORIZENET_TRANSACTION_KEY=...
+AUTHORIZENET_HOST=apitest.authorize.net   # optional, the default
+```
+Check it with `VISA_PROVIDER=authorizenet npm run visa:demo -- 1.00`. With `VISA_PROVIDER` empty, the backend is `authorizenet` if both `AUTHORIZENET_*` keys are set, else `acceptance` if the three CyberSource keys are, else simulated. This backend is covered by fake-server tests in `agents/test/visa.test.ts`; a live sandbox run hasn't been recorded here yet.
 
 **Demo setting:** we run the demo with `VISA_PROVIDER=simulated` and are not attempting live sandbox charges. The CyberSource integration is built and tested (HTTP Signature checked against `cybersource-rest-client`, a fake-server test suite, sandbox-host and test-card locks), but the live sandbox charge is blocked on our sandbox account's merchant setup (HTTP 502, needs a human in the sandbox Business Center). Because the keys are configured, leaving `VISA_PROVIDER` empty would still call the sandbox on every purchase, so set it explicitly.
 
