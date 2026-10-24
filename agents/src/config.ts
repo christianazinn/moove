@@ -61,6 +61,12 @@ export const config = {
     // Optional allowlist of hosts web images may come from (comma-separated). Empty = any public https host.
     productImageHosts: parseAllowedHosts(env('PRODUCT_IMAGE_HOSTS')),
   },
+  // POST /homes/import (#89) spend cap (#17 follow-up): paid steps (Apify Zillow run, photo classifier,
+  // floor-plan vision read) per window, re-counted from agent_event on start. See homes/budget.ts.
+  homes: {
+    maxPaidCalls: Number(env('HOMES_MAX_PAID_CALLS', '30')),
+    spendWindowH: Number(env('HOMES_SPEND_WINDOW_H', '24')),
+  },
   // Recorded Claude answers for LLM_REPLAY (see integrations/anthropic.ts).
   llmReplayDir: env('LLM_REPLAY_DIR', 'fixtures/llm'),
   models: {
