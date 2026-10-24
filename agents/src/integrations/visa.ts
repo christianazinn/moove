@@ -414,6 +414,9 @@ export interface PurchaseContext {
   consumerPrompt: string;
 }
 
+/** The parts of a purchase that every event names. */
+export type EventContext = Pick<PurchaseContext, 'owner' | 'agent' | 'purpose' | 'merchant' | 'refTable' | 'refId' | 'amountCents'>;
+
 const thresholdOf = (ctx: PurchaseContext): bigint => (typeof ctx.thresholdCents === 'function' ? ctx.thresholdCents() : ctx.thresholdCents);
 
 export interface Hold {
@@ -669,6 +672,43 @@ export class VisaCheckout {
     }
   }
 
+  /** True if this process placed a hold with this processor id (in flight, closed, or capture unknown). */
+  knowsHold(authId: string): boolean {
+    for (const k of this.holds.keys()) if (k.endsWith(`:${authId}`)) return true;
+    return false;
+  }
+
+  /**
+   * Reverses a hold an earlier run of the worker placed and never closed (it restarted between
+   * authorize and capture). Only a confirmed reversal marks the row failed; anything else (wrong
+   * backend now, or the processor refuses because the capture did go through) leaves it pending with
+   * an error event for reconciliation. Budget stays counted (it was seeded from the row). True if released.
+   */
+  async releaseStale(ctx: EventContext, p: { paymentId: bigint; authId: string; simulated: boolean }): Promise<boolean> {
+    if (this.knowsHold(p.authId)) return false;
+    const backend = p.simulated ? (this.backend.simulated ? this.backend : (this.fallback ?? createSimulatedBackend())) : this.backend.simulated ? undefined : this.backend;
+    let failure: string | undefined;
+    let r: BackendResult | undefined;
+    if (!backend || !p.authId) {
+      failure = `no ${p.simulated ? 'simulated' : 'real'} checkout configured to release it`;
+    } else {
+      try {
+        r = await backend.void(p.authId, ctx.amountCents, `moove-${ctx.refTable}-${ctx.refId}`, 'left open by an earlier run');
+        if (r.status !== 'voided') failure = r.reason ?? r.processorStatus;
+      } catch (err) {
+        failure = (err as Error).message;
+      }
+    }
+    const b = backend ?? this.backend;
+    if (failure !== undefined) {
+      await this.event(ctx, b, 'error', `${tag(b)} A ${dollars(ctx.amountCents)} hold for ${ctx.purpose} from an earlier run is still pending and could not be released: ${failure}. Left pending for reconciliation`, { authId: p.authId, paymentId: p.paymentId.toString(), reconcile: true });
+      return false;
+    }
+    await this.sink.updatePayment(p.paymentId, 'failed', '');
+    await this.event(ctx, b, 'payment', `${tag(b)} Released the ${dollars(ctx.amountCents)} hold for ${ctx.purpose} left open by an earlier run`, { authId: p.authId, reversalId: r!.id, processorStatus: r!.processorStatus, paymentId: p.paymentId.toString(), voided: true });
+    return true;
+  }
+
   private openHold(hold: Hold, op: 'capture' | 'void') {
     const entry = this.holds.get(holdKey(hold));
     if (!entry) throw new Error(`cannot ${op} unknown hold ${hold.authId}`);
@@ -676,7 +716,7 @@ export class VisaCheckout {
     return entry;
   }
 
-  private event(ctx: PurchaseContext, b: CheckoutBackend, kind: VisaEventRecord['kind'], message: string, data: Record<string, unknown>) {
+  private event(ctx: EventContext, b: CheckoutBackend, kind: VisaEventRecord['kind'], message: string, data: Record<string, unknown>) {
     return this.sink.logAgentEvent({
       owner: ctx.owner,
       agent: ctx.agent,

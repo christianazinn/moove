@@ -17,7 +17,7 @@ const DEFAULT_THRESHOLD_CENTS = BigInt(process.env.APPROVAL_THRESHOLD_CENTS_DEFA
 // Demo nicety: flip posted simulated listings to `sold` after this many seconds (0 = never).
 const SOLD_AFTER_SEC = Number(process.env.LISTING_SIM_SOLD_AFTER_SEC ?? '0');
 
-const Draft = z.object({
+export const ListingDraft = z.object({
   title: z.string().describe('eBay title, max 80 chars: brand, item, key spec, condition. No emoji, no ALL CAPS.'),
   description: z
     .string()
@@ -57,10 +57,10 @@ async function draft(conn: Conn, it: Item): Promise<void> {
   logEvent(conn, { owner: it.owner, agent: 'listing', kind: 'plan', message: `Drafting a listing for "${it.name}" from ${comps.length} comp(s)`, refTable: 'item', refId: it.id });
   try {
     // Comps are scraped (untrusted): cleaned and fenced in the prompt, and the output is checked in code (#17).
-    const d = await structuredCall({ model: config.models.agent, system: LISTING_SYSTEM, text: buildDraftPrompt(it, comps), schema: Draft });
+    const d = await structuredCall({ model: config.models.agent, system: LISTING_SYSTEM, text: buildDraftPrompt(it, comps), schema: ListingDraft });
     const price = clampPrice(it, d.priceCents, comps);
     const copy = finalizeCopy(d);
-    conn.reducers.createListingDraft({ itemId: it.id, title: copy.title, description: copy.description, priceCents: price, simulated: ebay.simulated });
+    await conn.reducers.createListingDraft({ itemId: it.id, title: copy.title, description: copy.description, priceCents: price, simulated: ebay.simulated });
     const clamped = BigInt(Math.round(d.priceCents)) !== price ? ` (model said ${dollars(BigInt(Math.round(d.priceCents)))}, clamped)` : '';
     logEvent(conn, { owner: it.owner, agent: 'listing', kind: 'result', message: `Drafted "${copy.title}" at ${dollars(price)}${clamped}: ${d.priceReason}`, refTable: 'item', refId: it.id, data: { ...d, ...copy, modelPriceCents: d.priceCents, priceCents: price } });
   } catch (err) {
@@ -71,6 +71,32 @@ async function draft(conn: Conn, it: Item): Promise<void> {
 
 function thresholdFor(conn: Conn, l: Listing): bigint {
   return conn.db.user.identity.find(l.owner)?.approvalThresholdCents ?? DEFAULT_THRESHOLD_CENTS;
+}
+
+// Status writes are awaited so a failed one (e.g. while reconnecting) shows up as an error event
+// instead of an unhandled rejection with the listing silently stuck.
+async function setStatus(conn: Conn, l: Listing, status: string, externalId = '', url = ''): Promise<boolean> {
+  try {
+    await conn.reducers.updateListing({ listingId: l.id, status, externalId, url, priceCents: -1n });
+    return true;
+  } catch (err) {
+    logEvent(conn, { owner: l.owner, agent: 'listing', kind: 'error', message: `Could not set the listing to ${status}: ${String(err)}`, refTable: 'listing', refId: l.id });
+    return false;
+  }
+}
+
+// Asks once per listing per worker run. On failure it logs and forgets, so a later pass retries.
+async function askApproval(conn: Conn, l: Listing): Promise<boolean> {
+  if (approvalRequested.has(l.id)) return false;
+  approvalRequested.add(l.id);
+  try {
+    await conn.reducers.requestApproval({ owner: l.owner, kind: 'listing', refId: l.id, amountCents: l.priceCents, summary: `Sell "${l.title}" for ${dollars(l.priceCents)}` });
+    return true;
+  } catch (err) {
+    approvalRequested.delete(l.id);
+    logEvent(conn, { owner: l.owner, agent: 'listing', kind: 'error', message: `Could not ask for approval: ${String(err)}`, refTable: 'listing', refId: l.id });
+    return false;
+  }
 }
 
 function approvalFor(conn: Conn, l: Listing): Approval | undefined {
@@ -86,7 +112,7 @@ async function post(conn: Conn, l: Listing): Promise<void> {
   const ref = { owner: l.owner, agent: 'listing', refTable: 'listing', refId: l.id };
   // A listing posts the way it was drafted, so its `simulated` flag stays true to what happened.
   if (!l.simulated && ebay.simulated) {
-    conn.reducers.updateListing({ listingId: l.id, status: 'failed', externalId: '', url: '', priceCents: -1n });
+    await setStatus(conn, l, 'failed');
     logEvent(conn, { ...ref, kind: 'error', message: 'Drafted for real eBay, but the eBay keys are no longer configured' });
     return;
   }
@@ -108,18 +134,18 @@ async function post(conn: Conn, l: Listing): Promise<void> {
       },
       s => logEvent(conn, { ...ref, kind: 'tool_call', message: `eBay ${s.call}${poster.simulated ? ' (simulated)' : ''}: ${s.detail}`, data: { ...s, simulated: poster.simulated } })
     );
-    conn.reducers.updateListing({ listingId: l.id, status: 'posted', externalId: r.externalId, url: r.url, priceCents: -1n });
+    await setStatus(conn, l, 'posted', r.externalId, r.url);
     logEvent(conn, { ...ref, kind: 'result', message: `Live as item #${r.externalId}${r.simulated ? ' (simulated)' : ''}`, data: r });
     if (r.simulated && SOLD_AFTER_SEC > 0) {
       setTimeout(() => {
         const cur = conn.db.listing.id.find(l.id);
         if (cur?.status !== 'posted') return;
-        conn.reducers.updateListing({ listingId: l.id, status: 'sold', externalId: '', url: '', priceCents: -1n });
+        void setStatus(conn, l, 'sold');
         logEvent(conn, { ...ref, kind: 'result', message: `Sold "${l.title}" for ${dollars(l.priceCents)} (simulated)` });
       }, SOLD_AFTER_SEC * 1000);
     }
   } catch (err) {
-    conn.reducers.updateListing({ listingId: l.id, status: 'failed', externalId: '', url: '', priceCents: -1n });
+    await setStatus(conn, l, 'failed');
     logEvent(conn, { ...ref, kind: 'error', message: `Posting failed: ${String(err)}` });
   }
 }
@@ -132,9 +158,12 @@ async function advance(conn: Conn, l: Listing): Promise<void> {
     const threshold = thresholdFor(conn, l);
     if (threshold < 0n || l.priceCents > threshold) {
       if (approvalRequested.has(l.id)) return;
-      approvalRequested.add(l.id);
-      conn.reducers.requestApproval({ owner: l.owner, kind: 'listing', refId: l.id, amountCents: l.priceCents, summary: `Sell "${l.title}" for ${dollars(l.priceCents)}` });
-      conn.reducers.updateListing({ listingId: l.id, status: 'awaiting_approval', externalId: '', url: '', priceCents: -1n });
+      // A restart between request_approval and the status update leaves a draft that was already
+      // asked about: reuse that approval rather than asking twice.
+      const prior = approvalFor(conn, l);
+      if (prior?.amountCents === l.priceCents) approvalRequested.add(l.id);
+      else if (!(await askApproval(conn, l))) return;
+      await setStatus(conn, l, 'awaiting_approval');
       logEvent(conn, { ...ref, kind: 'approval', message: `${dollars(l.priceCents)} is over the ${threshold < 0n ? 'always-ask' : dollars(threshold)} threshold, asking for approval` });
       return;
     }
@@ -145,14 +174,19 @@ async function advance(conn: Conn, l: Listing): Promise<void> {
   }
   if (l.status === 'awaiting_approval') {
     const a = approvalFor(conn, l);
-    if (!a || a.status === 'pending') return;
+    if (!a) {
+      // The status update landed but the approval request didn't (worker died or disconnected).
+      if (await askApproval(conn, l)) logEvent(conn, { ...ref, kind: 'approval', message: `Waiting for approval but none was on file, asking again` });
+      return;
+    }
+    if (a.status === 'pending') return;
     advancing.add(l.id);
     if (a.status === 'approved' && a.amountCents === l.priceCents) {
       logEvent(conn, { ...ref, kind: 'approval', message: `Approved by the user, posting` });
       await post(conn, l);
     } else {
       const why = a.status === 'approved' ? 'price changed after approval' : a.status;
-      conn.reducers.updateListing({ listingId: l.id, status: 'rejected', externalId: '', url: '', priceCents: -1n });
+      await setStatus(conn, l, 'rejected');
       logEvent(conn, { ...ref, kind: 'approval', message: `Not posting: ${why}` });
     }
     advancing.delete(l.id);
