@@ -142,25 +142,62 @@ enum RoomScene {
 
     // MARK: Objects
 
+    /// One piece of furniture: a container (named "obj:<id>", the tap target)
+    /// holding the colored block and, when `FurnitureFactory` has one for the
+    /// category, a stand-in furniture model ("furniture") that hides the block.
     private static func objectEntity(_ object: RoomGeometry.Object) -> Entity {
         let d = object.dimensions
+        let tint = RoomPalette.category(object.category)
+        let container = Entity()
+        container.name = objectPrefix + object.id
+        container.transform = RealityKit.Transform(matrix: object.transform.matrix)
+        container.components.set(InputTargetComponent())
+        container.components.set(CollisionComponent(shapes: [.generateBox(width: d.x, height: d.y, depth: d.z)]))
+
         let radius = min(0.04, min(d.x, d.y, d.z) / 4)
         let block = ModelEntity(mesh: .generateBox(width: d.x, height: d.y, depth: d.z, cornerRadius: radius),
-                                materials: [material(RoomPalette.category(object.category), roughness: 0.5)])
-        block.name = objectPrefix + object.id
-        block.transform = RealityKit.Transform(matrix: object.transform.matrix)
+                                materials: [material(tint, roughness: 0.5)])
+        block.name = "block"
         block.components.set(GroundingShadowComponent(castsShadow: true))
-        block.components.set(InputTargetComponent())
-        block.components.set(CollisionComponent(shapes: [.generateBox(width: d.x, height: d.y, depth: d.z)]))
-        return block
+        container.addChild(block)
+        if let shadow = contactShadow(for: d) { container.addChild(shadow) }
+
+        if let furniture = FurnitureFactory.makeEntity(category: object.category, size: d, tint: tint) {
+            furniture.name = "furniture"
+            castShadows(furniture)
+            container.addChild(furniture)
+            block.isEnabled = false
+        }
+        return container
+    }
+
+    /// The visible stand-in for an object: its furniture model if it has one, else its block.
+    static func body(of container: Entity) -> Entity? {
+        container.findEntity(named: "furniture") ?? container.findEntity(named: "block")
+    }
+
+    /// Gives every model under `entity` the same tinted material (and glow when selected).
+    static func recolor(_ entity: Entity, _ color: UIColor, roughness: Float, glow: Bool) {
+        if var model = entity.components[ModelComponent.self] {
+            model.materials = Array(repeating: material(color, roughness: roughness, glow: glow), count: max(model.materials.count, 1))
+            entity.components.set(model)
+        }
+        for child in entity.children where child.name != "label" { recolor(child, color, roughness: roughness, glow: glow) }
+    }
+
+    private static func castShadows(_ entity: Entity) {
+        if entity.components.has(ModelComponent.self) { entity.components.set(GroundingShadowComponent(castsShadow: true)) }
+        for child in entity.children { castShadows(child) }
     }
 
     /// Floating, camera-facing name tag above an object.
     /// `fontSize` is in room meters; pass something proportional to the room so
     /// labels stay readable however big the room is.
     static func label(_ text: String, above object: RoomGeometry.Object, fontSize: Float) -> Entity {
-        let mesh = MeshResource.generateText(text, extrusionDepth: 0.001, font: .systemFont(ofSize: CGFloat(fontSize), weight: .semibold),
-                                             containerFrame: .zero, alignment: .center, lineBreakMode: .byTruncatingTail)
+        let mesh = RoomSceneCache.labelMesh(text, fontSize: fontSize) {
+            MeshResource.generateText(text, extrusionDepth: 0.001, font: .systemFont(ofSize: CGFloat(fontSize), weight: .semibold),
+                                      containerFrame: .zero, alignment: .center, lineBreakMode: .byTruncatingTail)
+        }
         let textEntity = ModelEntity(mesh: mesh, materials: [UnlitMaterial(color: UIColor(white: 0.15, alpha: 1))])
         let bounds = mesh.bounds
         textEntity.position = SIMD3(-bounds.center.x, -bounds.center.y, 0)
@@ -177,6 +214,7 @@ enum RoomScene {
 
     private static func sunlight(for geometry: RoomGeometry) -> Entity {
         let sun = DirectionalLight()
+        sun.name = "sun"
         sun.light.intensity = 2600
         sun.light.color = UIColor(red: 1, green: 0.97, blue: 0.92, alpha: 1)
         sun.shadow = DirectionalLightComponent.Shadow(maximumDistance: 12, depthBias: 1.5)
