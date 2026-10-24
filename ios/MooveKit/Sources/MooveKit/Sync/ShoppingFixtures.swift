@@ -36,6 +36,11 @@ extension DemoFixtures {
             ShoppingItem(id: 53, owner: owner, name: "Dining table", category: "table",
                          reason: "The new home has a dining area and nothing from the old place fits it.",
                          status: .found, chosenDealId: 79, createdAt: ago(37)),
+            // A checkout that failed: the simulated Visa hold was declined, nothing was charged,
+            // and the user can pick another deal.
+            ShoppingItem(id: 54, owner: owner, name: "Area rug", category: "decor",
+                         reason: "The new living room has bare wood floors.",
+                         status: .found, chosenDealId: 80, createdAt: ago(36)),
         ]
 
         s.deals += [
@@ -81,6 +86,16 @@ extension DemoFixtures {
                  "https://sfbay.craigslist.org/search/fua?query=dining+table",
                  "Craigslist, El Cerrito · good · 7 mi · message seller · score 0.73",
                  fraud: 0.12, ai: 0.20),
+
+            deal(80, 54, "target", "5x7 flatweave area rug, cream/gray", 8_999,
+                 "https://www.target.com/s?searchTerm=5x7+area+rug", "Target · new · ships · Visa checkout · score 0.75",
+                 fraud: 0.03, ai: 0.11),
+            deal(81, 54, "ikea", "LOHALS flatwoven rug, natural, 5'3\"x7'7\"", 9_999,
+                 "https://www.ikea.com/us/en/search/?q=lohals", "IKEA · new · ships · Visa checkout · score 0.71",
+                 fraud: 0.02, ai: 0.07),
+            deal(82, 54, "amazon", "Washable 5x7 boho area rug", 6_499,
+                 "https://www.amazon.com/s?k=washable+5x7+rug", "Amazon · new · ships · Visa checkout · score 0.68",
+                 fraud: 0.05, ai: 0.41),
         ]
 
         // The sofa is over the approval threshold, so the buy agent asked first.
@@ -94,6 +109,19 @@ extension DemoFixtures {
             Payment(id: 90, owner: owner, agent: "buy", rail: .visa, purpose: "Mattress: 8\" memory foam mattress, Full",
                     payee: "simulated merchant", amountUsdMicros: 17_999 * 10_000, status: .settled, simulated: true,
                     refTable: "deal", refId: 62, createdAt: ago(20)),
+            Payment(id: 91, owner: owner, agent: "buy", rail: .visa, purpose: "Area rug: 5x7 flatweave area rug, cream/gray",
+                    payee: "simulated merchant", amountUsdMicros: 8_999 * 10_000, status: .failed, simulated: true,
+                    refTable: "deal", refId: 80, createdAt: ago(15)),
+        ]
+
+        // What the buy agent said about that failure (same wording as agents/src/agents/buy.ts).
+        s.agentEvents += [
+            AgentEvent(id: 630, owner: owner, agent: "buy", kind: .plan,
+                       message: "Checking out \"5x7 flatweave area rug, cream/gray\" for $89.99 via Visa, under the $100 approval threshold.",
+                       refTable: "deal", refId: 80, createdAt: ago(15.2)),
+            AgentEvent(id: 631, owner: owner, agent: "buy", kind: .result,
+                       message: "Did not buy \"5x7 flatweave area rug, cream/gray\": declined (card declined by the issuer, simulated)",
+                       refTable: "deal", refId: 80, dataJson: #"{"provider":"simulated","simulated":true}"#, createdAt: ago(15)),
         ]
     }
 }
