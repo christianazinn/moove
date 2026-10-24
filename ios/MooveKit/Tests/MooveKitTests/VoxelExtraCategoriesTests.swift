@@ -185,7 +185,7 @@ import Testing
             ("luggage", "Duffel bag", .suitcase), ("suitcase", "Carry-on suitcase", .suitcase), ("decor", "Bean bag chair", .beanBag),
             ("other", "Exercise bike", .fitness), ("bike", "Kids BMX bike", .bike), ("kitchenware", "Vacuum sealer", .kitchenware),
             ("kitchenware", "Vacuum flask", .kitchenware), ("clothes", "Ski jacket", .clothes), ("furniture", "Ski rack", .box),
-            ("rug", "Persian carpet", .rug), ("decor", "Orange vase", .decor), ("storage", "Storage bin", .box),
+            ("rug", "Persian carpet", .rug), ("decor", "Orange vase", .decor), ("storage", "Storage bin", .basket),
         ]
         for (cat, name, want) in cases { #expect(kind(cat, name) == want, "\(cat)/\(name)") }
         #expect(kind("keyboard", "Logitech keyboard", 0.44, 0.14, 0.03) == .electronics) // a computer keyboard is narrow
