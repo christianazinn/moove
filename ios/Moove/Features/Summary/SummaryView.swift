@@ -15,7 +15,7 @@ struct SummaryView: View {
     private var sales: [MoveSummary.Sale] { MoveSummary.sales(from: store.snapshot) }
 
     private var summary: MoveSummary {
-        let snap = store.snapshot
+        let snap = store.visibleSnapshot
         guard usingDemoActivity else { return MoveSummary(snapshot: snap) }
         return MoveSummary(items: snap.items, sales: sales, spend: SummaryDemo.spend, events: SummaryDemo.events())
     }
@@ -28,9 +28,9 @@ struct SummaryView: View {
                 PageHeader(
                     eyebrow: "07 — Summary",
                     title: "Your move, handled.",
-                    lede: store.items.isEmpty ? nil : "\(s.itemCount) items, start to finish."
+                    lede: store.visibleItems.isEmpty ? nil : "\(s.itemCount) items, start to finish."
                 )
-                if store.items.isEmpty {
+                if store.visibleItems.isEmpty {
                     emptyState.padding(.top, 36)
                 } else {
                     stats(s).padding(.top, 32)
@@ -127,7 +127,7 @@ struct SummaryView: View {
     /// The items themselves: what's coming along, what went where, what's still open.
     @ViewBuilder
     private func itemLists(_ s: MoveSummary) -> some View {
-        let items = store.items.sorted { a, b in
+        let items = store.visibleItems.sorted { a, b in
             let ra = Self.order.firstIndex(of: a.disposition) ?? 0, rb = Self.order.firstIndex(of: b.disposition) ?? 0
             return ra != rb ? ra < rb : a.name < b.name
         }

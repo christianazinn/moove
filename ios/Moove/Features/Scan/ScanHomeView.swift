@@ -21,13 +21,13 @@ struct ScanHomeView: View {
                 )
                 ScanHomeHero { openRoom = $0 }.padding(.top, 24)
                 startScan.padding(.top, 24)
-                if !store.snapshot.rooms.isEmpty {
-                    ListHeader(title: "Your rooms", count: "\(store.snapshot.rooms.count)")
+                if !store.visibleRooms.isEmpty {
+                    ListHeader(title: "Your rooms", count: "\(store.visibleRooms.count)")
                         .padding(.top, 40)
                     VStack(spacing: 10) {
-                        ForEach(store.snapshot.rooms) { room in
+                        ForEach(store.visibleRooms) { room in
                             NavigationLink(value: room) {
-                                ScanRoomCard(room: room, items: store.items.filter { $0.roomId == room.id })
+                                ScanRoomCard(room: room, items: store.visibleItems.filter { $0.roomId == room.id })
                             }
                             .buttonStyle(.plain)
                         }

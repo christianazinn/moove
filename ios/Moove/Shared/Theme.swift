@@ -230,6 +230,9 @@ struct LedgerRow<Leading: View, Trailing: View>: View {
     var value: String?
     var valueTint: Color = Theme.text
     var chevron = false
+    /// Optional short chip under the meta line (Inventory's item origin, #267).
+    var tag: String? = nil
+    var tagAccessibilityLabel: String? = nil
     @ViewBuilder var leading: Leading
     @ViewBuilder var trailing: Trailing
 
@@ -239,6 +242,11 @@ struct LedgerRow<Leading: View, Trailing: View>: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).blockTitle().fixedSize(horizontal: false, vertical: true)
                 if let meta { Text(meta).monoMeta().fixedSize(horizontal: false, vertical: true) }
+                if let tag {
+                    MonoTag(text: tag)
+                        .accessibilityLabel(tagAccessibilityLabel ?? tag)
+                        .padding(.top, 2)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 8) {
@@ -261,8 +269,10 @@ struct LedgerRow<Leading: View, Trailing: View>: View {
 }
 
 extension LedgerRow where Trailing == EmptyView {
-    init(title: String, meta: String? = nil, value: String? = nil, valueTint: Color = Theme.text, chevron: Bool = false, @ViewBuilder leading: () -> Leading) {
-        self.init(title: title, meta: meta, value: value, valueTint: valueTint, chevron: chevron, leading: leading) { EmptyView() }
+    init(title: String, meta: String? = nil, value: String? = nil, valueTint: Color = Theme.text, chevron: Bool = false,
+         tag: String? = nil, tagAccessibilityLabel: String? = nil, @ViewBuilder leading: () -> Leading) {
+        self.init(title: title, meta: meta, value: value, valueTint: valueTint, chevron: chevron, tag: tag,
+                  tagAccessibilityLabel: tagAccessibilityLabel, leading: leading) { EmptyView() }
     }
 }
 

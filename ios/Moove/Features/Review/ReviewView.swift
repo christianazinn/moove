@@ -8,7 +8,7 @@ struct ReviewView: View {
     @Environment(MooveStore.self) private var store
 
     var body: some View {
-        let sections = Review.sections(store.items)
+        let sections = Review.sections(store.visibleItems)
         // A plain List (not a ScrollView) so rows keep their swipe actions; the theme comes from
         // clear row backgrounds, gutter insets and rule-colored separators.
         List {
@@ -19,12 +19,12 @@ struct ReviewView: View {
                     lede: "Keep, sell, donate or trash. Swipe a row to change it. Your calls always win over the agents'."
                 )
                 .padding(.top, 16)
-                .padding(.bottom, store.items.isEmpty ? 28 : 24)
+                .padding(.bottom, store.visibleItems.isEmpty ? 28 : 24)
                 .chromeRow()
-                if store.items.isEmpty {
+                if store.visibleItems.isEmpty {
                     ReviewEmptyState().chromeRow()
                 } else {
-                    ReviewTotalsHeader(totals: Review.totals(store.items)).chromeRow()
+                    ReviewTotalsHeader(totals: Review.totals(store.visibleItems)).chromeRow()
                     if !sections.contains(where: { $0.section == .needsYou }) {
                         Label("All caught up: nothing needs you. Swipe any row to change it.", systemImage: "checkmark.circle")
                             .monoMeta()
@@ -64,7 +64,7 @@ struct ReviewView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: UInt64.self) { ItemDetailView(itemId: $0) }
         .mooveScreen()
-        .animation(.default, value: store.items)
+        .animation(.default, value: store.visibleItems)
     }
 
     private func swipe(_ item: Item, _ disposition: Disposition) -> some View {

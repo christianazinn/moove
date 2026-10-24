@@ -18,14 +18,14 @@ struct ScanHomeHero: View {
     }
 
     private var room: Room? {
-        store.snapshot.rooms
-            .filter { room in store.items.contains { $0.roomId == room.id } }
+        store.visibleRooms
+            .filter { room in store.visibleItems.contains { $0.roomId == room.id } }
             .max { $0.id < $1.id }
     }
 
     private var items: [Item] {
         guard let room else { return DemoFixtures.inventory(owner: "demo").items.filter(DemoFixtures.isDemoItem) }
-        return store.items.filter { $0.roomId == room.id }
+        return store.visibleItems.filter { $0.roomId == room.id }
     }
 
     private var isDemo: Bool { room == nil || items.allSatisfy(DemoFixtures.isDemoItem) }
