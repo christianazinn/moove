@@ -82,7 +82,7 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
                             self.cache = [:]
                         }
                         do {
-                            try await self.subscribe(client)
+                            try await self.subscribe(client, me: hex)
                             self.broadcast(status: .connected)
                             pending?.resume(returning: (hex, newToken))
                             pending = nil
@@ -122,9 +122,8 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
         lock.withLock { tasks.append(task) }
     }
 
-    private func subscribe(_ client: SpacetimeDBClient) async throws {
-        guard !Self.subscriptionQueries.isEmpty else { return publish() }
-        let handle = try await client.subscribe(Self.subscriptionQueries)
+    private func subscribe(_ client: SpacetimeDBClient, me: IdentityHex) async throws {
+        let handle = try await client.subscribe(Self.subscriptionQueries(me: me))
         try await handle.applied()
         publish()
     }

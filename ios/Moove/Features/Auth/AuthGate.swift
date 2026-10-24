@@ -21,6 +21,10 @@ struct AuthGate: View {
         .task(id: auth.state) { await sessionChanged() }
     }
 
+    #if DEBUG
+    @MainActor private static var importedDemo = false
+    #endif
+
     private func sessionChanged() async {
         switch auth.state {
         case .checking:
@@ -36,5 +40,13 @@ struct AuthGate: View {
                 await store.registerUser(name: "Guest", email: nil, auth0Sub: nil)
             }
         }
+        #if DEBUG
+        // Test hook: import the demo scan through the live backend once connected.
+        if ProcessInfo.processInfo.environment["MOOVE_DEBUG_IMPORT_DEMO"] != nil, !Self.importedDemo {
+            Self.importedDemo = true
+            try? await Task.sleep(for: .seconds(1))
+            if store.items.isEmpty { await store.importScan(DemoFixtures.scanImport()) }
+        }
+        #endif
     }
 }

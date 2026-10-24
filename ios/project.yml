@@ -12,6 +12,8 @@ settings:
 packages:
   MooveKit:
     path: MooveKit
+  MooveBindings:
+    path: MooveBindings
   SpacetimeDB:
     # Community SDK (ekscrypto). Pinned: spike-verified against SpacetimeDB 2.13.
     url: https://github.com/ekscrypto/spacetimedb-swift-sdk
@@ -30,6 +32,7 @@ targets:
       Release: Config/Moove.xcconfig
     dependencies:
       - package: MooveKit
+      - package: MooveBindings
       - package: SpacetimeDB
         product: SpacetimeDB
       - package: SpacetimeDB
