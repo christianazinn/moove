@@ -42,7 +42,7 @@ final class DevpostShotsTests: XCTestCase {
 
         // 3. Sell & Buy > Spending: the x402 payments with the Basescan row.
         open(tab: "Sell & Buy", segment: "Spending")
-        XCTAssertTrue(app.staticTexts["Where the money went."].waitForExistence(timeout: slow))
+        XCTAssertTrue(app.navigationBars["Spending"].waitForExistence(timeout: slow))
         shot("03a-spending-top")
         // The headline image: the pricing agent's receipt with the real Base Sepolia line.
         _ = scrollTo(byId("payment.basescan.500"))
@@ -50,7 +50,7 @@ final class DevpostShotsTests: XCTestCase {
 
         // 5. Sell & Buy > Approvals: two requests wait for the user.
         open(tab: "Sell & Buy", segment: "Approvals")
-        XCTAssertTrue(app.staticTexts["Your go-ahead."].waitForExistence(timeout: slow))
+        XCTAssertTrue(app.navigationBars["Approvals"].waitForExistence(timeout: slow))
         shot("05-approvals")
 
         // 6. Sell & Buy > Shopping > Desk chair: the planted scam deal is blocked.

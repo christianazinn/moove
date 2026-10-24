@@ -21,7 +21,6 @@ struct ReviewView: View {
         let piles = Review.piles(items.filter { !pending.contains($0.id) })
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                PageHeader(eyebrow: "03 — Review", title: deck.isEmpty ? "Where it goes." : "Your call.")
                 if items.isEmpty {
                     ReviewEmptyState().padding(.top, 28)
                 } else {

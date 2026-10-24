@@ -25,7 +25,6 @@ struct ManualRoomsEditor: View {
         Form {
             Section {
                 PageHeader(
-                    eyebrow: "06 — New home",
                     title: "Sketch your new place",
                     lede: "Width × depth, in meters."
                 )

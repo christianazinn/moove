@@ -174,14 +174,14 @@ extension View {
 // MARK: Components
 
 /// Eyebrow, big mono heading, and an optional sans paragraph, like the top of each prototype panel.
+/// A screen's big title and optional one-line instruction. No "02 — Inventory" eyebrow: the
+/// navigation bar already names the screen (Rio: "unnecessary text").
 struct PageHeader: View {
-    var eyebrow: String
     var title: String
     var lede: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(Self.unnumbered(eyebrow)).eyebrow().padding(.bottom, 12)
             Text(title)
                 .pageTitle()
                 .fixedSize(horizontal: false, vertical: true)
@@ -196,12 +196,6 @@ struct PageHeader: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Drops a leading page number ("06 — Spending" → "Spending"): with five tabs and their
-    /// segments the numbers couldn't stay in order, so pages show just their name.
-    static func unnumbered(_ eyebrow: String) -> String {
-        guard let r = eyebrow.range(of: #"^\d+\s*—\s*"#, options: .regularExpression) else { return eyebrow }
-        return String(eyebrow[r.upperBound...])
-    }
 }
 
 /// Section heading with an optional count and trailing accessory, over a rule.

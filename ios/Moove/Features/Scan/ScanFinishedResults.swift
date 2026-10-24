@@ -36,7 +36,7 @@ struct ScanFinishedResults: View {
                 // The room landed with no items (RoomPlan found no furniture, nothing added by photo).
                 VStack(alignment: .leading, spacing: 4) {
                     Text("No furniture in this scan").blockTitle()
-                    Text("The room is saved. Scan again more slowly, or add items by photo, and they'll show up here.")
+                    Text("The room is saved. Scan again or add items by photo.")
                         .monoMeta()
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -94,7 +94,6 @@ struct ScanFinishedScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
-                    Text("01 — Scan · Done").eyebrow()
                     if isDemo { MonoTag(text: "Demo scan", tone: Theme.ochreInk) }
                 }
                 Text(itemCount == 0 ? "Room saved" : "\(itemCount) item\(itemCount == 1 ? "" : "s") added")
@@ -126,12 +125,12 @@ struct ScanFinishedScreen: View {
             return "\(pendingPhotos) photo\(pendingPhotos == 1 ? "" : "s") waiting to upload\(why). Moove keeps trying for 15 minutes and adds them to their items; the room is already saved."
         }
         if let uploadProblem {
-            return "Photos couldn't be uploaded (\(uploadProblem)), so agents can't identify items yet. The room is saved, and the 3D view works on this device."
+            return "Photos couldn't be uploaded (\(uploadProblem)). The room is saved; items get identified once they upload."
         }
         if isDemo {
             return store.backendKind == .fixture
-                ? "A recorded bedroom, not a live scan. Offline demo: items, prices and colors are fixture data, as if the agents had run."
-                : "A recorded bedroom, not a live scan. Agents are identifying and pricing it now; colors are the demo room's."
+                ? "Demo bedroom, not a live scan: items and prices are fixture data."
+                : "Demo bedroom, not a live scan. Agents are pricing it now."
         }
         return "Agents are identifying and pricing them now."
     }

@@ -19,7 +19,6 @@ struct JoinRoomView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     PageHeader(
-                        eyebrow: "02 — Inventory · Join",
                         title: "Join a room.",
                         lede: store.backendKind == .fixture
                             ? "Offline demo: try \(DemoFixtures.roommateJoinCode)."
