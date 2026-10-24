@@ -142,17 +142,58 @@ enum RoomScene {
 
     // MARK: Objects
 
+    /// One piece of furniture: a container (named "obj:<id>", the tap target)
+    /// holding the colored block, a thin colored base, and, once captured, the
+    /// item's real 3D model (`attachModel`).
     private static func objectEntity(_ object: RoomGeometry.Object) -> Entity {
         let d = object.dimensions
+        let container = Entity()
+        container.name = objectPrefix + object.id
+        container.transform = RealityKit.Transform(matrix: object.transform.matrix)
+        container.components.set(InputTargetComponent())
+        container.components.set(CollisionComponent(shapes: [.generateBox(width: d.x, height: d.y, depth: d.z)]))
+
         let radius = min(0.04, min(d.x, d.y, d.z) / 4)
         let block = ModelEntity(mesh: .generateBox(width: d.x, height: d.y, depth: d.z, cornerRadius: radius),
                                 materials: [material(RoomPalette.category(object.category), roughness: 0.5)])
-        block.name = objectPrefix + object.id
-        block.transform = RealityKit.Transform(matrix: object.transform.matrix)
+        block.name = "block"
         block.components.set(GroundingShadowComponent(castsShadow: true))
-        block.components.set(InputTargetComponent())
-        block.components.set(CollisionComponent(shapes: [.generateBox(width: d.x, height: d.y, depth: d.z)]))
-        return block
+        container.addChild(block)
+
+        // Shown under captured models so color-by-category/decision still reads.
+        let base = ModelEntity(mesh: .generateBox(width: d.x, height: 0.025, depth: d.z, cornerRadius: 0.01),
+                               materials: [material(RoomPalette.category(object.category), roughness: 0.6)])
+        base.name = "base"
+        base.position = SIMD3(0, -d.y / 2 + 0.0125, 0)
+        base.isEnabled = false
+        container.addChild(base)
+        return container
+    }
+
+    /// Places a captured model (Object Capture USDZ) in the object's box:
+    /// long sides aligned, uniformly scaled to fit, standing on the floor.
+    static func attachModel(_ prototype: Entity, to container: Entity, object: RoomGeometry.Object, extraQuarterTurns: Int) {
+        container.children.filter { $0.name == "model" }.forEach { $0.removeFromParent() }
+        let clone = prototype.clone(recursive: true)
+        let bounds = clone.visualBounds(relativeTo: nil)
+        guard bounds.extents.x > 0, bounds.extents.y > 0, bounds.extents.z > 0 else { return }
+        let box = object.dimensions
+        let fit = ModelFit.fit(model: bounds.extents, box: box, extraQuarterTurns: extraQuarterTurns)
+
+        clone.position = -bounds.center  // model centered on its own bounds
+        castShadows(clone)
+        let pivot = Entity()
+        pivot.name = "model"
+        pivot.addChild(clone)
+        pivot.scale = SIMD3(repeating: fit.scale)
+        pivot.orientation = simd_quatf(angle: fit.yaw, axis: SIMD3(0, 1, 0))
+        pivot.position = SIMD3(0, -box.y / 2 + bounds.extents.y * fit.scale / 2 + 0.025, 0)  // on top of the base
+        container.addChild(pivot)
+    }
+
+    private static func castShadows(_ entity: Entity) {
+        if entity is ModelEntity { entity.components.set(GroundingShadowComponent(castsShadow: true)) }
+        for child in entity.children { castShadows(child) }
     }
 
     /// Floating, camera-facing name tag above an object.
