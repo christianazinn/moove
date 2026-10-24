@@ -12,8 +12,13 @@ struct RoomModelView: View {
     let showLabels: Bool
     @Binding var selection: String?
 
+    @State private var models = ObjectModelStore.shared
+    /// Loaded Object Capture models by object id (prototypes; the scene holds clones).
+    @State private var prototypes: [String: Entity] = [:]
+
     var body: some View {
         RealityView { content in
+            ModelSourceComponent.registerComponent()
             let room = RoomScene.make(geometry)
             content.add(stage(holding: room))
             apply(to: room)
@@ -22,6 +27,7 @@ struct RoomModelView: View {
             apply(to: room)
         }
         .realityViewCameraControls(.orbit)
+        .task(id: models.revision) { await loadModels() }
         .gesture(
             SpatialTapGesture().targetedToAnyEntity().onEnded { value in
                 var entity: Entity? = value.entity
@@ -64,21 +70,67 @@ struct RoomModelView: View {
         return max(b.max.x - b.min.x, b.max.z - b.min.z, 1) * 0.04
     }
 
-    /// Recolors furniture for the current mode and selection, and shows labels.
+    /// Loads the USDZ for every object that has a captured model.
+    private func loadModels() async {
+        for object in geometry.objects {
+            guard let url = models.modelURL(for: object.id) else {
+                prototypes[object.id] = nil
+                continue
+            }
+            if prototypes[object.id]?.name == url.absoluteString { continue }
+            guard let entity = try? await Entity(contentsOf: url) else { continue }
+            entity.name = url.absoluteString  // remembers which file it came from
+            prototypes[object.id] = entity
+        }
+    }
+
+    /// Recolors furniture for the current mode and selection, swaps in captured
+    /// models, and shows labels.
     private func apply(to room: Entity) {
         guard let objects = room.children.first(where: { $0.name == "objects" }) else { return }
-        for case let block as ModelEntity in objects.children {
-            let id = String(block.name.dropFirst(RoomScene.objectPrefix.count))
-            guard let object = geometry.objects.first(where: { $0.id == id }) else { continue }
+        for container in objects.children {
+            let id = String(container.name.dropFirst(RoomScene.objectPrefix.count))
+            guard let object = geometry.objects.first(where: { $0.id == id }),
+                  let block = container.findEntity(named: "block") as? ModelEntity,
+                  let base = container.findEntity(named: "base") as? ModelEntity else { continue }
             let item = items[id]
             let selected = id == selection
             let color = RoomPalette.color(for: object, item: item, mode: mode)
-            block.model?.materials = [RoomScene.material(color, roughness: 0.5, glow: selected)]
-            block.scale = selected ? SIMD3(repeating: 1.06) : .one
+
+            if let prototype = prototypes[id] {
+                // Captured model: show it on a colored base; the block becomes a
+                // translucent highlight when selected.
+                let turns = models.extraTurns(for: id)
+                let current = container.findEntity(named: "model")
+                if current?.components[ModelSourceComponent.self] != ModelSourceComponent(source: prototype.name, turns: turns) {
+                    RoomScene.attachModel(prototype, to: container, object: object, extraQuarterTurns: turns)
+                    container.findEntity(named: "model")?.components.set(ModelSourceComponent(source: prototype.name, turns: turns))
+                }
+                base.isEnabled = true
+                base.model?.materials = [RoomScene.material(color, roughness: 0.6, glow: selected)]
+                block.isEnabled = selected
+                var highlight = RoomScene.material(color, roughness: 0.4, glow: true)
+                highlight.blending = .transparent(opacity: .init(floatLiteral: 0.22))
+                block.model?.materials = [highlight]
+                block.scale = .one
+            } else {
+                container.children.filter { $0.name == "model" }.forEach { $0.removeFromParent() }
+                base.isEnabled = false
+                block.isEnabled = true
+                block.model?.materials = [RoomScene.material(color, roughness: 0.5, glow: selected)]
+                block.scale = selected ? SIMD3(repeating: 1.06) : .one
+            }
 
             var text = item?.name ?? object.category.capitalized
             if item?.maybeSentimental == true { text += " ♥" }
-            RoomScene.setLabel((showLabels || selected) ? text : nil, on: block, above: object, fontSize: labelSize)
+            RoomScene.setLabel((showLabels || selected) ? text : nil, on: container, above: object, fontSize: labelSize)
         }
     }
+}
+
+/// Tags a placed model with the file and rotation it was built from, so
+/// updates only rebuild it when one of those changes.
+private struct ModelSourceComponent: Component, Equatable {
+    var source: String
+    var turns: Int
 }
