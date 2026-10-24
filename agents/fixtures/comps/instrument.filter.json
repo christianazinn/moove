@@ -1,0 +1,16 @@
+{
+  "b3401c7817312de2": {
+    "item": "instrument; category instrument; 0.38 x 1.02 x 0.12 m (W x H x D)",
+    "n": 18,
+    "keep": [
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+    ],
+    "reason": "Kept complete generic musical instrument listings; dropped the vintage collectible accordion, the instrument cable accessory, calculators, CDs, car instrument clusters, and apparel as different produ…",
+    "model": "claude-haiku-5-5"
+  }
+}

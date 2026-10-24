@@ -1,0 +1,13 @@
+{
+  "7b023e6a56508389": {
+    "item": "sink; category sink; 0.57 x 0.18 x 0.46 m (W x H x D)",
+    "n": 15,
+    "keep": [
+      11,
+      13,
+      15
+    ],
+    "reason": "Kept generic sink listings (11, 13, 15) as the same kind of product; dropped faucets, strainers, caddies, mats, accessories, a wood vessel project, a laundry sink model, a Kohler artist edition, a Fr…",
+    "model": "claude-haiku-5-5"
+  }
+}

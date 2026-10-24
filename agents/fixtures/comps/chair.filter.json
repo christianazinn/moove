@@ -1,0 +1,29 @@
+{
+  "46f74c1291cfd318": {
+    "item": "chair; category chair; 0.55 x 1.13 x 0.64 m (W x H x D)",
+    "n": 9,
+    "keep": [
+      8
+    ],
+    "reason": "Dropped beanbag, dollhouse/toy chairs, vintage accessories, collectibles, dolls-house sets, a WWE ringside chair, a soda cup topper, and a music CD; only the portable camping chair is a plausible ord…",
+    "model": "claude-haiku-5-5"
+  },
+  "b74e2db7be74b683": {
+    "item": "chair; category chair; 0.70 x 1.10 x 0.70 m (W x H x D)",
+    "n": 9,
+    "keep": [
+      8
+    ],
+    "reason": "Dropped beanbag, dollhouse/toy chairs, collectibles, accessories, wicker set, promo cups, a music CD and similar unrelated items; kept only the folding camping chair as a plausibly same-kind generic …",
+    "model": "claude-haiku-5-5"
+  },
+  "464c86b8aa924c38": {
+    "item": "chair; category chair; 0.64 x 1.02 x 0.62 m (W x H x D)",
+    "n": 9,
+    "keep": [
+      8
+    ],
+    "reason": "Dropped beanbag, dollhouse/toy chairs and accessories, collectibles and vintage pieces, a sofa set, a cup topper, and a CD; only the camping chair is a plausible same-kind ordinary used chair.",
+    "model": "claude-haiku-5-5"
+  }
+}

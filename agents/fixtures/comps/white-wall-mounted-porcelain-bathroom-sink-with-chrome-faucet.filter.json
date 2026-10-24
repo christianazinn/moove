@@ -1,0 +1,13 @@
+{
+  "586abe8461bef071": {
+    "item": "white wall-mounted porcelain bathroom sink with chrome faucet; category appliance; material white porcelain, chrome faucet; 0.55 x 0.30 x 0.44 m (W x H x D); condition good",
+    "n": 7,
+    "keep": [
+      1,
+      2,
+      6
+    ],
+    "reason": "Dropped 3 (pedestal sink, different mount), 4 (vintage listing), 5 (price and wording suggest a part or vanity-only item, not a comparable sink), and 7 (luxury vanity/console base, different product).",
+    "model": "claude-haiku-5-5"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "63dd66150310c3ed": {
+    "item": "lamp; category lamp; 0.30 x 1.70 x 0.30 m (W x H x D)",
+    "n": 17,
+    "keep": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      17
+    ],
+    "reason": "Dropped vintage/antique, designer, parts/shades, unrelated items (car headlight, teapot, candle lamp, desk study lamp, shades only); kept generic floor/lamp listings of the 1.70 m standing lamp type.",
+    "model": "claude-haiku-5-5"
+  }
+}

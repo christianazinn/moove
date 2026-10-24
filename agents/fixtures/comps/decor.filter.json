@@ -1,0 +1,20 @@
+{
+  "6614112ec1aaf4f4": {
+    "item": "decor; category decor; 0.40 x 0.50 x 0.05 m (W x H x D)",
+    "n": 10,
+    "keep": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "reason": "Item is generic 'decor' with no named product line or model, so no listing can be confidently matched as the same product; keeping all as broad decor comparables, though several are clearly different…",
+    "model": "claude-haiku-5-5"
+  }
+}
