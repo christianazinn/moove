@@ -14,6 +14,15 @@ export interface Sam3dRequest {
   imageUrl: string;
   /** What to segment, e.g. "office chair". */
   prompt: string;
+  /** The object's box in pixels, when we know it (steers segmentation to the right object). */
+  box?: Sam3dBox;
+}
+
+export interface Sam3dBox {
+  x_min: number;
+  y_min: number;
+  x_max: number;
+  y_max: number;
 }
 
 export interface Sam3dResult {
@@ -32,6 +41,16 @@ export function glbUrlFrom(output: unknown): string | undefined {
   return o?.model_glb?.url ?? o?.individual_glbs?.find(g => g?.url)?.url;
 }
 
+/** The fal request body. A box goes in as one box prompt for object 0, next to the text prompt. */
+export function requestBody(req: Sam3dRequest): Record<string, unknown> {
+  return {
+    image_url: req.imageUrl,
+    prompt: req.prompt,
+    ...(req.box ? { box_prompts: [{ ...req.box, object_id: 0 }] } : {}),
+    export_textured_glb: true,
+  };
+}
+
 export async function reconstruct(
   req: Sam3dRequest,
   opts: { key?: string; fetch?: Fetch; pollMs?: number; timeoutMs?: number } = {}
@@ -45,7 +64,7 @@ export async function reconstruct(
   const submit = await f(`${QUEUE}/${SAM3D_MODEL}`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ image_url: req.imageUrl, prompt: req.prompt, export_textured_glb: true }),
+    body: JSON.stringify(requestBody(req)),
     signal: AbortSignal.timeout(60_000),
   });
   if (!submit.ok) throw new Sam3dError(`submit: ${submit.status} ${await submit.text()}`);
