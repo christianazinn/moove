@@ -4,6 +4,7 @@ import type { Conn } from '../spacetime.js';
 import type { Item } from '../module_bindings/types.js';
 import { config } from '../config.js';
 import { logEvent } from '../events.js';
+import { renameMisfit } from '../sizefit.js';
 import { loadImage, structuredCall, type ImageInput } from '../integrations/anthropic.js';
 
 const ItemDetails = z.object({
@@ -62,17 +63,23 @@ async function identify(conn: Conn, it: Item): Promise<void> {
       text: `Scan says: category "${it.category}", ${it.widthM.toFixed(2)} x ${it.depthM.toFixed(2)} x ${it.heightM.toFixed(2)} m (W x D x H). Current name: "${it.name}".`,
       images,
     });
+    // A name that can't fit the measured box (a 1.5 m "pillow", #267) isn't applied: '' keeps the
+    // item's name and category; material, condition and the rest still are.
+    const misfit = renameMisfit(it, d);
+    if (misfit) {
+      logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'result', message: misfit.message, refTable: 'item', refId: it.id, data: { sizeCheck: 'rename_rejected', proposed: d.name, proposedCategory: d.category, reason: misfit.reason } });
+    }
     conn.reducers.setItemDetails({
       itemId: it.id,
-      name: d.name,
-      category: d.category,
+      name: misfit ? '' : d.name,
+      category: misfit ? '' : d.category,
       material: d.material,
       brand: d.brand,
       condition: d.condition,
       fragile: d.fragile,
       maybeSentimental: d.maybeSentimental,
     });
-    logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'result', message: `${d.name} (${d.condition}${d.brand ? `, ${d.brand}` : ''})`, refTable: 'item', refId: it.id, data: d });
+    logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'result', message: `${misfit ? it.name : d.name} (${d.condition}${d.brand ? `, ${d.brand}` : ''})`, refTable: 'item', refId: it.id, data: d });
   } catch (err) {
     conn.reducers.setItemStage({ itemId: it.id, stage: 'failed', field: 'details' });
     logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'error', message: String(err), refTable: 'item', refId: it.id });
