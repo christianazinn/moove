@@ -126,6 +126,8 @@ public protocol SyncBackend: AnyObject, Sendable {
     func addItemPhoto(itemId: UInt64, url: String) async throws
     func setDisposition(itemId: UInt64, disposition: Disposition) async throws
     func setSentimental(itemId: UInt64, maybeSentimental: Bool) async throws
+    /// `set_item_colors` (#110): colors sampled from the scan's frames. nil clears them.
+    func setItemColors(itemId: UInt64, colors: ItemColors?) async throws
 
     /// Shopping list (#15): the user's edit step on the list the shopping agent generated.
     func addShoppingItem(name: String, category: String, reason: String) async throws

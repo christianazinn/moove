@@ -25,15 +25,22 @@ public struct LayoutItem: Sendable, Hashable, Identifiable {
         self.secondaryColor = secondaryColor
     }
 
+    /// The item with its stored colors (`item.colors`, from `set_item_colors`), if any.
     public init(_ item: Item) {
-        self.init(id: item.id, name: item.name, category: item.category, widthM: item.widthM, depthM: item.depthM, heightM: item.heightM)
+        self.init(item, colors: nil)
     }
 
-    /// The item with its scanned colors (matched by `scanObjectId`), if `colors` has any for it.
+    /// The item with its scanned colors (matched by `scanObjectId`) if `colors` has any for it,
+    /// else its stored colors (`item.colors`).
     public init(_ item: Item, colors: ScanColors?) {
-        let c = colors?.colors(for: item)
+        let primary: VoxelColor?, secondary: VoxelColor?
+        if let c = colors?.colors(for: item) {
+            (primary, secondary) = (c.primary, c.secondary)
+        } else {
+            (primary, secondary) = (item.colors?.primary, item.colors?.secondary)
+        }
         self.init(id: item.id, name: item.name, category: item.category, widthM: item.widthM, depthM: item.depthM, heightM: item.heightM,
-                  primaryColor: c?.primary, secondaryColor: c?.secondary)
+                  primaryColor: primary, secondaryColor: secondary)
     }
 }
 
