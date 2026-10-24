@@ -20,10 +20,14 @@ struct RootView: View {
                 .tag("review")
                 .tabItem { Label("Review", systemImage: "checklist") }
             NavigationStack { screen(NewHomeView()) }
+                .tag("newhome")
                 .tabItem { Label("New Home", systemImage: "house") }
             NavigationStack { screen(ListingsView()) }
                 .tag("listings")
                 .tabItem { Label("Listings", systemImage: "tag") }
+            NavigationStack { screen(SummaryView()) }
+                .tag("summary")
+                .tabItem { Label("Summary", systemImage: "chart.bar.doc.horizontal") }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .task { await store.connect(token: nil) }
