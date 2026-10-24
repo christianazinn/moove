@@ -23,6 +23,8 @@ struct ListingImportView: View {
     @State private var useScraper = false
     @State private var phase: Phase = .idle
     @State private var errorText: String?
+    /// The last build couldn't reach the worker, so "Try again" is offered next to the estimate.
+    @State private var workerFailed = false
     @State private var result: ImportResult?
     @State private var clipboardHasLink = false
 
@@ -143,17 +145,22 @@ struct ListingImportView: View {
                     Label(shots.isEmpty ? "Add" : "Change", systemImage: "photo.on.rectangle")
                 }
                 .buttonStyle(.pill(.outline, compact: true))
+                .disabled(!client.isConfigured)
+                .accessibilityLabel(shots.isEmpty ? "Add floor plan screenshots" : "Change floor plan screenshots")
             }
-            Text("Optional. Claude reads the room sizes.")
+            Text(client.isConfigured ? "Optional. Claude reads the room sizes." : "Needs Moove's server, which isn't set up.")
                 .sansText(14)
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
             if loadingShots {
-                ProgressView().padding(.vertical, 8)
+                ProgressView("Loading screenshots…")
+                    .monoText(13.5)
+                    .foregroundStyle(Theme.muted)
+                    .padding(.vertical, 8)
             } else if !shots.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
-                        ForEach(shots) { shot in
+                        ForEach(Array(shots.enumerated()), id: \.element.id) { index, shot in
                             Image(uiImage: shot.thumbnail)
                                 .resizable()
                                 .scaledToFill()
@@ -161,7 +168,7 @@ struct ListingImportView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
                                     .strokeBorder(Theme.line, lineWidth: 1))
-                                .accessibilityLabel("Floor plan screenshot")
+                                .accessibilityLabel("Floor plan screenshot \(index + 1) of \(shots.count)")
                         }
                     }
                 }
@@ -171,14 +178,15 @@ struct ListingImportView: View {
 
     private var scraperSection: some View {
         let zillow = link?.isZillow ?? false
+        let note = !client.isConfigured ? "Needs Moove's server." : zillow ? "Demo only." : "Zillow links only. Demo only."
         return VStack(alignment: .leading, spacing: 6) {
             Toggle(isOn: $useScraper) {
                 Text("Fetch details with Apify")
                     .blockTitle()
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .disabled(!zillow)
-            Text(zillow ? "Demo only." : "Zillow links only. Demo only.")
+            .disabled(!zillow || !client.isConfigured)
+            Text(note)
                 .monoMeta()
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -194,18 +202,30 @@ struct ListingImportView: View {
             } label: {
                 HStack(spacing: 8) {
                     if phase.isBusy { ProgressView().tint(Theme.accentInk) }
-                    Text(phase.isBusy ? phase.label : "Build floor plan")
+                    Text(phase.isBusy ? phase.label : client.isConfigured ? "Build floor plan" : "Estimate floor plan")
                 }
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.pill)
             .disabled(phase.isBusy || loadingShots)
 
+            if !client.isConfigured {
+                // No worker URL in this build or from `service_config`: say so, and estimate on device.
+                Text("Moove's server isn't set up, so the plan is estimated on this phone.")
+                    .sansText(14)
+                    .foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if let errorText {
                 Text(errorText)
                     .sansText(14)
                     .foregroundStyle(Theme.danger)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            if workerFailed && !phase.isBusy {
+                Button("Try again") { Task { await build() } }
+                    .buttonStyle(.pill(.outline, compact: true))
             }
         }
     }
@@ -223,12 +243,14 @@ struct ListingImportView: View {
                 .frame(maxWidth: .infinity)
                 .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
                 .accessibilityLabel("Floor plan sketch, \(result.plan.rooms.count) rooms")
+                .accessibilityAddTraits(.isImage)
             VStack(alignment: .leading, spacing: 4) {
                 Text(result.name).blockTitle().fixedSize(horizontal: false, vertical: true)
                 if let address = result.address, address != result.name {
                     Text(address).sansText(14).foregroundStyle(Theme.muted)
                 }
                 Text(Self.meta(result.plan)).monoMeta()
+                    .accessibilityLabel("\(result.plan.rooms.count) room\(result.plan.rooms.count == 1 ? "" : "s"), \(Spoken.area(result.plan.totalAreaM2))")
             }
             .accessibilityElement(children: .combine)
             if !result.notes.isEmpty {
@@ -332,6 +354,7 @@ struct ListingImportView: View {
 
     private func build() async {
         errorText = nil
+        workerFailed = false
         var problems: [String] = []
         var response: ListingImportClient.Response?
 
@@ -342,7 +365,7 @@ struct ListingImportView: View {
                 do {
                     imageURLs.append(try await client.upload(imageData: shot.jpeg, contentType: "image/jpeg").absoluteString)
                 } catch {
-                    problems.append("Couldn't upload a screenshot: \(error.localizedDescription)")
+                    problems.append("Couldn't upload the screenshots. \(Self.plain(error))")
                     break
                 }
             }
@@ -359,11 +382,12 @@ struct ListingImportView: View {
             do {
                 response = try await client.importHome(request)
             } catch {
-                problems.append("Couldn't reach Moove's worker (\(error.localizedDescription)). Built an estimate instead.")
+                problems.append("\(Self.plain(error)) Showing an estimate instead.")
+                workerFailed = true
             }
         }
 
-        let estimateNote = client.isConfigured ? nil : "Offline: estimated from beds, baths and size."
+        let estimateNote = client.isConfigured ? nil : "Estimated on this phone from beds, baths and size."
         let resolved = resolve(response, extraNote: estimateNote)
         withAnimation { result = resolved }
         errorText = problems.isEmpty ? nil : problems.joined(separator: "\n")
@@ -394,6 +418,24 @@ struct ListingImportView: View {
         )
         return ImportResult(name: name, address: address, plan: plan, method: .estimated, notes: notes,
                             simulated: response?.simulated ?? false, source: source)
+    }
+
+    /// One short, plain sentence for a failed worker call (no URLs or codes).
+    private static func plain(_ error: Error) -> String {
+        if let error = error as? URLError {
+            switch error.code {
+            case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed: return "You're offline."
+            case .timedOut: return "Moove's server took too long."
+            default: return "Couldn't reach Moove's server."
+            }
+        }
+        if let error = error as? ListingImportClient.ClientError {
+            switch error {
+            case .notConfigured: return "Moove's server isn't set up."
+            case .badStatus, .badResponse: return "Moove's server had a problem."
+            }
+        }
+        return "Couldn't reach Moove's server."
     }
 
     /// "123 Main St, Berkeley, CA 94704" -> "123 Main St".

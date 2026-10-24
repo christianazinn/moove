@@ -11,6 +11,16 @@ struct ManualRoomsEditor: View {
     private var plan: FloorPlan { ManualFloorPlan.build(rooms) }
     private var canSave: Bool { !plan.rooms.isEmpty && plan.issues().isEmpty }
 
+    private var problem: String? {
+        switch plan.issues().first {
+        case nil: nil
+        case .noRooms?: "Add a room to save."
+        case let .tooFewPoints(room)?, let .zeroArea(room)?: "\(room) is too small."
+        case let .duplicateName(room)?: "Two rooms are named \(room). Rename one."
+        case let .overlap(a, b)?: "\(a) and \(b) overlap."
+        }
+    }
+
     var body: some View {
         Form {
             Section {
@@ -35,8 +45,18 @@ struct ManualRoomsEditor: View {
                     .frame(height: 200)
                     .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
             } footer: {
-                Text("\(plan.rooms.count) rooms · \(plan.totalAreaM2, format: .number.precision(.fractionLength(0))) m²")
-                    .monoMeta()
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(plan.rooms.count) rooms · \(plan.totalAreaM2, format: .number.precision(.fractionLength(0))) m²")
+                        .monoMeta()
+                        .accessibilityLabel("\(plan.rooms.count) rooms, \(Spoken.area(plan.totalAreaM2))")
+                    // Why Save is off, in one line.
+                    if let problem {
+                        Text(problem)
+                            .monoText(13.5)
+                            .foregroundStyle(Theme.danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
             .listRowBackground(Theme.surface)
             Section {
@@ -97,18 +117,20 @@ private struct RoomRow: View {
 
     private func dimension(_ label: String, value: Binding<Double>) -> some View {
         HStack(spacing: 6) {
-            Text(label).monoText(11.5).foregroundStyle(Theme.muted)
+            Text(label).monoText(11.5).foregroundStyle(Theme.muted).accessibilityHidden(true)
             TextField(label, value: value, format: .number.precision(.fractionLength(1)))
                 .monoText(14)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.center)
                 .accessibilityLabel(label == "W" ? "Width in meters" : "Depth in meters")
-                .frame(width: 56, height: 36)
+                .frame(minWidth: 56, minHeight: 36)
+                .fixedSize()
                 .background(Theme.bg, in: RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.line))
             Stepper(label, value: value, in: 0.5...30, step: 0.5)
                 .labelsHidden()
                 .accessibilityLabel(label == "W" ? "Width" : "Depth")
+                .accessibilityValue("\(value.wrappedValue.formatted(.number.precision(.fractionLength(0...1)))) meters")
         }
     }
 }
