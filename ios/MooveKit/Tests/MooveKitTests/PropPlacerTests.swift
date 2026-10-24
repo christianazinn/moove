@@ -228,6 +228,66 @@ import Testing
         #expect(abs(tall[0].elevationM! - (1.45 - 0.25)) < 1e-9)
     }
 
+    // Scanned positions (Lisa's iPad scan): what the scan located stays where it was seen.
+    static let scanRoom = FloorPlan(rooms: [.rectangle("Room", x: 0, y: 0, width: 4, depth: 4)])
+    static let scanItems: [LayoutItem] = [
+        LayoutItem(id: 1, name: "Oak desk", category: "desk", widthM: 1.2, depthM: 0.6, heightM: 0.75),
+        LayoutItem(id: 2, name: "Nightstand", category: "storage", widthM: 0.45, depthM: 0.4, heightM: 0.55),
+        LayoutItem(id: 3, name: "Table lamp", category: "lamp", widthM: 0.3, depthM: 0.3, heightM: 0.45),
+        LayoutItem(id: 4, name: "Stack of books", category: "books", widthM: 0.3, depthM: 0.22, heightM: 0.2),
+        LayoutItem(id: 5, name: "Abstract art print", category: "art", widthM: 0.6, depthM: 0.04, heightM: 0.5),
+    ]
+    static let desk = Placement(itemId: 1, room: "Room", x: 1.0, y: 3.0)
+    static let nightstand = Placement(itemId: 2, room: "Room", x: 3.5, y: 0.5)
+
+    @Test func scannedLampOnTheFloorStaysPut() {
+        let lamp = Placement(itemId: 3, room: "Room", x: 2.5, y: 2.0, rotationDeg: 90)
+        let out = PropPlacer(plan: Self.scanRoom).place([Self.desk, Self.nightstand, lamp], items: Self.scanItems, scanned: [1, 2, 3])
+        #expect(out[2] == lamp, "not moved onto the nightstand")
+        // Unscanned, the same lamp still goes to the nightstand.
+        let free = PropPlacer(plan: Self.scanRoom).place([Self.desk, Self.nightstand, lamp], items: Self.scanItems, scanned: [1, 2])
+        #expect(free[2].onTopOf == 2)
+    }
+
+    @Test func scannedLampOverADeskSitsOnItAtItsOwnSpot() {
+        let lamp = Placement(itemId: 3, room: "Room", x: 1.4, y: 3.1, rotationDeg: 30)
+        let out = PropPlacer(plan: Self.scanRoom).place([Self.desk, Self.nightstand, lamp], items: Self.scanItems, scanned: [1, 2, 3])
+        let deskTop = VoxelModels.buildWithSurfaces(VoxelItemSpec(Self.scanItems[0])).surfaces.map(\.y).max()!
+        #expect(out[2].onTopOf == 1, "on the desk, not the nightstand")
+        #expect(out[2].x == 1.4 && out[2].y == 3.1 && out[2].rotationDeg == 30)
+        #expect(abs(out[2].elevationM! - Double(deskTop) * Self.V) < 1e-9)
+        // Just past the desk's edge (within 15 cm) still counts; far past it doesn't.
+        let edge = Placement(itemId: 3, room: "Room", x: 1.0, y: 3.38)
+        #expect(PropPlacer(plan: Self.scanRoom).place([Self.desk, edge], items: Self.scanItems, scanned: [1, 3])[1].onTopOf == 1)
+        let off = Placement(itemId: 3, room: "Room", x: 1.0, y: 3.6)
+        #expect(PropPlacer(plan: Self.scanRoom).place([Self.desk, off], items: Self.scanItems, scanned: [1, 3])[1] == off)
+    }
+
+    @Test func unscannedBookStillGoesOnASurfaceAroundAScannedLamp() {
+        let lamp = Placement(itemId: 3, room: "Room", x: 1.0, y: 3.0)
+        let book = Placement(itemId: 4, room: "Room", x: 2, y: 2)
+        let out = PropPlacer(plan: Self.scanRoom).place([Self.desk, Self.nightstand, lamp, book], items: Self.scanItems, scanned: [1, 2, 3])
+        #expect(out[2].onTopOf == 1 && out[2].x == 1.0 && out[2].y == 3.0)
+        #expect(out[3].onTopOf != nil, "the book found a surface")
+        if out[3].onTopOf == 1 { #expect(hypot(out[3].x - 1.0, out[3].y - 3.0) > 0.2, "not on top of the lamp") }
+    }
+
+    @Test func scannedWallArtKeepsItsWallAndSpot() {
+        // Scanned near the left wall (x = 0) at y = 1.2; the nearest-wall re-hang would also pick
+        // x = 0, but an unscanned piece blocked there would slide. Scanned ones keep y.
+        let art = Placement(itemId: 5, room: "Room", x: 0.1, y: 1.2, elevationM: 0.5)
+        let out = PropPlacer(plan: Self.scanRoom).place([art], items: Self.scanItems, scanned: [5])
+        #expect(out[0].isWallMounted)
+        #expect(abs(out[0].y - 1.2) < 1e-9 && out[0].x < 0.1)
+        #expect(out[0].elevationM == 0.5)
+        // A window over that spot doesn't push a scanned piece along the wall.
+        let windowed = FloorPlan(rooms: Self.scanRoom.rooms, windows: [WallOpening(from: PlanPoint(0, 0.8), to: PlanPoint(0, 1.6))])
+        let kept = PropPlacer(plan: windowed).place([art], items: Self.scanItems, scanned: [5])
+        #expect(abs(kept[0].y - 1.2) < 1e-9)
+        let slid = PropPlacer(plan: windowed).place([art], items: Self.scanItems)
+        #expect(abs(slid[0].y - 1.2) > 0.1)
+    }
+
     @Test func scanPropsWithoutPlacementsJoinTheRoom() {
         let (before, _) = Self.layout()
         let furniture = before.filter { [1, 2, 3, 4, 12, 13].contains($0.itemId) }
