@@ -43,7 +43,9 @@ struct SettingsView: View {
                             ForEach(DatabaseChoice.allCases) { databaseChoice($0) }
                         }
                         row("Status", statusText)
-                        row("Server", "\(AppConfig.current.spacetimeHost) / \(store.databaseName)")
+                        if store.backendKind == .spacetime {
+                            row("Server", "\(AppConfig.current.spacetimeHost) / \(store.databaseName)")
+                        }
                         if let me = store.snapshot.me {
                             row("Identity", String(me.prefix(16)) + "…")
                         }
@@ -53,7 +55,10 @@ struct SettingsView: View {
                         section("Worker") {
                             row("Agents", workerText)
                             row("Uploads", uploadsText)
+                            budgetRows
                         }
+                    } else if store.snapshot.serviceConfig.spendToday?.settingsRows() != nil {
+                        section("Budget (offline sample)") { budgetRows }
                     }
                 }
                 .padding(.horizontal, Theme.gutter)
@@ -112,6 +117,13 @@ struct SettingsView: View {
         }
         if let v = c.workerVersion { parts.append(v) }
         return parts.joined(separator: " · ")
+    }
+
+    /// Today's metered spend against the worker's daily caps (#220/#221). Hidden until announced.
+    @ViewBuilder private var budgetRows: some View {
+        if let rows = store.snapshot.serviceConfig.spendToday?.settingsRows() {
+            ForEach(rows, id: \.label) { row($0.label, $0.value) }
+        }
     }
 
     private var uploadsText: String {
