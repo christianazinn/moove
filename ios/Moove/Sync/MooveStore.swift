@@ -85,9 +85,20 @@ final class MooveStore {
             if token == nil { Keychain.set(result.token, for: .spacetimeToken) }
         } catch is CancellationError {
             // Superseded by a newer connect: its status wins.
+        } catch where token == nil && saved != nil && Self.isAuthRejection(error) {
+            // The saved guest token was signed by another server (a local `spacetime start`,
+            // the other database) or is no longer accepted, and the SDK would retry it forever.
+            // Start over with a new anonymous identity.
+            Keychain.set(nil, for: .spacetimeToken)
+            await connect(token: nil)
         } catch {
             status = .failed(error.localizedDescription)
         }
+    }
+
+    /// The server refused the WebSocket upgrade with 401 (the token's signature or claims).
+    static func isAuthRejection(_ error: Error) -> Bool {
+        String(describing: error).contains(" 401")
     }
 
     func disconnect() async {
