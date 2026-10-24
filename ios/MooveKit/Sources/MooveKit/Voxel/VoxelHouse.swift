@@ -4,7 +4,7 @@ import Foundation
 // buildHomeShell / buildFloor (static/scene/scene.js): a wooden plinth with a visible
 // ledge, oak plank floors (pale tile in wet rooms), cream tiled cut-away walls two voxels
 // thick with darker wood baseboards, door gaps and windows with a sill and glass.
-// `buildLayers` adds the exterior walls above the cut, one piece per facing, so the app can
+// `buildLayers` splits off the exterior walls' tall and low looks, per facing, so the app can
 // stand the back walls at full height and keep the near ones low (classic dollhouse).
 
 public enum VoxelHouse {
@@ -104,59 +104,95 @@ public enum VoxelHouse {
 
     /// A piece of the shell stored apart from the base grid. `offset` is its voxel (0,0,0)
     /// in house-grid voxels, so its world corner is `origin(of:) + offset * voxelSize`.
+    ///
+    /// `tall` pieces are the full-height look of the exterior walls in `facings` (the walls above
+    /// the cut, the window glass through the cut, curtains hung at the window head); the matching
+    /// low piece (`tall == false`) is their cut-away look (the cap row at the cut, the frame bar
+    /// under it, curtains hung from the cut). A wall corner shared by two facings is its own
+    /// piece with both, so no voxel is ever drawn twice: see `isShown`.
     public struct Layer: Sendable, Hashable {
         public var grid: VoxelGrid
         public var offset: SIMD3<Int>
+        public var facings: Set<Facing>
+        public var tall: Bool
+
+        /// A tall piece shows while any of its facings is a back wall (`Facing.isBack`); a low
+        /// piece while none is. So exactly one of each pair is up for any camera.
+        public func isShown(viewFromTarget v: SIMD2<Double>) -> Bool {
+            facings.contains { $0.isBack(viewFromTarget: v) } == tall
+        }
     }
 
-    /// The dollhouse split for a camera that orbits: `base` is exactly `build(plan, cutawayHeightM:)`
-    /// (floors, plinth, every wall up to the cut), and `upper[f]` is the rest of the exterior walls
-    /// whose outward normal is `f`, from the cut up to `fullHeightM` (default: the plan's
-    /// `wallHeightM`; scans carry their measured height), with windows (glass up to
-    /// `openingTopM`) and door heads. A renderer shows `upper[f]` only while `f` points away
-    /// from the camera, so the back walls stand full height and the near ones stay low.
+    /// The full wall height drawn for a plan: its `wallHeightM` (a scan's measured height; 2.6 m
+    /// for the demo house), except that a scan reporting more than 3 m (a vaulted or misread
+    /// ceiling) is drawn at 2.8 m, which reads better in the dollhouse.
+    public static func displayWallHeightM(_ plan: FloorPlan) -> Double {
+        plan.wallHeightM > 3.0 ? 2.8 : plan.wallHeightM
+    }
+
+    /// The dollhouse split for a camera that orbits. `base` is everything that looks the same
+    /// whichever walls are up (floors, plinth, interior walls up to the cut, the exterior walls
+    /// below the cut's cap and frame rows); `layers` holds, per exterior facing (or corner shared
+    /// by two), a tall piece (the wall up to `fullHeightM`, default `displayWallHeightM(plan)`,
+    /// windows glazed up to `openingTopM` with one frame there, door heads, curtains at the window
+    /// head) and a low piece (the cut-away cap, window frame bar and curtains at the cut). A
+    /// renderer shows each piece by `Layer.isShown`: back walls stand full height as one continuous
+    /// wall, near ones stay low. `base` plus the low pieces is exactly `build(plan, cutawayHeightM:)`.
     ///
     /// Interior partitions stay at the cut on purpose: a tall interior wall would be the back
     /// wall of one room and the near wall of its neighbor, hiding the room behind it.
-    /// Facings with no exterior wall are left out.
     public static func buildLayers(_ plan: FloorPlan, cutawayHeightM: Double = 1.1, fullHeightM: Double? = nil,
                                    realism: Bool = true, wallColor: VoxelColor? = nil,
-                                   floorColor: VoxelColor? = nil) -> (base: VoxelGrid, upper: [Facing: Layer]) {
-        let full = fullHeightM ?? plan.wallHeightM
-        let s = shell(plan, cutawayHeightM: cutawayHeightM, fullHeightM: full, realism: realism,
+                                   floorColor: VoxelColor? = nil) -> (base: VoxelGrid, layers: [Layer]) {
+        let full = fullHeightM ?? displayWallHeightM(plan)
+        let low = shell(plan, cutawayHeightM: cutawayHeightM, fullHeightM: nil, realism: realism,
+                        wallColor: wallColor, floorColor: floorColor).grid
+        let t = shell(plan, cutawayHeightM: cutawayHeightM, fullHeightM: full, realism: realism,
                       wallColor: wallColor, floorColor: floorColor)
-        let g = s.grid
-        let cutY = baseVoxels + s.cutRows
-        let base = g.cropped(x: 0..<g.nx, y: 0..<min(cutY, g.ny), z: 0..<g.nz)
-        guard g.ny > cutY else { return (base, [:]) }
-        var upper: [Facing: Layer] = [:]
-        for f in Facing.allCases {
-            var i0 = g.nx, i1 = -1, k0 = g.nz, k1 = -1
-            for k in 0..<g.nz {
-                for i in 0..<g.nx where s.facing[k * g.nx + i] & f.bit != 0 {
-                    i0 = min(i0, i); i1 = max(i1, i); k0 = min(k0, k); k1 = max(k1, k)
+        let tall = t.grid
+        guard tall.ny > low.ny else { return (low, []) }
+        let nx = tall.nx, nz = tall.nz
+        var base = low
+        // Voxels that differ between the two looks, per column facing mask: (i, y, k, low, tall).
+        var diffs: [UInt8: [(SIMD3<Int>, VoxelColor?, VoxelColor?)]] = [:]
+        for k in 0..<nz {
+            for i in 0..<nx {
+                let mask = t.facing[k * nx + i] | t.curtainFacing[k * nx + i]
+                guard mask != 0 else { continue }
+                for y in 0..<tall.ny {
+                    let l = low[i, y, k], h = tall[i, y, k]
+                    guard l != h else { continue }
+                    diffs[mask, default: []].append((SIMD3(i, y, k), l, h))
+                    base[i, y, k] = nil
                 }
             }
-            guard i1 >= i0 else { continue }
-            var layer = g.cropped(x: i0..<(i1 + 1), y: cutY..<g.ny, z: k0..<(k1 + 1))
-            // Keep only this facing's columns (corners can belong to two facings).
-            for k in k0...k1 {
-                for i in i0...i1 where s.facing[k * g.nx + i] & f.bit == 0 {
-                    for y in 0..<layer.ny { layer[i - i0, y, k - k0] = nil }
-                }
-            }
-            upper[f] = Layer(grid: layer, offset: SIMD3(i0, cutY, k0))
         }
-        return (base, upper)
+        var layers: [Layer] = []
+        for mask in diffs.keys.sorted() {
+            let facings = Set(Facing.allCases.filter { mask & $0.bit != 0 })
+            for isTall in [true, false] {
+                let cells = diffs[mask]!.compactMap { p, l, h in (isTall ? h : l).map { (p, $0) } }
+                guard let first = cells.first?.0 else { continue }
+                var lo = first, hi = first
+                for (p, _) in cells { lo = pointwiseMin(lo, p); hi = pointwiseMax(hi, p) }
+                var grid = VoxelGrid(nx: hi.x - lo.x + 1, ny: hi.y - lo.y + 1, nz: hi.z - lo.z + 1)
+                for (p, color) in cells { grid[p.x - lo.x, p.y - lo.y, p.z - lo.z] = color }
+                layers.append(Layer(grid: grid, offset: lo, facings: facings, tall: isTall))
+            }
+        }
+        return (base, layers)
     }
 
     /// Top of door gaps and window glass in the upper walls, above the floor.
     public static let openingTopM = 2.05
 
-    /// The shell as one grid up to `fullHeightM` (nil: up to the cut, and no upper walls),
-    /// plus each column's exterior-wall facings (`Facing.bit`s).
+    /// The shell as one grid. With `fullHeightM` nil every wall is cut away (the low look); else
+    /// the exterior walls stand full height (the tall look) and curtains on them hang from the
+    /// window head. Also returns each column's exterior-wall facings (`Facing.bit`s; all zero in
+    /// the low look) and, per column, the facing of the wall whose curtain is there.
     static func shell(_ plan: FloorPlan, cutawayHeightM: Double, fullHeightM: Double?, realism: Bool,
-                      wallColor: VoxelColor?, floorColor: VoxelColor?) -> (grid: VoxelGrid, facing: [UInt8], cutRows: Int) {
+                      wallColor: VoxelColor?, floorColor: VoxelColor?)
+        -> (grid: VoxelGrid, facing: [UInt8], curtainFacing: [UInt8]) {
         func tint(_ c: VoxelColor, _ f: Double) -> VoxelColor { VoxelColor(max(1, shade(Int(c & 0xFFFFFF), f))) }
         let wallTiles = wallColor.map { [tint($0, 1), tint($0, 0.97), tint($0, 1.02)] } ?? Palette.wallTile
         let wallGrout = wallColor.map { tint($0, 0.93) } ?? Palette.wallGrout
@@ -297,60 +333,35 @@ public enum VoxelHouse {
             }
         }
 
-        // 5. Fill.
+        // 5. Fill. Exterior walls (`facing` set, only when `fullHeightM` is given) run as one
+        // continuous wall up to a cap at full height: no cap row at the cut, doors open up to
+        // `openingTopM` and windows run glass from the sill to one frame there. Every other wall
+        // (and every wall of the low variant) stops at the cut with a cap, windows framed under it.
         let sillK = min(wallRows - 4, Int(sillHeightM / V))
         let hasWindows = sillK >= 1
         let openingRows = min(VoxelGrid.count(openingTopM), fullRows - 2)
-        // Upper exterior walls: tiles continue to a cap at full height; doors stay open up to
-        // `openingTopM` and windows run glass up to a frame there.
-        func fillUpper(_ i: Int, _ k: Int) {
-            let c = k * nx + i
-            let along = wallAxis[c] == 1 ? i : k, axis = wallAxis[c]
-            guard facing[c] != 0 else { return }
-            for row in wallRows..<fullRows {
-                var color: VoxelColor
-                if row == fullRows - 1 {
-                    color = wallCap
-                } else {
-                    let t = row - 2, s = wallTileSize
-                    color = along % s == 0 || t % s == 0
-                        ? wallGrout
-                        : wallTiles[Int(hash(along / s, t / s, Int(axis)) * Double(wallTiles.count))]
-                }
-                switch opening[c] {
-                case .door where row < openingRows:
-                    continue
-                case let .window(frame) where hasWindows && row < openingRows:
-                    color = frame || row == openingRows - 1 ? Palette.windowFrame : Palette.glass
-                default: break
-                }
-                g[i, baseVoxels + row, k] = color
-            }
-        }
         for k in 0..<nz {
             for i in 0..<nx {
                 let c = k * nx + i
                 let axis = wallAxis[c], r = roomAt[c]
                 g[i, 0, k] = axis == 0 && r < 0 ? Palette.plinthLedge : Palette.plinth
                 if axis != 0 {
-                    if case .door = opening[c] {
-                        g[i, 1, k] = Palette.threshold
-                        fillUpper(i, k)
-                        continue
-                    }
-                    g[i, 1, k] = Palette.plinth
+                    if case .door = opening[c] { g[i, 1, k] = Palette.threshold } else { g[i, 1, k] = Palette.plinth }
                 } else if r >= 0 {
                     g[i, 1, k] = floorVoxel(i, k, room: r)
                 }
                 if sillLip[c], hasWindows { g[i, baseVoxels + sillK, k] = Palette.sill }
                 guard axis != 0 else { continue }
+                let tall = facing[c] != 0
+                let top = tall ? fullRows : wallRows
+                // Window glass / door gap rows end here (the head frame is the row under it).
+                let head = tall ? openingRows : wallRows - 1
                 let along = axis == 1 ? i : k
-                for row in 0..<wallRows {
-                    let y = baseVoxels + row
+                for row in 0..<top {
                     var color: VoxelColor
                     if row < 2 {
                         color = Palette.baseboard
-                    } else if row == wallRows - 1 {
+                    } else if row == top - 1 {
                         color = wallCap
                     } else {
                         let t = row - 2, s = wallTileSize
@@ -358,20 +369,24 @@ public enum VoxelHouse {
                             ? wallGrout
                             : wallTiles[Int(hash(along / s, t / s, Int(axis)) * Double(wallTiles.count))]
                     }
-                    if hasWindows, case let .window(frame) = opening[c] {
+                    switch opening[c] {
+                    case .door where row < (tall ? openingRows : top):
+                        continue
+                    case let .window(frame) where hasWindows:
                         if row == sillK {
                             color = Palette.sill
-                        } else if row > sillK, row < wallRows - 1 {
-                            color = frame || row == wallRows - 2 ? Palette.windowFrame : Palette.glass
+                        } else if row > sillK, row < head {
+                            color = frame || row == head - 1 ? Palette.windowFrame : Palette.glass
                         }
+                    default: break
                     }
-                    g[i, y, k] = color
+                    g[i, baseVoxels + row, k] = color
                 }
-                fillUpper(i, k)
             }
         }
 
-        guard realism else { return (g, facing, wallRows) }
+        var curtainFacing = [UInt8](repeating: 0, count: nx * nz)
+        guard realism else { return (g, facing, curtainFacing) }
         func isDoor(_ c: Int) -> Bool { if case .door = opening[c] { return true } else { return false } }
 
         // 6. Protruding baseboards: two rows on every room column touching a (non-door) wall.
@@ -393,9 +408,10 @@ public enum VoxelHouse {
         }
 
         // 7. Curtains: folded cream strips on each side of every window, on the room side(s), hanging
-        // from a rod along the wall top (the cut) to the floor. Folds stand out one voxel more.
+        // from a rod to the floor. Folds stand out one voxel more. The rod runs along the wall top
+        // (the cut's cap row), or just above the window head on a full-height exterior wall;
+        // `curtainFacing` marks those curtains' columns with the wall's facing.
         if hasWindows {
-            let topY = baseVoxels + wallRows - 1 // rod layer (the cap row)
             func column(_ p: PlanPoint) -> Int? {
                 let i = Int(((p.x - ox) / V).rounded(.down)), k = Int(((p.y - oz) / V).rounded(.down))
                 guard i >= 0, k >= 0, i < nx, k < nz else { return nil }
@@ -406,6 +422,11 @@ public enum VoxelHouse {
                 guard len > 2 * V else { continue }
                 let dir = d * (1 / len), normal = PlanPoint(-dir.y, dir.x)
                 let n = max(3, Int((min(max(len * 0.22, 0.2), 0.36) / V).rounded()))
+                var wallFacing: UInt8 = 0
+                stamp(window.from, window.to, half: V) { i, k, t, len in
+                    if t > 0, t < len { wallFacing |= facing[k * nx + i] }
+                }
+                let topY = baseVoxels + (wallFacing != 0 ? openingRows : wallRows - 1) // rod layer
                 for side in [1.0, -1.0] {
                     let inward = normal * side
                     let mid = (window.from + window.to) * 0.5
@@ -423,6 +444,7 @@ public enum VoxelHouse {
                             guard let c = column(base + inward * (depth * V)), roomAt[c] >= 0, wallAxis[c] == 0 else { continue }
                             let i = c % nx, k = c / nx
                             for y in baseVoxels..<topY { g[i, y, k] = fold ? Palette.curtain : Palette.curtainFold }
+                            curtainFacing[c] |= wallFacing
                         }
                     }
                     // Rod with brass finials, one voxel past the panels.
@@ -432,13 +454,14 @@ public enum VoxelHouse {
                         if let c = column(window.from + dir * t + inward * (1.5 * V)), roomAt[c] >= 0, wallAxis[c] == 0 {
                             let end = t + reach < V || len + reach - t < V
                             g[c % nx, topY, c / nx] = end ? Palette.finial : Palette.curtainRod
+                            curtainFacing[c] |= wallFacing
                         }
                         t += V
                     }
                 }
             }
         }
-        return (g, facing, wallRows)
+        return (g, facing, curtainFacing)
     }
 
     /// World position (meters) of grid voxel (0,0,0)'s corner.

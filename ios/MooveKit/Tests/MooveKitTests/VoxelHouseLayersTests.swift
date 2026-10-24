@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import MooveKit
 
-/// The dollhouse split (`VoxelHouse.buildLayers`): base up to the cut, plus full-height
-/// exterior walls per facing that the app shows only on the side away from the camera.
+/// The dollhouse split (`VoxelHouse.buildLayers`): a shared base, plus a tall and a low look
+/// of the exterior walls per facing (and corner) that the app swaps as the camera orbits.
 @Suite struct VoxelHouseLayersTests {
     static let plan = DemoHouse.floorPlan
     static let layers = VoxelHouse.buildLayers(plan)
@@ -27,67 +27,129 @@ import Testing
         l.grid[i - l.offset.x, y - l.offset.y, k - l.offset.z]
     }
 
-    @Test func baseIsTheCutawayBuild() {
-        #expect(Self.layers.base == VoxelHouse.build(Self.plan))
-        let colored = VoxelHouse.buildLayers(Self.plan, wallColor: 0x6688AA, floorColor: 0x554433)
-        #expect(colored.base == VoxelHouse.build(Self.plan, wallColor: 0x6688AA, floorColor: 0x554433))
+    static let tallShell = VoxelHouse.shell(plan, cutawayHeightM: 1.1, fullHeightM: plan.wallHeightM, realism: true,
+                                            wallColor: nil, floorColor: nil).grid
+
+    /// Tall pieces whose facings include `f`.
+    static func tallPieces(_ f: VoxelHouse.Facing, _ r: (base: VoxelGrid, layers: [VoxelHouse.Layer]) = layers) -> [VoxelHouse.Layer] {
+        r.layers.filter { $0.tall && $0.facings.contains(f) }
     }
 
-    @Test func layersUnionIsTheFullHeightShell() {
-        let tall = VoxelHouse.shell(Self.plan, cutawayHeightM: 1.1, fullHeightM: Self.plan.wallHeightM, realism: true,
-                                    wallColor: nil, floorColor: nil).grid
-        let base = Self.layers.base
-        #expect(tall.ny == VoxelHouse.baseVoxels + VoxelGrid.count(2.6))
-        for y in 0..<tall.ny {
-            for k in 0..<tall.nz {
-                for i in 0..<tall.nx {
-                    let want = tall[i, y, k]
-                    if y < Self.cutY {
-                        if base[i, y, k] != want { Issue.record("base differs at \(i),\(y),\(k)"); return }
-                        continue
-                    }
-                    let got = Self.layers.upper.values.compactMap { Self.at($0, i, y, k) }
-                    if want == nil ? !got.isEmpty : (got.isEmpty || got.contains { $0 != want }) {
-                        Issue.record("upper differs at \(i),\(y),\(k): want \(String(describing: want)) got \(got)"); return
-                    }
+    /// The base plus the given pieces in one grid of `size`, and the number of voxels drawn twice.
+    static func compose(_ base: VoxelGrid, _ pieces: [VoxelHouse.Layer], size: VoxelGrid) -> (grid: VoxelGrid, doubled: Int) {
+        var g = VoxelGrid(nx: size.nx, ny: size.ny, nz: size.nz), doubled = 0
+        func put(_ i: Int, _ y: Int, _ k: Int, _ c: VoxelColor?) {
+            guard let c else { return }
+            if g[i, y, k] != nil { doubled += 1 }
+            g[i, y, k] = c
+        }
+        for y in 0..<base.ny { for k in 0..<base.nz { for i in 0..<base.nx { put(i, y, k, base[i, y, k]) } } }
+        for l in pieces {
+            for y in 0..<l.grid.ny { for k in 0..<l.grid.nz { for i in 0..<l.grid.nx {
+                put(i + l.offset.x, y + l.offset.y, k + l.offset.z, l.grid[i, y, k])
+            } } }
+        }
+        return (g, doubled)
+    }
+
+    /// The shell as seen with every facing low / every facing tall.
+    static func lowLook(_ r: (base: VoxelGrid, layers: [VoxelHouse.Layer]) = layers, size: VoxelGrid = tallShell) -> VoxelGrid {
+        compose(r.base, r.layers.filter { !$0.tall }, size: size).grid
+    }
+    static func tallLook(_ r: (base: VoxelGrid, layers: [VoxelHouse.Layer]) = layers, size: VoxelGrid = tallShell) -> VoxelGrid {
+        compose(r.base, r.layers.filter(\.tall), size: size).grid
+    }
+
+    static func sameVoxels(_ a: VoxelGrid, _ b: VoxelGrid) -> Bool {
+        let ny = max(a.ny, b.ny)
+        for y in 0..<ny { for k in 0..<a.nz { for i in 0..<a.nx where a[i, y, k] != b[i, y, k] { return false } } }
+        return true
+    }
+
+    @Test func baseAndLowPiecesAreTheCutawayBuild() {
+        #expect(Self.sameVoxels(Self.lowLook(), VoxelHouse.build(Self.plan)))
+        let colored = VoxelHouse.buildLayers(Self.plan, wallColor: 0x6688AA, floorColor: 0x554433)
+        #expect(Self.sameVoxels(Self.lowLook(colored), VoxelHouse.build(Self.plan, wallColor: 0x6688AA, floorColor: 0x554433)))
+    }
+
+    @Test func baseAndTallPiecesAreTheFullHeightShell() {
+        #expect(Self.tallShell.ny == VoxelHouse.baseVoxels + VoxelGrid.count(2.6))
+        #expect(Self.sameVoxels(Self.tallLook(), Self.tallShell))
+        // Nothing above the cut is in the base.
+        #expect(Self.layers.base.ny == Self.cutY)
+    }
+
+    /// Plans to check the split on: the demo house and an L (with an inside corner).
+    static let lPlan = FloorPlan(rooms: [.rectangle("A", x: 0, y: 0, width: 4, depth: 2), .rectangle("B", x: 0, y: 2, width: 2, depth: 2)],
+                                 windows: [WallOpening(from: PlanPoint(1, 4), to: PlanPoint(1.8, 4)),
+                                           WallOpening(from: PlanPoint(4, 0.5), to: PlanPoint(4, 1.5))],
+                                 wallHeightM: 2.4)
+
+    @Test func noVoxelDrawnTwiceAtAnyYaw() {
+        for plan in [Self.plan, Self.lPlan] {
+            let r = VoxelHouse.buildLayers(plan)
+            let size = VoxelHouse.shell(plan, cutawayHeightM: 1.1, fullHeightM: plan.wallHeightM, realism: true,
+                                        wallColor: nil, floorColor: nil).grid
+            for step in 0..<72 {
+                let a = Double(step) * 5 * .pi / 180
+                let v = SIMD2(sin(a), cos(a))
+                let shown = r.layers.filter { $0.isShown(viewFromTarget: v) }
+                let (_, doubled) = Self.compose(r.base, shown, size: size)
+                #expect(doubled == 0, "yaw \(step * 5)°: \(doubled) voxels drawn twice")
+                // Each facing set shows exactly one look.
+                for fs in Set(r.layers.map(\.facings)) {
+                    let looks = Set(shown.filter { $0.facings == fs }.map(\.tall))
+                    #expect(looks.count <= 1, "yaw \(step * 5)°: \(fs) shows both looks")
                 }
             }
+            // Corners of two facings are their own pieces, never also in a single-facing piece.
+            var owner: [SIMD3<Int>: Set<VoxelHouse.Facing>] = [:]
+            for l in r.layers where l.tall {
+                for y in 0..<l.grid.ny { for k in 0..<l.grid.nz { for i in 0..<l.grid.nx where l.grid[i, y, k] != nil {
+                    let p = SIMD3(i, y, k) &+ l.offset
+                    #expect(owner[p] == nil, "\(p) in \(String(describing: owner[p])) and \(l.facings)")
+                    owner[p] = l.facings
+                } } }
+            }
+            #expect(r.layers.contains { $0.facings.count == 2 }, "no corner pieces")
         }
     }
 
     @Test func eachFacingHoldsOnlyItsOwnExteriorWall() {
-        // The demo house is an 11 x 10.2 m rectangle, so each facing is one side of it.
+        // The demo house is an 11 x 10.2 m rectangle, so each facing is one side of it
+        // (curtains reach a few voxels into the room).
         let b = Self.plan.bounds
-        #expect(Set(Self.layers.upper.keys) == Set(VoxelHouse.Facing.allCases))
-        for (f, l) in Self.layers.upper {
-            var filled = 0
-            for k in 0..<l.grid.nz {
-                for i in 0..<l.grid.nx where (0..<l.grid.ny).contains(where: { l.grid[i, $0, k] != nil }) {
-                    filled += 1
-                    let p = Self.center(i + l.offset.x, k + l.offset.z)
-                    let off: Double = switch f {
-                    case .plusX: abs(p.x - b.maxX)
-                    case .minusX: abs(p.x - b.minX)
-                    case .plusZ: abs(p.y - b.maxY)
-                    case .minusZ: abs(p.y - b.minY)
+        for f in VoxelHouse.Facing.allCases {
+            var filled = Set<Int>()
+            for l in Self.tallPieces(f) where l.facings == [f] {
+                for k in 0..<l.grid.nz {
+                    for i in 0..<l.grid.nx where (0..<l.grid.ny).contains(where: { l.grid[i, $0, k] != nil }) {
+                        let p = Self.center(i + l.offset.x, k + l.offset.z)
+                        let off: Double = switch f {
+                        case .plusX: abs(p.x - b.maxX)
+                        case .minusX: abs(p.x - b.minX)
+                        case .plusZ: abs(p.y - b.maxY)
+                        case .minusZ: abs(p.y - b.minY)
+                        }
+                        #expect(off < 4 * Self.V, "\(f) voxel at \(p.x),\(p.y)")
+                        if off < Self.V { filled.insert(f == .plusX || f == .minusX ? k + l.offset.z : i + l.offset.x) }
                     }
-                    #expect(off < Self.V, "\(f) voxel at \(p.x),\(p.y)")
                 }
             }
             let side = f == .plusX || f == .minusX ? b.depth : b.width
-            #expect(Double(filled) > side / Self.V, "\(f): \(filled) columns")
+            #expect(Double(filled.count) > side / Self.V - 4, "\(f): \(filled.count) columns")
         }
     }
 
     @Test func interiorWallsStayLow() {
         // L-shaped plan: the shared wall (y = 2, x 0..2) is interior; the notch walls are exterior.
         let plan = FloorPlan(rooms: [.rectangle("A", x: 0, y: 0, width: 4, depth: 2), .rectangle("B", x: 0, y: 2, width: 2, depth: 2)])
-        let l = VoxelHouse.buildLayers(plan, fullHeightM: 2.4)
+        let r = VoxelHouse.buildLayers(plan, fullHeightM: 2.4)
+        let cutY = Self.cutY
         func facings(_ x: Double, _ y: Double) -> Set<VoxelHouse.Facing> {
             let (i, k) = Self.column(x, y, plan: plan)
-            return Set(l.upper.compactMap { f, layer in
-                (0..<layer.grid.ny).contains { Self.at(layer, i, layer.offset.y + $0, k) != nil } ? f : nil
-            })
+            return r.layers.filter { l in l.tall && (cutY..<(VoxelHouse.baseVoxels + 48)).contains { Self.at(l, i, $0, k) != nil } }
+                .reduce(into: Set()) { $0.formUnion($1.facings) }
         }
         #expect(facings(1, 2).isEmpty && facings(1, 1.98).isEmpty && facings(1, 2.02).isEmpty)
         #expect(facings(3, 2.02) == [.plusZ])
@@ -96,42 +158,98 @@ import Testing
         #expect(facings(1, -0.02) == [.minusZ])
         #expect(facings(-0.02, 3) == [.minusX])
         #expect(facings(1, 4.02) == [.plusZ])
-        // Interior partitions in the demo house (living/kitchen at x = 6) have nothing above the cut.
+        // Interior partitions in the demo house (living/kitchen at x = 6) are only in the base.
         let (i, k) = Self.column(6.0, 0.6)
-        #expect(Self.layers.upper.values.allSatisfy { l in (0..<l.grid.ny).allSatisfy { Self.at(l, i, l.offset.y + $0, k) == nil } })
+        #expect(Self.layers.layers.allSatisfy { l in (0..<(l.offset.y + l.grid.ny)).allSatisfy { Self.at(l, i, $0, k) == nil } })
+        #expect(Self.layers.base[i, Self.cutY - 1, k] == VoxelHouse.Palette.wallCap)
     }
 
     @Test func heights() {
-        for l in Self.layers.upper.values {
-            #expect(l.offset.y == Self.cutY)
-            #expect(l.offset.y + l.grid.ny == VoxelHouse.baseVoxels + VoxelGrid.count(Self.plan.wallHeightM))
-        }
+        let top = VoxelHouse.baseVoxels + VoxelGrid.count(Self.plan.wallHeightM)
+        #expect(Self.layers.layers.filter(\.tall).map { $0.offset.y + $0.grid.ny }.max() == top)
+        #expect(Self.layers.layers.filter { !$0.tall }.allSatisfy { $0.offset.y + $0.grid.ny <= Self.cutY })
         let short = VoxelHouse.buildLayers(Self.plan, fullHeightM: 2.4)
-        #expect(short.upper.values.allSatisfy { $0.offset.y + $0.grid.ny == VoxelHouse.baseVoxels + 48 })
-        // Wall top: cap color at full height on a plain stretch of the north (-z) wall.
-        let north = short.upper[.minusZ]!
+        #expect(short.layers.filter(\.tall).map { $0.offset.y + $0.grid.ny }.max() == VoxelHouse.baseVoxels + 48)
+        // Wall top: cap color at full height on a plain stretch of the north (-z) wall, wall all the way up.
+        let tall = Self.tallLook(short, size: VoxelHouse.shell(Self.plan, cutawayHeightM: 1.1, fullHeightM: 2.4, realism: true,
+                                                               wallColor: nil, floorColor: nil).grid)
         let (i, k) = Self.column(0.4, 0.0)
-        #expect(Self.at(north, i, north.offset.y + north.grid.ny - 1, k) == VoxelHouse.Palette.wallCap)
-        #expect((0..<north.grid.ny).allSatisfy { Self.at(north, i, north.offset.y + $0, k) != nil })
-        // No upper walls when the full height is the cut.
-        #expect(VoxelHouse.buildLayers(Self.plan, fullHeightM: 1.1).upper.isEmpty)
+        #expect(tall[i, VoxelHouse.baseVoxels + 47, k] == VoxelHouse.Palette.wallCap)
+        #expect((VoxelHouse.baseVoxels..<(VoxelHouse.baseVoxels + 48)).allSatisfy { tall[i, $0, k] != nil })
+        // No pieces when the full height is the cut.
+        #expect(VoxelHouse.buildLayers(Self.plan, fullHeightM: 1.1).layers.isEmpty)
     }
 
-    @Test func openingsInUpperWalls() {
-        let north = Self.layers.upper[.minusZ]!, east = Self.layers.upper[.plusX]!
+    @Test func displayHeightClampsTallScans() {
+        func plan(_ h: Double) -> FloorPlan { FloorPlan(rooms: Self.plan.rooms, wallHeightM: h) }
+        #expect(VoxelHouse.displayWallHeightM(Self.plan) == 2.6)
+        #expect(VoxelHouse.displayWallHeightM(plan(2.9)) == 2.9)
+        #expect(VoxelHouse.displayWallHeightM(plan(3.0)) == 3.0)
+        #expect(VoxelHouse.displayWallHeightM(plan(3.6)) == 2.8)
+        let r = VoxelHouse.buildLayers(plan(4.2), realism: false)
+        #expect(r.layers.filter(\.tall).map { $0.offset.y + $0.grid.ny }.max() == VoxelHouse.baseVoxels + VoxelGrid.count(2.8))
+    }
+
+    @Test func tallWallHasNoCapAtTheCutLowWallDoes() {
+        let low = Self.lowLook(), tall = Self.tallLook()
+        let capY = Self.cutY - 1
+        // Plain stretches of every side: capped when low, tiles straight through when tall.
+        for (x, y) in [(0.4, 0.0), (11.0, 0.4), (0.0, 0.4), (0.4, 10.2)] {
+            let (i, k) = Self.column(x, y)
+            #expect(low[i, capY, k] == VoxelHouse.Palette.wallCap, "low cap at \(x),\(y)")
+            #expect(tall[i, capY, k] != nil && tall[i, capY, k] != VoxelHouse.Palette.wallCap, "tall cap row at \(x),\(y)")
+        }
+        // The whole tall look has no cap color at the cut on any exterior wall column.
+        for l in Self.layers.layers where l.tall {
+            for k in 0..<l.grid.nz { for i in 0..<l.grid.nx {
+                #expect(tall[i + l.offset.x, capY, k + l.offset.z] != VoxelHouse.Palette.wallCap || l.grid[i, capY - l.offset.y, k] == nil)
+            } }
+        }
+    }
+
+    @Test func openingsInTallWalls() {
+        let tall = Self.tallLook(), low = Self.lowLook()
         let top = VoxelHouse.baseVoxels + VoxelGrid.count(VoxelHouse.openingTopM)
+        let sill = VoxelHouse.baseVoxels + Int(VoxelHouse.sillHeightM / Self.V)
         // Front door (x 2.5..3.5 on y = 0): open up to the door head, wall above it.
         let (di, dk) = Self.column(3.0, 0.0)
-        for y in Self.cutY..<top { #expect(Self.at(north, di, y, dk) == nil, "door y=\(y)") }
-        #expect(Self.at(north, di, top, dk) != nil)
-        // Windows: glass from the cut up to a frame under the head, then wall.
-        for (layer, x, y) in [(north, 1.4, 0.0), (east, 11.0, 1.75)] {
+        for y in VoxelHouse.baseVoxels..<top { #expect(tall[di, y, dk] == nil, "door y=\(y)") }
+        #expect(tall[di, top, dk] != nil)
+        // Windows: one run of glass from the sill to a single frame under the head, then wall.
+        for (x, y) in [(1.4, 0.0), (11.0, 1.75)] {
             let (i, k) = Self.column(x, y)
-            #expect(Self.at(layer, i, Self.cutY, k) == VoxelHouse.Palette.glass, "window at \(x),\(y)")
-            #expect(Self.at(layer, i, top - 2, k) == VoxelHouse.Palette.glass)
-            #expect(Self.at(layer, i, top - 1, k) == VoxelHouse.Palette.windowFrame)
-            #expect(Self.at(layer, i, top, k).map { $0 != VoxelHouse.Palette.glass && $0 != VoxelHouse.Palette.windowFrame } == true)
+            #expect(tall[i, sill, k] == VoxelHouse.Palette.sill)
+            for yy in (sill + 1)..<(top - 1) { #expect(tall[i, yy, k] == VoxelHouse.Palette.glass, "window at \(x),\(y) y=\(yy)") }
+            #expect(tall[i, top - 1, k] == VoxelHouse.Palette.windowFrame)
+            #expect(tall[i, top, k].map { $0 != VoxelHouse.Palette.glass && $0 != VoxelHouse.Palette.windowFrame } == true)
+            // Low: framed under the cap.
+            #expect(low[i, Self.cutY - 2, k] == VoxelHouse.Palette.windowFrame)
+            #expect(low[i, Self.cutY - 1, k] == VoxelHouse.Palette.wallCap)
         }
+    }
+
+    @Test func curtainsHangFromTheWindowHeadOnTallWalls() {
+        func rodRows(_ g: VoxelGrid) -> Set<Int> {
+            var rows = Set<Int>()
+            for y in 0..<g.ny { for k in 0..<g.nz { for i in 0..<g.nx where g[i, y, k] == VoxelHouse.Palette.curtainRod { rows.insert(y) } } }
+            return rows
+        }
+        let top = VoxelHouse.baseVoxels + VoxelGrid.count(VoxelHouse.openingTopM)
+        // Every demo window is on an exterior wall.
+        #expect(rodRows(Self.tallLook()) == [top])
+        #expect(rodRows(Self.lowLook()) == [Self.cutY - 1])
+        // Curtain fabric runs up past the cut in the tall look.
+        let tall = Self.tallLook()
+        var fabric = 0
+        for k in 0..<tall.nz { for i in 0..<tall.nx where tall[i, top - 1, k] == VoxelHouse.Palette.curtain { fabric += 1 } }
+        #expect(fabric > 0)
+        // And they belong to their wall's facing: shown and hidden with it.
+        func hasRod(_ l: VoxelHouse.Layer) -> Bool {
+            for y in 0..<l.grid.ny { for k in 0..<l.grid.nz { for i in 0..<l.grid.nx where l.grid[i, y, k] == VoxelHouse.Palette.curtainRod { return true } } }
+            return false
+        }
+        #expect(Self.layers.layers.contains { $0.tall && $0.facings == [.minusZ] && hasRod($0) })
+        #expect(Self.layers.layers.contains { !$0.tall && $0.facings == [.minusZ] && hasRod($0) })
     }
 
     @Test func backFacingsFollowTheCamera() {
@@ -153,9 +271,9 @@ import Testing
     }
 
     @Test func meshesAreSmall() {
-        for (f, l) in Self.layers.upper {
+        for l in Self.layers.layers {
             let n = VoxelMesher.mesh(l.grid, centered: false).triangleCount
-            #expect(n > 0 && n < 10_000, "\(f): \(n) triangles")
+            #expect(n > 0 && n < 10_000, "\(l.facings) tall=\(l.tall): \(n) triangles")
         }
     }
 }
