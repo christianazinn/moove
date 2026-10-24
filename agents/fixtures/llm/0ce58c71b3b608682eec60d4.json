@@ -1,0 +1,32 @@
+{
+  "model": "claude-sonnet-5-5",
+  "output": {
+    "matches": [
+      {
+        "itemId": "2",
+        "name": "brown wood desk with orange legs",
+        "category": "furniture",
+        "material": "brown wood top with orange-red metal legs",
+        "brand": "",
+        "condition": "good",
+        "fragile": false,
+        "maybeSentimental": false,
+        "photoIndex": 0,
+        "confidence": 0.45
+      },
+      {
+        "itemId": "8",
+        "name": "black floor lamp",
+        "category": "lighting",
+        "material": "black metal",
+        "brand": "",
+        "condition": "good",
+        "fragile": false,
+        "maybeSentimental": false,
+        "photoIndex": 0,
+        "confidence": 0.3
+      }
+    ],
+    "newItems": []
+  }
+}
