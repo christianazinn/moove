@@ -18,7 +18,7 @@ import { approvalGate, dollars } from '../integrations/visa.js';
 // Every step is an agent_event. Scraped text is only ever treated as data.
 
 const AGENT = 'buy';
-const DEFAULT_THRESHOLD_CENTS = 10_000n;
+const DEFAULT_THRESHOLD_CENTS = BigInt(process.env.APPROVAL_THRESHOLD_CENTS_DEFAULT || '10000');
 const MAX_DEALS = 5;
 const FRAUD_BLOCK = Number(process.env.BUY_FRAUD_BLOCK ?? '0.7');
 // 0 = only rank; the user must choose a deal in the app before anything is bought.
