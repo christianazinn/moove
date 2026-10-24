@@ -72,6 +72,26 @@ final class MooveStore {
     var items: [Item] { snapshot.items }
     var me: User? { snapshot.users.first { $0.identity == snapshot.me } }
 
+    // MARK: Hidden rooms (#267)
+
+    /// Rooms hidden on this device (Inventory > room header > Hide room), e.g. old
+    /// test scans. Local only: nothing is deleted from the database.
+    private(set) var hiddenRoomIds: Set<UInt64> =
+        HiddenRooms.decode(UserDefaults.standard.stringArray(forKey: HiddenRooms.defaultsKey))
+
+    func setRoom(_ roomId: UInt64, hidden: Bool) {
+        if hidden { hiddenRoomIds.insert(roomId) } else { hiddenRoomIds.remove(roomId) }
+        UserDefaults.standard.set(HiddenRooms.encode(hiddenRoomIds), forKey: HiddenRooms.defaultsKey)
+    }
+
+    /// The snapshot without hidden rooms and their items. Inventory, Review, Scan home,
+    /// New Home, Pack and Summary read this so they agree on what's there.
+    var visibleSnapshot: SyncSnapshot { snapshot.hidingRooms(hiddenRoomIds) }
+    var visibleItems: [Item] { hiddenRoomIds.isEmpty ? snapshot.items : snapshot.items.filter { !hiddenRoomIds.contains($0.roomId) } }
+    var visibleRooms: [Room] { hiddenRoomIds.isEmpty ? snapshot.rooms : snapshot.rooms.filter { !hiddenRoomIds.contains($0.id) } }
+    /// Hidden rooms that still exist, for Inventory's "Show hidden rooms (N)".
+    var hiddenRooms: [Room] { snapshot.rooms.filter { hiddenRoomIds.contains($0.id) } }
+
     // MARK: Connection
 
     /// Connects with an Auth0 ID token when signed in, or the saved anonymous

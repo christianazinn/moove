@@ -65,7 +65,7 @@ struct PackView: View {
     private var inputs: Inputs {
         let snap = store.snapshot
         func packable(_ item: Item) -> Bool { item.disposition == .keep || (item.disposition == .undecided && item.maybeSentimental) }
-        var items = snap.items.filter(packable)
+        var items = store.visibleItems.filter(packable)
         let demo = items.isEmpty
         if demo { items = DemoFixtures.inventory(owner: snap.me ?? "demo").items.filter(packable) }
         var rooms: [UInt64: String] = [:]
