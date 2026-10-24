@@ -127,7 +127,7 @@ That payment was made by `npm run x402:demo`. The pricing agent's payments in th
 - **Budgets are tracked in the worker.** The spend ledger lives in memory. On startup it is seeded from the last 24h of `payment` rows (`X402_SEED_BUDGETS=1`, the default), so a restart doesn't reset an agent's budget, but the window is rolling rather than a fixed period.
 - **The comps endpoint is our own paywall.** No third-party x402 data service fit, so we pay ourselves. The flow and settlement are real, but the money goes between two of our own wallets.
 - **Only the pricing agent pays over x402 so far.** It buys its comps through the paywall (#46). If a payment fails it falls back to a direct (unpaid) Apify lookup, so not every pricing run is guaranteed to produce a payment. The buy agent doesn't use the rail yet.
-- **The live iOS backend glue is pending** (#10), so the in-app spending log currently runs in Offline demo mode.
+- **The live spending log is unverified on device.** Since PR #28 the app subscribes to `payment` and `agent_event` for the signed-in identity, so worker payments should appear live; nobody has checked it on a phone against the maincloud worker yet. The Offline demo (fixture data, including the real Basescan link) is the fallback. `npm run e2e` checks the worker side on a local SpacetimeDB (pricing writes one simulated x402 `payment` row per item).
 
 ## Builder feedback
 **Biggest blocker: installing and type-checking the CDP x402 packages.**

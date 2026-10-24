@@ -2,9 +2,9 @@
 
 Submission notes for the Visa **Reimagining Shopping** track (Cal Hacks 13.0). Sections follow the judging weights: innovation 25%, UX 25%, technical execution 20%, commerce impact 15%, trust and responsibility 15%.
 
-> **Status.** The shopping list, buy agent, Visa checkout and iOS Shopping screen are merged (PR #40). So are the approval flow (Auth0 CIBA + in-app inbox, PR #35) and the x402 spend caps (PR #23).
+> **Status.** The shopping list, buy agent, Visa checkout and iOS Shopping screen are merged (PR #40). So are the approval flow (Auth0 CIBA + in-app inbox, PR #35), the x402 spend caps (PR #23), the fraud screen for deals (PR #64) and live sync for the app (PR #28). `npm run e2e` (PR #120) runs the whole worker pipeline on a local SpacetimeDB, including shopping list, deals, fraud and a purchase with approval on the simulated Visa rail.
 >
-> **The demo checkout is a labeled simulation.** We tried a real CyberSource sandbox charge with real sandbox keys (`npm run visa:demo -- 1.00`, Oct 24). Both attempts got **HTTP 502** (`status: SERVER_ERROR`, `reason: SYSTEM_ERROR`, CyberSource request id `7928175635416253203813`). Nothing was authorized or captured. The HTTP Signature was accepted (a bad signature returns 401), so this most likely means the sandbox account has no card processor enabled. Until that is fixed, every purchase runs on the simulated backend and is labeled SIMULATED.
+> **The demo checkout is a labeled simulation.** We tried a real CyberSource sandbox charge with real sandbox keys (`npm run visa:demo -- 1.00`, Oct 24). Every attempt got **HTTP 502** (`status: SERVER_ERROR`, `reason: SYSTEM_ERROR`; latest CyberSource request ids `7928329698276400003813` and `7928175635416253203813`). Nothing was authorized or captured. The HTTP Signature was accepted (a bad signature returns 401), so this is a merchant-side setup problem in our sandbox account (most likely no card processor enabled). It needs a human in the CyberSource sandbox Business Center, not a code change. Until then the demo runs `VISA_PROVIDER=simulated`, and every purchase is labeled SIMULATED.
 
 ## Summary
 **Who it's for.** People moving into a new place. You arrive needing a mattress, a sofa and a desk chair, and you have no time to compare listings.
@@ -19,7 +19,7 @@ Submission notes for the Visa **Reimagining Shopping** track (Cal Hacks 13.0). S
 1. **Shopping list.** `agents/src/agents/shopping.ts` runs when a `new_home` row appears and the owner has no shopping items. Claude (`MODEL_AGENT`, `structuredCall`) lists what the rooms still need, minus the owner's `keep` items. A rule-based list is the fallback. Each item is added with `add_shopping_item`.
 2. **Deals.** `agents/src/agents/buy.ts` searches deals for each open item through `createDealSource` (`agents/src/integrations/deals-apify.ts`). With `DEALS_SOURCE=apify` (the default), it uses three sources, in this order:
    - live FB Marketplace and eBay Buy It Now listings through Apify (`DEALS_APIFY_SOURCES`, default `fb,ebay`, with Craigslist opt-in), cached under `agents/.cache/deals/`;
-   - without `APIFY_TOKEN`, committed live searches (`agents/fixtures/deals-live-*.json`, labeled "cached replay");
+   - without `APIFY_TOKEN`, or when a live search fails or finds nothing, the last cached live search for that query (`agents/.cache/deals/`, then the committed `agents/fixtures/deals-live-*.json`, labeled "cached replay");
    - otherwise, hand-made sample data (`agents/fixtures/deals.json`, labeled "sample data").
 
    Live and replayed results always include the matching sample retail rows, so every item has a card-checkout option. At most `DEALS_SEARCH_CONCURRENCY` (2) items search at once.
@@ -99,7 +99,8 @@ Agent worker                                          |
 - Sellers are shown as "FB Marketplace seller, <city>" or "eBay seller". FB seller names are private individuals, so they are never read or stored.
 - Payment badges: an orange **SIMULATED** badge for simulated rows, and **VISA SANDBOX** for real sandbox rows.
 - Choose is locked while a hold or a purchase approval is pending for that item (`isCheckoutLocked`).
-- The live SpacetimeDB reducers for shopping are stubbed until the Swift bindings land (#10). So the full Choose, approve, checkout flow on the phone runs in Offline demo mode today. The worker side runs live.
+- Since PR #28 the app's live backend subscribes to `shopping_item`, `deal`, `approval` and `payment` and calls the real reducers (`choose_deal`, `decide_approval`, `add_shopping_item`, `remove_shopping_item`), so the Choose, approve, checkout flow can run live against the worker. That flow is unverified on device; the worker side is covered by `npm run e2e`, and the Offline demo (fixture data) is the fallback.
+- Fraud chips read "Low fraud risk", "Some fraud risk" (0.3+) or "Likely fraud" (0.7+) with the score and reasons. A deal the fraud agent hasn't scored yet shows no chip.
 
 ## Technical execution
 - HTTP Signature signing (`cybersourceSignedHeaders`) uses the same signing string as `cybersource-rest-client@0.0.84`: host, date, request-target, digest (POST only) and v-c-merchant-id, then HMAC-SHA256 with the base64-decoded secret.
@@ -114,7 +115,7 @@ Agent worker                                          |
 - Furnishing a new place means a burst of purchases at a stressful time. Moove turns it into a list you review and approve, instead of a weekend of browsing.
 - Merchants get a buyer agent that pays by card under a clear, bounded mandate, instead of a scraper.
 - Honest scope:
-  - Live deals are verified for one item. A real Apify run for the demo "Mattress" item returned 9 active listings (4 FB Marketplace, 5 eBay), committed as `agents/fixtures/deals-live-mattress.json` and replayed with a REPLAY label. Every other item uses sample data until it is searched live with `APIFY_TOKEN`.
+  - Every demo shopping item has a committed live replay: 16 real Apify searches (Oct 24) in `agents/fixtures/deals-live-*.json`, 3 to 9 active FB Marketplace and eBay listings each, replayed with a REPLAY label. `agents/test/deals-apify.test.ts` enforces 3+ listings per file and no seller identities. An item whose name has no replay is searched live with `APIFY_TOKEN`, or falls back to labeled sample data.
   - A sandbox charge would go to our own sandbox merchant, standing in for the retailer (the payee reads "Visa Acceptance sandbox merchant (for ikea)").
 
 ## Trust and responsibility
@@ -134,10 +135,12 @@ Agent worker                                          |
   - Budget comes back only after a confirmed reversal or a decline.
   - At startup the cap is seeded from the last 24 h of non-simulated (sandbox or real) card payments, so a restart doesn't reset it. Simulated rehearsals never count. `VISA_SEED_BUDGETS=0` turns seeding off.
   - x402 data calls have their own caps (`AGENT_SPEND_CAP_USDC`, `X402_MAX_PER_CALL_USDC`, see `docs/coinbase-x402.md`). The per-agent budgets in the app's Spending screen are x402-only; card spend shows in the per-rail totals.
-- **Fraud screen: pending (#18).**
-  - The buy agent already refuses deals with `fraudScore >= BUY_FRAUD_BLOCK`, and the app shows fraud chips and reasons.
-  - No fraud agent exists yet (issue #18 is open), so every live deal keeps the default score of -1. The fraud scores in the app's Offline demo are fixture values.
-  - With `BUY_REQUIRE_FRAUD_SCORE=0` (the default), unscored deals can be bought, and the plan event says "Not fraud-screened yet."
+- **Fraud screen (#18, PR #64).**
+  - `agents/src/agents/fraud.ts` scores every new deal after `FRAUD_SETTLE_MS` (1.5 s) of quiet for its shopping item, and writes `set_deal_fraud` (score, AI-text score, reasons) plus a `fraud` result event. No Claude calls.
+  - Signals, combined as a weighted noisy-OR: price far below the other deals and cached comps, off-platform payment asks (Zelle, Cash App, wire, gift cards, crypto, deposits), new-seller text, duplicate listings, and AI-written text (only when `PANGRAM_URL` is set; otherwise off).
+  - The buy agent refuses deals with `fraudScore >= BUY_FRAUD_BLOCK` (0.7). One payment ask alone crosses it; a cheap price alone only reaches "some risk" (0.3).
+  - `agents/test/fraud.test.ts` checks a planted set (`fixtures/fraud-deals.json`): every scam caught with the right reasons, no false positives. In the latest e2e run on main, 3 of 44 deals scored 0.3 or more.
+  - With `BUY_REQUIRE_FRAUD_SCORE=0` (the default), a deal chosen in the short window before it is scored can still be bought, and the plan event says "Not fraud-screened yet." Set it to `1` to wait for the score.
 - **Simulated labeling.**
   - Simulated rows have `simulated: true`, their messages start with `[SIMULATED]`, and the app shows the SIMULATED badge.
   - Sandbox rows are `simulated: false`, with `sandbox: true` in the event data. Their purposes start with `[Visa sandbox]`, their messages with `[VISA SANDBOX]`, and the app shows VISA SANDBOX.
@@ -164,7 +167,7 @@ VISA_ACCEPTANCE_HOST=apitest.cybersource.com
 ```
 Run `npm run visa:demo -- 1.00` once to check it. With no `VISA_PROVIDER`, the backend is `acceptance` if all three keys are set, and simulated otherwise.
 
-**Demo setting:** we run the demo with `VISA_PROVIDER=simulated` and are not attempting live sandbox charges. The CyberSource integration is built and tested (HTTP Signature checked against `cybersource-rest-client`, a fake-server test suite, sandbox-host and test-card locks), but the live sandbox charge is blocked on our sandbox account setup (HTTP 502). Because the keys are configured, leaving `VISA_PROVIDER` empty would still call the sandbox on every purchase, so set it explicitly.
+**Demo setting:** we run the demo with `VISA_PROVIDER=simulated` and are not attempting live sandbox charges. The CyberSource integration is built and tested (HTTP Signature checked against `cybersource-rest-client`, a fake-server test suite, sandbox-host and test-card locks), but the live sandbox charge is blocked on our sandbox account's merchant setup (HTTP 502, needs a human in the sandbox Business Center). Because the keys are configured, leaving `VISA_PROVIDER` empty would still call the sandbox on every purchase, so set it explicitly.
 
 Other settings in `.env.example`:
 - `VISA_FALLBACK_SIMULATED`, `VISA_SPEND_CAP_USD`, `VISA_MAX_PER_PURCHASE_USD`, `VISA_SEED_BUDGETS`, `VISA_SIM_DELAY_MS` (400)
@@ -172,17 +175,17 @@ Other settings in `.env.example`:
 - `DEALS_SOURCE`, `DEALS_APIFY_SOURCES`, `DEALS_SEARCH_CONCURRENCY`, `DEALS_PER_SOURCE` (6), `DEALS_HOME_LAT` / `DEALS_HOME_LNG`
 
 ## Known limitations
-- **The real sandbox charge hasn't succeeded.** CyberSource returned HTTP 502 `SYSTEM_ERROR` (request id `7928175635416253203813`), likely because the sandbox account has no card processor enabled. The demo uses the labeled simulation. Don't set `VISA_PROVIDER=acceptance` for a demo until a `visa:demo -- 1.00` run succeeds, or every checkout fails.
+- **The real sandbox charge hasn't succeeded.** CyberSource returns HTTP 502 `SYSTEM_ERROR` (latest request ids `7928329698276400003813` and `7928175635416253203813`), a merchant-side setup problem (most likely no card processor enabled) that needs a human in the sandbox Business Center. The demo uses the labeled simulation. Don't set `VISA_PROVIDER=acceptance` for a demo until a `visa:demo -- 1.00` run succeeds, or every checkout fails.
 - **VIC is not implemented.** Credentials are gated, so `vic` is a seam that falls back to simulated. The mandate is only logged, not enforced by Visa. Our code does not check its 24-hour `effectiveUntil`.
-- **Live deals are verified for the mattress only.** Other items use labeled sample data until searched live.
-- **No fraud screen yet** (#18). Unscored deals can be bought by default.
+- **Replays cover the 16 demo item names.** An item named differently (Claude may write "Full size mattress") is searched live, or gets labeled sample data.
+- **The fraud screen is rules only.** The AI-text signal needs a `PANGRAM_URL` service, and a deal chosen before it is scored can be bought unless `BUY_REQUIRE_FRAUD_SCORE=1`.
 - **The card budget lives in the worker.** It is per agent name rather than per user, and it is enforced in our code, not by the processor.
-- **The phone runs the shopping flow in Offline demo mode** until the live Swift bindings land (#10).
+- **The live shopping flow on the phone is unverified on device.** It is wired (PR #28) and the worker side passes `npm run e2e`; the Offline demo is the fallback.
 - **Bought items don't appear in the new-home layout** (#14) yet.
 
 ## Devpost block
 - **Track:** Visa, Reimagining Shopping.
 - **What:** Moove's buy agent turns your new home's rooms, minus what you keep, into a shopping list. It ranks live and replayed deals and checks out by card for the deal you choose, asking for approval on your phone above your threshold.
-- **Visa tooling:** Visa Acceptance (CyberSource) REST sandbox: an auth-only hold on the Visa test card, then capture or reversal, with HTTP Signature auth. VIC credentials were gated, so each purchase carries a VIC-shaped mandate instead. Our real sandbox attempt returned a 502 (account provisioning), so the demo checkout is a labeled simulation.
-- **Trust:** Auth0 CIBA approval above `approvalThresholdCents`, the approved amount re-checked right before capture, per-agent and per-purchase card caps, a broken integration never disguised as a simulation, and every step logged as an `agent_event`. Fraud screening is planned (#18).
+- **Visa tooling:** Visa Acceptance (CyberSource) REST sandbox: an auth-only hold on the Visa test card, then capture or reversal, with HTTP Signature auth. VIC credentials were gated, so each purchase carries a VIC-shaped mandate instead. Our real sandbox attempts return a 502 (merchant setup on the sandbox account), so the demo checkout is a labeled simulation.
+- **Trust:** Auth0 CIBA approval above `approvalThresholdCents`, the approved amount re-checked right before capture, per-agent and per-purchase card caps, a broken integration never disguised as a simulation, every step logged as an `agent_event`, and a rule-based fraud screen on every deal (0.7+ is never bought).
 - **Repo:** https://github.com/christianazinn/moove, see `docs/visa.md` (code: `agents/src/integrations/visa.ts`, `agents/src/agents/buy.ts`).
