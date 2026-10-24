@@ -34,11 +34,13 @@ struct NewHomeView: View {
         }
         .navigationTitle("New home")
         .navigationBarTitleDisplayMode(.inline)
+        .mooveScreen()
         .onChange(of: store.newHome?.id) { unsaved = nil }
         .toolbar {
             if current != nil {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Change", systemImage: "house.and.flag") { showPicker = true }
+                    Button("Change") { showPicker = true }
+                        .font(.mono(13, weight: .bold))
                 }
             }
         }
@@ -49,7 +51,9 @@ struct NewHomeView: View {
                     choose(name, source, plan)
                 }
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { showPicker = false } }
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showPicker = false }.font(.mono(13))
+                    }
                 }
             }
         }
@@ -75,41 +79,74 @@ struct NewHomePicker: View {
     var onPick: (_ name: String, _ source: NewHomeSource, _ plan: FloorPlan) -> Void
 
     var body: some View {
-        List {
-            Section {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("New home").eyebrow().padding(.bottom, 10)
+                Text("Where are you moving?")
+                    .font(.system(size: 26, weight: .semibold))
+                    .padding(.bottom, 6)
+                Text("Pick the new place so Moove can lay out what you keep.")
+                    .monoMeta()
+                    .padding(.bottom, 24)
+
                 Button { onPick(DemoHouse.name, .demo, DemoHouse.floorPlan) } label: {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 14) {
                         FloorPlanSketch(plan: DemoHouse.floorPlan)
-                            .frame(height: 170)
-                        Text(DemoHouse.name).font(.headline)
-                        Text(summary(DemoHouse.floorPlan)).font(.subheadline).foregroundStyle(.secondary)
+                            .frame(height: 190)
+                            .padding(14)
+                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusLarge))
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(DemoHouse.name).blockTitle()
+                                Text(summary(DemoHouse.floorPlan)).monoMeta()
+                            }
+                            Spacer()
+                            Text("Use").font(.mono(13, weight: .bold))
+                                .padding(.horizontal, 16).frame(minHeight: 34)
+                                .foregroundStyle(Theme.accentInk)
+                                .background(Capsule().fill(Theme.accent))
+                        }
                     }
-                    .padding(.vertical, 6)
+                    .padding(.bottom, 20)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-            } header: {
-                Text("Demo house")
-            }
-            Section {
+                .ruled()
+
                 NavigationLink {
                     ManualRoomsEditor { name, plan in onPick(name, .manual, plan) }
                 } label: {
-                    Label("Enter room sizes", systemImage: "ruler")
+                    row(icon: "ruler", title: "Enter room sizes", meta: "Type each room as width × depth", enabled: true)
                 }
-                Label {
-                    VStack(alignment: .leading) {
-                        Text("Import from Zillow")
-                        Text("Coming soon").font(.caption).foregroundStyle(.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "link")
-                }
-                .foregroundStyle(.secondary)
-            } header: {
-                Text("Your place")
+                .buttonStyle(.plain)
+
+                row(icon: "link", title: "Import from a listing", meta: "Zillow, Redfin · coming soon", enabled: false)
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 24)
         }
         .navigationTitle("Pick your new home")
+        .navigationBarTitleDisplayMode(.inline)
+        .mooveScreen()
+    }
+
+    private func row(icon: String, title: String, meta: String, enabled: Bool) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .light))
+                .frame(width: 36, height: 36)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusSmall))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).blockTitle()
+                Text(meta).monoMeta()
+            }
+            Spacer()
+            if enabled { Image(systemName: "chevron.right").font(.system(size: 13, weight: .light)).foregroundStyle(Theme.faint) }
+        }
+        .padding(.vertical, 16)
+        .opacity(enabled ? 1 : 0.5)
+        .contentShape(Rectangle())
+        .ruled()
     }
 
     private func summary(_ plan: FloorPlan) -> String {
@@ -145,12 +182,16 @@ struct NewHomeDetail: View {
     private var option: LayoutOption? { options.first { $0.style == style } }
 
     var body: some View {
-        FloorPlan3DView(plan: plan, focusRoom: focusRoom, items: furniture.items, placements: option?.placements ?? [], flyInToken: flyInToken)
-            .ignoresSafeArea(edges: .horizontal)
-            .overlay(alignment: .top) { header }
-            .safeAreaInset(edge: .bottom) { controls }
-            .onChange(of: plan) { focusRoom = nil }
-            .task(id: SolveKey(plan: plan, items: furniture.items)) { solve() }
+        VStack(spacing: 0) {
+            header
+            FloorPlan3DView(plan: plan, focusRoom: focusRoom, items: furniture.items, placements: option?.placements ?? [], flyInToken: flyInToken)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge))
+                .padding(.horizontal, 16)
+            controls
+        }
+        .background(Theme.bg)
+        .onChange(of: plan) { focusRoom = nil }
+        .task(id: SolveKey(plan: plan, items: furniture.items)) { solve() }
     }
 
     private struct SolveKey: Equatable {
@@ -169,39 +210,58 @@ struct NewHomeDetail: View {
         flyInToken += 1
     }
 
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(name).font(.system(size: 20, weight: .semibold)).lineLimit(1)
+                Text("\(plan.rooms.count) rooms · \(Int(plan.totalAreaM2.rounded())) m² · \(option?.placements.count ?? 0) pieces")
+                    .monoMeta()
+            }
+            Spacer()
+            if !saved { Tag(text: "Not saved", tone: Theme.ochre) }
+            Tag(text: sourceLabel)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 14)
+    }
+
+    private var sourceLabel: String {
+        switch source {
+        case .demo: "Demo house"
+        case .manual: "Entered by you"
+        case .zillow: "From Zillow"
+        }
+    }
+
     private var controls: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             if !furniture.items.isEmpty {
-                HStack(spacing: 10) {
-                    Picker("Layout", selection: $style) {
-                        ForEach(LayoutSolver.Style.allCases, id: \.self) { Text($0.label).tag($0) }
+                Text("Layout").eyebrow().padding(.top, 16).padding(.bottom, 8)
+                HStack(spacing: 8) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        PillPicker(options: LayoutSolver.Style.allCases, selection: $style) { $0.label }
                     }
-                    .pickerStyle(.segmented)
-                    Button("Fly in", systemImage: "arrow.triangle.turn.up.right.diamond") { flyInToken += 1 }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(.bordered)
+                    Button { flyInToken += 1 } label: { Image(systemName: "arrow.triangle.2.circlepath") }
+                        .buttonStyle(.pill(.outline, compact: true))
+                        .accessibilityLabel("Play fly-in again")
                     Button(savedStyle == style ? "Saved" : "Save") { Task { await save() } }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.pill(.primary, compact: true))
                         .disabled(!saved || savedStyle == style || option == nil)
                 }
-                .padding(.horizontal)
-                .padding(.top, 10)
-                HStack {
+                HStack(spacing: 10) {
                     if let option, !option.unplaced.isEmpty {
-                        Label("\(option.unplaced.count) didn't fit", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                        Text("\(option.unplaced.count) didn't fit").font(.mono(12)).foregroundStyle(Theme.danger)
                     }
-                    if furniture.isDemo { Text("Demo items: nothing kept yet") }
-                    Spacer()
-                    Text("\(option?.placements.count ?? 0) items")
+                    if furniture.isDemo { Text("Demo items · nothing kept yet").font(.mono(12)).foregroundStyle(Theme.faint) }
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
-                .padding(.top, 6)
+                .padding(.top, 8)
             }
+            Text("Rooms").eyebrow().padding(.top, 16).padding(.bottom, 8)
             roomStrip
         }
-        .background(.bar)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
     }
 
     private func save() async {
@@ -209,59 +269,29 @@ struct NewHomeDetail: View {
         if await store.saveLayout(option.placements, name: option.name, for: home) { savedStyle = option.style }
     }
 
-    private var header: some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name).font(.headline)
-                Text("\(plan.rooms.count) rooms · \(Int(plan.totalAreaM2.rounded())) m²").font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Text(sourceLabel).font(.caption2.weight(.semibold)).padding(.horizontal, 8).padding(.vertical, 4)
-                .background(.thinMaterial, in: Capsule())
-            if !saved {
-                Image(systemName: "icloud.slash").foregroundStyle(.orange).accessibilityLabel("Not saved yet")
-            }
-        }
-        .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-        .padding(.horizontal)
-        .padding(.top, 8)
-    }
-
-    private var sourceLabel: String {
-        switch source {
-        case .demo: "DEMO HOUSE"
-        case .manual: "ENTERED BY YOU"
-        case .zillow: "FROM ZILLOW"
-        }
-    }
-
     private var roomStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                chip("Whole home", systemImage: "house", selected: focusRoom == nil) { focusRoom = nil }
+            HStack(spacing: 6) {
+                chip("Whole home", meta: nil, selected: focusRoom == nil) { focusRoom = nil }
                 ForEach(plan.rooms.filter { $0.kind != .hallway }) { room in
-                    chip("\(room.name) · \(room.widthM, specifier: "%.1f")×\(room.depthM, specifier: "%.1f")", systemImage: nil, selected: focusRoom == room.name) {
+                    chip(room.name, meta: String(format: "%.1f×%.1f", room.widthM, room.depthM), selected: focusRoom == room.name) {
                         focusRoom = room.name
                     }
                 }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 10)
         }
     }
 
-    private func chip(_ title: LocalizedStringKey, systemImage: String?, selected: Bool, action: @escaping () -> Void) -> some View {
+    private func chip(_ title: String, meta: String?, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 4) {
-                if let systemImage { Image(systemName: systemImage) }
-                Text(title)
+            HStack(spacing: 6) {
+                Text(title).font(.mono(12.5, weight: selected ? .bold : .regular))
+                if let meta { Text(meta).font(.mono(11.5)).foregroundStyle(selected ? Theme.accentInk.opacity(0.75) : Theme.faint) }
             }
-            .font(.subheadline)
             .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.fill.tertiary), in: Capsule())
-            .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+            .frame(minHeight: 32)
+            .foregroundStyle(selected ? Theme.accentInk : Theme.text)
+            .background(Capsule().fill(selected ? Theme.accent : Theme.surface))
         }
         .buttonStyle(.plain)
     }

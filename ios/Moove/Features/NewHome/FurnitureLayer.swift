@@ -125,17 +125,18 @@ final class FurnitureLayer {
         return m
     }
 
+    /// Muted, warm palette matching the app theme: sage, slate, wood, ochre, terracotta.
     static func color(_ category: String) -> UIColor {
         switch category.lowercased() {
-        case "bed": UIColor(red: 0.36, green: 0.47, blue: 0.80, alpha: 1)
-        case "sofa", "couch": UIColor(red: 0.85, green: 0.52, blue: 0.33, alpha: 1)
-        case "table", "desk": UIColor(red: 0.62, green: 0.45, blue: 0.30, alpha: 1)
-        case "chair": UIColor(red: 0.30, green: 0.62, blue: 0.55, alpha: 1)
-        case "storage", "dresser", "nightstand", "bookshelf": UIColor(red: 0.72, green: 0.58, blue: 0.40, alpha: 1)
-        case "lamp": UIColor(red: 0.95, green: 0.80, blue: 0.30, alpha: 1)
-        case "appliance": UIColor(red: 0.62, green: 0.66, blue: 0.70, alpha: 1)
-        case "decor", "plant": UIColor(red: 0.78, green: 0.40, blue: 0.55, alpha: 1)
-        default: UIColor(red: 0.55, green: 0.55, blue: 0.60, alpha: 1)
+        case "bed": Theme.uiColor(0x7B8B99)
+        case "sofa", "couch": Theme.uiColor(0x8B9A7B)
+        case "table", "desk": Theme.uiColor(0xA88B66)
+        case "chair": Theme.uiColor(0x6E7E5F)
+        case "storage", "dresser", "nightstand", "bookshelf": Theme.uiColor(0xB9A07A)
+        case "lamp": Theme.uiColor(0xB48A3E)
+        case "appliance": Theme.uiColor(0x8F8577)
+        case "decor", "plant": Theme.uiColor(0xB0563D)
+        default: Theme.uiColor(0x9C9383)
         }
     }
 }
