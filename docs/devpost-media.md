@@ -4,7 +4,9 @@ The 8 images for the Devpost gallery, in story order: scan, items, prices, sort,
 
 They match the commerce [video shot list](demo-commerce.md#video-shot-list-commerce-70-s) (#175), so the stills and the video show the same rows and figures. All on-screen strings come from the Swift source and fixtures on `main` (`ios/MooveKit/Sources/MooveKit/Sync/DemoFixtures.swift`, `ShoppingFixtures.swift`, `ios/Moove/Features/*`).
 
-**Decision (Aiden's agent):** capture everything on the **Offline demo** (Settings, the gear at top right > Backend > Data source **"Offline demo (fixtures)"**; the banner reads "Offline demo: fixture data, nothing is synced"). It is the only data source whose rows are known in advance, and `DemoNumbersTests` checks its figures. The Offline demo also has the voxel dollhouse (#137) and the new home, so the scan and new-home shots don't need the **Demo** backend. Use Demo (Settings > Backend > Data source "SpacetimeDB (live)" > Database **"Demo (moove-demo)"**, then Items > Join a room > `4RZ9G8`) only for the optional live swaps marked below. On Demo the names and amounts differ (the seeded Bedroom has a "Mesh office chair", "IKEA Micke desk" and "Yamaha acoustic guitar", and no Aeron), and every x402 row there is simulated.
+**Decision (Aiden's agent):** capture everything on the **Offline demo** (Settings, the gear at top right > Backend > Data source **"Offline demo (fixtures)"**; the banner reads "Offline demo: fixture data, nothing is synced"). It is the only data source whose rows are known in advance, and `DemoNumbersTests` checks its figures. The Offline demo also has the voxel dollhouse (#137) and the new home, so the scan and new-home shots don't need the **Demo** backend. Use Demo (Settings > Backend > Data source "SpacetimeDB (live)" > Database **"Demo (moove-demo)"**, then Items > Inventory > Join a room > `4RZ9G8`) only for the optional live swaps marked below. On Demo the names and amounts differ (the seeded Bedroom has a "Mesh office chair", "IKEA Micke desk" and "Yamaha acoustic guitar", and no Aeron), and every x402 row there is simulated.
+
+> **⚠️ Don't approve or deny the Demo chair.** On Demo, a joined phone sees the seeded "Herman Miller Office Chair, Ergonomic Desk Chair, Used, 69 x 67 x 104 cm" ($325) under Approvals > **Shared rooms**, with Approve/Deny and "Shared room: the owner's item. Anyone in the room can decide." (#248). That approval is **single-use** and is meant for the judges: tapping it posts the listing (simulated) for everyone. Shot 5 is always captured on the Offline demo. If it gets used, ask Christian to run `npm run seed:demo -- --maincloud --reset-commerce` (#246).
 
 **Honesty rule for captions:** every caption names what's simulated or fixture data. The only real payment in the Offline demo is the $0.01 Aeron comps row with the Basescan link.
 
@@ -49,11 +51,11 @@ They match the commerce [video shot list](demo-commerce.md#video-shot-list-comme
 
 ### 5. List and approve: a $410 listing waits for you
 - **Screen:** Sell & Buy tab > **Approvals** segment (it reads "Approvals · 2"; the tab icon has a badge of 2).
-- **State:** before tapping: **"Needs you · 2"**, the Sell request "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition", **$410**, the Sell tag and SIMULATED pill, the Buy request for the "78" upholstered sofa, gray" $429.99 "from wayfair", and "Also sent to your phone via Auth0 Guardian when set up. Approving here works too." Good as a **GIF**: tap **Approve** on the Aeron, it moves to History with "You approved it. The listing agent posts it." and "Needs you · 1". This is video shot 3.
-- **Optional:** Listings segment after approving: the Aeron under **Live** with **"Posted (simulated)"**.
+- **State:** before tapping: **"Needs you · 2"**, the Sell request "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition", **$410**, the Sell tag and SIMULATED pill, the Buy request for the "78" upholstered sofa, gray" $429.99 "from wayfair" with its own filled **SIMULATED** pill (#238: the Visa checkout is simulated, and VoiceOver says "Simulated purchase, no money will move"), and "Also sent to your phone via Auth0 Guardian when set up. Approving here works too." Good as a **GIF**: tap **Approve** on the Aeron, it moves to the top of History with "You approved it. The listing agent posts it." and "Needs you · 1". This is video shot 3. Further down, **History · 4** (5 after the tap) includes the $699 KIVIK sofa with the outlined **EXPIRED** pill and "No answer in 12 h. The agent asked again." (#231). That makes an optional extra still for the Auth0 track: unanswered requests time out instead of waiting forever.
+- **Optional:** Listings segment after approving: the Aeron under **Live** (now Live 2, Listed $445) with **"Posted (simulated)"**. Before approving, it sits under **"Needs approval"** (renamed from "Needs you" in #208).
 - **Caption:** "Claude writes the listing, and anything over your $100 limit waits for your approval by Auth0 push or in the app; the eBay post itself is simulated."
 - **Track:** Auth0 (approval over the threshold; CIBA push when configured, in-app inbox shown), Anthropic (the Claude-written listing).
-- **Backend:** Offline demo.
+- **Backend:** Offline demo **only**. No live swap: the Demo chair approval is single-use (see the warning at the top).
 
 ### 6. Buy: the fraud screen blocks a planted scam
 - **Screen:** Sell & Buy tab > **Shopping** segment > tap **Desk chair**.
@@ -71,8 +73,8 @@ They match the commerce [video shot list](demo-commerce.md#video-shot-list-comme
 - **Backend:** Offline demo. Live swap: Demo, after Lisa's check in [`docs/morning.md`](morning.md).
 
 ### 8. Summary: what you made, spent and kept out of landfill
-- **Screen:** Summary tab. Scroll so "Where everything went" and **Money** are both visible (two stills are fine).
-- **State (after the taps in shots 5 and 6):** "07 — Summary", "Your move, handled.", "Where everything went": 12 items, Kept 3, Selling 4, Donated 2, Trashed 1, Undecided 2. **Money** with the **Simulated** tag: Sold $18, Still selling $520, **Spent $689.995**, **Net −$152**; "Visa purchases" $689.97 tagged Simulated, "x402 data payments" $0.025 tagged "$0.015 sim"; then the "~N kg" landfill line. This is video shot 6b.
+- **Screen:** Summary tab. Scroll so "Where everything went" and **Money** are both visible (two stills are fine). An optional third still is the **"Agents kept you safe"** card at the bottom.
+- **State (after the taps in shots 5 and 6):** "07 — Summary", "Your move, handled.", "Where everything went": 12 items, Kept 3, Selling 4, Donated 2, Trashed 1, Undecided 2. **Money** with the **Simulated** tag: Sold $18, Still selling $520, **Spent $689.995**, **Net −$152**; "Visa purchases" $689.97 tagged Simulated, "x402 data payments" $0.025 tagged "$0.015 sim"; then Impact, "~109 kg" "kept out of landfill" and "6 items sold or donated, not trashed." This is video shot 6b. At the bottom, **"Agents kept you safe"** (Simulated tag): "1 scam deal blocked · fraud score 0.85", "6 approvals asked · 3 approved · 2 denied · 1 expired" with "Anything over $100 needs your OK", "2 sentimental items left for you", "Spent $0.025 of $10.00 data budget ($0.015 simulated)" and "Spent $689.97 of $1,500.00 card budget (simulated)". On a fresh fixture (before the taps), the approvals line reads "6 approvals asked · 1 approved · 2 denied · 2 waiting · 1 expired" and the card line reads "Spent $179.99 of $1,500.00 card budget (simulated)".
 - **Caption:** "The summary adds up what you sold, what the agents spent and what stayed out of landfill, and tags the simulated money as Simulated."
 - **Track:** Best Planet-First Hack, Coinbase and Visa (real vs. simulated spend kept apart).
 - **Backend:** Offline demo.
@@ -85,14 +87,14 @@ They match the commerce [video shot list](demo-commerce.md#video-shot-list-comme
 - Name files in story order (`01-scan.gif`, `02-items.png`, ...) and upload in that order.
 
 ## Fallback: screenshots from CI
-Rio's UI smoke tests (#161, merged, `ios/MooveUITests/MooveSmokeTests.swift`) and the commerce UI test (#155, `CommerceUITests.swift`, still open as of writing) run on the Offline demo in the Simulator and attach screenshots (`XCTAttachment`, `.keepAlways`). On `main` today **CI does not run the UI tests**. The `ios-ui` job that runs both suites and uploads the PNGs as the `ios-ui-screenshots` artifact arrives with #155. Once a run of that job has finished (on `main` after #155 merges, or on its branch `aiden/15-commerce-uitest`):
+Rio's UI smoke tests (#161, merged, `ios/MooveUITests/MooveSmokeTests.swift`) and the commerce UI test (#155, merged, `CommerceUITests.swift`) run on the Offline demo in the Simulator and attach screenshots (`XCTAttachment`, `.keepAlways`). CI's `ios-ui` job runs them on PRs that touch `ios/` and on pushes to `main`, and uploads the PNGs as the `ios-ui-screenshots` artifact (about 15 min per run). To fetch them from a finished run on `main`:
 
 ```sh
 gh run list -R christianazinn/moove --workflow ci.yml --branch main --limit 5
 gh run download <run-id> -R christianazinn/moove -n ios-ui-screenshots -D ~/Desktop/moove-ci-shots
 ```
 
-The files land as `MooveSmokeTests/<name>.png` (e.g. `03-scan-finished`, `03-inventory`, `02-review`, `04-room-3d`) and `CommerceUITests/<name>.png` (`1-spending`, `3-approvals-pending`, `5-desk-chair-deals`, `6-desk-chair-paid`, ...). They're simulator-sized and unframed, so use them only if no phone is free. Before #155 lands, run the smoke tests locally and export the attachments:
+The files land as `MooveSmokeTests/<name>.png` (e.g. `03-scan-finished`, `03-inventory`, `02-review`, `04-room-3d`) and `CommerceUITests/<name>.png` (`1-spending`, `3-approvals-pending`, `5-desk-chair-deals`, `6-desk-chair-paid`, ...). They're simulator-sized and unframed, so use them only if no phone is free. To get them without CI, run the UI tests locally and export the attachments:
 
 ```sh
 cd ios && xcodegen
