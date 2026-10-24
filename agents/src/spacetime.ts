@@ -23,9 +23,32 @@ export function saveToken(file: string, token: string): boolean {
   }
 }
 
+// If the connection stays down this long (e.g. after the laptop sleeps, automatic reconnect can
+// keep failing forever), exit so run-worker.sh restarts the worker with a fresh connection.
+// 0 disables the watchdog.
+export const DISCONNECT_EXIT_SEC = Number(process.env.WORKER_DISCONNECT_EXIT_SEC ?? 120);
+
+export function disconnectWatchdog(exit: () => void = () => process.exit(1), limitSec = DISCONNECT_EXIT_SEC) {
+  let timer: NodeJS.Timeout | undefined;
+  return {
+    down() {
+      if (limitSec <= 0 || timer) return;
+      timer = setTimeout(() => {
+        console.error(`[spacetime] still disconnected after ${limitSec}s; exiting so the supervisor restarts the worker`);
+        exit();
+      }, limitSec * 1000);
+    },
+    up() {
+      clearTimeout(timer);
+      timer = undefined;
+    },
+  };
+}
+
 // Connects as the worker identity, registers it, and subscribes to every table.
 // Resolves once the initial subscription has been applied (the local cache is populated).
 export function connect(): Promise<{ conn: Conn; identity: Identity }> {
+  const watchdog = disconnectWatchdog();
   return new Promise((resolve, reject) => {
     const conn = DbConnection.builder()
       .withUri(config.spacetimeUri)
@@ -50,9 +73,15 @@ export function connect(): Promise<{ conn: Conn; identity: Identity }> {
             reject(err);
           });
       })
-      .onAutomaticReconnect((_conn, _identity, token) => saveToken(config.workerTokenFile, token))
+      .onAutomaticReconnect((_conn, _identity, token) => {
+        watchdog.up();
+        saveToken(config.workerTokenFile, token);
+      })
       .onConnectError((_ctx, err) => reject(err))
-      .onDisconnect((_ctx, err) => console.warn('[spacetime] disconnected', err ?? ''))
+      .onDisconnect((_ctx, err) => {
+        console.warn('[spacetime] disconnected', err ?? '');
+        watchdog.down();
+      })
       .build();
   });
 }
