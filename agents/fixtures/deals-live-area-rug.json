@@ -1,0 +1,102 @@
+{
+  "_note": "Cached live Apify search (active listings) for the buy agent (#15), fetched with a real APIFY_TOKEN and trimmed to the fields we use. FB seller names and eBay seller handles removed (privacy). Served for the demo 'Area rug' shopping item (search text was 'Area rug'). Rows read back from this file are labeled as a cached replay.",
+  "query": "Area rug",
+  "fetchedAt": "2026-10-24T05:32:21.807Z",
+  "actors": {
+    "fb": "apify~facebook-marketplace-scraper",
+    "ebay": "automation-lab~ebay-scraper"
+  },
+  "errors": [],
+  "rows": [
+    {
+      "source": "fb",
+      "title": "Modern Abstract Distressed Area Rug",
+      "priceCents": 3000,
+      "url": "https://www.facebook.com/marketplace/item/2920818551632808/",
+      "seller": "FB Marketplace seller, Pleasanton, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Dynamic Rugs “Paradise” Area Rug – 8' x 10'",
+      "priceCents": 1000,
+      "url": "https://www.facebook.com/marketplace/item/1390302366361981/",
+      "seller": "FB Marketplace seller, Berkeley, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Large area rug 8x10",
+      "priceCents": 5000,
+      "url": "https://www.facebook.com/marketplace/item/1049708467827539/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Area rug",
+      "priceCents": 10000,
+      "url": "https://www.facebook.com/marketplace/item/1047094024595385/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Hand-Tufted Wool & Viscose Rug Avery Design Floral Pattern Beige Pink Accents",
+      "priceCents": 5882,
+      "url": "https://www.ebay.com/itm/335518518664",
+      "seller": "eBay seller, 100% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "New ListingVintage Hand-Knotted Area Rug 6'7\" x 9'6\" Traditional Wool Carpet",
+      "priceCents": 694300,
+      "url": "https://www.ebay.com/itm/147649628569",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "New ListingTraditional Vintage Hand-Knotted Area Rug 7'9\" x 11'0\" Oriental Wool Carpet",
+      "priceCents": 1046700,
+      "url": "https://www.ebay.com/itm/920068921274",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "New ListingVintage Hand-Knotted Area Rug 9'4\" x 11'10\" Traditional Wool Carpet",
+      "priceCents": 944100,
+      "url": "https://www.ebay.com/itm/137870066095",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "VEVOR Indoor Plush Area Rug 8 x 10ft Grey Plush Carpet for Living Room Bedroom",
+      "priceCents": 5690,
+      "url": "https://www.ebay.com/itm/267443156278",
+      "seller": "eBay seller, 99.8% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    }
+  ]
+}

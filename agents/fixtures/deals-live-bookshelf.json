@@ -1,0 +1,102 @@
+{
+  "_note": "Cached live Apify search (active listings) for the buy agent (#15), fetched with a real APIFY_TOKEN and trimmed to the fields we use. FB seller names and eBay seller handles removed (privacy). Served for the demo 'Bookshelf' shopping item (search text was 'Bookshelf'). Rows read back from this file are labeled as a cached replay.",
+  "query": "Bookshelf",
+  "fetchedAt": "2026-10-24T05:34:46.134Z",
+  "actors": {
+    "fb": "apify~facebook-marketplace-scraper",
+    "ebay": "automation-lab~ebay-scraper"
+  },
+  "errors": [],
+  "rows": [
+    {
+      "source": "fb",
+      "title": "IKEA bookshelf",
+      "priceCents": 1000,
+      "url": "https://www.facebook.com/marketplace/item/1692027865869656/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "White bookshelf with two drawers",
+      "priceCents": 2500,
+      "url": "https://www.facebook.com/marketplace/item/1444245041007459/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "IKEA bookshelf- small",
+      "priceCents": 1500,
+      "url": "https://www.facebook.com/marketplace/item/1900716837583134/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Numenn Bookshelf",
+      "priceCents": 2000,
+      "url": "https://www.facebook.com/marketplace/item/2261079261343083/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "71\"Tall Arched Bookcase, 5-Tier Freestanding Mid-Century Modern Wooden Bookshelf",
+      "priceCents": 18999,
+      "url": "https://www.ebay.com/itm/198394369308",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "5-Tier Corner Bookshelf, 69.9'' Mid-Century Modern Corner Bookcase with Drawers",
+      "priceCents": 19999,
+      "url": "https://www.ebay.com/itm/197916527926",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-3 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "5-Tier Bookshelf Wood Bookshelf for Organized and Easy Access Storage, Study",
+      "priceCents": 8549,
+      "url": "https://www.ebay.com/itm/134904705154",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "New Listing5 Tier Bookshelf Bookcase Storage Shelf Organizer for Living Room Home Office",
+      "priceCents": 6499,
+      "url": "https://www.ebay.com/itm/377593674701",
+      "seller": "eBay seller, 100% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "7 Tier Tree Bookshelf, Rustic Brown Floor Standing Bookcase with Storage Cabinet",
+      "priceCents": 3799,
+      "url": "https://www.ebay.com/itm/317508188830",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    }
+  ]
+}

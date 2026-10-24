@@ -304,6 +304,45 @@ test('the committed live replay serves 3+ real, labeled deals for the demo Mattr
   assert.ok(infos.every(i => /cached replay/.test(i) && !/FB Marketplace:/.test(i) && !/(^|[^0-9.])0% positive/.test(i) && !/25 mi/.test(i)));
 });
 
+// Every committed live replay (fixtures/deals-live-*.json): real active listings, 3+ per item, no seller identities.
+const FIXTURES = new URL('../fixtures/', import.meta.url);
+const REPLAYS = readdirSync(FIXTURES).filter(f => /^deals-live-.+\.json$/.test(f));
+const ANON_SELLER = /^(FB Marketplace seller|eBay seller|Craigslist seller)(, [^,]+)*$/;
+
+test('there is a committed live replay for each demo shopping item', () => {
+  for (const s of ['mattress', 'sofa', 'dresser', 'desk-chair', 'dining-table', 'office-chair', 'desk', 'nightstand']) {
+    assert.ok(REPLAYS.includes(`deals-live-${s}.json`), s);
+  }
+});
+
+for (const file of REPLAYS) {
+  test(`committed replay ${file} has 3+ active listings and no seller names or handles`, async () => {
+    const body = JSON.parse(readFileSync(new URL(file, FIXTURES), 'utf8')) as { query: string; rows: Record<string, unknown>[] };
+    assert.equal(typeof body.query, 'string');
+    assert.ok(body.rows.length >= 3, `${file}: ${body.rows.length} rows`);
+    for (const r of body.rows) {
+      assert.ok(r.source === 'fb' || r.source === 'ebay' || r.source === 'craigslist', String(r.source));
+      assert.ok(typeof r.title === 'string' && r.title.length > 0);
+      assert.ok(typeof r.priceCents === 'number' && r.priceCents > 0, `${file}: free or missing price`);
+      assert.equal(canonicalUrl(r.source as 'fb' | 'ebay' | 'craigslist', r.url), r.url, `${file}: ${r.url}`);
+      assert.match(String(r.seller), ANON_SELLER, `${file}: seller text ${r.seller}`);
+      assert.doesNotMatch(String(r.seller), /FB Marketplace:|eBay:|@/);
+      assert.deepEqual(
+        Object.keys(r).filter(k => /name|handle|user|owner|profile|phone|email/i.test(k)),
+        [],
+        `${file}: identity fields`,
+      );
+    }
+    // The buy agent searching the item name in `query` reads this file and gets 3+ replayed deals.
+    // (The mattress replay was searched as "mattress queen" and is served for the item "Mattress"; covered above.)
+    if (file !== 'deals-live-mattress.json') {
+      assert.equal(`deals-live-${body.query.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.json`, file);
+      const deals = (await createDealSource({}).search({ name: body.query, category: '' })).filter(d => !d.sample);
+      assert.ok(deals.length >= 3 && deals.every(d => d.replay), `${file}: ${deals.length}`);
+    }
+  });
+}
+
 test('live results always carry the matching sample retail rows for card checkout', async () => {
   const src = createApifyDealSource({ sources: ['fb', 'craigslist', 'ebay'], token: 't', fetch: stubFetch(ALL_OK), cacheDir: tmp() });
   const deals = await src.search(Q);

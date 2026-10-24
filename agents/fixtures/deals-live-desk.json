@@ -1,0 +1,72 @@
+{
+  "_note": "Cached live Apify search (active listings) for the buy agent (#15), fetched with a real APIFY_TOKEN and trimmed to the fields we use. FB seller names and eBay seller handles removed (privacy). Served for the demo 'Desk' shopping item (search text was 'Desk'). Rows read back from this file are labeled as a cached replay.",
+  "query": "Desk",
+  "fetchedAt": "2026-10-24T05:32:35.163Z",
+  "actors": {
+    "fb": "apify~facebook-marketplace-scraper",
+    "ebay": "automation-lab~ebay-scraper"
+  },
+  "errors": [],
+  "rows": [
+    {
+      "source": "fb",
+      "title": "Desk",
+      "priceCents": 1500,
+      "url": "https://www.facebook.com/marketplace/item/4906429246291698/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "XUEGW Gaming Desk 4 Sizes Ergonomic Workstation Home Office Computer Table",
+      "priceCents": 7999,
+      "url": "https://www.ebay.com/itm/236999233758",
+      "seller": "eBay seller, 98.9% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Electric Standing Desk - 40/48/55 x 24 inch Adjustable Sit to Stand Up Desk",
+      "priceCents": 8720,
+      "url": "https://www.ebay.com/itm/365171636237",
+      "seller": "eBay seller, 100% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Computer Desk, 39 inch Home Office Gaming Desk Modren Simple Style PC Wood&Metal",
+      "priceCents": 3599,
+      "url": "https://www.ebay.com/itm/315400309998",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Home Mobile Portable Laptop Desk Adjustable Height Rolling Small Standing Desk",
+      "priceCents": 5147,
+      "url": "https://www.ebay.com/itm/286228623349",
+      "seller": "eBay seller, 100% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "L Shaped Desk with 4 Drawers &Storage Shelves, Corner Computer Desk w/LED Lights",
+      "priceCents": 9998,
+      "url": "https://www.ebay.com/itm/177306853762",
+      "seller": "eBay seller, 99.1% positive, Free delivery",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    }
+  ]
+}
