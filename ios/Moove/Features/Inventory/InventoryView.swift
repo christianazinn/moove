@@ -6,8 +6,13 @@ struct InventoryView: View {
     @Environment(MooveStore.self) private var store
     @State private var sharing: Room?
     @State private var showJoin = false
+    @State private var showHidden = false
+    /// Room id → (scan object id → the scanner's category), from each room's scan geometry,
+    /// for the "was: storage" marker on items a later pass renamed (#267).
+    @State private var scannedCategories: [UInt64: [String: String]] = [:]
 
     var body: some View {
+        let rooms = store.snapshot.roomsNewestFirst(store.visibleRooms)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 PageHeader(
@@ -15,60 +20,15 @@ struct InventoryView: View {
                     title: "Everything you own.",
                     lede: "Every item Moove found, room by room. Prices fill in as the agents finish."
                 )
-                if store.items.isEmpty {
+                if store.visibleItems.isEmpty {
                     emptyState.padding(.top, 32)
                 } else {
                     totals.padding(.top, 28)
                 }
-                ForEach(store.snapshot.rooms) { room in
-                    let items = store.items.filter { $0.roomId == room.id }
-                    ListHeader(title: room.name, count: "\(items.count)") {
-                        HStack(spacing: 8) {
-                            if isMine(room) {
-                                Button { sharing = room } label: {
-                                    Image(systemName: "person.badge.plus")
-                                }
-                                .buttonStyle(.pill(.outline, compact: true))
-                                .accessibilityLabel("Share \(room.name)")
-                            }
-                            NavigationLink(value: room) {
-                                Label("3D", systemImage: "cube.transparent")
-                                    .labelStyle(.titleAndIcon)
-                            }
-                            .buttonStyle(.pill(.outline, compact: true))
-                            .accessibilityLabel("View room in 3D")
-                        }
-                        .fixedSize()
-                    }
-                    .padding(.top, 40)
-                    if !isMine(room) {
-                        Label("Shared by \(ownerName(of: room))", systemImage: "person.2")
-                            .monoMeta()
-                            .padding(.vertical, 8)
-                    }
-                    if let scan = store.snapshot.latestScan(ofRoom: room.id), scan.sweepStatus?.isActive == true,
-                       scan.createdAt > .now.addingTimeInterval(-300) {
-                        // Room photo sweep (#92): the worker is naming "other" boxes and adding missed items.
-                        // Hidden after 5 min so a scan whose worker was down doesn't spin forever.
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.mini)
-                            Text("Identifying items from room photos…").monoMeta()
-                        }
-                        .padding(.vertical, 8)
-                        .accessibilityElement(children: .combine)
-                    }
-                    ForEach(items) { item in
-                        LedgerRow(
-                            title: item.name,
-                            meta: item.origin == .roomPhotos ? "\(item.category.capitalized) · from room photos" : item.category.capitalized,
-                            value: item.priceText,
-                            valueTint: item.estValueCents == nil ? Theme.muted : Theme.text
-                        ) {
-                            ItemThumbnail(item: item, size: 56)
-                        }
-                        .accessibilityElement(children: .combine)
-                    }
+                ForEach(rooms) { room in
+                    roomSection(room)
                 }
+                hiddenRoomsFooter.padding(.top, 40)
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.top, 16)
@@ -95,8 +55,163 @@ struct InventoryView: View {
             }
         }
         #endif
+        .task(id: geometryKey) { await loadScannedCategories() }
         .mooveScreen()
         .animation(.default, value: store.items)
+        .animation(.default, value: store.hiddenRoomIds)
+    }
+
+    // MARK: Room sections
+
+    @ViewBuilder
+    private func roomSection(_ room: Room) -> some View {
+        let items = store.items.filter { $0.roomId == room.id }
+        let shared = !isMine(room)
+        ListHeader(title: room.name, count: "\(items.count)") {
+            HStack(spacing: 8) {
+                if !shared {
+                    Button { sharing = room } label: {
+                        Image(systemName: "person.badge.plus")
+                    }
+                    .buttonStyle(.pill(.outline, compact: true))
+                    .accessibilityLabel("Share \(room.name)")
+                }
+                NavigationLink(value: room) {
+                    Label("3D", systemImage: "cube.transparent")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.pill(.outline, compact: true))
+                .accessibilityLabel("View room in 3D")
+                Menu {
+                    hideButton(room)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(minWidth: 28, minHeight: 28)
+                        .contentShape(Rectangle())
+                }
+                .foregroundStyle(Theme.muted)
+                .accessibilityLabel("More for \(room.name)")
+            }
+            .fixedSize()
+        }
+        .padding(.top, 40)
+        .contextMenu { hideButton(room) }
+        .accessibilityAction(named: "Hide room") { store.setRoom(room.id, hidden: true) }
+        roomMeta(room, shared: shared).padding(.vertical, 8)
+        if let scan = store.snapshot.latestScan(ofRoom: room.id), scan.sweepStatus?.isActive == true,
+           scan.createdAt > .now.addingTimeInterval(-300) {
+            // Room photo sweep (#92): the worker is naming "other" boxes and adding missed items.
+            // Hidden after 5 min so a scan whose worker was down doesn't spin forever.
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.mini)
+                Text("Identifying items from room photos…").monoMeta()
+            }
+            .padding(.vertical, 8)
+            .accessibilityElement(children: .combine)
+        }
+        ForEach(items) { item in
+            let tag = item.originTag(inSharedRoom: shared)
+            LedgerRow(
+                title: item.name,
+                meta: meta(for: item),
+                value: item.priceText,
+                valueTint: item.estValueCents == nil ? Theme.muted : Theme.text,
+                tag: tag.label,
+                tagAccessibilityLabel: tag.accessibilityLabel
+            ) {
+                ItemThumbnail(item: item, size: 56)
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func hideButton(_ room: Room) -> some View {
+        Button("Hide room", systemImage: "eye.slash") { store.setRoom(room.id, hidden: true) }
+    }
+
+    /// "Demo · Today 10:42 · Shared by Sam": which scan this section is.
+    @ViewBuilder
+    private func roomMeta(_ room: Room, shared: Bool) -> some View {
+        let demo = store.snapshot.isDemoRoom(room.id)
+        let date = store.snapshot.scanDate(ofRoom: room.id).map { ScanDateLabel.text($0) }
+        if demo || date != nil || shared {
+            HStack(spacing: 8) {
+                if demo {
+                    MonoTag(text: "Demo", tone: Theme.ochreInk)
+                        .accessibilityLabel("Demo scan")
+                }
+                if let date {
+                    Text(date).monoMeta().accessibilityLabel("Scanned \(date)")
+                }
+                if shared {
+                    Label("Shared by \(ownerName(of: room))", systemImage: "person.2").monoMeta()
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func meta(for item: Item) -> String {
+        let category = item.category.capitalized
+        guard let scanned = item.scanObjectId.flatMap({ scannedCategories[item.roomId]?[$0] }),
+              let was = item.renamedFrom(scannedCategory: scanned) else { return category }
+        return "\(category) · was: \(was)"
+    }
+
+    // MARK: Hidden rooms
+
+    @ViewBuilder
+    private var hiddenRoomsFooter: some View {
+        let hidden = store.snapshot.roomsNewestFirst(store.hiddenRooms)
+        if !hidden.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                Button {
+                    showHidden.toggle()
+                } label: {
+                    Label(showHidden ? "Hide hidden rooms" : "Show hidden rooms (\(hidden.count))",
+                          systemImage: showHidden ? "chevron.up" : "eye")
+                }
+                .buttonStyle(.pill(.outline, compact: true))
+                if showHidden {
+                    ForEach(hidden) { room in
+                        let count = store.items.filter { $0.roomId == room.id }.count
+                        let date = store.snapshot.scanDate(ofRoom: room.id).map { ScanDateLabel.text($0) }
+                        let demo = store.snapshot.isDemoRoom(room.id)
+                        LedgerRow(
+                            title: room.name,
+                            meta: [demo ? "Demo" : nil, date, "\(count) items"].compactMap { $0 }.joined(separator: " · ")
+                        ) {
+                            IconTile(systemName: "eye.slash")
+                        } trailing: {
+                            Button("Unhide") { store.setRoom(room.id, hidden: false) }
+                                .buttonStyle(.pill(.outline, compact: true))
+                                .accessibilityLabel("Unhide \(room.name)")
+                        }
+                    }
+                    .padding(.top, 12)
+                }
+            }
+        }
+    }
+
+    // MARK: Scan geometry (rename marker)
+
+    /// Changes when a visible room's newest scan changes.
+    private var geometryKey: [String] {
+        store.visibleRooms.map { room in
+            "\(room.id):\(store.snapshot.latestScan(ofRoom: room.id)?.capturedRoomJsonUrl ?? "")"
+        }
+    }
+
+    private func loadScannedCategories() async {
+        var out: [UInt64: [String: String]] = [:]
+        for room in store.visibleRooms where !store.snapshot.isDemoRoom(room.id) {
+            guard store.snapshot.latestScan(ofRoom: room.id)?.capturedRoomJsonUrl?.isEmpty == false,
+                  let geometry = try? await RoomGeometryLoader.load(room: room, snapshot: store.snapshot) else { continue }
+            out[room.id] = Dictionary(geometry.objects.map { ($0.id, $0.category) }, uniquingKeysWith: { a, _ in a })
+        }
+        scannedCategories = out
     }
 
     private var emptyState: some View {
@@ -125,12 +240,12 @@ struct InventoryView: View {
 
     /// Item count, room count and estimated value between rules, split by hairlines.
     private var totals: some View {
-        let priced = store.items.compactMap(\.estValueCents)
+        let priced = store.visibleItems.compactMap(\.estValueCents)
         return HStack(spacing: 0) {
-            StatFigure(label: "Items", value: "\(store.items.count)")
+            StatFigure(label: "Items", value: "\(store.visibleItems.count)")
                 .padding(.vertical, 18).padding(.trailing, 14)
             Rectangle().fill(Theme.line).frame(width: 1)
-            StatFigure(label: "Rooms", value: "\(store.snapshot.rooms.count)")
+            StatFigure(label: "Rooms", value: "\(store.visibleRooms.count)")
                 .padding(.vertical, 18).padding(.horizontal, 14)
             Rectangle().fill(Theme.line).frame(width: 1)
             StatFigure(label: "Est. value", value: priced.reduce(0, +).usd, tint: Theme.accentStrong)
