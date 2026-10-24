@@ -54,6 +54,6 @@ The kickoff plan is a starting point, not a mandate. After kickoff, **agents coo
 
 ## Commands
 Each lane fills these in as it initializes its directory. Keep this section current.
-- `spacetime/`: _TBD by #2 (e.g. `spacetime build`, `spacetime publish`, `spacetime generate`)_
+- `spacetime/` (needs the CLI: `curl -sSf https://install.spacetimedb.com | sh`): `npm install`, then `npm run typecheck`, `npm run build`, `spacetime start` (local server on :3000), `npm run publish:local` (or `publish:local:reset` to wipe data), `npm run generate` (regenerates `agents/src/module_bindings`, which are committed; never hand-edit them), and `npm run publish:cloud` (maincloud). Poke at it with `spacetime call -s local moove create_room '"Bedroom"' '"old"'` or `spacetime sql -s local moove "SELECT * FROM item"`.
 - `agents/`: _TBD (e.g. `npm run dev`, `npm run typecheck`, `npm test`)_
 - `ios/`: `cd ios && xcodegen && open Moove.xcodeproj`. `cd ios/MooveKit && swift test` (also works on Linux).

@@ -38,3 +38,6 @@ The planted-scam fixture set with an answer key, showing the screener catching t
 
 ## Definition of done
 Merged to `main` via PR with green CI, issue closed, and `docs/data-model.md` updated if the contract changed.
+
+## AI-generated listing text (Pangram replication)
+Christian has an open-source replication of Pangram, an AI-text detector. Use it to score each deal's listing copy: AI-written or templated scam listings are a fraud signal. Store the result in `deal.ai_text_score` (0-1, `-1` = not scored) through `set_deal_fraud`, and add a human-readable entry to `fraud_reasons`, e.g. "listing text likely AI-generated (0.93)". It runs in the agent worker next to the other fraud heuristics. Optionally, the listing agent (#11) can run its own drafts through the detector as a quality check. Ask Christian for the repo / package link.
