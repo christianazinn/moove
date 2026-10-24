@@ -8,10 +8,11 @@ import { installPaidComps, paidCompsSource, pricingPaysX402, startCompsPaywall }
 import { listingAgent } from './agents/listing.js';
 import { approvalAgent } from './agents/approval.js';
 import { sam3dAgent } from './agents/sam3d.js';
+import { meshyAgent } from './agents/meshy.js';
 import type { Agent } from './agents/types.js';
 
 // Register agents here as they land (vision, pricing, sort, listing, buy, fraud, ...).
-const agents: Agent[] = [visionAgent, pricingAgent, listingAgent, approvalAgent, sam3dAgent];
+const agents: Agent[] = [visionAgent, pricingAgent, listingAgent, approvalAgent, sam3dAgent, meshyAgent];
 
 startUploadServer();
 

@@ -8,6 +8,7 @@ import { config } from '../config.js';
 import { logEvent } from '../events.js';
 import { loadImage } from '../integrations/anthropic.js';
 import { reconstruct, SAM3D_MODEL } from '../integrations/sam3d.js';
+import { meshyClaimsModels } from './meshy.js';
 
 const inFlight = new Set<bigint>();
 let spentUsd = 0;
@@ -70,6 +71,10 @@ export const sam3dAgent: Agent = {
   start(conn) {
     if (!config.sam3d.enabled) {
       console.log('[sam3d] FAL_KEY not set: 3D models from photos are off (items stay pending)');
+      return;
+    }
+    if (meshyClaimsModels()) {
+      console.log('[sam3d] Meshy is enabled and builds the 3D models: SAM 3D stands down');
       return;
     }
     const queue: Item[] = [];
