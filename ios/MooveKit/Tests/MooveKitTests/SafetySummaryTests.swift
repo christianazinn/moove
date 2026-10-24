@@ -20,7 +20,7 @@ import Testing
     }
 
     @Test func countsSentimentalItems() {
-        #expect(demo.sentimentalLeftToYou == 2) // the quilt rack and the framed photos
+        #expect(demo.sentimentalLeftToYou == 1) // the Yamaha guitar, as on the seeded Bedroom
     }
 
     @Test func x402SpendAgainstThePerAgentCaps() {
@@ -47,7 +47,7 @@ import Testing
         #expect(demo.lines.map(\.text) == [
             "1 scam deal blocked · fraud score 0.85",
             "6 approvals asked · 1 approved · 2 denied · 2 waiting · 1 expired",
-            "2 sentimental items left for you",
+            "1 sentimental item left for you",
             "Spent $0.025 of $10.00 data budget ($0.015 simulated)",
             "Spent $179.99 of $1,500.00 card budget (simulated)",
         ])
