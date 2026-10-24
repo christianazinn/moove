@@ -10,6 +10,8 @@ struct ScanFlowView: View {
     @State private var session = ScanSession()
     @State private var stopRequested = false
     @State private var photographing: ScanSession.DetectedObject?
+    /// Extra objects (#73) spotted so far during the scan.
+    @State private var found: [String] = []
 
     private var capturing: Bool { session.phase == .capturing }
 
@@ -40,13 +42,14 @@ struct ScanFlowView: View {
         switch session.phase {
         case .capturing:
             ZStack(alignment: .top) {
-                RoomCaptureContainer(stopRequested: $stopRequested, recorder: session.frameRecorder) { result in
+                RoomCaptureContainer(stopRequested: $stopRequested, recorder: session.frameRecorder, onFound: { found = $0 }) { result, extras in
                     switch result {
-                    case .success(let room): session.captured(room)
+                    case .success(let room): session.captured(room, extras: extras)
                     case .failure(let error): session.phase = .failed(error.localizedDescription)
                     }
                 }
                 .ignoresSafeArea()
+                .overlay(alignment: .bottom) { foundChips }
                 captureChrome
             }
         case .reviewing:
@@ -234,6 +237,24 @@ struct ScanFlowView: View {
             .padding(.vertical, 12)
             .background(Theme.bg)
             .ruled(.top)
+        }
+    }
+
+    /// "Also found: Bicycle, Plant" while scanning, for things RoomPlan doesn't outline.
+    @ViewBuilder private var foundChips: some View {
+        if !found.isEmpty {
+            let counts = Dictionary(grouping: found, by: { $0 }).map { ($0.key, $0.value.count) }.sorted { $0.0 < $1.0 }
+            HStack(spacing: 6) {
+                Text("Also found:").font(.caption.weight(.semibold))
+                ForEach(counts, id: \.0) { name, n in
+                    Label(n > 1 ? "\(name.capitalized) ×\(n)" : name.capitalized, systemImage: ItemThumbnail.icon(for: name))
+                        .font(.caption)
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(.ultraThinMaterial, in: .capsule)
+            .padding(.bottom, 110)
+            .transition(.opacity)
         }
     }
 

@@ -82,6 +82,17 @@ struct ItemThumbnail: View {
         case "appliance", "refrigerator": "refrigerator"
         case "television": "tv"
         case "decor": "photo.artframe"
+        case "bicycle": "bicycle"
+        case "motorcycle": "motorcycle"
+        case "suitcase": "suitcase"
+        case "plant": "leaf"
+        case "microwave": "microwave"
+        case "laptop": "laptopcomputer"
+        case "backpack": "backpack"
+        case "bench": "chair.lounge"
+        case "teddy bear": "teddybear"
+        case "skateboard": "skateboard"
+        case "surfboard", "skis", "snowboard": "figure.skiing.downhill"
         default: "shippingbox"
         }
     }
