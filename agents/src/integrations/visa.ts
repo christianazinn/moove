@@ -701,7 +701,9 @@ export class VisaCheckout {
         failure = (err as Error).message;
       }
     }
-    const b = backend ?? this.backend;
+    // No backend means a real hold while this run is simulated: label it as the real (sandbox) hold
+    // it is, never as [SIMULATED]. The Acceptance sandbox is the only real backend that places holds.
+    const b = backend ?? { ...this.backend, provider: 'acceptance' as const, simulated: false, sandbox: true };
     if (failure !== undefined) {
       await this.event(ctx, b, 'error', `${tag(b)} A ${dollars(ctx.amountCents)} hold for ${ctx.purpose} from an earlier run is still pending and could not be released: ${failure}. Left pending for reconciliation`, { authId: p.authId, paymentId: p.paymentId.toString(), reconcile: true });
       return false;
