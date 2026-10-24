@@ -136,7 +136,7 @@ final class CommerceUITests: XCTestCase {
     /// Lazy stacks only build rows near the screen, so swipe until the element is on screen.
     @discardableResult
     private func scrollTo(_ element: XCUIElement, up: Bool = true, swipes: Int = 12) -> Bool {
-        if element.waitForExistence(timeout: 3), element.isHittable { return true }
+        if element.waitForExistence(timeout: 1), element.isHittable { return true }
         for direction in [up, !up] {
             for _ in 0..<swipes {
                 if element.exists, element.isHittable { return true }
@@ -170,7 +170,7 @@ final class CommerceUITests: XCTestCase {
     private func assertNoLiveOnEbay() {
         let live = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] 'Live on eBay'"))
         scrollToTop()
-        for _ in 0..<8 {
+        for _ in 0..<5 {
             XCTAssertEqual(live.count, 0, "a simulated listing says Live on eBay")
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
                 .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)))

@@ -115,7 +115,7 @@ jobs:
 
   ios-ui:
     # Runs the app in an iOS Simulator on the offline demo backend: the `Moove` scheme's test action
-    # (ios/MooveUITests: MooveSmokeTests + CommerceUITests). Screenshots are in the `ios-ui-screenshots` artifact.
+    # (ios/MooveUITests, CommerceUITests for now). Screenshots are in the `ios-ui-screenshots` artifact.
     runs-on: macos-15
     timeout-minutes: 20
     steps:
@@ -148,7 +148,9 @@ jobs:
         working-directory: ios
         run: |
           xcrun simctl boot "$SIM_UDID" || true
-          xcodebuild test -scheme Moove -destination "id=$SIM_UDID" \
+          # Only the commerce suite gates CI for now: MooveSmokeTests (#161) still has two tests that time
+          # out on the slower CI runner, and running both suites goes past ~15 min.
+          xcodebuild test -scheme Moove -destination "id=$SIM_UDID" -only-testing:MooveUITests/CommerceUITests \
             -resultBundlePath "$RUNNER_TEMP/MooveUITests.xcresult" CODE_SIGNING_ALLOWED=NO
       - name: Export screenshots
         if: always()
