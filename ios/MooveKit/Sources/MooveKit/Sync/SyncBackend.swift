@@ -13,6 +13,8 @@ public struct SyncSnapshot: Sendable, Equatable {
     public var layouts: [Layout] = []
     public var listings: [Listing] = []
     public var approvals: [Approval] = []
+    public var payments: [Payment] = []
+    public var agentEvents: [AgentEvent] = []
 
     public init(me: IdentityHex? = nil) { self.me = me }
 
@@ -27,6 +29,18 @@ public struct SyncSnapshot: Sendable, Equatable {
 
     /// The item's newest listing, if the listing agent has written one.
     public func listing(for itemId: UInt64) -> Listing? { listings.filter { $0.itemId == itemId }.max { $0.id < $1.id } }
+
+    /// Payments plus refusals, newest first, with per-agent budgets (#7).
+    public func spendingLog(capPerAgentUsdMicros: Int64 = UsdMicros.defaultAgentCap) -> SpendingLog {
+        SpendingLog(payments: payments, events: agentEvents, capPerAgentUsdMicros: capPerAgentUsdMicros)
+    }
+
+    /// Agent steps, newest first, optionally only those about one row (e.g. "item", 11).
+    public func agentEvents(refTable: String? = nil, refId: UInt64? = nil) -> [AgentEvent] {
+        agentEvents
+            .filter { e in (refTable == nil || e.refTable == refTable) && (refId == nil || e.refId == refId) }
+            .sorted { ($0.createdAt, $0.id) > ($1.createdAt, $1.id) }
+    }
 }
 
 /// One object from a RoomPlan scan, ready to become an `items` row.
