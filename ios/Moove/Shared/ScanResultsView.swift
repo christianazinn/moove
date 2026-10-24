@@ -12,11 +12,14 @@ struct ScanResultsView: View {
     var items: [Item]
     var comps: [Comp]
     var onSelect: (Item) -> Void
+    /// The scan's real room (walls, doors, windows, object positions). Nil: estimate a room.
+    var geometry: RoomGeometry?
 
-    init(room: Room?, items: [Item], comps: [Comp], onSelect: @escaping (Item) -> Void = { _ in }) {
+    init(room: Room?, items: [Item], comps: [Comp], geometry: RoomGeometry? = nil, onSelect: @escaping (Item) -> Void = { _ in }) {
         self.room = room
         self.items = items
         self.comps = comps
+        self.geometry = geometry
         self.onSelect = onSelect
     }
 
@@ -28,8 +31,12 @@ struct ScanResultsView: View {
             stage
             inventory.padding(.top, 40)
         }
-        .onChange(of: ModelKey(name: roomName, items: items.map(LayoutItem.init)), initial: true) { _, key in
-            model = EstimatedRoom.build(name: key.name, items: key.items)
+        .onChange(of: ModelKey(name: roomName, items: items.map(LayoutItem.init), geometry: geometry), initial: true) { _, key in
+            if let geometry = key.geometry {
+                model = EstimatedRoom.scanned(name: key.name, geometry: geometry, items: items)
+            } else {
+                model = EstimatedRoom.build(name: key.name, items: key.items)
+            }
             flyInToken += 1
         }
     }
@@ -39,6 +46,7 @@ struct ScanResultsView: View {
     private struct ModelKey: Equatable {
         var name: String
         var items: [LayoutItem]
+        var geometry: RoomGeometry?
     }
 
     // MARK: Dollhouse
@@ -63,7 +71,9 @@ struct ScanResultsView: View {
                 Text(caption).monoText(13).foregroundStyle(Theme.text)
             }
             .padding(.top, 14)
-            Text("Layout estimated from your items, not their scanned positions.")
+            Text(model?.scanned == true
+                 ? "Your room as scanned: walls, doors, windows and where each piece stands."
+                 : "Layout estimated from your items, not their scanned positions.")
                 .monoMeta()
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 4)
@@ -169,6 +179,17 @@ struct EstimatedRoom {
     var placements: [Placement]
     var widthM: Double
     var depthM: Double
+    /// True when the room and positions come from the scan rather than an estimate.
+    var scanned = false
+
+    /// The scanned room with each item where the scan found it. Items the scan can't match
+    /// (added by photo, no RoomPlan object) are left out of the 3D view; they stay in the list.
+    static func scanned(name: String, geometry: RoomGeometry, items: [Item]) -> EstimatedRoom {
+        let result = geometry.dollhouse(roomName: name, items: items)
+        let b = result.plan.bounds
+        return EstimatedRoom(plan: result.plan, items: items.map(LayoutItem.init), placements: result.placements,
+                             widthM: b.width, depthM: b.depth, scanned: true)
+    }
 
     static func build(name: String, items: [LayoutItem]) -> EstimatedRoom {
         let footprint = items.reduce(0) { $0 + $1.widthM * $1.depthM }
