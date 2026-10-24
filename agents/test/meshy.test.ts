@@ -52,7 +52,8 @@ const run = (f: typeof fetch, extra: { maxBytes?: number } = {}) => generateMode
 function fakeConn(items: Item[] = []) {
   const calls: { name: string; args: Record<string, unknown> }[] = [];
   let listeners = 0;
-  const rec = (name: string) => (args: Record<string, unknown>) => void calls.push({ name, args });
+  // Reducers return promises (logEvent chains .catch on them).
+  const rec = (name: string) => (args: Record<string, unknown>) => (calls.push({ name, args }), Promise.resolve());
   const conn = {
     db: { item: { iter: () => items[Symbol.iterator](), onInsert: () => void listeners++, onUpdate: () => void listeners++ } },
     reducers: { setItemStage: rec('setItemStage'), setItemModel: rec('setItemModel'), logAgentEvent: rec('logAgentEvent') },
