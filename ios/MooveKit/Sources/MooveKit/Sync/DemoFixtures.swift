@@ -11,20 +11,25 @@ public enum DemoFixtures {
 
         func item(_ id: UInt64, _ name: String, _ category: String, _ dims: (Double, Double, Double),
                   material: String? = nil, brand: String? = nil, condition: Int? = nil, value: Int64? = nil,
-                  _ disposition: Disposition, reason: String? = nil, fragile: Bool = false, sentimental: Bool = false) -> Item {
+                  _ disposition: Disposition, reason: String? = nil, fragile: Bool = false, sentimental: Bool = false,
+                  attributes: [String] = [], colors: ItemColors? = nil) -> Item {
             Item(id: id, owner: owner, roomId: 1, scanObjectId: "demo-\(id)", name: name, category: category,
                  widthM: dims.0, heightM: dims.1, depthM: dims.2, material: material, brand: brand, condition: condition,
                  estValueCents: value, disposition: disposition, dispositionReason: reason,
-                 fragile: fragile, maybeSentimental: sentimental)
+                 fragile: fragile, maybeSentimental: sentimental, attributes: attributes, colors: colors)
         }
 
         s.items = [
             item(10, "Queen bed frame", "bed", (1.6, 0.4, 2.1), material: "oak", brand: "IKEA", condition: 4, value: 12_000, .keep, reason: "Needed in the new bedroom; costs more to replace than to move."),
-            item(11, "Office chair", "chair", (0.7, 1.1, 0.7), material: "mesh", brand: "Herman Miller", condition: 4, value: 42_000, .sell, reason: "Resells well ($380-$460 comps); new place has a built-in desk nook."),
-            item(12, "Desk", "table", (1.4, 0.75, 0.7), material: "laminate", brand: "IKEA", condition: 3, value: 4_000, .sell, reason: "Low value but easy to sell locally."),
-            item(13, "Bookshelf", "storage", (0.8, 1.8, 0.3), material: "particleboard", brand: "IKEA", condition: 2, value: 1_500, .donate, reason: "Worth less than moving it; usable, so donate rather than trash."),
+            item(11, "Office chair", "chair", (0.7, 1.1, 0.7), material: "mesh", brand: "Herman Miller", condition: 4, value: 42_000, .sell, reason: "Resells well ($380-$460 comps); new place has a built-in desk nook.",
+                 attributes: ["ChairType.swivel", "ChairArmType.existing", "ChairBackType.existing", "ChairLegType.star"],
+                 colors: ItemColors(primary: 0x3A3D42, secondary: 0x1E1F21)),
+            item(12, "Desk", "table", (1.4, 0.75, 0.7), material: "laminate", brand: "IKEA", condition: 3, value: 4_000, .sell, reason: "Low value but easy to sell locally.",
+                 attributes: ["TableShapeType.rectangular"], colors: ItemColors(primary: 0xF2F0EB)),
+            item(13, "Bookshelf", "storage", (0.8, 1.8, 0.3), material: "particleboard", brand: "IKEA", condition: 2, value: 1_500, .donate, reason: "Worth less than moving it; usable, so donate rather than trash.",
+                 attributes: ["StorageType.shelf"]),
             item(14, "Floor lamp", "lamp", (0.3, 1.6, 0.3), material: "metal", condition: 4, value: 2_500, .keep, reason: "Small and light; cheap to move.", fragile: true),
-            item(15, "Nightstand", "storage", (0.45, 0.55, 0.4), material: "pine", condition: 3, value: 3_000, .keep, reason: "Pairs with the bed."),
+            item(15, "Nightstand", "storage", (0.45, 0.55, 0.4), material: "pine", condition: 3, value: 3_000, .keep, reason: "Pairs with the bed.", attributes: ["StorageType.cabinet"]),
             item(16, "Box fan", "appliance", (0.5, 0.5, 0.2), condition: 2, value: 800, .donate, reason: "New place has central air."),
             item(17, "Broken mirror", "decor", (0.6, 0.9, 0.05), condition: 1, value: 0, .trash, reason: "Cracked; not safe to sell or donate.", fragile: true),
             item(18, "Grandma's quilt rack", "decor", (0.9, 0.9, 0.3), material: "walnut", condition: 3, value: 6_000, .undecided, reason: "Handmade and old; left for you to decide.", sentimental: true),
@@ -151,7 +156,8 @@ extension DemoFixtures {
             roomName: "Demo bedroom",
             objects: items.map {
                 ScanObject(scanObjectId: $0.scanObjectId ?? "demo-\($0.id)", category: $0.category,
-                           widthM: $0.widthM, heightM: $0.heightM, depthM: $0.depthM, photoUrl: $0.photoUrls.first)
+                           widthM: $0.widthM, heightM: $0.heightM, depthM: $0.depthM, photoUrl: $0.photoUrls.first,
+                           attributes: $0.attributes)
             }
         )
     }

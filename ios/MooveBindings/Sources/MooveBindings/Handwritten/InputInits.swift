@@ -13,3 +13,17 @@ extension ScanObjectInput {
         self.photoUrl = photoUrl
     }
 }
+
+extension ScanObjectInputV2 {
+    public init(scanObjectId: String, name: String, category: String, widthM: Double, heightM: Double, depthM: Double,
+                photoUrl: String, attributes: [String]) {
+        self.scanObjectId = scanObjectId
+        self.name = name
+        self.category = category
+        self.widthM = widthM
+        self.heightM = heightM
+        self.depthM = depthM
+        self.photoUrl = photoUrl
+        self.attributes = attributes
+    }
+}
