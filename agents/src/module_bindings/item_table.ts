@@ -37,4 +37,7 @@ export default __t.row({
   maybeSentimental: __t.bool().name("maybe_sentimental"),
   createdAt: __t.timestamp().name("created_at"),
   updatedAt: __t.timestamp().name("updated_at"),
+  modelUrl: __t.string().name("model_url"),
+  modelSource: __t.string().name("model_source"),
+  modelStatus: __t.string().name("model_status"),
 });
