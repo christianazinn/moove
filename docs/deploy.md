@@ -31,7 +31,7 @@ env file on a Droplet), never in `fly.toml`, an app spec in git, or the image.
 | `UPLOAD_MAX_BYTES` | no | `52428800` (50 MB, sized for USDZ scans). |
 | `ANTHROPIC_API_KEY` | **yes** | Vision + listing agents. |
 | `MODEL_VISION`, `MODEL_FAST`, `MODEL_AGENT` | no | Defaults `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5`. |
-| `APIFY_TOKEN` | **yes** | Pricing comps. Without it pricing uses only cached `fixtures/comps/` (baked into the image). |
+| `APIFY_TOKEN` | **yes** | Pricing comps. Without it pricing uses only cached `fixtures/comps/`. Those caches are baked into the image only when it's built from a checkout that has them (e.g. `fly deploy` from Christian's `agents/`); none are committed yet, so a build from a fresh `git clone` (Droplet, App Platform) has no cache. Cache files written on the host live in the container and are lost on redeploy. |
 | `APIFY_SOURCES`, `APIFY_MAX_USD_PER_RUN`, `MARKET_CITY_FB`, `MARKET_CITY_CRAIGSLIST` | no | Defaults `ebay,fb`, `0.10`, `sanfrancisco`, `sfbay`. |
 | `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET` | **yes** | Real Base Sepolia x402 payments. Without them payments are recorded `simulated: true`. |
 | `AGENT_SPEND_CAP_USDC`, `X402_MAX_PER_CALL_USDC`, `X402_SIMULATE`, `X402_PORT`, `PRICING_PAY_X402` | no | Defaults `5`, `0.10`, unset, `8402`, `1`. |
