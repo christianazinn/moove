@@ -264,7 +264,7 @@ struct StoryEditor: View {
 }
 
 /// Lays chips out left to right, wrapping to a new row when the next one doesn't fit.
-struct ChipFlow: Layout {
+struct ChipFlow: SwiftUI.Layout {
     var spacing: CGFloat = 8
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
