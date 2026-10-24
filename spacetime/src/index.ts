@@ -459,7 +459,8 @@ export const setApprovalThreshold = spacetimedb.reducer(
 // worker and after that only existing workers can add more; to reset, republish with --delete-data.
 // upload_base_url: where the app POSTs /upload (the worker's PUBLIC_UPLOAD_BASE_URL)
 // worker_version: git sha the worker runs; worker_started_at: ISO time it (re)started
-const SERVICE_KEYS = ['upload_base_url', 'worker_version', 'worker_started_at'] as const;
+// spend_today: JSON of today's estimated Claude and Apify spend against the worker's daily caps
+const SERVICE_KEYS = ['upload_base_url', 'worker_version', 'worker_started_at', 'spend_today'] as const;
 
 // A bare origin: no userinfo, path, query or fragment. Plain http only for local/private hosts (#146).
 const HTTPS_ORIGIN_RE = /^https:\/\/[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?\/?$/i;
