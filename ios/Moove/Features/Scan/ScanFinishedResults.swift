@@ -75,8 +75,15 @@ struct ScanFinishedScreen: View {
     var importedCount: Int? = nil
     var onDone: () -> Void
 
+    /// What the module skipped on import (#177/#180), once the event syncs back.
+    private var skips: ScanSkips? {
+        guard let room = store.newestRoom(named: roomName),
+              let scan = store.snapshot.scans.filter({ $0.roomId == room.id }).max(by: { $0.id < $1.id }) else { return nil }
+        return store.snapshot.skips(forScan: scan.id)
+    }
+
     private var itemCount: Int {
-        if let importedCount { return importedCount }
+        if let importedCount { return max(importedCount - (skips?.count ?? 0), 0) }
         guard let room = store.newestRoom(named: roomName) else { return 0 }
         return store.items.filter { $0.roomId == room.id }.count
     }
@@ -95,6 +102,9 @@ struct ScanFinishedScreen: View {
                     .lede()
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
+                if let skips {
+                    SkippedObjectsNotice(skips: skips).padding(.top, 16)
+                }
                 ScanFinishedResults(roomName: roomName, colors: colors)
                     .padding(.top, 28)
                 Button("See inventory", action: onDone)
@@ -118,5 +128,36 @@ struct ScanFinishedScreen: View {
                 : "A recorded bedroom, not a live scan. Agents are identifying and pricing it now; colors are the demo room's."
         }
         return "Agents are identifying and pricing them now."
+    }
+}
+
+/// "2 objects looked wrong and were skipped", with what was wrong with each (#180).
+private struct SkippedObjectsNotice: View {
+    var skips: ScanSkips
+
+    var body: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(skips.entries.enumerated()), id: \.offset) { _, entry in
+                    Text(entry.readable).monoMeta()
+                }
+                if skips.count > skips.entries.count {
+                    Text("and \(skips.count - skips.entries.count) more").monoMeta()
+                }
+                Text("Their sizes or labels were impossible (a scanning glitch). Everything else was added.")
+                    .monoMeta()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 8)
+        } label: {
+            Label(skips.summary, systemImage: "exclamationmark.triangle")
+                .monoText(13.5)
+                .foregroundStyle(Theme.ochreInk)
+        }
+        .tint(Theme.ochreInk)
+        .padding(12)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
     }
 }
