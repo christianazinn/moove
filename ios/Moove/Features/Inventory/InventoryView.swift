@@ -4,6 +4,8 @@ import MooveKit
 /// Live list of the user's items, grouped by room. Polished in #4.
 struct InventoryView: View {
     @Environment(MooveStore.self) private var store
+    @State private var sharing: Room?
+    @State private var showJoin = false
 
     var body: some View {
         ScrollView {
@@ -21,13 +23,27 @@ struct InventoryView: View {
                 ForEach(store.snapshot.rooms) { room in
                     let items = store.items.filter { $0.roomId == room.id }
                     ListHeader(title: room.name, count: "\(items.count)") {
-                        NavigationLink(value: room) {
-                            Label("3D", systemImage: "cube.transparent")
+                        HStack(spacing: 8) {
+                            if isMine(room) {
+                                Button { sharing = room } label: {
+                                    Image(systemName: "person.badge.plus")
+                                }
+                                .buttonStyle(.pill(.outline, compact: true))
+                                .accessibilityLabel("Share \(room.name)")
+                            }
+                            NavigationLink(value: room) {
+                                Label("3D", systemImage: "cube.transparent")
+                            }
+                            .buttonStyle(.pill(.outline, compact: true))
+                            .accessibilityLabel("View room in 3D")
                         }
-                        .buttonStyle(.pill(.outline, compact: true))
-                        .accessibilityLabel("View room in 3D")
                     }
                     .padding(.top, 40)
+                    if !isMine(room) {
+                        Label("Shared by \(ownerName(of: room))", systemImage: "person.2")
+                            .monoMeta()
+                            .padding(.vertical, 8)
+                    }
                     ForEach(items) { item in
                         LedgerRow(
                             title: item.name,
@@ -48,6 +64,24 @@ struct InventoryView: View {
         .navigationTitle("Inventory")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: Room.self) { RoomDetailView(room: $0) }
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Join a room", systemImage: "person.2.badge.plus") { showJoin = true }
+            }
+        }
+        .sheet(item: $sharing) { ShareRoomView(room: $0) }
+        .sheet(isPresented: $showJoin) { JoinRoomView() }
+        #if DEBUG
+        // Screenshot/UI-test hook: MOOVE_OPEN_SHEET=share|join.
+        .task {
+            let sheet = ProcessInfo.processInfo.environment["MOOVE_OPEN_SHEET"]
+            if sheet == "join" { showJoin = true }
+            if sheet == "share" {
+                for _ in 0..<20 where store.snapshot.rooms.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
+                sharing = store.snapshot.rooms.first(where: isMine)
+            }
+        }
+        #endif
         .mooveScreen()
         .animation(.default, value: store.items)
     }
@@ -55,13 +89,25 @@ struct InventoryView: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("No items yet").blockTitle()
-            Text("Scan a room to build your inventory.").monoMeta()
+            Text("Scan a room to build your inventory, or join a shared one with its code.").monoMeta()
+            Button("Join a room") { showJoin = true }
+                .buttonStyle(.pill(.outline, compact: true))
+                .padding(.top, 12)
         }
         .padding(.vertical, 28)
         .frame(maxWidth: .infinity, alignment: .leading)
         .ruled(.top)
         .ruled()
         .accessibilityElement(children: .combine)
+    }
+
+    /// Rooms are mine unless someone shared them with me through a join code (#10).
+    private func isMine(_ room: Room) -> Bool { room.owner == store.snapshot.me }
+
+    /// The owner's name when their user row is visible; the live app only subscribes
+    /// to its own user row, so shared rooms usually say "someone".
+    private func ownerName(of room: Room) -> String {
+        store.snapshot.users.first { $0.identity == room.owner }?.name ?? "someone"
     }
 
     /// Item count, room count and estimated value between rules, split by hairlines.

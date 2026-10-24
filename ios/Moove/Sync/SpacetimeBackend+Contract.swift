@@ -132,6 +132,11 @@ extension SpacetimeBackend {
         try await call(SetItemColorsReducer(itemid: itemId, colorsjson: colors?.json ?? ""))
     }
 
+    // Sharing (#10): the module also normalizes, but send the clean code anyway.
+    func joinRoom(code: String) async throws {
+        try await call(MooveBindings.JoinRoomReducer(code: Room.normalizeJoinCode(code)))
+    }
+
     // Shopping (#15).
     func addShoppingItem(name: String, category: String, reason: String) async throws {
         guard let me = currentIdentity, let owner = Identity(hex: me) else { throw Failure.notConnected }
@@ -173,7 +178,8 @@ private extension User {
 
 private extension Room {
     init(_ r: MooveBindings.RoomRow) {
-        self.init(id: r.id, owner: r.owner.description, name: r.name, home: Home(rawValue: r.home) ?? .old)
+        self.init(id: r.id, owner: r.owner.description, name: r.name, home: Home(rawValue: r.home) ?? .old,
+                  joinCode: optional(r.joinCode))
     }
 }
 
