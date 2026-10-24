@@ -8,10 +8,17 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 - **Every member needs a verified Coinbase account** (US/Canada, 18+).
 - Judged on usefulness, technical design, ease of reuse, and product feedback. Not judged on code volume or money spent. Real money is not required. **Label simulated actions**, keep credentials private, and don't manage other people's funds.
 - Submit:
-  - [ ] project summary (who it's for, what it does, which Coinbase tools)
-  - [ ] demo + repo with setup instructions
-  - [ ] **architecture diagram**, controls and known limitations
-  - [ ] **builder feedback** (biggest blocker, how we worked around it, the missing capability we want most)
+  - [x] project summary (who it's for, what it does, which Coinbase tools)
+  - [ ] demo + repo with setup instructions (repo + setup done in the doc below; the demo video and the live in-app log, pending #6 and #10, are not)
+  - [x] **architecture diagram**, controls and known limitations
+  - [x] **builder feedback** (biggest blocker, how we worked around it, the missing capability we want most)
+
+  **Devpost block (paste from [`docs/coinbase-x402.md`](coinbase-x402.md)):**
+  - *Summary:* Moove's agents pay for the data they need (e.g. a $0.01 premium comps report to price an item) per call over x402, in USDC on Base Sepolia, from a CDP server wallet. A payment rail enforces a per-agent budget and a per-call max before anything is signed, and every payment shows up live in the iOS spending log with a basescan link. Coinbase tools: `@coinbase/cdp-sdk` (`CdpX402Client`, `createX402Server`, faucet), `@x402/*` v2, the CDP facilitator.
+  - *Repo + setup:* https://github.com/christianazinn/moove, see "Setup" in `docs/coinbase-x402.md` (`cd agents && npm ci`, `npm test`, `npm run x402:wallet -- --faucet`, `npm run x402:demo`).
+  - *Architecture, controls, limitations:* the Mermaid diagram, "Controls" and "Known limitations" sections of the doc.
+  - *Proof:* 0.01 USDC settled on Base Sepolia: https://sepolia.basescan.org/tx/0xc7942646380456c56dde204434aeb6115338b521b6e91a0901ec05dde1fe136c
+  - *Builder feedback:* the "Builder feedback" section of the doc (optional peer deps crash on import, CJS/ESM type split, settlement/tx hash undocumented for buyers, missing per-request spend context).
 
 **Spacetime** (prize TBD)
 - SpacetimeDB must be the core real-time backend, used meaningfully and not as an add-on. They like live shared state, agent coordination, marketplaces and live dashboards.
