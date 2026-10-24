@@ -26,8 +26,9 @@ const FRAUD_BLOCK = Number(process.env.BUY_FRAUD_BLOCK ?? '0.7');
 // in the app. 1 = the agent also chooses its recommendation (purchases at or under the threshold then
 // happen without the user touching anything).
 const AUTO_CHOOSE = process.env.BUY_AUTO_CHOOSE === '1';
-// 1 = wait for the fraud screen (#18) to score a deal before buying it. Off until a fraud agent runs.
-const REQUIRE_FRAUD_SCORE = process.env.BUY_REQUIRE_FRAUD_SCORE === '1';
+// A deal is never paid before the fraud screen (#18, which runs in this worker) has scored it: with
+// BUY_AUTO_CHOOSE the choice lands inside the screen's settle window, so a scam could otherwise be
+// paid before it was flagged. (BUY_REQUIRE_FRAUD_SCORE is no longer read.)
 
 // The one place the deal source is chosen: live Apify search (DEALS_SOURCE / APIFY_TOKEN), else
 // the labeled sample data. See integrations/deals-apify.ts.
@@ -38,6 +39,8 @@ const busyItems = new Set<bigint>(); // shopping item ids in checkout
 const settled = new Set<string>(); // keys that reached a final outcome this session
 const approvalRequested = new Set<string>();
 const ignoredChoice = new Set<string>();
+const awaitingFraud = new Set<string>(); // keys whose "waiting for the fraud screen" event was logged
+const staleTried = new Set<bigint>(); // pending payment ids from an earlier run we tried to release
 
 /**
  * Requests an approval at most once per key, but only remembers the key once the request went
@@ -207,10 +210,14 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
   for (const other of dealsFor(conn, s.id)) {
     const st = paymentState(conn, other.id);
     if (st === 'settled') {
-      settled.add(key);
+      // Mark it settled only once the status is written, so a failed write is retried.
       if (s.status !== 'bought') await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'bought' });
+      settled.add(key);
       return;
     }
+    // A hold an earlier run placed and never closed (the worker restarted between authorize and
+    // capture): reverse it so it doesn't hang, and so the item isn't blocked with no visible reason.
+    if (st === 'pending' && (await releaseStaleHolds(conn, s, other))) continue;
     if (st === 'pending') {
       // A hold in flight or from an earlier run; never double-charge. Say so if the user picked another deal.
       if (other.id !== d.id && !ignoredChoice.has(key)) {
@@ -226,12 +233,19 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
     return;
   }
 
-  if (d.fraudScore >= FRAUD_BLOCK) {
+  if (!(d.fraudScore < FRAUD_BLOCK)) {
     settled.add(key);
     logEvent(conn, { ...ref, kind: 'error', message: `Not buying "${d.title}": fraud screen scored it ${d.fraudScore.toFixed(2)} (${d.fraudReasons.join('; ') || 'no reasons given'})` });
     return;
   }
-  if (d.fraudScore < 0 && REQUIRE_FRAUD_SCORE) return; // wait for the fraud screen (#18)
+  if (d.fraudScore < 0) {
+    // Wait for the fraud screen (#18); its set_deal_fraud update re-runs this step.
+    if (!awaitingFraud.has(key)) {
+      awaitingFraud.add(key);
+      logEvent(conn, { ...ref, kind: 'plan', message: `Waiting for the fraud screen to check "${d.title}" before buying it` });
+    }
+    return;
+  }
 
   if (!CARD_CHECKOUT_SOURCES.has(d.source)) {
     settled.add(key);
@@ -266,8 +280,7 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
     return;
   }
 
-  const unscreened = d.fraudScore < 0 ? ' Not fraud-screened yet.' : '';
-  logEvent(conn, { ...ref, kind: 'plan', message: `Checking out "${d.title}" for ${dollars(d.priceCents)} via Visa${gate.approvalId ? ', approved by the user' : `, under the ${dollars(threshold)} approval threshold`}.${unscreened}` });
+  logEvent(conn, { ...ref, kind: 'plan', message: `Checking out "${d.title}" for ${dollars(d.priceCents)} via Visa${gate.approvalId ? ', approved by the user' : `, under the ${dollars(threshold)} approval threshold`}.` });
   const r = await visa.purchase({
     owner: s.owner,
     agent: AGENT,
@@ -285,7 +298,8 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
       if (cur.chosenDealId !== d.id) return 'the user picked a different deal';
       const deal = conn.db.deal.id.find(d.id);
       if (!deal) return 'deal was removed';
-      if (deal.fraudScore >= FRAUD_BLOCK) return `fraud screen scored it ${deal.fraudScore.toFixed(2)}`;
+      if (deal.fraudScore < 0) return 'deal is no longer fraud-screened';
+      if (!(deal.fraudScore < FRAUD_BLOCK)) return `fraud screen scored it ${deal.fraudScore.toFixed(2)}`;
       return undefined;
     },
     consumerPrompt: `Buy ${s.name} (${s.reason}) for no more than ${dollars(d.priceCents)} from ${d.source}`,
@@ -293,8 +307,12 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
   const label = r.simulated ? ' (simulated)' : ' (Visa sandbox, test card)';
   if (r.status === 'captured') {
     settled.add(key);
-    await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'bought' });
     logEvent(conn, { ...ref, kind: 'result', message: `Bought "${d.title}" for ${dollars(d.priceCents)}${label}`, data: { provider: r.provider, simulated: r.simulated, authId: r.hold?.authId, captureId: r.captureId } });
+    // The money moved: a failed status write must not look like a checkout to retry (the settled
+    // payment row marks the item bought on the next start).
+    await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'bought' }).catch(err =>
+      logEvent(conn, { ...ref, kind: 'error', message: `Bought "${d.title}" but could not mark the item bought yet: ${String(err)}` })
+    );
   } else if (r.status === 'unknown') {
     settled.add(key);
     logEvent(conn, { ...ref, kind: 'error', message: `Capture of "${d.title}" may or may not have gone through${label}; the payment stays pending until someone checks the processor`, data: { authId: r.hold?.authId, reconcile: true } });
@@ -304,6 +322,26 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
     settled.add(key);
     logEvent(conn, { ...ref, kind: 'result', message: `Did not buy "${d.title}": ${r.status}${r.reason ? ` (${r.reason})` : ''}`, data: { provider: r.provider, simulated: r.simulated } });
   }
+}
+
+/** Tries once per process to reverse each pending hold on this deal left by an earlier run. True if all were released. */
+async function releaseStaleHolds(conn: Conn, s: ShoppingItem, d: Deal): Promise<boolean> {
+  const visa = visaCheckout(conn);
+  let all = true;
+  for (const p of conn.db.payment.iter()) {
+    if (p.rail !== 'visa' || p.refTable !== 'deal' || p.refId !== d.id || p.status !== 'pending') continue;
+    if (staleTried.has(p.id) || visa.knowsHold(p.txHash)) {
+      all = false;
+      continue;
+    }
+    staleTried.add(p.id);
+    const ok = await visa.releaseStale(
+      { owner: s.owner, agent: AGENT, purpose: `${s.name}: ${sanitizeText(d.title, 80)}`, merchant: d.source, refTable: 'deal', refId: d.id, amountCents: p.amountUsdMicros / 10_000n },
+      { paymentId: p.id, authId: p.txHash, simulated: p.simulated }
+    );
+    if (!ok) all = false;
+  }
+  return all;
 }
 
 function step(conn: Conn, s: ShoppingItem): void {
