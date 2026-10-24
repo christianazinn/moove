@@ -8,6 +8,8 @@ import { structuredCall } from '../integrations/anthropic.js';
 import { chooseEbay, dollars, simulatedEbay, type EbayPoster, type PublishResult } from '../integrations/ebay.js';
 import { buildDraftPrompt, clampPrice, finalizeCopy, LISTING_SYSTEM } from './listingPrompt.js';
 import { afterExpiry, approvalExpiry } from './approval-expiry.js';
+import { paymentRail } from '../payments.js';
+import { createRecallChecker, describeMatch, recallCheckEnabled, type Recall, type RecallChecker } from '../integrations/recalls.js';
 
 // Real eBay (sandbox) once scripts/ebay-setup.ts has filled in the EBAY_* keys, otherwise the
 // labeled simulation (#11, #32). Fixed at startup so a draft's `simulated` flag matches how it posts.
@@ -15,9 +17,37 @@ let ebay: EbayPoster = chooseEbay();
 let simulated: EbayPoster = simulatedEbay;
 
 // Tests swap in fake posters (the real one, and the simulated one simulated listings use).
-export function setListingDeps(d: { ebay?: EbayPoster; simulated?: EbayPoster }): void {
+export function setListingDeps(d: { ebay?: EbayPoster; simulated?: EbayPoster; recalls?: RecallChecker }): void {
   if (d.ebay) ebay = d.ebay;
   if (d.simulated) simulated = d.simulated;
+  if (d.recalls) recalls = d.recalls;
+}
+
+// CPSC recall check before listing (RECALL_CHECK_X402=1, off by default): the safety agent pays a
+// third-party x402 service once per query (integrations/recalls.ts). A probable recall makes the
+// listing ask for approval whatever its price, with the recall in the summary. Never blocks a draft.
+let recalls: RecallChecker | undefined;
+function recallChecker(conn: Conn): RecallChecker {
+  return (recalls ??= createRecallChecker({ rail: paymentRail(conn), log: e => logEvent(conn, e) }));
+}
+async function checkRecalls(conn: Conn, it: Item): Promise<void> {
+  if (!recallCheckEnabled()) return;
+  try {
+    await recallChecker(conn).check(it);
+  } catch (err) {
+    // check() already turns failures into events; this is only a backstop.
+    console.warn(`[safety] recall check threw: ${String(err)}`);
+  }
+}
+/** The recall already found for this listing's item (from the paid report's cache), if any. */
+function recallFor(conn: Conn, l: Listing): Recall | undefined {
+  if (!recallCheckEnabled()) return undefined;
+  const it = conn.db.item.id.find(l.itemId);
+  return it ? recallChecker(conn).cached(it)?.[0] : undefined;
+}
+function approvalSummary(conn: Conn, l: Listing): string {
+  const recall = recallFor(conn, l);
+  return `Sell "${l.title}" for ${dollars(l.priceCents)}${recall ? `. Possible CPSC recall: ${describeMatch(recall)}` : ''}`;
 }
 
 // Fallback when the owner has no user row; the user's approval_threshold_cents wins (#12).
@@ -64,9 +94,12 @@ async function draft(conn: Conn, it: Item): Promise<void> {
   drafting.add(it.id);
   const comps = [...conn.db.comp.iter()].filter(c => c.itemId === it.id);
   logEvent(conn, { owner: it.owner, agent: 'listing', kind: 'plan', message: `Drafting a listing for "${it.name}" from ${comps.length} comp(s)`, refTable: 'item', refId: it.id });
+  // Runs alongside the Claude draft; awaited before the listing row exists so advance() sees a recall.
+  const recallCheck = checkRecalls(conn, it);
   try {
     // Comps are scraped (untrusted): cleaned and fenced in the prompt, and the output is checked in code (#17).
     const d = await structuredCall({ model: config.models.agent, system: LISTING_SYSTEM, text: buildDraftPrompt(it, comps), schema: ListingDraft });
+    await recallCheck;
     const price = clampPrice(it, d.priceCents, comps);
     const copy = finalizeCopy(d);
     await conn.reducers.createListingDraft({ itemId: it.id, title: copy.title, description: copy.description, priceCents: price, simulated: ebay.simulated });
@@ -99,7 +132,7 @@ async function askApproval(conn: Conn, l: Listing): Promise<boolean> {
   if (approvalRequested.has(l.id)) return false;
   approvalRequested.add(l.id);
   try {
-    await conn.reducers.requestApproval({ owner: l.owner, kind: 'listing', refId: l.id, amountCents: l.priceCents, summary: `Sell "${l.title}" for ${dollars(l.priceCents)}` });
+    await conn.reducers.requestApproval({ owner: l.owner, kind: 'listing', refId: l.id, amountCents: l.priceCents, summary: approvalSummary(conn, l) });
     return true;
   } catch (err) {
     approvalRequested.delete(l.id);
@@ -196,7 +229,7 @@ async function reaskAfterExpiry(conn: Conn, l: Listing): Promise<void> {
   if (reasked.has(next.expired)) return;
   reasked.add(next.expired);
   try {
-    await conn.reducers.requestApproval({ owner: l.owner, kind: 'listing', refId: l.id, amountCents: l.priceCents, summary: `Sell "${l.title}" for ${dollars(l.priceCents)}` });
+    await conn.reducers.requestApproval({ owner: l.owner, kind: 'listing', refId: l.id, amountCents: l.priceCents, summary: approvalSummary(conn, l) });
     logEvent(conn, { ...ref, kind: 'approval', message: `The approval expired without an answer, asking again (${next.attempt} of ${approvalExpiry.maxReasks})`, data: { expiredApprovalId: next.expired } });
   } catch (err) {
     reasked.delete(next.expired); // a later update retries
@@ -257,7 +290,8 @@ async function advance(conn: Conn, l: Listing): Promise<void> {
   const ref = { owner: l.owner, agent: 'listing', refTable: 'listing', refId: l.id };
   if (l.status === 'draft') {
     const threshold = thresholdFor(conn, l);
-    if (threshold < 0n || l.priceCents > threshold) {
+    const recall = recallFor(conn, l);
+    if (recall || threshold < 0n || l.priceCents > threshold) {
       if (approvalRequested.has(l.id)) return;
       // A restart between request_approval and the status update leaves a draft that was already
       // asked about: reuse that approval rather than asking twice.
@@ -265,7 +299,10 @@ async function advance(conn: Conn, l: Listing): Promise<void> {
       if (prior?.amountCents === l.priceCents) approvalRequested.add(l.id);
       else if (!(await askApproval(conn, l))) return;
       await setStatus(conn, l, 'awaiting_approval');
-      logEvent(conn, { ...ref, kind: 'approval', message: `${dollars(l.priceCents)} is over the ${threshold < 0n ? 'always-ask' : dollars(threshold)} threshold, asking for approval` });
+      const why = recall
+        ? `Possible CPSC recall (${describeMatch(recall)}), asking for approval before posting`
+        : `${dollars(l.priceCents)} is over the ${threshold < 0n ? 'always-ask' : dollars(threshold)} threshold, asking for approval`;
+      logEvent(conn, { ...ref, kind: 'approval', message: why, ...(recall ? { data: { possibleRecall: true, recallNumber: recall.recallNumber, title: recall.title } } : {}) });
       return;
     }
     advancing.add(l.id);
