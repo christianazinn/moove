@@ -1,0 +1,82 @@
+{
+  "_note": "Cached live Apify search (active listings) for the buy agent (#15), fetched with a real APIFY_TOKEN and trimmed to the fields we use. FB seller names and eBay seller handles removed (privacy). Served for the demo 'Bed frame' shopping item (search text was 'Bed frame'). FB rows come from the 2026-10-24T05:30:09.360Z run (whose eBay run failed); eBay rows come from a separate eBay-only run at fetchedAt. Rows read back from this file are labeled as a cached replay.",
+  "query": "Bed frame",
+  "fetchedAt": "2026-10-24T05:53:32.124Z",
+  "actors": {
+    "fb": "apify~facebook-marketplace-scraper",
+    "ebay": "automation-lab~ebay-scraper"
+  },
+  "errors": [],
+  "rows": [
+    {
+      "source": "fb",
+      "title": "Bed Frame",
+      "priceCents": 100,
+      "url": "https://www.facebook.com/marketplace/item/1150171414338688/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "fb",
+      "title": "Queen bed + bed frame - PICKUP in OAKLAND only",
+      "priceCents": 4000,
+      "url": "https://www.facebook.com/marketplace/item/1087789287573006/",
+      "seller": "FB Marketplace seller, San Francisco, CA, distance unknown",
+      "condition": "unknown",
+      "distanceMiles": 25,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Full Queen LED Bed Frame with Charging Station&Upholstered Storage Headboard",
+      "priceCents": 16599,
+      "url": "https://www.ebay.com/itm/317176255409",
+      "seller": "eBay seller, 99.8% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Metal Bed Frame with Wooden Storage Headboard &LED Light & Charging Station",
+      "priceCents": 14399,
+      "url": "https://www.ebay.com/itm/315926136565",
+      "seller": "eBay seller, 99.8% positive, Free delivery in 2-4 days",
+      "condition": "good",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Bed Frame Full/Queen/King Size with 2-Tier Storage and LED Lights Headboard",
+      "priceCents": 14399,
+      "url": "https://www.ebay.com/itm/315790907670",
+      "seller": "eBay seller, 99.8% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Queen Size LED Bed Frame with 3-Tier Storage Headboard＆Charging Station",
+      "priceCents": 17499,
+      "url": "https://www.ebay.com/itm/316913651493",
+      "seller": "eBay seller, 99.8% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    },
+    {
+      "source": "ebay",
+      "title": "Metal Bed Frame Twin Full Queen King Size 14 inch Heavy Duty Platform Bed frames",
+      "priceCents": 4359,
+      "url": "https://www.ebay.com/itm/357733306267",
+      "seller": "eBay seller, 99.5% positive, Free delivery in 2-4 days",
+      "condition": "new",
+      "distanceMiles": -1,
+      "checkout": "seller_message"
+    }
+  ]
+}
