@@ -56,20 +56,22 @@ final class ExtraObjectDetector: @unchecked Sendable {
     /// The measured objects, minus anything RoomPlan already found and anything that
     /// is really room structure (walls, door frames, views through windows), see
     /// `StructureCheck`. Checked on the measured boxes, before the minimum-depth padding.
+    /// Then `DetectorPlacement` pads each box to its category's minimum depth, moving
+    /// the center away from the camera (LiDAR saw the front), and turns its front to
+    /// the room: back to a wall it stands against, else toward the room's center (#267).
     func results(room: RoomGeometry) -> (objects: [RoomGeometry.Object], dropped: [String]) {
         let tracks = lock.withLock { () -> [SightingMerger.Track] in
             merger.floorY = room.floorY
             return merger.results(excluding: room.objects)
         }
-        let measured = tracks.map {
-            RoomGeometry.Object(id: UUID().uuidString, category: $0.label, dimensions: $0.box.size, transform: $0.box.transform)
-        }
-        let (kept, dropped) = StructureCheck.apply(measured, in: room)
-        let objects = kept.map { o -> RoomGeometry.Object in
-            var o = o
-            o.dimensions.z = max(o.dimensions.z, ObjectVocabulary.minimumDepth[o.category] ?? 0.05)
+        var cameras: [String: SIMD3<Float>] = [:]
+        let measured = tracks.map { t -> RoomGeometry.Object in
+            let o = RoomGeometry.Object(id: UUID().uuidString, category: t.label, dimensions: t.box.size, transform: t.box.transform)
+            cameras[o.id] = t.camera
             return o
         }
+        let (kept, dropped) = StructureCheck.apply(measured, in: room)
+        let objects = kept.map { DetectorPlacement.place($0, in: room, camera: cameras[$0.id]) }
         return (objects, dropped.map { "\($0.0.category): \($0.1)" })
     }
 
@@ -90,11 +92,14 @@ final class ExtraObjectDetector: @unchecked Sendable {
             return (top.identifier, top.confidence * obs.confidence,
                     NormRect(x: Float(b.minX), y: Float(1 - b.maxY), width: Float(b.width), height: Float(b.height)))
         }
+        let c = frame.camera.transform.columns.3
+        let camera = SIMD3<Float>(c.x, c.y, c.z)
         for d in DetectionFilter.filter(raw) {
             let box = CGRect(x: CGFloat(d.box.x), y: CGFloat(1 - d.box.maxY), width: CGFloat(d.box.width), height: CGFloat(d.box.height))
             let points = depthPoints(frame, box: box) ?? raycastPoints(frame, session: session, box: box)
             guard points.count >= 12 else { continue }
-            lock.withLock { _ = merger.add(Sighting(label: d.category, confidence: d.confidence, points: points)) }
+            let sighting = Sighting(label: d.category, confidence: d.confidence, points: points, camera: camera, time: frame.timestamp)
+            lock.withLock { _ = merger.add(sighting) }
         }
     }
 
@@ -141,6 +146,7 @@ final class ExtraObjectDetector: @unchecked Sendable {
         guard samples.count >= 12 else { return [] }
         lock.withLock { usedDepth += 1 }
         // The object is the nearest big surface; keep depths near the 30th percentile.
+        // This is its front only: DetectorPlacement re-centers the box away from the camera.
         let sorted = samples.map(\.d).sorted()
         let near = sorted[sorted.count * 3 / 10]
         let image = frame.camera.imageResolution
