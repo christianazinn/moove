@@ -265,7 +265,8 @@ struct NewHomeDetail: View {
 
     private func solve() {
         // Lived-in pass: small things onto furniture tops, art and mirrors onto the walls
-        // (PropPlacer's default wall top matches NewHomeScene's 1.1 m cutaway).
+        // (PropPlacer's default wall top matches NewHomeScene's 1.1 m cut, the height every wall
+        // has when it is nearest the camera; back walls rise higher but art stays below the cut).
         let placer = PropPlacer(plan: plan)
         options = LayoutSolver(plan: plan).solveAll(furniture.items).map { option in
             var option = option

@@ -11,8 +11,8 @@ import Testing
 
     // Today (Oct 24, Linux debug): biggest item the bed (~10.7k at default size; sofa 6.1k,
     // mattress 5.9k, bookshelf 5.6k, the rest under 5k); demo bedroom (the seeded Bedroom, #243)
-    // shell 2.0k + 12 items = 26.1k; demo house shell 11.8k + 8 laid-out items = 34.5k;
-    // building + meshing all of it 0.3-0.9 s.
+    // shell 3.3k + 12 items = 27.1k; demo house shell 15.0k + 8 laid-out items = 37.8k (shells
+    // include the full-height back walls); building + meshing all of it 0.4-1.1 s.
 
     /// Any one item mesh (demo item or a kind at its default size). Leaves room for new builders.
     static let perItemTriangleCap = 20_000
@@ -91,9 +91,18 @@ import Testing
 
     // MARK: (2) the demo bedroom dollhouse
 
+    /// The shell as the app draws it: the cut-away base plus the full-height back walls
+    /// (`VoxelHouse.buildLayers`), worst case over the camera's turn (two adjacent facings up).
+    static func shellTriangles(_ plan: FloorPlan, wallColor: VoxelColor? = nil, floorColor: VoxelColor? = nil) -> Int {
+        let layers = VoxelHouse.buildLayers(plan, wallColor: wallColor, floorColor: floorColor)
+        let base = VoxelMesher.mesh(layers.base, centered: false).triangleCount
+        let upper = layers.upper.mapValues { VoxelMesher.mesh($0.grid, centered: false).triangleCount }
+        let x = max(upper[.plusX] ?? 0, upper[.minusX] ?? 0), z = max(upper[.plusZ] ?? 0, upper[.minusZ] ?? 0)
+        return base + x + z
+    }
+
     static func bedroomTriangles() -> (shell: Int, items: Int) {
-        let shell = VoxelMesher.mesh(VoxelHouse.build(bedroomPlan, wallColor: scanColors.wallColor,
-                                                       floorColor: scanColors.floorColor), centered: false).triangleCount
+        let shell = shellTriangles(bedroomPlan, wallColor: scanColors.wallColor, floorColor: scanColors.floorColor)
         let items = demoItems.map { triangles(VoxelItemSpec(LayoutItem($0, colors: scanColors))) }.reduce(0, +)
         return (shell, items)
     }
@@ -108,7 +117,7 @@ import Testing
 
     static func houseTriangles() -> (shell: Int, items: Int, placed: Int) {
         let plan = DemoHouse.floorPlan
-        let shell = VoxelMesher.mesh(VoxelHouse.build(plan), centered: false).triangleCount
+        let shell = shellTriangles(plan)
         // As NewHomeView: kept demo items (with the demo room's colors) plus bought ones,
         // laid out and then dressed by PropPlacer. Every style, worst case counts.
         let demo = DemoFixtures.demo(owner: owner)
