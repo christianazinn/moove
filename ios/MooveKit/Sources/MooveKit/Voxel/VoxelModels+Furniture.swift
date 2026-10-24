@@ -300,6 +300,17 @@ extension Canvas {
         let legC = metalFrame ? frameC : isWhite ? shade(body, 0.95) : shade(body, 0.85)
         let knob = isWhite ? P.brass : P.charcoal
         let ty = Y - 1
+        // desk types from name words; the original styles (L-shaped, standing, glass) win and keep
+        // their exact output. See `deskStyle` for the precedence.
+        let style: DeskStyle = lShape || standing || glass ? .plain : deskStyle(X, Y, Z, name)
+        switch style {
+        case .vanity: vanityDesk(X, Y, Z, name); return
+        case .hutch: hutchDesk(X, Y, Z, name, legC: legC, knob: knob); return
+        case .gaming: gamingDesk(X, Y, Z, name); return
+        case .pedestal: pedestalDesk(X, Y, Z, name, knob: knob); return
+        case .writing: writingDesk(X, Y, Z, name, legC: metalFrame ? frameC : nil, knob: knob); return
+        case .computer, .plain: break
+        }
         // top: glass (flat, see-through blue) or wood grain; an L-desk adds a return wing on the right
         let mainD = lShape ? min(Z - 2, max(5, rd(D(Z) * 0.5))) : Z
         let wing = lShape ? clamp(rd(D(X) * 0.3), 4, X - 6) : 0
@@ -365,6 +376,255 @@ extension Canvas {
             }
             box(X - dw, 0, Z - 2, X, 1, Z - 1, shade(body, 0.7)) // plinth
         }
+        if style == .computer { keyboardTray(X, Y, Z, apronEnd: apronEnd, trayC: metalFrame ? frameC : shade(body, 0.92), railC: metalFrame ? shade(frameC, 0.8) : 0x3A3936) }
+    }
+
+    /// Desk types beyond the original plain / metal / white / drawer-pedestal desk.
+    enum DeskStyle { case plain, vanity, hutch, gaming, pedestal, computer, writing }
+
+    /// Precedence, first match wins (L-shaped, standing and glass desks never get here):
+    ///  1. vanity: "vanity", "dressing table", "makeup"
+    ///  2. hutch: "secretary", "hutch", "roll top", "rolltop", "computer armoire"
+    ///     (the hutch itself only when the scan is >= 1.1 m tall; shorter ones are the plain desk)
+    ///  3. gaming: "gaming"
+    ///  4. pedestal: "executive", "pedestal", or "office desk" at least 1.4 m wide
+    ///  5. computer: "computer desk", "keyboard tray" (the plain desk plus a pull-out tray)
+    ///  6. writing: "writing", "console desk", "mid-century", "midcentury"
+    func deskStyle(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) -> DeskStyle {
+        if name.word("vanity") || name.has("dressing table", "makeup") { return .vanity }
+        if name.has("secretary", "hutch", "roll top", "rolltop", "roll-top", "computer armoire") {
+            return D(Y) * voxelM >= 1.1 && Y >= 12 ? .hutch : .plain
+        }
+        if name.word("gaming") { return .gaming }
+        if name.has("executive", "pedestal") || (name.has("office desk") && D(X) * voxelM >= 1.4) { return .pedestal }
+        if name.has("computer desk", "keyboard tray") { return .computer }
+        if name.word("writing") || name.has("console desk", "mid-century", "midcentury") { return .writing }
+        return .plain
+    }
+
+    /// A pull-out keyboard tray hanging on two rails under the front of the top, keys showing.
+    private func keyboardTray(_ X: Int, _ Y: Int, _ Z: Int, apronEnd: Int, trayC: Int, railC: Int) {
+        let ty = Y - 1
+        let tyT = ty >= 3 ? ty - 2 : max(0, ty - 1)
+        let tx0 = clamp(rd(D(apronEnd) * 0.22), 1, max(1, apronEnd - 2))
+        let tx1 = clamp(rd(D(apronEnd) * 0.72), tx0 + 1, max(tx0 + 1, apronEnd - 1))
+        let tz0 = clamp(Z - max(2, rd(D(Z) * 0.45)), 1, max(1, Z - 1))
+        // rails from the back to the front, hung from the underside of the top
+        for rx in [tx0 - 1, tx1] {
+            box(rx, tyT, 1, rx + 1, tyT + 1, Z - 1, railC)
+            if tyT < ty - 1 { box(rx, tyT + 1, 1, rx + 1, ty, 2, railC) }
+        }
+        box(tx0, tyT, tz0, tx1, tyT + 1, Z, trayC)
+        // keyboard: a dark slab with lighter key rows, flush with the tray
+        if tx1 - tx0 >= 3 && Z - tz0 >= 3 {
+            box(tx0 + 1, tyT, tz0 + 1, tx1 - 1, tyT + 1, Z - 1, flat: true) { x, _, z in (x + z) % 3 == 0 ? 0x55575C : 0x2A2B2E }
+        } else {
+            set(tx0, tyT, Z - 1, 0x2A2B2E, flat: true)
+        }
+    }
+
+    /// Simple four-leg base with an apron for a desk top at `ty` (used by the hutch and vanity).
+    private func deskLegs(_ X: Int, _ ty: Int, _ Z: Int, _ legC: Int, _ apronC: Int, inset: Int = 0) {
+        guard ty > 0 else { return }
+        let i = min(inset, max(0, (X - 2) / 2)), k = min(inset, max(0, (Z - 2) / 2))
+        for (lx, lz) in [(i, k), (X - 1 - i, k), (i, Z - 1 - k), (X - 1 - i, Z - 1 - k)] { box(lx, 0, lz, lx + 1, ty, lz + 1, legC) }
+        if ty >= 3 {
+            box(i, ty - 1, k, X - i, ty, k + 1, apronC)
+            box(i, ty - 1, Z - 1 - k, X - i, ty, Z - k, apronC)
+            box(i, ty - 1, k, i + 1, ty, Z - k, apronC)
+            box(X - 1 - i, ty - 1, k, X - i, ty, Z - k, apronC)
+        }
+    }
+
+    /// Vanity / dressing table: slim legs, two shallow drawers flanking the knee space, and (when
+    /// the scan is tall enough, >= 1.1 m) a framed mirror standing on the back edge.
+    private func vanityDesk(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
+        let body = colorFromName(name, P.white)
+        let knob = P.brass
+        let tall = D(Y) * voxelM >= 1.1 && Y >= 12
+        let deskH = tall ? clamp(vox(0.76), 3, Y - 6) : Y
+        let ty = deskH - 1
+        wood(0, ty, 0, X, deskH, Z, body, .x)
+        box(0, ty, Z - 1, X, deskH, Z, shade(body, 0.93)) // front edge
+        // tapered legs: full at the top, thinner (set back) at the foot
+        let legC = shade(body, 0.9)
+        for (lx, lz) in [(0, 0), (X - 1, 0), (0, Z - 1), (X - 1, Z - 1)] { box(lx, 0, lz, lx + 1, ty, lz + 1, legC) }
+        if ty >= 2 {
+            // apron with a drawer on each side of the knee space (or one centered on a narrow table)
+            box(1, ty - 1, 0, X - 1, ty, 1, shade(body, 0.95))
+            let fronts: [(Int, Int)] = X >= 10 ? [(1, rd(D(X) * 0.36)), (X - rd(D(X) * 0.36), X - 1)] : [(1, max(2, X - 1))]
+            for (x0, x1) in fronts where x1 > x0 {
+                box(x0, ty - 1, 1, x1, ty, Z - 1, body)
+                box(x0, ty - 1, Z - 1, x1, ty, Z) { x, _, _ in x == x0 ? shade(body, 0.78) : body }
+                set(rd(D(x0 + x1 - 1) / 2), ty - 1, Z - 1, knob)
+            }
+            if X >= 10 { box(rd(D(X) * 0.36), ty - 1, Z - 1, X - rd(D(X) * 0.36), ty, Z, shade(body, 0.86)) } // knee-space rail
+        }
+        guard tall else { surface(0, 0, X, Z, deskH); return }
+        // mirror: a thin frame on the back edge, light-blue reflective glass with a highlight streak
+        let mx0 = X >= 8 ? rd(D(X) * 0.18) : 0, mx1 = X - mx0
+        let frame = name.has("gold", "brass") ? P.brass : shade(body, 0.88)
+        let glassC = 0xBFDCEB, hi = 0xE6F3FA
+        box(mx0, deskH, 0, mx1, Y, 1) { x, y, _ in
+            if x == mx0 || x == mx1 - 1 || y == deskH || y == Y - 1 { return frame }
+            return nil
+        }
+        box(mx0 + 1, deskH + 1, 0, mx1 - 1, Y - 1, 1, flat: true) { x, y, _ in
+            let d = (x - mx0) - (y - deskH)
+            return d >= 1 && d <= 2 ? hi : glassC
+        }
+        // hollywood bulbs around the frame
+        if name.has("lighted", "lights", "hollywood", "led") {
+            for y in stride(from: deskH + 2, to: Y - 1, by: 3) { set(mx0, y, 1, P.bulb, flat: true); set(mx1 - 1, y, 1, P.bulb, flat: true) }
+        }
+        surface(0, 1, X, Z, deskH)
+    }
+
+    /// Secretary / hutch desk: a work surface at desk height with a shelved cubby hutch on the back
+    /// half rising to the scanned height. Only called when the scan is tall (see `deskStyle`).
+    private func hutchDesk(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName, legC: Int, knob: Int) {
+        let body = colorFromName(name, name.has("secretary", "roll top", "rolltop", "roll-top") ? P.walnut : P.oak)
+        let deskH = clamp(vox(0.75), 3, Y - 6)
+        let ty = deskH - 1
+        let hz = clamp(rd(D(Z) * 0.4), 1, max(1, Z - 1))
+        // the desk: top, legs, a drawer pedestal on the right when wide enough
+        wood(0, ty, 0, X, deskH, Z, body, .x)
+        box(0, ty, Z - 1, X, deskH, Z, shade(body, 0.93))
+        let ped = X >= 14 && ty >= 4 ? clamp(rd(D(X) * 0.3), 4, 10) : 0
+        deskLegs(ped > 0 ? X - ped + 1 : X, ty, Z, legC, shade(body, 0.9))
+        if ped > 0 {
+            box(X - ped, 0, 0, X, ty, Z - 1, shade(body, 0.97))
+            let n = clamp(rd(D(ty) * voxelM / 0.22), 2, 3)
+            for i in 0..<n {
+                let y0 = 1 + rd(D((ty - 1) * i) / D(n)), y1 = 1 + rd(D((ty - 1) * (i + 1)) / D(n))
+                drawerFront(X - ped, X, y0, y1, Z - 2, body, knob, false)
+            }
+        }
+        surface(0, hz, X, Z, deskH) // the work surface in front of the hutch
+        // the hutch: sides, back, top, shelves; cubby dividers in the lowest row
+        let side = shade(body, 0.95)
+        box(0, deskH, 0, 1, Y, hz, side)
+        box(X - 1, deskH, 0, X, Y, hz, side)
+        box(0, deskH, 0, X, Y, 1, shade(body, 0.85))
+        wood(0, Y - 1, 0, X, Y, hz, body, .x)
+        let inner = Y - 1 - deskH
+        let rows = clamp(rd(D(inner) * voxelM / 0.25), 1, 4)
+        var boards = [ty]
+        for r in 1..<rows {
+            let by = deskH + rd(D(inner * r) / D(rows))
+            if by > boards.last! + 1 && by < Y - 2 { wood(1, by, 1, X - 1, by + 1, hz, body, .x); boards.append(by) }
+        }
+        boards.append(Y - 1)
+        // cubbies in the lowest row: dividers every ~25 cm
+        let lowTop = boards[1]
+        let cubbies = clamp(rd(D(X - 2) * voxelM / 0.25), 1, 6)
+        if cubbies > 1 { for k in 1..<cubbies { let dx = 1 + rd(D((X - 2) * k) / D(cubbies)); box(dx, deskH, 1, dx + 1, lowTop, hz, side) } }
+        // roll-top: a slatted tambour hood across the hutch's lower front
+        if name.has("roll top", "rolltop", "roll-top") && hz < Z {
+            box(0, deskH, hz, X, min(lowTop, deskH + 2), hz + 1) { x, y, _ in y % 2 == 0 ? shade(body, 0.82) : body }
+        }
+        for i in 0..<(boards.count - 1) {
+            let y = boards[i] + 1, clear = boards[i + 1] - y
+            if clear > 0 { surface(1, 1, X - 1, hz, y, clearance: clear) }
+        }
+        surface(0, 0, X, hz, Y)
+    }
+
+    /// Gaming desk: black carbon-weave top with a red (or RGB) strip on the front edge, Z-shaped
+    /// metal side legs, a headphone hook on the left and a cup holder on the right.
+    private func gamingDesk(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
+        let ty = Y - 1
+        let carbonA = 0x1C1C1E, carbonB = 0x2B2B2F, frame = 0x232325
+        let accent = name.has("blue") ? 0x2E7BEF : name.has("green") ? 0x2ECC71 : 0xD7263D
+        let rgb = name.has("rgb", "led")
+        let rgbs = [0xFF3B5C, 0xFFB03B, 0x3BFF8A, 0x3BC8FF, 0x8A5BFF]
+        box(0, ty, 0, X, Y, Z, flat: true) { x, _, z in (x + z) % 2 == 0 ? carbonA : carbonB }
+        box(0, ty, Z - 1, X, Y, Z, flat: true) { x, _, _ in rgb ? rgbs[(x / 2) % rgbs.count] : accent }
+        surface(0, 0, X, Z, Y)
+        guard ty >= 1 else { return }
+        // Z-legs: a rail under the top, a diagonal down to the back, a foot along the floor
+        let fx = X >= 8 ? [1, X - 2] : [0, X - 1]
+        for lx in fx {
+            box(lx, max(0, ty - 1), 0, lx + 1, ty, Z, frame)
+            box(lx, 0, 0, lx + 1, 1, Z, frame)
+            if ty >= 3 { line(lx, ty - 1, Z - 2, lx, 1, 1, frame) }
+            set(lx, 0, Z - 1, accent); set(lx, 0, 0, accent) // foot caps
+        }
+        if ty >= 3 { box(fx[0], ty - 1, 1, fx[1], ty, 2, frame) } // back crossbar
+        if Y >= 8 { let cy = rd(D(Y) * 0.3); box(fx[0], cy, 1, fx[1], cy + 1, 2, frame) }
+        guard ty >= 3 else { return }
+        // headphone hook (left) and cup holder (right) under the top
+        let zc = Z / 2
+        let hx = X >= 8 ? 0 : fx[0]
+        set(hx, ty - 1, zc, frame); set(hx, ty - 2, zc, frame); set(hx, ty - 2, zc + 1, accent)
+        let cx = X >= 8 ? X - 1 : fx[1]
+        box(cx, ty - 2, max(0, Z - 4), cx + 1, ty - 1, Z - 1, carbonB)
+        set(cx, ty - 1, max(0, Z - 3), 0x8B8D91) // the cup's rim
+    }
+
+    /// Pedestal / executive desk: a drawer pedestal on each side, a modesty panel across the back,
+    /// a thick top (with a leather writing inlay on wide executive desks).
+    private func pedestalDesk(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName, knob: Int) {
+        let body = colorFromName(name, name.has("executive") ? P.walnut : P.oak)
+        let ty = Y - 1
+        let thick = Y >= 10
+        wood(0, ty, 0, X, Y, Z, body, .x)
+        if thick { box(0, ty - 1, 0, X, ty, Z, shade(body, 0.9)) }
+        let under = thick ? ty - 1 : ty
+        if name.has("executive") && X >= 16 && Z >= 8 {
+            box(rd(D(X) * 0.25), ty, 2, X - rd(D(X) * 0.25), Y, Z - 2, flat: true) { _, _, _ in 0x2F4A3A }
+        }
+        surface(0, 0, X, Z, Y)
+        guard under >= 1 else { return }
+        let pw = clamp(rd(D(X) * 0.28), 1, max(1, (X - 1) / 2))
+        let zf = max(0, Z - 2)
+        for px in [0, X - pw] {
+            box(px, 0, 0, px + pw, under, max(1, Z - 1), shade(body, 0.96))
+            let n = clamp(rd(D(under) * voxelM / 0.2), 1, 4)
+            for i in 0..<n where under >= 2 {
+                let y0 = 1 + rd(D((under - 1) * i) / D(n)), y1 = 1 + rd(D((under - 1) * (i + 1)) / D(n))
+                if y1 > y0 { drawerFront(px, px + pw, y0, y1, zf, body, knob, pw >= 8) }
+            }
+            box(px, 0, zf, px + pw, 1, zf + 1, shade(body, 0.7)) // plinth
+        }
+        // modesty panel at the back between the pedestals, plus a center drawer under the top
+        let my0 = max(0, rd(D(under) * 0.25))
+        box(pw, my0, 0, X - pw, under, 1, shade(body, 0.86))
+        if X - 2 * pw >= 4 && thick {
+            box(pw, under - 1, 1, X - pw, under, Z - 1, body)
+            set(rd(D(X - 1) / 2), under - 1, Z - 1, knob)
+        }
+    }
+
+    /// Writing desk (mid-century / console): a slim top, one shallow drawer centered under it,
+    /// and four tapered legs splaying out to the corners.
+    private func writingDesk(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName, legC metalC: Int?, knob: Int) {
+        let mcm = name.has("mid-century", "midcentury")
+        let body = colorFromName(name, mcm ? P.walnut : P.oak)
+        let legC = metalC ?? shade(body, 0.85)
+        let ty = Y - 1
+        wood(0, ty, 0, X, Y, Z, body, .x)
+        box(0, ty, Z - 1, X, Y, Z, shade(body, 0.93))
+        surface(0, 0, X, Z, Y)
+        guard ty >= 1 else { return }
+        let ix = max(1, X / 8), iz = max(1, Z / 8)
+        // splayed legs: thick under the apron, tapering to a point at the corners
+        for (tx, tz, fx, fz) in [(ix, iz, 0, 0), (X - 1 - ix, iz, X - 1, 0), (ix, Z - 1 - iz, 0, Z - 1), (X - 1 - ix, Z - 1 - iz, X - 1, Z - 1)] {
+            set(tx, ty - 1, tz, legC)
+            let mx = D(tx + fx) / 2, mz = D(tz + fz) / 2, my = D(ty - 1) / 2
+            if Y >= 12 && X >= 12 {
+                line(D(tx), D(ty - 1), D(tz), mx, my, mz, legC, thick: true)
+                line(mx, my, mz, D(fx), 0, D(fz), legC)
+            } else {
+                line(D(tx), D(ty - 1), D(tz), D(fx), 0, D(fz), legC)
+            }
+        }
+        guard ty >= 2 else { return }
+        // apron ring and the single shallow drawer centered at the front
+        box(ix, ty - 1, iz, X - ix, ty, Z - iz) { x, _, z in x == ix || x == X - ix - 1 || z == iz || z == Z - iz - 1 ? shade(body, 0.82) : nil }
+        let dx0 = clamp(rd(D(X) * 0.3), ix, X - 1), dx1 = clamp(rd(D(X) * 0.7), dx0 + 1, X - ix)
+        box(dx0, ty - 1, iz + 1, dx1, ty, Z - iz) { x, _, z in z == Z - iz - 1 && x == dx0 ? shade(body, 0.78) : body }
+        set(rd(D(dx0 + dx1 - 1) / 2), ty - 1, min(Z - 1, Z - iz), knob)
     }
 
     func officeChair(_ X: Int, _ Y: Int, _ Z: Int, _ name: VName) {
