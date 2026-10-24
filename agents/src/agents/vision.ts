@@ -7,9 +7,9 @@ import { logEvent } from '../events.js';
 import { loadImage, structuredCall } from '../integrations/anthropic.js';
 
 const ItemDetails = z.object({
-  name: z.string().describe('Short, specific name a buyer would search for, e.g. "IKEA Kallax 2x4 shelf, white"'),
+  name: z.string().describe('Short, specific name a buyer would search for. Include the main visible color and any shape or style words, e.g. "white IKEA Kallax 2x4 shelf", "gray L-shaped sectional sofa", "black mesh office chair", "round walnut dining table", "tufted beige headboard bed". These words also drive the item\'s 3D look in the app.'),
   category: z.string().describe('Broad category: furniture, electronics, appliance, decor, kitchen, clothing, books, plant, other'),
-  material: z.string().describe('Main material(s), e.g. "solid oak", "leather", "particleboard"; "" if unclear'),
+  material: z.string().describe('Main material(s) with finish/color, e.g. "walnut veneer", "white laminate", "gray fabric", "black leather", "brushed steel"; "" if unclear'),
   brand: z.string().describe('Brand or maker if identifiable from logos/design, else ""'),
   condition: z.enum(['new', 'like_new', 'good', 'fair', 'poor']),
   fragile: z.boolean().describe('Glass, ceramics, screens, mirrors, art, delicate electronics'),
