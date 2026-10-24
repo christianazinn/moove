@@ -132,8 +132,11 @@ public struct LayoutSolver: Sendable {
         // Hallways stay clear, unless the plan is only that room (a scanned "Entry").
         let usable = plan.rooms.filter { $0.polygon.count >= 3 }
         let rooms = usable.count == 1 ? usable : usable.filter { $0.kind != .hallway }
-        var designer = Designer(solver: self, style: style, rooms: rooms, fixed: fixed, used: seeded)
-        return designer.run(items, fixedBeds: fixedBeds)
+        // A mattress that matches a bed frame goes on it, not into a second bedroom (MattressPairing).
+        return solvePairingMattresses(items) { items in
+            var designer = Designer(solver: self, style: style, rooms: rooms, fixed: fixed, used: seeded)
+            return designer.run(items, fixedBeds: fixedBeds)
+        }
     }
 
     // MARK: Room choice
@@ -322,5 +325,25 @@ public struct OrientedRect: Sendable, Hashable {
             if pa.max()! <= pb.min()! + 1e-9 || pb.max()! <= pa.min()! + 1e-9 { return false }
         }
         return true
+    }
+}
+
+extension LayoutSolver {
+    /// Every style with the lived-in pass on top: small things onto furniture tops, art and
+    /// mirrors onto the walls (PropPlacer's default wall top matches the 3D view's 1.1 m cut).
+    /// What New Home shows.
+    public func arrangeAll(_ items: [LayoutItem]) -> [LayoutOption] {
+        let placer = PropPlacer(plan: plan)
+        return solveAll(items).map { option in
+            var option = option
+            option.placements = placer.place(option.placements, items: items)
+            return option
+        }
+    }
+
+    /// `arrangeAll` off the caller's actor (about a second for the demo house on a debug
+    /// build), so New Home's main thread keeps drawing while it solves.
+    public static func arrange(plan: FloorPlan, items: [LayoutItem]) async -> [LayoutOption] {
+        await Task.detached(priority: .userInitiated) { LayoutSolver(plan: plan).arrangeAll(items) }.value
     }
 }
