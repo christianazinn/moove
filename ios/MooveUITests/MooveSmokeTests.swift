@@ -115,6 +115,13 @@ final class MooveSmokeTests: XCTestCase {
         XCTAssertTrue(view3D.waitForExistence(timeout: slow))
         view3D.tap()
 
+        // Opens on the voxel dollhouse (#236), the app's one 3D look for items.
+        let voxel = app.descendants(matching: .any)["room.voxel"].firstMatch
+        XCTAssertTrue(voxel.waitForExistence(timeout: slow), "voxel dollhouse view")
+        sleep(3)  // let RealityKit draw a frame
+        snap("04-room-voxel")
+
+        app.buttons["3D"].firstMatch.tap()
         let model = app.descendants(matching: .any)["room.model"].firstMatch
         XCTAssertTrue(model.waitForExistence(timeout: slow), "3D model view")
         sleep(2)  // let RealityKit draw a frame

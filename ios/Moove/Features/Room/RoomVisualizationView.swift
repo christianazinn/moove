@@ -5,17 +5,28 @@ import MooveKit
 /// card for the selected piece of furniture.
 struct RoomVisualizationView: View {
     enum Style: String, CaseIterable, Identifiable {
-        case model, plan
+        /// Voxel dollhouse (decision 0108's look, #236), RoomPlan's boxes in 3D, or the floor plan.
+        case voxel, model, plan
         var id: String { rawValue }
-        var label: String { self == .model ? "3D" : "Plan" }
+        var label: String {
+            switch self {
+            case .voxel: "Voxel"
+            case .model: "3D"
+            case .plan: "Plan"
+            }
+        }
+        var identifier: String { "room.\(rawValue)" }
     }
 
     let geometry: RoomGeometry
     /// Inventory items keyed by `scanObjectId`.
     var items: [String: Item] = [:]
     var initialMode: RoomPalette.Mode = .category
+    /// For the Voxel style: the room's name and all its items (also ones with no scanned box).
+    var roomName = "Room"
+    var roomItems: [Item] = []
 
-    @State private var style: Style = .model
+    @State private var style: Style = .voxel
     @State private var mode: RoomPalette.Mode = .category
     @State private var showLabels = true
     @State private var fullWalls = false
@@ -27,26 +38,24 @@ struct RoomVisualizationView: View {
         ZStack(alignment: .bottom) {
             Theme.bg.ignoresSafeArea()
             Group {
-                if style == .model, #available(iOS 18.0, *) {
-                    RoomModelView(geometry: shown, items: items, mode: mode, showLabels: showLabels, selection: $selection)
-                        .id(fullWalls)  // rebuild the scene when walls change
-                } else {
-                    RoomPlanView(geometry: centered, items: items, mode: mode, showLabels: showLabels, selection: $selection)
+                if style == .voxel {
+                    // The camera frames the room before the view has a size (as if 0.8 wide), so
+                    // a tall full-screen view crops the walls; a square leaves room on the sides.
+                    RoomVoxelView(geometry: geometry, roomName: roomName, items: roomItems)
+                        .aspectRatio(1, contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding(.bottom, 60)
-                }
-            }
-            // The 3D scene and the plan canvas draw pixels VoiceOver can't read, so
-            // expose each piece of furniture as its own element: swipe through them,
-            // double-tap to select (which opens the item card below).
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(accessibilitySummary)
-            // On the combined element: `.ignore` hides identifiers set inside it.
-            .accessibilityIdentifier(style == .model ? "room.model" : "room.plan")
-            .accessibilityChildren {
-                ForEach(geometry.objects) { object in
-                    Text(accessibilityName(object))
-                        .accessibilityAddTraits(selection == object.id ? [.isButton, .isSelected] : .isButton)
-                        .accessibilityAction { selection = object.id }
+                        // `.accessibilityChildren` around the ARView stops it drawing, so VoiceOver
+                        // gets the furniture list from a clear overlay instead.
+                        .overlay { furnitureForVoiceOver(Color.clear.allowsHitTesting(false)) }
+                } else if style == .model, #available(iOS 18.0, *) {
+                    furnitureForVoiceOver(
+                        RoomModelView(geometry: shown, items: items, mode: mode, showLabels: showLabels, selection: $selection)
+                            .id(fullWalls))  // rebuild the scene when walls change
+                } else {
+                    furnitureForVoiceOver(
+                        RoomPlanView(geometry: centered, items: items, mode: mode, showLabels: showLabels, selection: $selection)
+                            .padding(.bottom, 60))
                 }
             }
             VStack(spacing: 10) {
@@ -54,7 +63,7 @@ struct RoomVisualizationView: View {
                     SelectedObjectCard(object: object, item: items[id]) { selection = nil }
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                legend
+                if style != .voxel { legend }  // voxels use the items' own colors
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.bottom, 16)
@@ -67,31 +76,59 @@ struct RoomVisualizationView: View {
                     .accessibilityLabel("View")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Picker("Color by", selection: $mode) {
-                        ForEach(RoomPalette.Mode.allCases) { Text($0.label).tag($0) }
-                    }
-                    Toggle("Labels", isOn: $showLabels)
-                    Toggle("Full-height walls", isOn: $fullWalls)
-                } label: {
-                    Label("Display", systemImage: "paintpalette")
-                }
-                .accessibilityIdentifier("room.display")
+                // Coloring, labels and wall height only apply to RoomPlan's boxes.
+                if style != .voxel { displayMenu }
             }
         }
         .mooveScreen()
         .onAppear {
             mode = initialMode
             #if DEBUG
-            if ProcessInfo.processInfo.environment["MOOVE_ROOM_STYLE"] == "plan" { style = .plan }
+            if let raw = ProcessInfo.processInfo.environment["MOOVE_ROOM_STYLE"], let s = Style(rawValue: raw) { style = s }
             if ProcessInfo.processInfo.environment["MOOVE_ROOM_MODE"] == "decision" { mode = .decision }
             #endif
         }
     }
 
+    /// The 3D scene and the plan canvas draw pixels VoiceOver can't read, so expose each
+    /// piece of furniture as its own element: swipe through them, double-tap to select
+    /// (which opens the item card below).
+    private func furnitureForVoiceOver(_ content: some View) -> some View {
+        content
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilitySummary)
+            // On the combined element: `.ignore` hides identifiers set inside it.
+            .accessibilityIdentifier(style.identifier)
+            .accessibilityChildren {
+                ForEach(geometry.objects) { object in
+                    Text(accessibilityName(object))
+                        .accessibilityAddTraits(selection == object.id ? [.isButton, .isSelected] : .isButton)
+                        .accessibilityAction { selection = object.id }
+                }
+            }
+    }
+
+    private var displayMenu: some View {
+        Menu {
+            Picker("Color by", selection: $mode) {
+                ForEach(RoomPalette.Mode.allCases) { Text($0.label).tag($0) }
+            }
+            Toggle("Labels", isOn: $showLabels)
+            Toggle("Full-height walls", isOn: $fullWalls)
+        } label: {
+            Label("Display", systemImage: "paintpalette")
+        }
+        .accessibilityIdentifier("room.display")
+    }
+
     private var accessibilitySummary: String {
         let n = geometry.objects.count
-        return "\(style == .model ? "3D model" : "Floor plan") of the room: \(n) item\(n == 1 ? "" : "s"), \(geometry.walls.count) walls, \(geometry.openings.count) doors and windows"
+        let kind = switch style {
+        case .voxel: "Voxel model"
+        case .model: "3D model"
+        case .plan: "Floor plan"
+        }
+        return "\(kind) of the room: \(n) item\(n == 1 ? "" : "s"), \(geometry.walls.count) walls, \(geometry.openings.count) doors and windows"
     }
 
     private func accessibilityName(_ object: RoomGeometry.Object) -> String {
