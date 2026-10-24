@@ -36,6 +36,27 @@ export const config = {
     maxUsdPerRun: Number(env('APIFY_MAX_USD_PER_RUN', '0.10')),
     city: { fb: env('MARKET_CITY_FB', 'sanfrancisco'), craigslist: env('MARKET_CITY_CRAIGSLIST', 'sfbay') },
   },
+  // SAM 3D Objects on fal.ai (#65): 3D models of photographed items. Off without FAL_KEY.
+  sam3d: {
+    enabled: Boolean(env('FAL_KEY')),
+    usdPerRun: Number(env('SAM3D_USD_PER_RUN', '0.02')),
+    // Per worker run, covering fal + the Claude image pick + image searches (~$0.07 per item).
+    maxUsd: Number(env('SAM3D_MAX_USD', '2.00')),
+    concurrency: Number(env('SAM3D_CONCURRENCY', '2')),
+    // After fal says it can't run (no balance, rate limit, outage), wait this long before retrying.
+    retryLaterSec: Number(env('SAM3D_RETRY_LATER_SEC', '600')),
+    // SAM 3D tries on one item before giving up (next-best image on each retry).
+    maxAttempts: Math.max(1, Number(env('SAM3D_MAX_ATTEMPTS', '2'))),
+    // Estimated cost of one Claude image pick (MODEL_VISION, up to ~8 images), for the spend cap.
+    selectUsd: Number(env('SAM3D_SELECT_USD', '0.04')),
+    // Web product images for items vision identified as a specific product (#84). 0 = photos only.
+    webImages: env('SAM3D_WEB_IMAGES', '1') !== '0',
+    webImagesMax: Math.max(0, Number(env('SAM3D_WEB_IMAGES_MAX', '6'))),
+    // Cap on one Apify image search (maxTotalChargeUsd); cached searches are free.
+    imageSearchMaxUsd: Number(env('SAM3D_IMAGE_SEARCH_MAX_USD', '0.03')),
+    // Optional allowlist of hosts web images may come from (comma-separated). Empty = any public https host.
+    productImageHosts: parseAllowedHosts(env('PRODUCT_IMAGE_HOSTS')),
+  },
   models: {
     vision: env('MODEL_VISION', 'claude-sonnet-5-5'),
     fast: env('MODEL_FAST', 'claude-haiku-5-5'),
