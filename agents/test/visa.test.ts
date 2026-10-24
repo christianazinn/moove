@@ -7,11 +7,17 @@ import {
   VisaApiError,
   VisaCheckout,
   approvalGate,
+  authorizeNetRef,
+  checkoutMode,
   createAcceptanceBackend,
+  createAuthorizeNetBackend,
   createSimulatedBackend,
   createVisaCheckout,
   cybersourceSignedHeaders,
+  isAuthError,
+  isTransient,
   selectBackend,
+  visaCheckoutMode,
   type ApprovalView,
   type CheckoutBackend,
   type PurchaseContext,
@@ -204,6 +210,188 @@ test("acceptance throws VisaApiError on 401", async () => {
 
 test("acceptance refuses any non-sandbox host", () => {
   assert.throws(() => createAcceptanceBackend({ ...CFG, host: "api.cybersource.com" }), /sandbox only/);
+});
+
+// ---------- authorize.net backend ----------
+
+const ANET = { apiLoginId: "anet_login", transactionKey: "anet-not-a-real-key" };
+const ANET_ENV = { AUTHORIZENET_API_LOGIN_ID: "l", AUTHORIZENET_TRANSACTION_KEY: "k" };
+const anetOk = (transId: string, extra: object = {}) => ({
+  transactionResponse: { responseCode: "1", authCode: "HH5414", transId, messages: [{ code: "1", description: "This transaction has been approved." }], ...extra },
+  refId: "r",
+  messages: { resultCode: "Ok", message: [{ code: "I00001", text: "Successful." }] },
+});
+const anetDecline = (responseCode: string, errorCode: string, errorText: string) => ({
+  transactionResponse: { responseCode, transId: "0", errors: [{ errorCode, errorText }] },
+  messages: { resultCode: "Error", message: [{ code: "E00027", text: "The transaction was unsuccessful." }] },
+});
+
+/**
+ * A fake Authorize.net JSON API, keyed by transactionType. Bodies start with a UTF-8 BOM like the real
+ * one; the reply is Response-shaped by hand because Response.text() would strip the BOM for us.
+ */
+function fakeAuthorizeNet(routes: Partial<Record<"authOnlyTransaction" | "priorAuthCaptureTransaction" | "voidTransaction", Reply | Reply[]>> = {}) {
+  const seen: { url: string; headers: Headers; raw: string; body: any; kind: string }[] = [];
+  const defaults: Record<string, Reply> = {
+    authOnlyTransaction: { status: 200, body: anetOk("60000000001") },
+    priorAuthCaptureTransaction: { status: 200, body: anetOk("60000000001") },
+    voidTransaction: { status: 200, body: anetOk("60000000001") },
+  };
+  const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const raw = String(init?.body);
+    const body = JSON.parse(raw);
+    const kind = body.createTransactionRequest.transactionRequest.transactionType;
+    seen.push({ url: String(input), headers: new Headers(init?.headers), raw, body, kind });
+    const r = routes[kind as keyof typeof routes];
+    const reply = Array.isArray(r) ? (r.length > 1 ? r.shift()! : r[0]) : (r ?? defaults[kind]);
+    return { status: reply.status, text: async () => "﻿" + JSON.stringify(reply.body) } as Response;
+  }) as typeof globalThis.fetch;
+  return { fetch, seen };
+}
+
+test("authorize.net authorize posts an authOnlyTransaction on the test card, keys in schema order", async () => {
+  const server = fakeAuthorizeNet();
+  const b = createAuthorizeNetBackend({ ...ANET, fetch: server.fetch });
+  assert.equal(b.provider, "authorizenet");
+  assert.equal(b.simulated, false);
+  assert.equal(b.sandbox, true);
+  assert.match(b.payee, /Authorize\.net sandbox merchant/);
+
+  const r = await b.authorize({ reference: "moove-deal-12", amountCents: 1_234n, currency: "USD", description: "bed" });
+  assert.deepEqual(r, { id: "60000000001", status: "authorized", processorStatus: "APPROVED", reason: undefined, httpStatus: 200 });
+  const req = server.seen[0];
+  assert.equal(req.url, "https://apitest.authorize.net/xml/v1/request.api");
+  assert.equal(req.headers.get("content-type"), "application/json");
+  const top = req.body.createTransactionRequest;
+  // XML-backed JSON: element order is part of the schema.
+  assert.deepEqual(Object.keys(top), ["merchantAuthentication", "refId", "transactionRequest"]);
+  assert.deepEqual(top.merchantAuthentication, { name: "anet_login", transactionKey: "anet-not-a-real-key" });
+  assert.equal(top.refId, "moove-deal-12");
+  const t = top.transactionRequest;
+  assert.deepEqual(Object.keys(t), ["transactionType", "amount", "payment", "order", "billTo"]);
+  assert.equal(t.transactionType, "authOnlyTransaction");
+  assert.equal(t.amount, "12.34");
+  assert.deepEqual(t.payment.creditCard, { cardNumber: "4111111111111111", expirationDate: "2031-12", cardCode: "123" });
+  assert.equal(t.order.invoiceNumber, "moove-deal-12");
+  assert.equal(t.billTo.zip, "94105");
+});
+
+test("authorize.net refId and invoiceNumber stay within 20 chars and keep the row id", async () => {
+  const server = fakeAuthorizeNet();
+  const b = createAuthorizeNetBackend({ ...ANET, fetch: server.fetch });
+  await b.authorize({ reference: "moove-shopping_item-123456789012", amountCents: 100n, currency: "USD", description: "d" });
+  const top = server.seen[0].body.createTransactionRequest;
+  assert.ok(top.refId.length <= 20, top.refId);
+  assert.ok(top.transactionRequest.order.invoiceNumber.length <= 20);
+  assert.match(top.refId, /123456789012$/);
+  assert.equal(authorizeNetRef("moove-deal-12"), "moove-deal-12");
+});
+
+test("authorize.net capture and void send refTransId and map approvals", async () => {
+  const server = fakeAuthorizeNet();
+  const b = createAuthorizeNetBackend({ ...ANET, fetch: server.fetch });
+  const cap = await b.capture("60000000001", 500n, "moove-deal-12");
+  assert.equal(cap.status, "captured");
+  const ct = server.seen[0].body.createTransactionRequest.transactionRequest;
+  assert.deepEqual(ct, { transactionType: "priorAuthCaptureTransaction", amount: "5.00", refTransId: "60000000001" });
+
+  const v = await b.void("60000000001", 500n, "moove-deal-12", "user picked another deal");
+  assert.equal(v.status, "voided");
+  assert.deepEqual(server.seen[1].body.createTransactionRequest.transactionRequest, { transactionType: "voidTransaction", refTransId: "60000000001" });
+});
+
+test("authorize.net purchase: approve -> capture, labeled VISA SANDBOX, never simulated", async () => {
+  const { sink, payments, events } = memorySink();
+  const server = fakeAuthorizeNet();
+  const co = new VisaCheckout({ sink, backend: createAuthorizeNetBackend({ ...ANET, fetch: server.fetch }), ledger: ledger() });
+  const r = await co.purchase(ctx());
+  assert.equal(r.status, "captured");
+  assert.equal(r.provider, "authorizenet");
+  assert.equal(r.simulated, false);
+  assert.equal(payments[0].simulated, false);
+  assert.equal(payments[0].txHash, "60000000001");
+  assert.equal(payments[0].status, "settled");
+  assert.match(payments[0].purpose, /^\[Visa sandbox\] /);
+  assert.equal(payments[0].payee, "Authorize.net sandbox merchant (for IKEA)");
+  for (const e of events) {
+    assert.match(e.message, /^\[VISA SANDBOX\]/);
+    assert.equal(e.data.sandbox, true);
+    assert.equal(e.data.simulated, false);
+    assert.equal(e.data.provider, "authorizenet");
+    assert.match(String(e.data.note), /Authorize\.net sandbox/);
+  }
+  assert.deepEqual(server.seen.map((s) => s.kind), ["authOnlyTransaction", "priorAuthCaptureTransaction"]);
+  assert.equal(server.seen[1].body.createTransactionRequest.transactionRequest.refTransId, "60000000001");
+});
+
+test("authorize.net decline (responseCode 2) is a decline with the error text, budget released", async () => {
+  const { sink, payments } = memorySink();
+  const server = fakeAuthorizeNet({ authOnlyTransaction: { status: 200, body: anetDecline("2", "2", "This transaction has been declined.") } });
+  const sim = spy(createSimulatedBackend());
+  const co = new VisaCheckout({ sink, backend: createAuthorizeNetBackend({ ...ANET, fetch: server.fetch }), fallback: sim.backend, ledger: ledger() });
+  const r = await co.purchase(ctx());
+  assert.equal(r.status, "declined");
+  assert.equal(r.simulated, false);
+  assert.match(r.reason!, /2: This transaction has been declined\./);
+  assert.equal(payments[0].status, "failed");
+  assert.equal(sim.calls.authorize, 0, "a decline never falls back");
+  assert.equal(co.remaining("buy"), 50_000n);
+});
+
+test("authorize.net held for review (responseCode 4) is not a usable hold", async () => {
+  const server = fakeAuthorizeNet({ authOnlyTransaction: { status: 200, body: { ...anetOk("60000000009"), transactionResponse: { responseCode: "4", transId: "60000000009" } } } });
+  const b = createAuthorizeNetBackend({ ...ANET, fetch: server.fetch });
+  const r = await b.authorize({ reference: "r", amountCents: 100n, currency: "USD", description: "d" });
+  assert.equal(r.status, "declined");
+  assert.equal(r.processorStatus, "HELD_FOR_REVIEW");
+});
+
+test("authorize.net E00007 (bad keys) is an auth error: fails the checkout, no simulated fallback", async () => {
+  const { sink, payments, events } = memorySink();
+  const server = fakeAuthorizeNet({
+    authOnlyTransaction: { status: 200, body: { messages: { resultCode: "Error", message: [{ code: "E00007", text: "User authentication failed due to invalid authentication values." }] } } },
+  });
+  const b = createAuthorizeNetBackend({ ...ANET, fetch: server.fetch });
+  await assert.rejects(b.authorize({ reference: "r", amountCents: 100n, currency: "USD", description: "d" }), (e: unknown) => {
+    assert.ok(e instanceof VisaApiError);
+    assert.equal(e.httpStatus, 401);
+    assert.ok(isAuthError(e));
+    assert.match(e.message, /E00007/);
+    return true;
+  });
+
+  const visa = createVisaCheckout(sink, { ...ANET_ENV, VISA_PROVIDER: "authorizenet", VISA_FALLBACK_SIMULATED: "1", VISA_SIM_DELAY_MS: "0" }, server.fetch);
+  const r = await visa.purchase(ctx());
+  assert.equal(r.status, "declined");
+  assert.equal(r.simulated, false);
+  assert.equal(r.retryable, false);
+  assert.equal(payments.length, 0);
+  assert.ok(!events.some((e) => /\[SIMULATED\]/.test(e.message)));
+});
+
+test("authorize.net network failure is a retryable status-0 error", async () => {
+  const b = createAuthorizeNetBackend({ ...ANET, fetch: (async () => { throw new TypeError("fetch failed"); }) as typeof globalThis.fetch });
+  await assert.rejects(b.authorize({ reference: "r", amountCents: 100n, currency: "USD", description: "d" }), (e: unknown) => {
+    assert.ok(e instanceof VisaApiError);
+    assert.equal(e.httpStatus, 0);
+    assert.ok(isTransient(e));
+    return true;
+  });
+});
+
+test("authorize.net parses a BOM-prefixed body (a plain JSON.parse would throw)", async () => {
+  const server = fakeAuthorizeNet();
+  const b = createAuthorizeNetBackend({ ...ANET, fetch: server.fetch });
+  const res = await server.fetch("https://apitest.authorize.net/xml/v1/request.api", { method: "POST", body: JSON.stringify({ createTransactionRequest: { transactionRequest: { transactionType: "voidTransaction" } } }) });
+  const text = await res.text();
+  assert.equal(text.charCodeAt(0), 0xfeff);
+  assert.throws(() => JSON.parse(text));
+  assert.equal((await b.authorize({ reference: "r", amountCents: 100n, currency: "USD", description: "d" })).status, "authorized");
+});
+
+test("authorize.net refuses any non-sandbox host", () => {
+  assert.throws(() => createAuthorizeNetBackend({ ...ANET, host: "api.authorize.net" }), /sandbox only/);
+  assert.throws(() => createAuthorizeNetBackend({ ...ANET, host: "api2.authorize.net" }), /sandbox only/);
 });
 
 // ---------- purchase flow ----------
@@ -548,6 +736,56 @@ test("selectBackend picks the backend from env", () => {
 
   assert.equal(selectBackend({ ...ENV_KEYS, VISA_PROVIDER: "simulated" }).backend.simulated, true);
   assert.match(selectBackend({ VISA_PROVIDER: "paypal" }).note!, /unknown VISA_PROVIDER/);
+});
+
+test("selectBackend: authorizenet explicitly, preferred over acceptance from keys, loud when misconfigured", () => {
+  const explicit = selectBackend({ ...ANET_ENV, VISA_PROVIDER: "authorizenet" });
+  assert.equal(explicit.backend.provider, "authorizenet");
+  assert.equal(explicit.backend.sandbox, true);
+  assert.equal(explicit.note, undefined);
+
+  // No VISA_PROVIDER: Authorize.net keys win over CyberSource keys; CyberSource alone still picks acceptance.
+  assert.equal(selectBackend({ ...ENV_KEYS, ...ANET_ENV }).backend.provider, "authorizenet");
+  assert.equal(selectBackend(ENV_KEYS).backend.provider, "acceptance");
+  assert.equal(selectBackend({ ...ENV_KEYS, ...ANET_ENV, VISA_PROVIDER: "acceptance" }).backend.provider, "acceptance");
+  // Only one of the two Authorize.net keys is not enough.
+  assert.equal(selectBackend({ AUTHORIZENET_API_LOGIN_ID: "l" }).backend.provider, "simulated");
+
+  const missing = selectBackend({ VISA_PROVIDER: "authorizenet" });
+  assert.equal(missing.backend.simulated, false);
+  assert.equal(missing.backend.sandbox, true);
+  assert.match(missing.note!, /AUTHORIZENET_\* keys are missing/);
+  const explicitBadHost = selectBackend({ ...ANET_ENV, VISA_PROVIDER: "authorizenet", AUTHORIZENET_HOST: "api.authorize.net" });
+  assert.equal(explicitBadHost.backend.simulated, false);
+  assert.match(explicitBadHost.note!, /sandbox only/);
+  const badHost = selectBackend({ ...ANET_ENV, AUTHORIZENET_HOST: "api.authorize.net" });
+  assert.equal(badHost.backend.simulated, true);
+  assert.equal(selectBackend({ ...ANET_ENV, AUTHORIZENET_HOST: "apitest.authorize.net" }).backend.provider, "authorizenet");
+});
+
+test("authorizenet reports a sandbox checkout mode (VISA SANDBOX, not SIMULATED)", () => {
+  assert.equal(visaCheckoutMode({ ...ANET_ENV, VISA_PROVIDER: "authorizenet" }), "sandbox");
+  assert.equal(visaCheckoutMode({ ...ANET_ENV, VISA_PROVIDER: "authorizenet", VISA_FALLBACK_SIMULATED: "1" }), "sandbox+fallback");
+  assert.equal(visaCheckoutMode(ANET_ENV), "sandbox+fallback");
+  assert.equal(visaCheckoutMode({ VISA_PROVIDER: "authorizenet" }), "sandbox");
+  assert.equal(checkoutMode(createAuthorizeNetBackend(ANET)), "sandbox");
+});
+
+test("explicit authorizenet: a network failure is retryable and does not fall back unless VISA_FALLBACK_SIMULATED=1", async () => {
+  const { sink, payments } = memorySink();
+  const down = (async () => {
+    throw new TypeError("fetch failed");
+  }) as typeof globalThis.fetch;
+  const strict = createVisaCheckout(sink, { ...ANET_ENV, VISA_PROVIDER: "authorizenet", VISA_SIM_DELAY_MS: "0" }, down);
+  const r = await strict.purchase(ctx());
+  assert.equal(r.status, "declined");
+  assert.equal(r.retryable, true);
+  assert.equal(payments.length, 0);
+
+  const lenient = createVisaCheckout(sink, { ...ANET_ENV, VISA_PROVIDER: "authorizenet", VISA_FALLBACK_SIMULATED: "1", VISA_SIM_DELAY_MS: "0" }, down);
+  const r2 = await lenient.purchase(ctx());
+  assert.equal(r2.status, "captured");
+  assert.equal(r2.simulated, true);
 });
 
 test("createVisaCheckout budgets: defaults, and an explicit 0 cap means no spending", async () => {

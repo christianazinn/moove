@@ -7,8 +7,12 @@
 //     transaction id, on a public Visa test card, so no money moves. HTTP Signature auth, built to
 //     match cybersource-rest-client@0.0.84 (src/authentication/http) and the REST getting-started
 //     guide. Only the sandbox host is allowed. Rows say simulated=false; event data says sandbox=true.
+//     Our two sandbox merchants answer every authorization with a 502 SYSTEM_ERROR (merchant setup).
+//   - `authorizenet`: Authorize.net (also a Visa Acceptance product) **sandbox** JSON API, same test
+//     card, same labels as `acceptance` (simulated=false, sandbox=true). Auth is in the request body.
+//     Only apitest.authorize.net is allowed.
 //   - `simulated`: no network. Every result and row says `simulated: true` and messages start with
-//     [SIMULATED]. This is the default whenever the VISA_ACCEPTANCE_* keys are missing.
+//     [SIMULATED]. This is the default whenever the AUTHORIZENET_* and VISA_ACCEPTANCE_* keys are missing.
 //   - `vic`: Visa Intelligent Commerce. Credentials are gated (VIC/VTS onboarding), so this is only a
 //     seam: see `createVicBackend` below.
 //
@@ -21,7 +25,7 @@ import crypto from 'node:crypto';
 import { usdCapFromEnv } from './caps.js';
 import { simulatedLabel } from './simulated.js';
 
-export type VisaProvider = 'acceptance' | 'simulated' | 'vic';
+export type VisaProvider = 'acceptance' | 'authorizenet' | 'simulated' | 'vic';
 
 // Opaque here; the SpacetimeDB `Identity` in the worker (see payments wiring in buy.ts).
 export type Owner = unknown;
@@ -71,13 +75,13 @@ export interface AuthorizeRequest {
 }
 
 export interface BackendResult {
-  /** Processor transaction id (CyberSource `id`, or `sim_*`). */
+  /** Processor transaction id (CyberSource `id`, Authorize.net `transId`, or `sim_*`). */
   id: string;
   status: 'authorized' | 'captured' | 'voided' | 'declined';
   /** Processor status string, e.g. AUTHORIZED, PENDING, REVERSED, DECLINED. */
   processorStatus: string;
   reason?: string;
-  /** HTTP status of the processor call (acceptance backend only), kept as evidence in event data. */
+  /** HTTP status of the processor call (sandbox backends only), kept as evidence in event data. */
   httpStatus?: number;
 }
 
@@ -259,6 +263,121 @@ export function createAcceptanceBackend(cfg: AcceptanceConfig): CheckoutBackend 
       });
       const ok = j.status === 'REVERSED';
       return { id: String(j.id ?? ''), status: ok ? 'voided' : 'declined', processorStatus: String(j.status ?? ''), reason: ok ? undefined : declineReason(j), httpStatus: j.__http };
+    },
+  };
+}
+
+export const AUTHORIZENET_SANDBOX_HOST = 'apitest.authorize.net';
+// The same public Visa test card, in Authorize.net's shape (expirationDate is YYYY-MM). Sandbox only.
+const AUTHORIZENET_TEST_CARD = { cardNumber: '4111111111111111', expirationDate: '2031-12', cardCode: '123' };
+
+export interface AuthorizeNetConfig {
+  apiLoginId: string;
+  transactionKey: string;
+  host?: string;
+  fetch?: typeof globalThis.fetch;
+}
+
+// transactionResponse.responseCode -> our processorStatus string.
+const AUTHORIZENET_RESPONSE: Record<string, string> = { '1': 'APPROVED', '2': 'DECLINED', '3': 'ERROR', '4': 'HELD_FOR_REVIEW' };
+
+/**
+ * refId and order.invoiceNumber are capped at 20 characters. Keep the tail, which holds the row id
+ * (`moove-deal-12`), so two long references never collapse into the same prefix.
+ */
+export const authorizeNetRef = (reference: string): string => {
+  const clean = reference.replace(/[^A-Za-z0-9_-]/g, '');
+  return clean.length <= 20 ? clean : clean.slice(-20);
+};
+
+/** Authorize.net sandbox (JSON API): authOnlyTransaction, priorAuthCaptureTransaction, voidTransaction. */
+export function createAuthorizeNetBackend(cfg: AuthorizeNetConfig): CheckoutBackend {
+  const host = cfg.host || AUTHORIZENET_SANDBOX_HOST;
+  // Guardrail: this integration only ever talks to the sandbox with a test card.
+  if (host !== AUTHORIZENET_SANDBOX_HOST) {
+    throw new Error(`AUTHORIZENET_HOST must be ${AUTHORIZENET_SANDBOX_HOST} (sandbox only), got ${host}`);
+  }
+  const fetchImpl = cfg.fetch ?? globalThis.fetch;
+
+  async function call(reference: string, transactionRequest: object): Promise<Record<string, any>> {
+    // The JSON API is XML-backed, so key order matters: merchantAuthentication, refId, transactionRequest.
+    const body = JSON.stringify({
+      createTransactionRequest: {
+        merchantAuthentication: { name: cfg.apiLoginId, transactionKey: cfg.transactionKey },
+        refId: authorizeNetRef(reference),
+        transactionRequest,
+      },
+    });
+    let res: Response;
+    try {
+      res = await fetchImpl(`https://${host}/xml/v1/request.api`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body });
+    } catch (err) {
+      // DNS, TLS, reset, offline: a transport failure (status 0), retryable.
+      throw new VisaApiError(`Authorize.net unreachable: ${(err as Error).message}`, 0, undefined);
+    }
+    // Authorize.net starts its JSON with a UTF-8 BOM, which JSON.parse rejects.
+    const text = (await res.text()).replace(/^﻿/, '');
+    let json: Record<string, any> = {};
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch {
+      json = { raw: text.slice(0, 500) };
+    }
+    const msg = json.messages?.message?.[0] as { code?: string; text?: string } | undefined;
+    // Evidence for the fallback/error events, in the fields the CyberSource body has (never credentials).
+    const evidence = { id: json.transactionResponse?.transId, status: json.messages?.resultCode, reason: msg ? `${msg.code}: ${msg.text}` : undefined, response: json };
+    if (res.status !== 200) throw new VisaApiError(`Authorize.net ${res.status}: ${msg?.text ?? text.slice(0, 200)}`, res.status, evidence);
+    // HTTP is 200 either way: approvals and declines both carry transactionResponse.responseCode
+    // (with resultCode Ok or Error). Without one, the request itself was refused.
+    if (json.transactionResponse?.responseCode) return { ...json.transactionResponse, __http: res.status, __message: msg };
+    // E00007/E00008: wrong or inactive API login ID / transaction key, like CyberSource's 401/403.
+    // E00001 is "An error occurred during processing. Please try again", so it counts as a 5xx.
+    const httpStatus = msg?.code === 'E00007' ? 401 : msg?.code === 'E00008' ? 403 : msg?.code === 'E00001' ? 503 : 400;
+    throw new VisaApiError(`Authorize.net ${msg?.code ?? 'error'}: ${msg?.text ?? text.slice(0, 200)}`, httpStatus, evidence);
+  }
+
+  const result = (t: Record<string, any>, ok: BackendResult['status']): BackendResult => {
+    const code = String(t.responseCode);
+    // 1 = approved. 2 = declined, 3 = error, 4 = held for review: none of those is a usable hold.
+    const approved = code === '1';
+    const err = t.errors?.[0] as { errorCode?: string; errorText?: string } | undefined;
+    const reason = approved ? undefined : [err?.errorCode, err?.errorText ?? t.__message?.text].filter(Boolean).join(': ') || AUTHORIZENET_RESPONSE[code] || code;
+    return { id: String(t.transId ?? ''), status: approved ? ok : 'declined', processorStatus: AUTHORIZENET_RESPONSE[code] ?? code, reason, httpStatus: t.__http };
+  };
+
+  return {
+    provider: 'authorizenet',
+    simulated: false,
+    sandbox: true,
+    payee: 'Authorize.net sandbox merchant',
+    async authorize(req) {
+      // Field order follows the schema: transactionType, amount, payment, order, billTo.
+      const t = await call(req.reference, {
+        transactionType: 'authOnlyTransaction',
+        amount: centsToAmount(req.amountCents),
+        payment: { creditCard: AUTHORIZENET_TEST_CARD },
+        order: { invoiceNumber: authorizeNetRef(req.reference), description: req.description.slice(0, 255) },
+        billTo: {
+          // Same sample test billing address as the CyberSource backend.
+          firstName: 'John',
+          lastName: 'Doe',
+          address: '1 Market St',
+          city: 'San Francisco',
+          state: 'CA',
+          zip: '94105',
+          country: 'US',
+        },
+      });
+      return result(t, 'authorized');
+    },
+    async capture(authId, amountCents, reference) {
+      const t = await call(reference, { transactionType: 'priorAuthCaptureTransaction', amount: centsToAmount(amountCents), refTransId: authId });
+      return result(t, 'captured');
+    },
+    async void(authId, _amountCents, reference) {
+      // Releasing an uncaptured hold is a void of the authorization (no amount or reason field).
+      const t = await call(reference, { transactionType: 'voidTransaction', refTransId: authId });
+      return result(t, 'voided');
     },
   };
 }
@@ -706,7 +825,7 @@ export class VisaCheckout {
       }
     }
     // No backend means a real hold while this run is simulated: label it as the real (sandbox) hold
-    // it is, never as [SIMULATED]. The Acceptance sandbox is the only real backend that places holds.
+    // it is, never as [SIMULATED]. Both real backends are sandboxes; the row doesn't say which one.
     const b = backend ?? { ...this.backend, provider: 'acceptance' as const, simulated: false, sandbox: true };
     if (failure !== undefined) {
       await this.event(ctx, b, 'error', `${tag(b)} A ${dollars(ctx.amountCents)} hold for ${ctx.purpose} from an earlier run is still pending and could not be released: ${failure}. Left pending for reconciliation`, { authId: p.authId, paymentId: p.paymentId.toString(), reconcile: true });
@@ -739,7 +858,7 @@ export class VisaCheckout {
         provider: b.provider,
         simulated: b.simulated,
         sandbox: b.sandbox,
-        ...(b.sandbox ? { note: 'Visa Acceptance sandbox, test card, no real money' } : {}),
+        ...(b.sandbox ? { note: `${b.provider === 'authorizenet' ? 'Authorize.net' : 'Visa Acceptance'} sandbox, test card, no real money` } : {}),
         amountCents: ctx.amountCents.toString(),
         merchant: ctx.merchant,
       },
@@ -762,10 +881,15 @@ export interface VisaEnv {
   VISA_MAX_PER_PURCHASE_USD?: string;
   VISA_SIM_DELAY_MS?: string;
   VISA_FALLBACK_SIMULATED?: string;
+  AUTHORIZENET_API_LOGIN_ID?: string;
+  AUTHORIZENET_TRANSACTION_KEY?: string;
+  AUTHORIZENET_HOST?: string;
 }
 
 export const hasAcceptanceKeys = (env: VisaEnv): boolean =>
   !!(env.VISA_ACCEPTANCE_MERCHANT_ID && env.VISA_ACCEPTANCE_KEY_ID && env.VISA_ACCEPTANCE_SECRET);
+
+export const hasAuthorizeNetKeys = (env: VisaEnv): boolean => !!(env.AUTHORIZENET_API_LOGIN_ID && env.AUTHORIZENET_TRANSACTION_KEY);
 
 // An explicit "0" means "no card spending". Non-numeric or negative -> a loud warning and the default (caps.ts).
 const capCents = (env: VisaEnv, key: 'VISA_SPEND_CAP_USD' | 'VISA_MAX_PER_PURCHASE_USD'): bigint =>
@@ -777,18 +901,40 @@ export function createMisconfiguredBackend(provider: VisaProvider, why: string):
   const fail = async (): Promise<BackendResult> => {
     throw new VisaConfigError(`VISA_PROVIDER=${provider} is set but ${why}; not falling back to simulated`);
   };
-  return { provider, simulated: false, sandbox: provider === 'acceptance', payee: `${provider} (misconfigured)`, authorize: fail, capture: fail, void: fail };
+  return { provider, simulated: false, sandbox: provider === 'acceptance' || provider === 'authorizenet', payee: `${provider} (misconfigured)`, authorize: fail, capture: fail, void: fail };
 }
 
 export function selectBackend(env: VisaEnv, fetchImpl?: typeof globalThis.fetch): { backend: CheckoutBackend; note?: string } {
   const sim = createSimulatedBackend({ delayMs: Number(env.VISA_SIM_DELAY_MS ?? '400') });
-  const wanted = (env.VISA_PROVIDER || (hasAcceptanceKeys(env) ? 'acceptance' : 'simulated')) as VisaProvider;
+  // No VISA_PROVIDER: Authorize.net if its keys are set (its sandbox works), else CyberSource, else simulated.
+  const wanted = (env.VISA_PROVIDER || (hasAuthorizeNetKeys(env) ? 'authorizenet' : hasAcceptanceKeys(env) ? 'acceptance' : 'simulated')) as VisaProvider;
   if (wanted === 'simulated') return { backend: sim };
   if (wanted === 'vic') {
     try {
       return { backend: createVicBackend() };
     } catch (err) {
       return { backend: sim, note: (err as Error).message };
+    }
+  }
+  if (wanted === 'authorizenet') {
+    const explicitAnet = env.VISA_PROVIDER === 'authorizenet';
+    if (!hasAuthorizeNetKeys(env)) {
+      return explicitAnet
+        ? { backend: createMisconfiguredBackend('authorizenet', 'AUTHORIZENET_* keys are missing'), note: 'AUTHORIZENET_* keys are missing' }
+        : { backend: sim, note: 'AUTHORIZENET_* keys are missing' };
+    }
+    try {
+      return {
+        backend: createAuthorizeNetBackend({
+          apiLoginId: env.AUTHORIZENET_API_LOGIN_ID!,
+          transactionKey: env.AUTHORIZENET_TRANSACTION_KEY!,
+          host: env.AUTHORIZENET_HOST,
+          fetch: fetchImpl,
+        }),
+      };
+    } catch (err) {
+      const why = (err as Error).message;
+      return explicitAnet ? { backend: createMisconfiguredBackend('authorizenet', why), note: why } : { backend: sim, note: why };
     }
   }
   if (wanted !== 'acceptance') return { backend: sim, note: `unknown VISA_PROVIDER '${wanted}'` };
