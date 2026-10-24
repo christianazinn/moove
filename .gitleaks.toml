@@ -22,3 +22,10 @@ condition = "AND"
 paths = ['''^spacetime/src/index\.ts$''']
 regexTarget = "line"
 regexes = ['''^\s*const AUTH0_IOS_CLIENT_ID\s*=''']
+
+[[allowlists]]
+description = "Public SpacetimeDB database/worker identities in the module's PINNED_WORKERS map (#146); identities are addresses, not secrets"
+condition = "AND"
+paths = ['''^spacetime/src/index\.ts$''']
+regexTarget = "line"
+regexes = ['''^\s*c200[0-9a-f]{60}: \['c200[0-9a-f]{60}'\],''']
