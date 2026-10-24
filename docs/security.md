@@ -96,9 +96,9 @@ Anything not real says so in the data (`simulated: true` on `listing` and `payme
 - Nice to have: a CDP Policy Engine policy that only lets the wallet sign USDC authorizations; Auth0 CIBA with RAR `authorization_details` that bind the amount and item; `permissions: contents: read` in CI; Dependabot.
 
 ## Manual test: calling another user's reducer is rejected
-**Unverified.** No SpacetimeDB CLI is installed on the machine that wrote this. Run it against a local server:
+**Verified 2026-10-23 against a local SpacetimeDB 2.13 standalone server** (module from `main` at `4454282`). Steps 1-3 pass, which is issue #17's acceptance check. Step 4 shows the join-code gap tracked in [#41](https://github.com/christianazinn/moove/issues/41), which is expected until #41 ships.
 
-Shows the cross-user write check that already works, the read leak, and the join-code takeover. Run it before the change (the leak steps succeed) and after it (they fail). Identity A is your CLI login. Identity B is a separate fresh identity: `--anonymous` on the CLI (a new identity per command) or an HTTP token from `POST /v1/identity` (a persistent identity).
+Identity A is your normal CLI login. Identity B is a second, persistent identity kept in its own CLI config file (`--config-path`), so your normal login is never touched. Its token comes from the local server's `POST /v1/identity`. `--anonymous` also works for steps 2 and 3 (it uses a new identity on every command), but step 4 needs B to stay the same across calls.
 
 ```sh
 # Terminal 1
@@ -106,44 +106,72 @@ spacetime start
 
 # Terminal 2, from the repo root. Identity A = your CLI login.
 cd spacetime && npm install && npm run publish:local:reset
+
+# Identity B: a separate CLI config with its own server-issued token.
+B() { spacetime --config-path /tmp/moove-b/cli.toml "$@"; }   # works in zsh and bash
+mkdir -p /tmp/moove-b
+B server add --url http://127.0.0.1:3000 local --no-fingerprint
+B login --token "$(curl -s -X POST http://127.0.0.1:3000/v1/identity | jq -r .token)"
+B login show                         # B's identity, different from `spacetime login show`
+
+# 1. A creates a room and an item. ScanObjectInput is passed as a positional array:
+#    [scanObjectId, name, category, widthM, heightM, depthM, photoUrl]
 spacetime call -s local moove create_room '"Bedroom"' '"old"'
-# ScanObjectInput as a positional product: scanObjectId, name, category, widthM, heightM, depthM, photoUrl
-# (if this errors, `spacetime describe -s local moove --json` shows the exact field names)
 spacetime call -s local moove add_item 1 '["", "Lamp", "lamp", 0.3, 1.5, 0.3, ""]'
-spacetime sql -s local moove "SELECT * FROM room"   # note A's room id and join code
-spacetime sql -s local moove "SELECT * FROM item"   # note the item id (1 on a fresh DB)
+spacetime sql -s local moove "SELECT * FROM room"     # room 1, owner A, note the join_code
+spacetime sql -s local moove "SELECT id, owner, room_id, name, disposition, disposition_source FROM item"
+#    item 1, owner A, disposition "undecided", source "auto"
 
-# 1. Write isolation (should already pass): a stranger can't edit A's item.
-spacetime call -s local --anonymous moove set_disposition 1 '"trash"'
-#    expect: error containing 'not your room'
+# 2. B can't write A's rows.
+B call -s local moove set_disposition 1 '"trash"'    # Error: Response text: not your room
+B call -s local moove rename_item 1 '"Pwned"'        # Error: Response text: not your room
+B call -s local moove delete_item 1                  # Error: Response text: not your room
+spacetime call -s local moove add_shopping_item '"0x<A identity>"' '"Desk"' '"desk"' '"new place"'   # as A: ok
+B call -s local moove set_shopping_status 1 '"dropped"'   # Error: Response text: not your row
+B call -s local moove remove_shopping_item 1              # Error: Response text: not your row
+B call -s local moove add_shopping_item '"0x<A identity>"' '"Junk"' '"misc"' '"spam"'   # Error: Response text: not your row
+#    Worker-only reducers reject a non-worker.
+B call -s local moove set_est_value 1 100 50 150          # Error: Response text: worker-only reducer
+B call -s local moove update_payment 1 '"settled"' '"0xfake"'   # Error: Response text: worker-only reducer
+B call -s local moove record_payment '"0x<A identity>"' '"buyer"' '"x402"' '"desk"' '"0xpayee"' 1000000 '"0xfake"' '"settled"' true '"deal"' 1
+#    Error: Response text: worker-only reducer
+#    Each rejection exits 1 with HTTP 530. As A, the item is still "undecided"/"auto",
+#    the shopping item is still "open", and the payment table is empty.
 
-# 2. Worker-only reducers (should already pass): a non-worker is rejected.
-spacetime call -s local --anonymous moove set_est_value 1 100 50 150
-spacetime call -s local --anonymous moove update_payment 1 '"settled"' '"0xfake"'
-#    expect: error containing 'worker-only reducer' for both
+# 3. A can write its own item.
+spacetime call -s local moove set_disposition 1 '"donate"'   # exit 0
+spacetime sql -s local moove "SELECT id, name, disposition, disposition_source, disposition_reason FROM item"
+#    1 | "Lamp" | "donate" | "user" | "set by user"
 
-# 3. Read leak (BUG before the fix): a stranger reads A's rows, including the join code.
-spacetime sql -s local --anonymous moove "SELECT * FROM room"
-spacetime sql -s local --anonymous moove "SELECT * FROM user"
-#    before: rows come back. after: error (private table); `SELECT * FROM my_room` returns 0 rows.
+# 4. Known gap (#41): B reads A's join code from the public room table, joins, and then writes.
+B sql -s local moove "SELECT id, owner, join_code FROM room"   # B sees A's row and code
+B call -s local moove join_room '"<A JOIN CODE>"'              # exit 0
+B call -s local moove set_disposition 1 '"trash"'              # exit 0
+spacetime sql -s local moove "SELECT id, name, disposition, disposition_source FROM item"
+#    1 | "Lamp" | "trash" | "user"   (B changed A's item)
+spacetime sql -s local moove "SELECT room_id, member FROM room_member"
+#    1 | 0x<B identity>
 
-# 4. Join-code takeover (BUG before the fix). B needs a persistent identity, so use HTTP.
-B=$(curl -s -X POST http://127.0.0.1:3000/v1/identity | jq -r .token)
-call() { curl -s -w ' [HTTP %{http_code}]\n' -X POST "http://127.0.0.1:3000/v1/database/moove/call/$1" \
-  -H "Authorization: Bearer $B" -H 'Content-Type: application/json' -d "$2"; }
-call set_disposition '[1, "trash"]'       # expect: 'not your room'
-call join_room '["<A JOIN CODE>"]'        # before: succeeds using the code read in step 3
-call set_disposition '[1, "trash"]'       # before: succeeds, so B edited A's item
-spacetime sql -s local moove "SELECT * FROM item"   # as A: disposition = trash, dispositionSource = user
-#    after: B can't read the code in step 3, so it can't join. If A rotates the code
-#    (the `rotate_join_code` / `remove_room_member` reducers proposed in #41), step 4 fails with 'not your room'.
-
-# 5. Connection gate (after the fix, with REQUIRE_AUTH0 = true and a republish):
-spacetime sql -s local --anonymous moove "SELECT * FROM my_room"
-#    expect: connection rejected with 'sign in with Auth0 to use Moove' (unverified for HTTP/sql, see open questions)
+rm -rf /tmp/moove-b
 ```
 
-Steps 1 and 2 are the acceptance check ("calling another user's reducer is rejected"): the module already rejects them with `SenderError`. Steps 3 and 4 show the read leak and join-code takeover that #41 fixes. Same steps as in #41.
+What we observed:
+
+| Step | Who | Call | Result |
+|---|---|---|---|
+| 1 | A | `create_room`, `add_item` | ok: room 1 and item 1 owned by A |
+| 2 | B | `set_disposition`, `rename_item`, `delete_item` on A's item | rejected: `not your room` |
+| 2 | B | `set_shopping_status`, `remove_shopping_item`, `add_shopping_item` for A | rejected: `not your row` |
+| 2 | B | `set_est_value`, `update_payment`, `record_payment` | rejected: `worker-only reducer` |
+| 3 | A | `set_disposition 1 "donate"` | ok, confirmed with `spacetime sql` |
+| 4 | B | read `room.join_code`, `join_room`, `set_disposition` | **all succeed**: the #41 gap, not a #17 failure |
+
+Notes:
+- **Item reducers check room access, not row ownership.** `set_disposition`, `rename_item`, `delete_item` and the other item edits call `requireRoomAccess`, which allows the room owner, a room member, or the worker, so the error is `not your room`. `not your row` comes from `requireOwnerOrWorker` (shopping items, deals, listings, approvals, layouts).
+- **Identity arguments** are passed as a hex string with a `0x` prefix, e.g. `'"0xc2005c..."'`.
+- **Fresh databases have no worker.** `register_worker` lets the first caller take the role, and after that it returns `a worker is already registered` to anyone else (checked in the same run). On a freshly reset local DB, start the agent worker (or register a worker yourself) before letting other identities connect. Pinning the worker identity is tracked in [#44](https://github.com/christianazinn/moove/issues/44).
+- **After #41**, step 4 should fail: tables become private, so B can't read the join code (`SELECT * FROM room` errors and `my_room` returns 0 rows), and a code rotation (`rotate_join_code` / `remove_room_member`, proposed in #41) removes access for a leaked code. The connection gate (`REQUIRE_AUTH0`) and `my_*` views don't exist in the module yet, so those checks can't be run today.
+- We ran this on a private port (`spacetime start --listen-addr 127.0.0.1:3200 --data-dir <scratch>`) with the alias `local17` in place of `local`. Nothing else differed.
 
 ## Responsible-AI choices
 - **The user stays in charge.** Agents propose; anything over the threshold waits for a human. Sentimental items are never auto-sorted. A user's own choice always beats the auto-sorter.
