@@ -48,3 +48,6 @@ prizes.txt
 ios/Config/Local.xcconfig
 ios/Moove/Resources/Info.plist
 .worker-token*
+
+# Core ML models are downloaded by ios/scripts/fetch-models.sh (too big for git)
+ios/Moove/Resources/Models/
