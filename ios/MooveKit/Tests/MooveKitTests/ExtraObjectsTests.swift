@@ -118,3 +118,79 @@ private struct SplitMix {
         #expect(merger.tracks.first!.points.count <= 500)
     }
 }
+
+/// Recall tuning (#82).
+@Suite struct SightingMergerRecallTests {
+    let scooter = (center: SIMD3<Float>(1, 0.575, 0), size: SIMD3<Float>(1.1, 1.15, 0.45))
+
+    @Test func keepsABigObjectSeenOnceWithConfidence() {
+        var merger = SightingMerger(floorY: 0)
+        merger.add(Sighting(label: "scooter", confidence: 0.74, points: boxPoints(center: scooter.center, size: scooter.size, yaw: 0)))
+        #expect(merger.results().map(\.label) == ["scooter"])
+    }
+
+    @Test func dropsSmallOrUnsureOneOffs() {
+        var merger = SightingMerger(floorY: 0)
+        // Big but unsure.
+        merger.add(Sighting(label: "scooter", confidence: 0.45, points: boxPoints(center: scooter.center, size: scooter.size, yaw: 0)))
+        // Sure but small (a 30 cm vase).
+        merger.add(Sighting(label: "vase", confidence: 0.9, points: boxPoints(center: SIMD3(-2, 0.15, 1), size: SIMD3(0.2, 0.3, 0.2), yaw: 0, seed: 3)))
+        #expect(merger.results().isEmpty)
+    }
+
+    @Test func oneObjectWithTwoLabelsGetsTheStrongerPlausibleOne() {
+        // An e-scooter that also scores as a motorcycle in every frame (real: 0.88 vs 0.82).
+        var merger = SightingMerger(floorY: 0)
+        for seed in 1...3 {
+            let pts = boxPoints(center: scooter.center, size: scooter.size, yaw: 0, count: 300, seed: UInt64(seed))
+            merger.add(Sighting(label: "motorcycle", confidence: 0.88, points: pts))
+            merger.add(Sighting(label: "scooter", confidence: 0.82, points: pts))
+        }
+        let out = merger.results()
+        #expect(out.count == 1)
+        // A 1.1 m "motorcycle" is implausible, so the scooter wins despite lower scores.
+        #expect(out.first?.label == "scooter")
+        #expect(out.first?.sightings == 6)
+    }
+
+    @Test func moreEvidenceWinsBetweenPlausibleLabels() {
+        var merger = SightingMerger(floorY: 0)
+        for seed in 1...4 {
+            merger.add(Sighting(label: "bicycle", confidence: 0.6, points: boxPoints(center: scooter.center, size: scooter.size, yaw: 0, count: 300, seed: UInt64(seed))))
+        }
+        merger.add(Sighting(label: "scooter", confidence: 0.8, points: boxPoints(center: scooter.center, size: scooter.size, yaw: 0, count: 300, seed: 9)))
+        #expect(merger.results().map(\.label) == ["bicycle"])
+    }
+
+    @Test func keepsThingsStandingOnRoomPlanFurniture() {
+        // A monitor on a RoomPlan desk: on top of it, not inside it.
+        var merger = SightingMerger(floorY: 0)
+        for seed in 1...2 {
+            merger.add(Sighting(label: "monitor", confidence: 0.8, points: boxPoints(center: SIMD3(0, 1.0, 0), size: SIMD3(0.6, 0.45, 0.2), yaw: 0, seed: UInt64(seed))))
+        }
+        let desk = RoomGeometry.Object(id: "d", category: "table", dimensions: SIMD3(1.4, 0.75, 0.7), transform: .at(SIMD3(0, 0.375, 0)))
+        #expect(merger.results(excluding: [desk]).map(\.label) == ["monitor"])
+    }
+
+    @Test func roomPlanCategoriesOnlyFillGaps() {
+        var merger = SightingMerger(floorY: 0)
+        for seed in 1...2 {
+            // A chair RoomPlan also found (boxes overlap partly)...
+            merger.add(Sighting(label: "chair", confidence: 0.8, points: boxPoints(center: SIMD3(0.25, 0.45, 0), size: SIMD3(0.5, 0.9, 0.5), yaw: 0, seed: UInt64(seed))))
+            // ...and one it missed.
+            merger.add(Sighting(label: "chair", confidence: 0.8, points: boxPoints(center: SIMD3(3, 0.45, 2), size: SIMD3(0.5, 0.9, 0.5), yaw: 0, seed: UInt64(seed + 5))))
+        }
+        let roomPlanChair = RoomGeometry.Object(id: "c", category: "chair", dimensions: SIMD3(0.55, 0.9, 0.55), transform: .at(SIMD3(0, 0.45, 0)))
+        let out = merger.results(excluding: [roomPlanChair])
+        #expect(out.count == 1)
+        #expect(abs((out.first?.box.center.x ?? 0) - 3) < 0.2)
+    }
+
+    @Test func trackIDsAreStable() {
+        var merger = SightingMerger(floorY: 0)
+        let a = merger.add(Sighting(label: "scooter", confidence: 0.7, points: boxPoints(center: scooter.center, size: scooter.size, yaw: 0)))
+        let b = merger.add(Sighting(label: "guitar", confidence: 0.7, points: boxPoints(center: SIMD3(-2, 0.5, 0), size: SIMD3(0.4, 1.0, 0.12), yaw: 0, seed: 4)))
+        let a2 = merger.add(Sighting(label: "scooter", confidence: 0.7, points: boxPoints(center: scooter.center, size: scooter.size, yaw: 0, seed: 7)))
+        #expect(a == 0 && b == 1 && a2 == 0)
+    }
+}
