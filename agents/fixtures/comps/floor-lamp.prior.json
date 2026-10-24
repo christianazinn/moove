@@ -1,12 +1,12 @@
 {
-  "6f94934472dfefc0": {
+  "df207f475ba4813a": {
     "item": "floor lamp",
     "newRetailUsd": 60,
     "usedUsd": 20,
     "reason": "Assumed a common mid-range metal torchiere or arc-style floor lamp from a big-box store like IKEA, Target or Amazon at about $60 new; used sells at roughly one third of new.",
     "model": "claude-sonnet-5-5"
   },
-  "6ee92ae39621ed28": {
+  "f0b3eb1311e6322e": {
     "item": "Floor lamp; category lamp; 0.30 x 1.70 x 0.30 m (W x H x D)",
     "newRetailUsd": 50,
     "usedUsd": 15,

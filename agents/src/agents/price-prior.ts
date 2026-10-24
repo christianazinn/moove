@@ -48,7 +48,8 @@ export const claudePrior: PriorJudge = async itemDesc => {
 
 type CacheEntry = Prior & { item: string; model: string };
 
-const cacheKey = (itemDesc: string) => createHash('sha256').update(JSON.stringify([SYSTEM, itemDesc])).digest('hex').slice(0, 16);
+// The model is part of the key, so switching MODEL_ESTIMATE re-asks instead of replaying another model's answers.
+export const priorCacheKey = (itemDesc: string, model: string) => createHash('sha256').update(JSON.stringify([SYSTEM, itemDesc, model])).digest('hex').slice(0, 16);
 
 function readCache(file: string): Record<string, CacheEntry> {
   try {
@@ -75,7 +76,7 @@ export interface PriorDeps {
 export async function pricePrior(it: ItemDesc, deps: PriorDeps = {}): Promise<PriorResult> {
   if (!(deps.enabled ?? priorEnabled())) return { status: 'off' };
   const desc = describeItem(it);
-  const key = cacheKey(desc);
+  const key = priorCacheKey(desc, config.models.estimate);
   const file = deps.cacheFile ?? null;
   const hit = file ? readCache(file)[key] : undefined;
   if (hit) return { status: 'cached', cents: Math.round(hit.usedUsd * 100), reason: hit.reason };

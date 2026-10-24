@@ -1,12 +1,12 @@
 {
-  "70502cff78b8bf21": {
+  "98f951f7927aebcc": {
     "item": "dell 27 inch monitor",
     "newRetailUsd": 200,
     "usedUsd": 70,
     "reason": "Assumed a mid-range Dell 27-inch 1080p/1440p IPS monitor (S2721/P2723 class) at about $200 new, with roughly a 65% discount for typical local used sales.",
     "model": "claude-sonnet-5-5"
   },
-  "da51b4a435dd7cde": {
+  "903fe46a2fa7a72e": {
     "item": "Dell 27 inch monitor; category electronics; 0.61 x 0.45 x 0.18 m (W x H x D)",
     "newRetailUsd": 200,
     "usedUsd": 70,

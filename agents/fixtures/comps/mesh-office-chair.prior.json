@@ -1,12 +1,12 @@
 {
-  "0007017f458d738e": {
+  "643bc6f017de4d5d": {
     "item": "mesh office chair",
     "newRetailUsd": 180,
     "usedUsd": 60,
     "reason": "Assumed a generic mid-range mesh ergonomic office chair (non-Herman Miller/Steelcase) with adjustable arms; roughly 33% of new for local resale.",
     "model": "claude-sonnet-5-5"
   },
-  "6ae1f6585c442372": {
+  "103668cda6bbe93d": {
     "item": "Mesh office chair; category chair; 0.64 x 1.02 x 0.62 m (W x H x D)",
     "newRetailUsd": 200,
     "usedUsd": 60,

@@ -1,12 +1,12 @@
 {
-  "8652a111141712d7": {
+  "5ee2263c5910e276": {
     "item": "tcl 32 inch tv",
     "newRetailUsd": 130,
     "usedUsd": 45,
     "reason": "Assumed a TCL 32-inch 720p/1080p Roku smart TV (S3 series, about $130 new); used sells at roughly 35% of new for mainstream, low-cost electronics.",
     "model": "claude-sonnet-5-5"
   },
-  "c0dda457c166b097": {
+  "01da87f44b9505a8": {
     "item": "TCL 32 inch TV; category television; 0.73 x 0.48 x 0.18 m (W x H x D)",
     "newRetailUsd": 130,
     "usedUsd": 50,

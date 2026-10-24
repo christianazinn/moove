@@ -1,12 +1,12 @@
 {
-  "218178f99d6d993c": {
+  "971ce942a637a4a1": {
     "item": "yamaha acoustic guitar",
     "newRetailUsd": 200,
     "usedUsd": 110,
     "reason": "Assumed a common entry-level Yamaha dreadnought acoustic like the FG800 or F325 at about $200 new; used at roughly 55% of new since Yamaha guitars hold value well.",
     "model": "claude-sonnet-5-5"
   },
-  "ad661fca3eb0b9be": {
+  "bc43c73323a47baf": {
     "item": "Yamaha acoustic guitar; category instrument; 0.38 x 1.02 x 0.12 m (W x H x D)",
     "newRetailUsd": 200,
     "usedUsd": 110,

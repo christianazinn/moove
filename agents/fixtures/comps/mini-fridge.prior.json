@@ -1,12 +1,12 @@
 {
-  "3069550942fd2b97": {
+  "40263c5f67cf6d3f": {
     "item": "mini fridge",
     "newRetailUsd": 150,
     "usedUsd": 50,
     "reason": "Assumed a common 3.2-4.4 cu ft compact fridge (Midea/Insignia/Frigidaire type) at about $150 new; used sells for roughly one-third of new locally.",
     "model": "claude-sonnet-5-5"
   },
-  "dabcd6c0e7c5f765": {
+  "d6e0a9106b114e00": {
     "item": "Mini fridge; category refrigerator; 0.48 x 0.85 x 0.50 m (W x H x D)",
     "newRetailUsd": 180,
     "usedUsd": 60,
