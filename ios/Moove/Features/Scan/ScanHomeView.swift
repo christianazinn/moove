@@ -9,6 +9,7 @@ struct ScanHomeView: View {
     @State private var loadingDemo = false
     /// The demo scan landed: show its results like a real scan's.
     @State private var demoFinished = false
+    @State private var openRoom: Room?
 
     var body: some View {
         ScrollView {
@@ -16,26 +17,23 @@ struct ScanHomeView: View {
                 PageHeader(
                     eyebrow: "01 — Scan",
                     title: "Scan a room.",
-                    lede: "Walk slowly around the room with the camera. Moove finds each piece of furniture and measures it, then you snap a photo of each one."
+                    lede: "Walk around slowly. Moove finds and measures every piece."
                 )
-                startScan.padding(.top, 28)
-                demoScan.padding(.top, 40)
+                ScanHomeHero { openRoom = $0 }.padding(.top, 24)
+                startScan.padding(.top, 24)
                 if !store.snapshot.rooms.isEmpty {
-                    ListHeader(title: "Scanned rooms", count: "\(store.snapshot.rooms.count)")
+                    ListHeader(title: "Your rooms", count: "\(store.snapshot.rooms.count)")
                         .padding(.top, 40)
-                    ForEach(store.snapshot.rooms) { room in
-                        NavigationLink(value: room) {
-                            LedgerRow(
-                                title: room.name,
-                                value: "\(store.items.filter { $0.roomId == room.id }.count) items",
-                                chevron: true
-                            ) {
-                                IconTile(systemName: "cube.transparent")
+                    VStack(spacing: 10) {
+                        ForEach(store.snapshot.rooms) { room in
+                            NavigationLink(value: room) {
+                                ScanRoomCard(room: room, items: store.items.filter { $0.roomId == room.id })
                             }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
+                ScanHowItWorks().padding(.top, 40)
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.top, 16)
@@ -44,6 +42,7 @@ struct ScanHomeView: View {
         .navigationTitle("Scan")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: Room.self) { RoomDetailView(room: $0) }
+        .navigationDestination(item: $openRoom) { RoomDetailView(room: $0) }
         .mooveScreen()
         .fullScreenCover(isPresented: $scanning, onDismiss: {
             if !store.items.isEmpty { tab = "inventory" }
@@ -59,14 +58,15 @@ struct ScanHomeView: View {
     }
 
     private var startScan: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             Button {
                 scanning = true
             } label: {
-                Label("Start scan", systemImage: "camera.viewfinder").frame(maxWidth: .infinity)
+                Label("Scan a room", systemImage: "camera.viewfinder").frame(maxWidth: .infinity)
             }
             .buttonStyle(.pill(.primary))
             .disabled(!RoomCaptureSession.isSupported)
+            demoScan
             if !RoomCaptureSession.isSupported {
                 ScanNotice(
                     text: "This device has no LiDAR scanner. Use an iPhone 12 Pro or iPad Pro (2020) or later, or load the demo scan.",
@@ -80,11 +80,7 @@ struct ScanHomeView: View {
     private var demo: ScanImport { DemoFixtures.scanImport() }
 
     private var demoScan: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ListHeader(title: "Demo scan") { MonoTag(text: "Demo", tone: Theme.ochreInk) }
-            Text("Imports a recorded bedroom through the same path as a real scan and shows its 3D results. Use it if a live scan fails on stage.")
-                .monoMeta()
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 6) {
             Button {
                 loadingDemo = true
                 Task {
@@ -102,6 +98,10 @@ struct ScanHomeView: View {
             }
             .buttonStyle(.pill(.outline))
             .disabled(loadingDemo)
+            .accessibilityHint("Imports a recorded bedroom, the same way a real scan does")
+            Text("Recorded bedroom, for when a live scan isn't possible.")
+                .monoMeta()
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
