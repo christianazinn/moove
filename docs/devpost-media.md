@@ -80,7 +80,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 
 ### 6. Sell & Buy > Shopping > Desk chair: the scam is blocked
 - **Source:** CI `06-desk-chair-deals`.
-- **State:** three deals with voxel chairs. The planted deal **"Herman Miller Aeron, brand new, $95, Zelle only, ship only"**, seller "Planted demo scam (not a real listing)", the **Sample** badge, **"Likely fraud · 0.85"**, the reasons "asks for payment by Zelle" and "shipping only, no meetup", and the red **"Blocked: likely fraud"** tag where Choose would be.
+- **State:** a big voxel picture of the desk chair, then three deals as product cards with voxel chairs (the Target chair has the **Best deal** ribbon). The planted deal, on a red-bordered card with its price struck through, **"Herman Miller Aeron, brand new, $95, Zelle only, ship only"**, seller "Planted demo scam (not a real listing)", the **Sample** badge, **"Likely fraud · 0.85"**, the reasons "asks for payment by Zelle" and "shipping only, no meetup", and the red **"Blocked: likely fraud"** tag where Choose would be.
 - **Caption:** "The buy agent screens every deal and refuses this planted Zelle-only "brand new" Aeron (fraud score 0.85); checkout runs on a labeled simulated Visa rail."
 - **Track:** Visa (fraud checks, trust and responsibility), Apify (deal search; fixture deals are labeled Sample).
 
