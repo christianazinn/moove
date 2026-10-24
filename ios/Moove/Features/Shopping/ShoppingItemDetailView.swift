@@ -11,7 +11,8 @@ struct ShoppingItemDetailView: View {
         if let item = store.snapshot.shoppingItems.first(where: { $0.id == itemId }) {
             content(item)
         } else {
-            ContentUnavailableView("Removed from the list", systemImage: "cart")
+            ContentUnavailableView("Removed from the list", systemImage: "cart",
+                                   description: Text("This item is no longer on your shopping list."))
                 .mooveScreen()
         }
     }
@@ -19,13 +20,17 @@ struct ShoppingItemDetailView: View {
     private func content(_ item: ShoppingItem) -> some View {
         let deals = store.snapshot.deals(for: item.id)
         let checkout = store.snapshot.checkout(for: item)
+        let snapshot = store.snapshot
         return ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Text("07 — Shopping").eyebrow().padding(.bottom, 12)
-                Text(item.name)
-                    .pageTitle()
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
+                HStack(alignment: .center, spacing: 16) {
+                    ShoppingThumbnail(spec: ShoppingThumbnails.spec(for: item), bought: item.status == .bought, size: 72)
+                    Text(item.name)
+                        .pageTitle()
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                }
                 ShoppingStatusChip(status: item.status).padding(.top, 10)
                 if !item.reason.isEmpty {
                     Text(item.reason)
@@ -35,7 +40,8 @@ struct ShoppingItemDetailView: View {
                 }
 
                 ListHeader(title: "Checkout").padding(.top, 36)
-                ShoppingCheckoutView(checkout: checkout)
+                ShoppingCheckoutView(checkout: checkout, searchProblem: snapshot.dealSearchProblem(for: item),
+                                     checkoutProblem: item.chosenDealId.flatMap(snapshot.checkoutProblem(dealId:)))
                     .padding(.vertical, 16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .ruled()
@@ -72,11 +78,27 @@ struct ShoppingItemDetailView: View {
 /// The next step for an item, in words, plus the approval card when it's waiting on the user.
 struct ShoppingCheckoutView: View {
     let checkout: ShoppingCheckout
+    /// The buy agent's note when the deal search failed or found nothing.
+    var searchProblem: String? = nil
+    /// The buy agent's note on the chosen deal (refused, declined, gave up).
+    var checkoutProblem: String? = nil
 
     var body: some View {
         switch checkout {
         case .findingDeals:
-            step("The buy agent is looking for deals.", systemImage: "magnifyingglass")
+            if let searchProblem {
+                VStack(alignment: .leading, spacing: 6) {
+                    step("No deals yet.", systemImage: "magnifyingglass", tint: Theme.ochreInk)
+                    Text(searchProblem).monoMeta().fixedSize(horizontal: false, vertical: true)
+                    Text("The buy agent searches again when the list changes. You can also remove this item and add it with a different name.")
+                        .monoMeta().fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                HStack(spacing: 10) {
+                    ProgressView().tint(Theme.muted)
+                    step("The buy agent is looking for deals.", systemImage: "magnifyingglass")
+                }
+            }
         case .chooseDeal:
             step("Pick a deal below and the agent takes it from there.", systemImage: "hand.tap")
         case .messageSeller(let deal):
@@ -98,9 +120,31 @@ struct ShoppingCheckoutView: View {
                  : "You denied this purchase. Nothing was bought.",
                  systemImage: "xmark.circle")
         case .checkingOut:
-            step("Cleared to buy. Waiting for the agent to place the Visa hold.", systemImage: "creditcard")
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    ProgressView().tint(Theme.muted)
+                    step("Cleared to buy. Waiting for the agent to place the Visa hold.", systemImage: "creditcard")
+                }
+                // e.g. a card-cap refusal or a temporary checkout error the agent will retry.
+                if let checkoutProblem { CommerceProblem(text: checkoutProblem, tint: Theme.ochreInk) }
+            }
         case .payment(let payment):
-            VisaPaymentRow(payment: payment)
+            VStack(alignment: .leading, spacing: 8) {
+                VisaPaymentRow(payment: payment)
+                switch payment.status {
+                case .failed:
+                    CommerceProblem(text: checkoutProblem ?? "The Visa checkout failed.")
+                    Text("Nothing was charged. Pick another deal below to try again.")
+                        .monoMeta().fixedSize(horizontal: false, vertical: true)
+                case .pending:
+                    Text("A hold is placed on the card. The agent captures it after a last approval check.")
+                        .monoMeta().fixedSize(horizontal: false, vertical: true)
+                case .settled:
+                    Text(payment.simulated ? "Paid through the simulated Visa rail. No real card was charged."
+                         : "Paid in the Visa sandbox with a test card.")
+                        .monoMeta().fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
 
@@ -120,57 +164,83 @@ struct DealRow: View {
     let deal: Deal
     let isChosen: Bool
     @State private var working = false
+    @State private var failed = false
 
     var body: some View {
         let payments = store.snapshot.visaPayments(for: deal.id)
+        let locked = store.snapshot.isCheckoutLocked(item)
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if isChosen {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.accentStrong)
-                        .accessibilityLabel("Chosen deal")
-                }
-                Text(deal.title).blockTitle().lineLimit(2)
-                Spacer(minLength: 8)
-                if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
-            }
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(deal.priceCents.usd).monoText(16, weight: .bold).foregroundStyle(Theme.text)
-                Text(deal.source).monoMeta()
-                Spacer(minLength: 8)
-                Label(deal.supportsCardCheckout ? "Visa checkout" : "Message seller",
-                      systemImage: deal.supportsCardCheckout ? "creditcard" : "envelope")
-                    .monoMeta()
-                    .lineLimit(1)
-            }
-            if !deal.sellerDetails.isEmpty {
-                Text(deal.sellerDetails).sansText(14).foregroundStyle(Theme.muted).lineLimit(2)
-            }
-            if let level = deal.fraudLevel, let score = deal.fraudScore {
-                FraudChip(level: level, score: score)
-                if level != .low {
-                    ForEach(deal.fraudReasons, id: \.self) { reason in
-                        Text("· \(reason)").monoMeta().fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: 14) {
+                ShoppingThumbnail(spec: ShoppingThumbnails.spec(for: deal, item: item), size: 56)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        if isChosen {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.accentStrong)
+                        }
+                        Text(deal.title).blockTitle().lineLimit(3)
+                        Spacer(minLength: 8)
+                        if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
+                    }
+                    AdaptiveLine {
+                        Text(deal.formattedPrice).monoText(16, weight: .bold).foregroundStyle(Theme.text).amountText()
+                        Text(deal.source).monoMeta()
+                        Spacer(minLength: 8)
+                        Label(deal.supportsCardCheckout ? "Visa checkout" : "Message seller",
+                              systemImage: deal.supportsCardCheckout ? "creditcard" : "envelope")
+                            .monoMeta()
+                            .lineLimit(1)
+                    }
+                    if !deal.sellerDetails.isEmpty {
+                        Text(deal.sellerDetails).sansText(14).foregroundStyle(Theme.muted).lineLimit(3)
+                    }
+                    if let level = deal.fraudLevel, let score = deal.fraudScore {
+                        FraudChip(level: level, score: score)
+                        if level != .low {
+                            ForEach(deal.fraudReasons, id: \.self) { reason in
+                                Text("· \(reason)").monoMeta().fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    } else {
+                        Text("Not fraud-screened yet").monoMeta()
                     }
                 }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel((isChosen ? "Chosen deal. " : "") + deal.accessibilitySummary
+                                + (deal.fraudReasons.isEmpty || deal.fraudLevel == .low ? "" : ". " + deal.fraudReasons.joined(separator: ". ")))
             ForEach(payments) { VisaPaymentRow(payment: $0) }
+            if failed {
+                CommerceProblem(text: "Couldn't send your choice. Check the connection and try again.")
+            }
             HStack(spacing: 8) {
                 if let url = deal.link {
                     Link(destination: url) {
                         Label("View", systemImage: "arrow.up.right.square")
                     }
                     .buttonStyle(.pill(.text, compact: true))
+                    .accessibilityLabel("View the listing at \(deal.source)")
                 }
                 Spacer()
                 if isChosen {
-                    MonoTag(text: "Chosen", tone: Theme.accentStrong)
+                    MonoTag(text: "Chosen", tone: Theme.accentStrong).fixedSize()
                 } else if item.status != .bought {
-                    // Disabled while a hold or a purchase approval is pending: that one finishes (or is denied) first.
-                    Button("Choose") { choose() }
+                    if !deal.isChoosable {
+                        // The worker refuses fraud-blocked deals, so the app doesn't offer them.
+                        MonoTag(text: "Blocked: likely fraud", tone: Theme.danger)
+                            .fixedSize()
+                            .accessibilityLabel("Blocked, likely fraud. The agent won't buy this deal.")
+                    } else {
+                        // Disabled while a hold or a purchase approval is pending: that one finishes (or is denied) first.
+                        Button { choose() } label: {
+                            if working { ProgressView() } else { Text("Choose") }
+                        }
                         .buttonStyle(.pill(.outline, compact: true))
-                        .disabled(working || store.snapshot.isCheckoutLocked(item))
+                        .disabled(working || locked)
+                        .accessibilityLabel("Choose this deal, \(deal.formattedPrice) from \(deal.source)")
+                        .accessibilityHint(locked ? "Locked while a hold or an approval is pending for this item" : "")
+                    }
                 }
             }
         }
@@ -180,8 +250,9 @@ struct DealRow: View {
 
     private func choose() {
         working = true
+        failed = false
         Task {
-            await store.choose(deal, for: item)
+            failed = !(await store.choose(deal, for: item))
             working = false
         }
     }
@@ -195,6 +266,7 @@ struct AddShoppingItemSheet: View {
     @State private var category = ""
     @State private var reason = ""
     @State private var saving = false
+    @State private var failed = false
 
     var body: some View {
         NavigationStack {
@@ -210,6 +282,10 @@ struct AddShoppingItemSheet: View {
                     field("Why") {
                         TextField("Reason (optional)", text: $reason, axis: .vertical)
                             .lineLimit(2...4)
+                    }
+                    if failed {
+                        CommerceProblem(text: "Couldn't add it. Check the connection and try again.")
+                            .padding(.top, 16)
                     }
                 }
                 .padding(.horizontal, Theme.gutter)
@@ -229,7 +305,7 @@ struct AddShoppingItemSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationBackground(Theme.bg)
     }
 
@@ -256,6 +332,7 @@ struct AddShoppingItemSheet: View {
         Task {
             let ok = await store.addShoppingItem(name: n, category: c, reason: r.isEmpty ? "Added by you" : r)
             saving = false
+            failed = !ok
             if ok { dismiss() }
         }
     }
