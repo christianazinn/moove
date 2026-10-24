@@ -163,6 +163,17 @@ test("duplicate: the same listing seen twice, different prices, or short titles 
   assert.deepEqual(duplicateSignal(short, [short, deal({ title: "desk", priceCents: 1000 })]), none);
 });
 
+test("duplicate: a retail catalog deal seen again under another URL is not reuse", () => {
+  const a = deal({ source: "ikea", title: "HEKTAR floor lamp, dark gray", priceCents: 6999, url: "https://www.ikea.com/us/en/search/?q=hektar" });
+  const b = deal({ source: "ikea", title: a.title, priceCents: 6999, url: "https://www.ikea.com/us/en/search/?q=floor%20lamp", shoppingItemId: 2n });
+  const c = deal({ source: "Target", title: "Arc floor lamp, brass", url: a.url });
+  assert.deepEqual(duplicateSignal(a, [a, b, c]), none);
+  assert.deepEqual(duplicateSignal(c, [a, b, c]), none);
+  // A marketplace deal copying a retail listing's link is still caught.
+  const fb = deal({ source: "fb", title: "Brand new floor lamp", url: a.url });
+  assert.deepEqual(duplicateSignal(fb, [a, fb]).reasons, ["same link is used by a different listing"]);
+});
+
 test("ai text: -1 and low scores add nothing; higher scores add a reason", () => {
   assert.deepEqual(aiTextSignal(-1), none);
   assert.deepEqual(aiTextSignal(0.3), none);
@@ -246,7 +257,7 @@ test("aitext: request body and tolerant score parsing", () => {
   assert.equal(parseScore(0.5), 0.5);
   assert.equal(parseScore("0.7"), 0.7);
   assert.equal(parseScore([{ score: 0.4 }]), 0.4);
-  for (const bad of [{}, { score: 1.5 }, { score: -0.1 }, { score: "nope" }, null, { label: "AI" }]) {
+  for (const bad of [{}, { score: 1.5 }, { score: -0.1 }, { score: "nope" }, { score: "" }, " ", null, { label: "AI" }]) {
     assert.throws(() => parseScore(bad), /no 0..1 score/, JSON.stringify(bad));
   }
 });

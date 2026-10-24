@@ -117,9 +117,13 @@ export function newSellerSignal(sellerInfo: string, now: Date = new Date()): Sig
 // (4) Reused listings. Deals carry no photos, so this works on what they do carry: the same link
 // reused by a listing with a different title, or the same title + price posted under different
 // links (copy-pasted scam listings, or one listing cross-posted to several sources).
+// Retail catalog deals are exempt: the same product page (or search page) legitimately shows up
+// under several shopping items, users and URLs. Same list as the buy agent's card-checkout sources.
+export const RETAIL_SOURCES = new Set(['ikea', 'target', 'amazon', 'wayfair']);
 const normTitle = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 export function duplicateSignal(deal: DealLike, others: DealLike[]): Signal {
+  if (RETAIL_SOURCES.has(deal.source.toLowerCase())) return NONE;
   const hits: { score: number; reason: string }[] = [];
   const title = normTitle(deal.title);
   const url = deal.url.trim();

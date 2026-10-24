@@ -29,7 +29,8 @@ export function parseScore(body: unknown): number {
     const o = v as Record<string, unknown>;
     v = SCORE_KEYS.map(k => o[k]).find(x => x !== undefined);
   }
-  const n = typeof v === 'string' ? Number(v) : v;
+  // Number('') and Number(' ') are 0, so a blank string must not read as "human".
+  const n = typeof v === 'string' ? (v.trim() ? Number(v) : NaN) : v;
   if (typeof n !== 'number' || !Number.isFinite(n) || n < 0 || n > 1) {
     throw new Error(`AI-text detector returned no 0..1 score: ${JSON.stringify(body).slice(0, 200)}`);
   }
