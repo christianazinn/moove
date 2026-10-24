@@ -1,8 +1,9 @@
 import Foundation
 
 /// Offline demo for the Shopping screen (#15): what the new home still needs, the buy agent's
-/// replayed deals (labeled "sample data", like the worker's fixture deal source), one purchase
-/// waiting on approval, one simulated Visa checkout that already settled, and one that was declined.
+/// replayed deals (labeled "sample data", like the worker's fixture deal source), purchase approvals
+/// (one waiting, one approved, one denied), one simulated Visa checkout that already settled, and one
+/// that was declined.
 ///
 /// Ids stay below the inventory fixture's max so `FixtureBackend` never reuses them for new rows.
 extension DemoFixtures {
@@ -100,13 +101,22 @@ extension DemoFixtures {
                  fraud: 0.05, ai: 0.41),
         ]
 
-        // The sofa is over the approval threshold, so the buy agent asked first.
+        // Over the $100 approval threshold, so the buy agent asked first: the user denied the pricier
+        // KIVIK sofa (then chose the Wayfair one), approved the mattress (bought below), and the
+        // Wayfair sofa is waiting. Summaries use the buy agent's wording (`FixtureBackend.runBuyAgent`).
         s.approvals += [
+            Approval(id: 302, owner: owner, kind: .purchase, refId: 70, amountCents: 69_900,
+                     summary: "Buy \"KIVIK sofa, Tibbleby beige/gray\" from ikea for $699.00", status: .denied,
+                     requestedAt: ago(10), updatedAt: ago(8)),
+            Approval(id: 303, owner: owner, kind: .purchase, refId: 62, amountCents: 17_999,
+                     summary: "Buy \"8\" memory foam mattress, Full\" from target for $179.99", status: .approved,
+                     requestedAt: ago(22), updatedAt: ago(21)),
             Approval(id: 85, owner: owner, kind: .purchase, refId: 71, amountCents: 42_999,
                      summary: "Buy \"78\" upholstered sofa, gray\" from wayfair for $429.99", requestedAt: ago(4)),
         ]
 
-        // The mattress was under the threshold and checked out through the simulated Visa rail.
+        // The approved mattress checked out through the simulated Visa rail. The rug ($89.99, under
+        // the threshold, so no approval) was declined.
         s.payments += [
             Payment(id: 90, owner: owner, agent: "buy", rail: .visa, purpose: "Mattress: 8\" memory foam mattress, Full",
                     payee: "simulated merchant", amountUsdMicros: 17_999 * 10_000, status: .settled, simulated: true,

@@ -27,7 +27,7 @@ public struct User: Codable, Sendable, Hashable, Identifiable {
 
     public var id: IdentityHex { identity }
 
-    public init(identity: IdentityHex, auth0Sub: String? = nil, name: String, email: String? = nil, approvalThresholdCents: Int64 = 20_000) {
+    public init(identity: IdentityHex, auth0Sub: String? = nil, name: String, email: String? = nil, approvalThresholdCents: Int64 = 10_000) {
         self.identity = identity
         self.auth0Sub = auth0Sub
         self.name = name

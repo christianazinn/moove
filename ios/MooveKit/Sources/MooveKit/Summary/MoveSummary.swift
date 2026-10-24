@@ -146,6 +146,18 @@ public struct MoveSummary: Sendable, Equatable {
         }
     }
 
+    /// Sale lines for a whole snapshot: every sell item at its estimate, overridden by its listings.
+    public static func sales(from snapshot: SyncSnapshot) -> [Sale] {
+        estimatedSales(from: snapshot.items) + sales(from: snapshot.listings)
+    }
+
+    /// The Summary screen's figures straight from synced rows (items, listings, payments, agent events).
+    /// The screen uses this whenever there are payment or event rows (the offline demo always has them).
+    public init(snapshot: SyncSnapshot, timelineLimit: Int = 8) {
+        self.init(items: snapshot.items, sales: Self.sales(from: snapshot), spend: Self.spend(from: snapshot.payments),
+                  events: Self.events(from: snapshot.agentEvents), timelineLimit: timelineLimit)
+    }
+
     /// Timeline entries from the `agent_event` table.
     public static func events(from agentEvents: [AgentEvent]) -> [Event] {
         agentEvents.map { Event(agent: $0.agent, kind: $0.kind.rawValue, message: $0.message, createdAt: $0.createdAt) }
