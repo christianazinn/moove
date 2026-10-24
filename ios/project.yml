@@ -4,6 +4,8 @@ options:
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
+  # Fetches big Core ML models that aren't in git (skips on CI/offline).
+  preGenCommand: scripts/fetch-models.sh
 settings:
   base:
     SWIFT_VERSION: "6.0"
