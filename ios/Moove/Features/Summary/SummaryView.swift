@@ -6,6 +6,7 @@ import MooveKit
 /// recomputes from the store on every snapshot.
 struct SummaryView: View {
     @Environment(MooveStore.self) private var store
+    @AppStorage("moove.tab") private var tab = "summary"
 
     /// Spend and agent steps come from the `payment` and `agent_event` tables. With no
     /// rows yet (nothing has run), show labeled demo lines so the closing slide isn't empty.
@@ -27,9 +28,7 @@ struct SummaryView: View {
                 PageHeader(
                     eyebrow: "07 — Summary",
                     title: "Your move, handled.",
-                    lede: store.items.isEmpty
-                        ? "Scan a room to start."
-                        : "\(s.itemCount) items, start to finish."
+                    lede: store.items.isEmpty ? nil : "\(s.itemCount) items, start to finish."
                 )
                 if store.items.isEmpty {
                     emptyState.padding(.top, 36)
@@ -54,7 +53,10 @@ struct SummaryView: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Nothing to sum up yet").blockTitle()
-            Text("Kept, sold and donated items land here.").monoMeta()
+            Text("Scan a room to start.").monoMeta().fixedSize(horizontal: false, vertical: true)
+            Button("Scan a room") { tab = "scan" }
+                .buttonStyle(.pill(.outline, compact: true))
+                .padding(.top, 12)
         }
         .padding(.vertical, 28)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -70,8 +72,9 @@ struct SummaryView: View {
             StatFigure(label: "Net", value: s.netMicros.netUSD, tint: s.netMicros >= 0 ? Theme.accentStrong : Theme.danger)
                 .padding(.vertical, 18)
                 .padding(.trailing, 20)
-            Rectangle().fill(Theme.line).frame(width: 1)
+            Rectangle().fill(Theme.line).frame(width: 1).accessibilityHidden(true)
             StatFigure(label: "Kept from landfill", value: "\(Int(s.divertedKg.rounded())) kg")
+                .accessibilityLabel("Kept from landfill, \(Int(s.divertedKg.rounded())) kilograms")
                 .padding(.vertical, 18)
                 .padding(.leading, 20)
         }
@@ -114,6 +117,7 @@ struct SummaryView: View {
                 Text("\(s.needsYou) still need you · sentimental or undecided")
                     .monoText(13.5)
                     .foregroundStyle(Theme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
             }
         }
@@ -139,6 +143,7 @@ struct SummaryView: View {
                 }
                 Text("\(s.keptVolumeM3, format: .number.precision(.fractionLength(1))) m³ to move")
                     .monoMeta()
+                    .accessibilityLabel("\(Spoken.volume(s.keptVolumeM3)) to move")
                     .padding(.top, 12)
             }
         }
@@ -171,6 +176,10 @@ struct SummaryView: View {
             if sale?.simulated == true && sale?.stage != .estimated { MonoTag(text: "Sim", tone: Theme.ochreInk) }
         }
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(([
+            item.name, Spoken.size(item.widthM, item.depthM), state, value,
+            sale?.simulated == true && sale?.stage != .estimated ? "simulated" : nil,
+        ] as [String?]).compactMap { $0 }.joined(separator: ", "))
     }
 
     /// One sale line per item, the furthest-along stage winning (the same rule `MoveSummary` totals with).
@@ -212,7 +221,7 @@ struct SummaryView: View {
                     StatFigure(label: "Sold", value: s.soldCents.usd, tint: Theme.accentStrong).padding(.vertical, 18)
                     StatFigure(label: "Still selling", value: s.pendingSalesCents.usd).padding(.vertical, 18)
                 }
-                Rectangle().fill(Theme.line).frame(height: 1).gridCellUnsizedAxes(.horizontal)
+                Rectangle().fill(Theme.line).frame(height: 1).gridCellUnsizedAxes(.horizontal).accessibilityHidden(true)
                 GridRow {
                     StatFigure(label: "Spent", value: UsdMicros.format(s.spentMicros), tint: Theme.ochreInk).padding(.vertical, 18)
                     StatFigure(label: "Net", value: s.netMicros.netUSD, tint: s.netMicros >= 0 ? Theme.accentStrong : Theme.danger)
@@ -248,6 +257,8 @@ struct SummaryView: View {
                         .foregroundStyle(Theme.accentStrong)
                     Text("kept out of landfill").monoText(13.5).foregroundStyle(Theme.muted)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("About \(Int(s.divertedKg.rounded())) kilograms kept out of landfill")
                 Text("\(s.divertedItems) items sold or donated, not trashed.")
                     .sansText(15.5)
                     .lineSpacing(3)
@@ -275,6 +286,7 @@ struct SummaryView: View {
                             .frame(minHeight: 30)
                             .background(Capsule().fill(Theme.surface))
                             .accessibilityElement(children: .combine)
+                            .accessibilityLabel("\(a.agent), \(a.steps) step\(a.steps == 1 ? "" : "s")")
                         }
                     }
                 }

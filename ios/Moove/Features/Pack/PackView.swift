@@ -12,6 +12,7 @@ struct PackView: View {
     // Check-off state survives relaunches. Keys: "boxId:lineIndex" and supply names.
     @AppStorage("moove.pack.checked") private var checkedRaw = ""
     @AppStorage("moove.pack.supplies") private var suppliesRaw = ""
+    @AppStorage("moove.tab") private var tab = "pack"
 
     var body: some View {
         let input = inputs
@@ -24,6 +25,7 @@ struct PackView: View {
                 )
                 .padding(.top, 16)
                 .padding(.bottom, 24)
+                if input.demo { demoNotice.padding(.bottom, 24) }
                 if let plan {
                     truckCard(plan.truck, plan: plan, demo: input.demo)
                     boxes(plan.boxes)
@@ -31,7 +33,7 @@ struct PackView: View {
                     if !plan.supplies.isEmpty { supplies(plan.supplies) }
                     if !plan.schedule.isEmpty { schedule(plan.schedule, boxes: plan.boxes) }
                 } else {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, 40)
+                    ProgressView("Planning…").frame(maxWidth: .infinity).padding(.vertical, 40)
                 }
             }
             .padding(.horizontal, Theme.gutter)
@@ -87,6 +89,21 @@ struct PackView: View {
         !box.contents.isEmpty && packed(box, in: set) == box.contents.count
     }
 
+    /// Nothing kept yet: the plan below is for the demo items. Points at where to keep things.
+    private var demoNotice: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Nothing kept yet. This plan uses demo items.")
+                .sansText(15)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Choose what to keep") { tab = "review" }
+                .buttonStyle(.pill(.outline, compact: true))
+        }
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .ruled(.top)
+        .ruled()
+    }
+
     // MARK: Truck
 
     private func truckCard(_ t: TruckEstimate, plan: PackingPlan, demo: Bool) -> some View {
@@ -101,11 +118,15 @@ struct PackView: View {
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 18) {
                 GridRow {
                     StatFigure(label: "Truck", value: t.trucks > 1 ? "\(t.trucks) × \(t.truck.label)" : t.truck.label)
+                        .accessibilityLabel("Truck, \(t.truck.label)\(t.trucks > 1 ? ", \(t.trucks) of them" : "")")
                     StatFigure(label: "Load", value: "\(t.loadM3.formatted(.number.precision(.fractionLength(1)))) m³")
+                        .accessibilityLabel("Load, \(Spoken.volume(t.loadM3))")
                 }
                 GridRow {
                     StatFigure(label: "Movers", value: "\(t.movers) × \(t.moverHours.formatted(.number.precision(.fractionLength(0...1)))) h")
+                        .accessibilityLabel("\(t.movers) movers, \(t.moverHours.formatted(.number.precision(.fractionLength(0...1)))) hours each")
                     StatFigure(label: "Cost", value: "\(t.costLowCents.usd)–\(t.costHighCents.usd)", tint: Theme.accentStrong)
+                        .accessibilityLabel("Cost, \(t.costLowCents.usd) to \(t.costHighCents.usd)")
                 }
             }
             VStack(alignment: .leading, spacing: 8) {
@@ -164,6 +185,7 @@ struct PackView: View {
             if boxes.isEmpty {
                 Text("No boxes needed. It's all furniture.")
                     .monoMeta()
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 14)
             }
             ForEach(groups(boxes)) { group in
@@ -227,6 +249,8 @@ struct PackView: View {
                                         .foregroundStyle(Theme.accentStrong)
                                     Text(step).sansText(15).fixedSize(horizontal: false, vertical: true)
                                 }
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel("Step \(i + 1), \(step)")
                             }
                         }
                         .padding(.leading, 60)
@@ -259,10 +283,12 @@ struct PackView: View {
                             .font(.system(size: 20))
                             .foregroundStyle(have ? Theme.accentStrong : Theme.muted)
                             .frame(width: 24)
+                            .accessibilityHidden(true)
                         Text(line.name)
                             .monoText(14.5, weight: .bold)
                             .foregroundStyle(have ? Theme.muted : Theme.text)
                             .strikethrough(have, color: Theme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Text("× \(line.quantity)").rowValue()
                     }
@@ -273,7 +299,7 @@ struct PackView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(line.name), \(line.quantity)")
+                .accessibilityLabel("\(line.name), \(line.quantity) needed")
                 .accessibilityValue(have ? "Got it" : "Still need")
                 .accessibilityAddTraits(have ? [.isButton, .isSelected] : .isButton)
             }
@@ -308,8 +334,11 @@ struct PackView: View {
                     .frame(width: 12)
                     .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(Self.when(step.daysBeforeMove)).monoText(13.5).foregroundStyle(Theme.muted)
-                        Text(step.title).blockTitle().fixedSize(horizontal: false, vertical: true)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(Self.when(step.daysBeforeMove)).monoText(13.5).foregroundStyle(Theme.muted)
+                            Text(step.title).blockTitle().fixedSize(horizontal: false, vertical: true)
+                        }
+                        .accessibilityElement(children: .combine)
                         if !stepBoxes.isEmpty {
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 2) {
