@@ -98,6 +98,13 @@ struct ItemDetailView: View {
             case .idle, .uploading:
                 if item.photoUrls.isEmpty {
                     Text("No photo yet, so the agents can't identify it.").monoMeta()
+                } else if let ask = item.closeupRequest {
+                    // #276: vision named one photo that would identify the exact product
+                    Text(ask)
+                        .monoMeta()
+                        .foregroundStyle(Theme.ochreInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("item.closeup")
                 }
             case .added:
                 Text("Photo added. Moove is identifying it again.").monoMeta()
