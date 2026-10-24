@@ -16,9 +16,7 @@ struct PackView: View {
     @State private var openBox: MovingBox?
     @State private var expandedFurniture: Set<UInt64> = []
     /// Box groups (rooms, "first") showing their cards.
-    @State private var expandedRooms: Set<String> = []
     /// Rooms whose estimate folder is flipped from its default (folded when the room has scanned boxes).
-    @State private var flippedEstimates: Set<String> = []
     @State private var showRooms = false
     // Check-off state survives relaunches. Keys: "boxId:lineIndex" and supply names.
     @AppStorage("moove.pack.checked") private var checkedRaw = ""
@@ -264,113 +262,25 @@ struct PackView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 14)
             }
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(groups(boxes)) { group in
-                    roomGroup(group, checked: set)
-                }
-            }
-            .padding(.top, 18)
-        }
-        .padding(.top, 36)
-    }
-
-    /// A heading per room ("Bedroom · 3 boxes · 37 kg") over its box cards, which show by default
-    /// (tap the heading to fold them). Boxes with scanned things come first, then "Everyday stuff (estimate)".
-    private func roomGroup(_ group: BoxGroup, checked set: Set<String>) -> some View {
-        let open = !expandedRooms.contains(group.id)  // cards show by default; the set holds folded rooms
-        let fragile = group.boxes.filter(\.fragile).count
-        let openFirst = group.boxes.filter(\.openFirst).count
-        let sealed = group.boxes.filter { isSealed($0, in: set) }.count
-        return VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    if open { expandedRooms.insert(group.id) } else { expandedRooms.remove(group.id) }
-                }
-            } label: {
-                HStack(alignment: .center, spacing: 12) {
-                    Circle().fill(BoxPalette.tape(for: group.title)).frame(width: 12, height: 12).accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("\(group.title) · \(Self.count(group.boxes.count, "box")) · \(group.kg) kg")
-                            .monoText(14.5, weight: .bold)
-                            .foregroundStyle(Theme.text)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if fragile > 0 || openFirst > 0 || sealed > 0 {
-                            HStack(spacing: 6) {
-                                if fragile > 0 { MonoTag(text: "\(fragile) fragile", tone: Theme.ochreInk) }
-                                if openFirst > 0 { MonoTag(text: "\(openFirst) open first", tone: Theme.accentStrong) }
-                                if sealed > 0 { MonoTag(text: "\(sealed) sealed", tone: Theme.accentStrong) }
-                            }
+            // One heading per room (with its tape color) over a grid of big box cards, the way
+            // Pack looked before #306; scanned boxes first, then everyday-stuff estimates.
+            ForEach(groups(boxes)) { group in
+                VStack(alignment: .leading, spacing: 14) {
+                    ListHeader(title: group.title, count: "\(group.boxes.count)") {
+                        if !group.isFirst {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(BoxPalette.tape(for: group.title))
+                                .frame(width: 18, height: 10)
+                                .accessibilityHidden(true)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(Theme.muted)
-                        .rotationEffect(.degrees(open ? 180 : 0))
-                        .accessibilityHidden(true)
+                    .accessibilityIdentifier("pack.room.\(group.isFirst ? "openFirst" : group.title)")
+                    boxGrid(group.scanned + group.estimated, checked: set)
                 }
-                .padding(.vertical, 14)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-                .ruled()
-            }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(roomLabel(group, fragile: fragile, openFirst: openFirst, sealed: sealed))
-            .accessibilityValue(open ? "Expanded" : "Collapsed")
-            .accessibilityHint(open ? "Hides the boxes" : "Shows the boxes")
-            .accessibilityAddTraits(.isButton)
-            .accessibilityIdentifier("pack.room.\(group.isFirst ? "openFirst" : group.title)")
-            if open {
-                VStack(alignment: .leading, spacing: 14) {
-                    if !group.scanned.isEmpty { boxGrid(group.scanned, checked: set) }
-                    if !group.estimated.isEmpty { estimates(group, checked: set) }
-                }
-                .padding(.top, 14)
-                .padding(.bottom, 10)
-                .transition(.opacity)
+                .padding(.top, 24)
             }
         }
-    }
-
-    private func roomLabel(_ group: BoxGroup, fragile: Int, openFirst: Int, sealed: Int) -> String {
-        var parts = [group.title, Self.count(group.boxes.count, "box"), "\(group.kg) kilograms"]
-        if fragile > 0 { parts.append("\(fragile) fragile") }
-        if openFirst > 0 { parts.append("\(openFirst) open first") }
-        if sealed > 0 { parts.append("\(sealed) sealed") }
-        if !group.estimated.isEmpty { parts.append("\(group.estimated.count) of everyday stuff, an estimate") }
-        return parts.joined(separator: ", ")
-    }
-
-    /// Estimate-only boxes (typical everyday contents, not scanned), shown as cards under their label.
-    private func estimates(_ group: BoxGroup, checked set: Set<String>) -> some View {
-        let open = !flippedEstimates.contains(group.id)  // shown by default; tap folds them
-        return VStack(alignment: .leading, spacing: 14) {
-            Button {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    if flippedEstimates.contains(group.id) { flippedEstimates.remove(group.id) } else { flippedEstimates.insert(group.id) }
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: open ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 11, weight: .regular))
-                        .frame(width: 14)
-                        .accessibilityHidden(true)
-                    Text("Everyday stuff (estimate) · \(Self.count(group.estimated.count, "box"))")
-                        .monoText(13, weight: .bold)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                }
-                .foregroundStyle(Theme.muted)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityValue(open ? "Expanded" : "Collapsed")
-            .accessibilityHint("Typical contents Moove expects for this room, not from your scan")
-            .accessibilityIdentifier("pack.estimates.\(group.title)")
-            if open { boxGrid(group.estimated, checked: set).transition(.opacity) }
-        }
+        .padding(.top, 36)
     }
 
     private func boxGrid(_ boxes: [MovingBox], checked set: Set<String>) -> some View {
