@@ -22,7 +22,8 @@
 | `worker` (pk `identity`) | label |
 | `room` | name, home: `old`\|`new`, join_code (6 chars, unique) |
 | `room_member` | room_id, member (Identity), for shared access (#10) |
-| `scan` | room_id, usdz_url, captured_room_json_url |
+| `scan` | room_id, usdz_url, captured_room_json_url, **sweep_status**: `none`\|`pending`\|`running`\|`done`\|`failed` |
+| `scan_photo` | scan_id, url: wide room photos for the photo sweep (max 12 per scan) |
 | `item` | room_id, scan_id, scan_object_id, name, category, width_m, height_m, depth_m, photo_urls[], material, brand, condition, **details_status**, est_value_cents, est_low_cents, est_high_cents, **pricing_status**, **disposition**, **disposition_source**: `auto`\|`user`, disposition_reason, fragile, maybe_sentimental, **model_url**, **model_source**: `capture`\|`sam3d`\|`''`, **model_status** |
 | `comp` | item_id, source (`fb`\|`craigslist`\|`ebay`\|…), title, price_cents, url |
 | `listing` | item_id, platform (`ebay`), title, description, price_cents, status, external_id, url, simulated |
@@ -46,6 +47,7 @@ Status values:
 **App (owner), and the worker can call these too:**
 - **Users:** `register_user(auth0_sub, name, email)` (`auth0_sub`/`email` come from the token, see above), `set_approval_threshold(cents)` (`-1` = always ask, else `0..10000000` = $100,000)
 - **Capture:** **`import_scan(room_name, home, usdz_url, captured_room_json_url, objects[])`**: the app's one-shot import that creates room, scan and items atomically. `objects[]` = {scan_object_id, name ('' means use category), category, width_m, height_m, depth_m, photo_url ('' if none)}. Also `create_room(name, home)`, `join_room(code)`, `rotate_join_code(room_id)` and `remove_member(room_id, member)` (room owner only), and `create_scan(room_id, ...)` to re-scan (it updates items by `scan_object_id`), `add_item(room_id, object)`, `add_item_photo(item_id, url)` (re-queues vision), `delete_item`
+- **Room photo sweep:** `add_scan_photo(scan_id, url)`: after a scan, attach a few wide room photos (upload each to the worker's `/upload` first). Each one sets `sweep_status = pending`, and the worker sweeps once photos stop arriving (~8 s). It renames scanned items it recognizes and adds items RoomPlan missed (`scan_object_id = "photo:<scan_id>"`: no RoomPlan box, size is an estimate).
 - **3D models (#65):** `set_item_model(item_id, url, source)`: the app after Object Capture (`capture`, USDZ) or the SAM 3D agent (`sam3d`, GLB). `url` must be http(s), or `''` to clear. A `sam3d` result never replaces a `capture` model. `add_item_photo` re-queues SAM 3D unless the item has a captured model.
 - **Review:** `set_disposition(item_id, disposition)` (marks it `user`; auto-sort never overrides it), `set_sentimental(item_id, value)`, `set_fragile(item_id, value)` (absolute setters, not toggles), `rename_item`
 - **Approvals:** `decide_approval(approval_id, status)`: **owner only** (not the worker), `status` must be `approved`\|`denied`, records `decided_via = 'app'` (#42)
@@ -54,6 +56,7 @@ Status values:
 
 **Worker only:**
 - `register_worker(label)`
+- **Photo sweep (worker):** `set_sweep_status(scan_id, status)`, `apply_sweep_match(item_id, name, category, material, brand, condition, fragile, maybe_sentimental, photo_url)` (a changed name/brand re-queues pricing), `add_sweep_item(scan_id, name, category, width_m, height_m, depth_m, material, brand, condition, fragile, maybe_sentimental, photo_url)` (`details_status = done`, so no second vision call)
 - **Item enrichment:** `set_item_stage(item_id, stage, field: details|pricing|model)`, `set_item_details(...)`, `add_comps(item_id, comps[])`, `set_est_value(item_id, est_value_cents, est_low_cents, est_high_cents)`
 - **Sorting:** `set_auto_disposition(item_id, disposition, reason)`. It no-ops on user-set items and forces `undecided` on `maybe_sentimental` ones.
 - **Listings, approvals, deals:** `create_listing_draft(...)`, `update_listing(listing_id, status, external_id, url, price_cents)` (`''`/`-1` keep the current value; worker-only since #44), `request_approval(owner, kind, ref_id, amount_cents, summary)` (the listing, or deal for `purchase`, must belong to `owner` and `amount_cents` must equal its `price_cents`), `record_ciba_decision(approval_id, status, ciba_subject)` (`approved`\|`denied`; `ciba_subject` must equal the owner's `user.auth0_sub`; records `decided_via = 'ciba'`), `add_deal(...)`, `set_deal_fraud(deal_id, fraud_score, ai_text_score, reasons[])`
