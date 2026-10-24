@@ -55,7 +55,7 @@ struct BoxDetailView: View {
                 .monoMeta()
             if !box.stamps.isEmpty {
                 Text(box.stamps.map(\.rawValue).joined(separator: " · "))
-                    .monoText(12.5, weight: .bold)
+                    .monoText(13.5, weight: .bold)
                     .foregroundStyle(box.fragile ? Theme.danger : Theme.accentStrong)
             }
             if let hint = hint {
@@ -85,13 +85,13 @@ struct BoxDetailView: View {
                 ContentRow(line: line, done: isChecked(index)) { toggle(index) }
             }
             if box.contents.contains(where: { $0.itemId == nil }) {
-                Text("Typical lines are what a box like this usually holds, not things from your scan.")
+                Text("Typical: usual contents, not from your scan.")
                     .monoMeta()
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
             }
             if sealed {
-                Text("Sealed. Write the number on two sides and stack it by the door.")
+                Text("Sealed. Number two sides, stack by the door.")
                     .monoMeta()
                     .foregroundStyle(Theme.accentStrong)
                     .fixedSize(horizontal: false, vertical: true)
@@ -141,7 +141,7 @@ private struct ContentRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                     if line.itemId == nil {
                         // "Faint" in spirit; `muted` so it still passes 4.5:1.
-                        Text("typical").monoText(11.5).foregroundStyle(Theme.muted)
+                        Text("typical").monoText(12.5).foregroundStyle(Theme.muted)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

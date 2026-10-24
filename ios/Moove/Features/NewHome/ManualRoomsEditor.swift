@@ -17,7 +17,7 @@ struct ManualRoomsEditor: View {
                 PageHeader(
                     eyebrow: "06 — New home",
                     title: "Sketch your new place",
-                    lede: "Type each room as width × depth in meters. Moove arranges them around a hallway."
+                    lede: "Width × depth, in meters."
                 )
                 .listRowInsets(EdgeInsets(top: 8, leading: 4, bottom: 8, trailing: 4))
                 .listRowBackground(Color.clear)
@@ -35,7 +35,7 @@ struct ManualRoomsEditor: View {
                     .frame(height: 200)
                     .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
             } footer: {
-                Text("\(plan.rooms.count) rooms · \(plan.totalAreaM2, format: .number.precision(.fractionLength(0))) m² · only the sizes matter")
+                Text("\(plan.rooms.count) rooms · \(plan.totalAreaM2, format: .number.precision(.fractionLength(0))) m²")
                     .monoMeta()
             }
             .listRowBackground(Theme.surface)

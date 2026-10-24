@@ -30,13 +30,13 @@ struct SummaryView: View {
         let s = summary
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                MooveWordmark(height: 24).padding(.bottom, 28)
+                MooveWordmark(height: 36).padding(.top, 8).padding(.bottom, 32)
                 PageHeader(
                     eyebrow: "07 — Summary",
                     title: "Your move, handled.",
                     lede: store.items.isEmpty
-                        ? "Scan a room and Moove will tally your move here."
-                        : "\(s.itemCount) items: where each one went, what it brought in, and what the agents did."
+                        ? "Scan a room to start."
+                        : "\(s.itemCount) items, start to finish."
                 )
                 if store.items.isEmpty {
                     emptyState.padding(.top, 36)
@@ -61,7 +61,7 @@ struct SummaryView: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Nothing to sum up yet").blockTitle()
-            Text("Kept, sold and donated items show up here as you go.").monoMeta()
+            Text("Kept, sold and donated items land here.").monoMeta()
         }
         .padding(.vertical, 28)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -119,7 +119,7 @@ struct SummaryView: View {
             }
             if s.needsYou > 0 {
                 Text("\(s.needsYou) still need you · sentimental or undecided")
-                    .monoText(12.5)
+                    .monoText(13.5)
                     .foregroundStyle(Theme.danger)
                     .padding(.top, 12)
             }
@@ -242,7 +242,7 @@ struct SummaryView: View {
                 .ruled()
                 .accessibilityElement(children: .combine)
             }
-            Text("Unsold items count at their listing price or estimate.").monoMeta().padding(.top, 12)
+            Text("Unsold items at listing price or estimate.").monoMeta().padding(.top, 12)
         }
     }
 
@@ -253,14 +253,14 @@ struct SummaryView: View {
                     Text("~\(Int(s.divertedKg.rounded())) kg")
                         .monoText(30, weight: .bold, maxScale: 1.6)
                         .foregroundStyle(Theme.accentStrong)
-                    Text("kept out of landfill").monoText(13).foregroundStyle(Theme.muted)
+                    Text("kept out of landfill").monoText(13.5).foregroundStyle(Theme.muted)
                 }
-                Text("\(s.divertedItems) items sold or donated instead of trashed. You're moving \(s.keptVolumeM3, format: .number.precision(.fractionLength(1))) m³ of things you kept.")
+                Text("\(s.divertedItems) items sold or donated, not trashed.")
                     .sansText(15.5)
                     .lineSpacing(3)
                     .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Weights are rough estimates by item type and size.").monoMeta()
+                Text("Rough weights by type and size.").monoMeta()
             }
             .padding(.top, 18)
         }
@@ -275,8 +275,8 @@ struct SummaryView: View {
                     HStack(spacing: 6) {
                         ForEach(s.agents) { a in
                             HStack(spacing: 6) {
-                                Text(a.agent).monoText(12.5, maxScale: 1.5).foregroundStyle(Theme.muted)
-                                Text("\(a.steps)").monoText(12.5, weight: .bold, maxScale: 1.5)
+                                Text(a.agent).monoText(13, maxScale: 1.5).foregroundStyle(Theme.muted)
+                                Text("\(a.steps)").monoText(13, weight: .bold, maxScale: 1.5)
                             }
                             .padding(.horizontal, 12)
                             .frame(minHeight: 30)
