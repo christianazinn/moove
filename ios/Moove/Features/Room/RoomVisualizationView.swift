@@ -25,6 +25,7 @@ struct RoomVisualizationView: View {
     @State private var selection: String?
     @State private var capturing: RoomGeometry.Object?
     @State private var models = ObjectModelStore.shared
+    @Environment(MooveStore.self) private var store
 
     var body: some View {
         let centered = display.centered(geometry)
@@ -73,7 +74,9 @@ struct RoomVisualizationView: View {
             }
         }
         .fullScreenCover(item: $capturing) { object in
-            ObjectCaptureFlowView(objectId: object.id, title: items[object.id]?.name ?? object.category.capitalized)
+            ObjectCaptureFlowView(objectId: object.id, title: items[object.id]?.name ?? object.category.capitalized) { file in
+                Task { await store.publishCapturedModel(scanObjectId: object.id, file: file) }
+            }
         }
         .onAppear {
             mode = initialMode
@@ -152,7 +155,11 @@ private struct SelectedObjectCard: View {
     @ViewBuilder private var modelButtons: some View {
         if let url = models.modelURL(for: object.id) {
             HStack {
-                Button("View in AR", systemImage: "arkit") { quickLook = url }
+                if ObjectModelStore.isQuickLookable(url) {
+                    Button("View in AR", systemImage: "arkit") { quickLook = url }
+                } else if item?.modelSource == .sam3d {
+                    Label("SAM 3D", systemImage: "wand.and.stars").font(.caption).foregroundStyle(.secondary)
+                }
                 Button("Rotate 90°", systemImage: "rotate.right") { models.rotate(object.id) }
                 Spacer()
                 Button("Recapture", systemImage: "camera.metering.center.weighted", action: capture)
@@ -180,4 +187,5 @@ private struct SelectedObjectCard: View {
         RoomVisualizationView(geometry: DemoFixtures.roomGeometry(),
                               items: Dictionary(uniqueKeysWithValues: DemoFixtures.inventory(owner: "me").items.map { ($0.scanObjectId!, $0) }))
     }
+    .environment(MooveStore.preview())
 }

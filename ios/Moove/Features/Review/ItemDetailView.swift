@@ -73,8 +73,13 @@ struct ItemDetailView: View {
         }
         .navigationTitle(item.name)
         .quickLookPreview($quickLook)
+        .task(id: item.modelUrl) {
+            if let remote = item.modelUrl.flatMap(URL.init(string:)) { await models.fetchRemote(remote, for: modelKey(item)) }
+        }
         .fullScreenCover(isPresented: $capturing) {
-            ObjectCaptureFlowView(objectId: modelKey(item), title: item.name)
+            ObjectCaptureFlowView(objectId: modelKey(item), title: item.name) { file in
+                Task { await store.publishCapturedModel(scanObjectId: modelKey(item), file: file) }
+            }
         }
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -91,7 +96,13 @@ struct ItemDetailView: View {
         let key = modelKey(item)
         if let url = models.modelURL(for: key) {
             Section("3D model") {
-                Button("View in 3D / AR", systemImage: "arkit") { quickLook = url }
+                if ObjectModelStore.isQuickLookable(url) {
+                    Button("View in 3D / AR", systemImage: "arkit") { quickLook = url }
+                }
+                if item.modelSource == .sam3d, item.modelUrl != nil {
+                    Label("Built by SAM 3D from the photo. Capture it for a more accurate model.", systemImage: "wand.and.stars")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Button("Rotate in room 90°", systemImage: "rotate.right") { models.rotate(key) }
                 Button("Recapture", systemImage: "camera.metering.center.weighted") { capturing = true }
                     .disabled(!ObjectCaptureFlowView.isSupported)

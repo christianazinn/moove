@@ -104,6 +104,8 @@ public protocol SyncBackend: AnyObject, Sendable {
     func addItemPhoto(itemId: UInt64, url: String) async throws
     func setDisposition(itemId: UInt64, disposition: Disposition) async throws
     func setSentimental(itemId: UInt64, maybeSentimental: Bool) async throws
+    /// Stores (or clears, with "") an item's 3D model URL (#65).
+    func setItemModel(itemId: UInt64, url: String, source: ModelSource) async throws
 
     /// Shopping list (#15): the user's edit step on the list the shopping agent generated.
     func addShoppingItem(name: String, category: String, reason: String) async throws
