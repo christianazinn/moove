@@ -96,6 +96,10 @@ final class DevpostShotsTests: XCTestCase {
             deskChair.tap()
             _ = scrollTo(byId("deal.blocked.76"))
             shot("06-desk-chair-deals")
+            // Back to the list: the segment pills live on the tab's root, and step 8 needs them.
+            app.navigationBars.buttons.firstMatch.tap()
+            let agents = app.buttons.matching(NSPredicate(format: "label == 'Agents' OR label BEGINSWITH 'Agents ·'")).firstMatch
+            XCTAssertTrue(agents.waitForExistence(timeout: slow), "back on Shopping's list")
         }
 
         // 7. Move (one page) > the demo house: what was kept, in the voxel house.
