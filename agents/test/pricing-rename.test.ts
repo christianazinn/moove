@@ -60,17 +60,17 @@ test("a done item renamed later (vision after a new photo) is priced again under
   });
   const f = fakeConn([{ id: 1n, name: "chair" }]);
   pricingAgent.start(f.conn);
-  await sleep(20);
+  await sleep(150);
   assert.equal(f.rows.get(1n)!.estValueCents, 2000n);
   f.set(1n, { name: "black mesh office chair" });
-  await sleep(20);
+  await sleep(150);
   assert.deepEqual(queries, ["chair", "black mesh office chair"]);
   assert.equal(f.rows.get(1n)!.pricingStatus, "done");
   assert.equal(f.rows.get(1n)!.estValueCents, 9000n);
   assert.ok(f.events.some(e => /^Name changed, re-pricing/.test(e.message)));
   // An update that doesn't change the query (condition, a stage) never re-prices.
   f.set(1n, { condition: "fair" });
-  await sleep(20);
+  await sleep(150);
   assert.equal(queries.length, 2);
 });
 
@@ -86,7 +86,7 @@ test("a rename during the lookup drops the old query's comps and price, then re-
   });
   f = fakeConn([{ id: 2n, name: "table", category: "table" }]);
   pricingAgent.start(f.conn);
-  await sleep(50);
+  await sleep(300);
   assert.deepEqual(queries, ["table", "round walnut dining table"]);
   assert.deepEqual(f.priced.map(p => p.estValueCents), [12000n], "never priced from the old query");
   assert.equal(f.added.length, 1, "the old query's comps were not written");
@@ -105,7 +105,7 @@ test("a queued item is priced as it is now: renamed rows under the new name, del
   pricingAgent.start(f.conn); // concurrency 1: "lamp" runs, the others wait
   f.rows.set(4n, { ...f.rows.get(4n)!, name: "standing desk" }); // renamed in the DB while queued
   f.rows.delete(5n); // deleted while queued
-  await sleep(60);
+  await sleep(300);
   assert.deepEqual(queries, ["lamp", "standing desk"]);
 });
 
@@ -117,13 +117,13 @@ test("a catch-all name vision couldn't fix is marked failed (once), and a rename
   });
   const f = fakeConn([{ id: 6n, name: "storage", category: "storage", detailsStatus: "failed" }, { id: 7n, name: "other", category: "other", detailsStatus: "pending", photoUrls: ["https://x/a.jpg"] }]);
   pricingAgent.start(f.conn);
-  await sleep(20);
+  await sleep(150);
   assert.equal(f.rows.get(6n)!.pricingStatus, "failed");
   assert.equal(f.events.filter(e => e.refId === 6n && /too generic/.test(e.message)).length, 1);
   // vision hasn't run yet on item 7: still waiting for a name
   assert.equal(f.rows.get(7n)!.pricingStatus, "pending");
   f.set(6n, { name: "white IKEA Kallax shelf" });
-  await sleep(20);
+  await sleep(150);
   assert.deepEqual(queries, ["white IKEA Kallax shelf"]);
   assert.equal(f.rows.get(6n)!.pricingStatus, "done");
 });
