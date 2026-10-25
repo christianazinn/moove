@@ -238,10 +238,24 @@ private struct ReviewCardFace: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            ItemArt(item: item, size: 190)
+            // The voxel model is the card's picture (the same piece that flies into the new
+            // home, and never blank); the photo, once it loads, is a snapshot pinned in the corner.
+            ItemArt(item: item, size: 190, photo: .none)
                 .frame(maxWidth: .infinity)
                 .frame(height: 210)
                 .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+                .overlay(alignment: .bottomTrailing) {
+                    ItemPhoto(urls: item.photoUrls) { image in
+                        image.resizable().scaledToFill()
+                            .frame(width: 76, height: 76)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .padding(5)
+                            .background(Theme.bg, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+                            .rotationEffect(.degrees(4))
+                            .padding(12)
+                    }
+                }
                 .overlay(alignment: .topLeading) {
                     if item.maybeSentimental {
                         Label("Sentimental", systemImage: "heart.fill")
@@ -303,7 +317,7 @@ private struct ReviewCardBack: View {
     var body: some View {
         ReviewCardBackground()
             .overlay(alignment: .top) {
-                ItemArt(item: item, size: 120).opacity(0.35).padding(.top, 40)
+                ItemArt(item: item, size: 120, photo: .none).opacity(0.35).padding(.top, 40)
             }
     }
 }
@@ -386,19 +400,5 @@ struct ReviewAllDecided: View {
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// A photo when the item has one, else its voxel model.
-struct ItemArt: View {
-    let item: Item
-    var size: CGFloat
-
-    var body: some View {
-        if item.photoUrls.isEmpty {
-            VoxelThumbnail(item, size: size, tile: false)
-        } else {
-            ItemThumbnail(item: item, size: size)
-        }
     }
 }

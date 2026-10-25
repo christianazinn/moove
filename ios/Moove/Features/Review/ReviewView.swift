@@ -11,8 +11,6 @@ struct ReviewView: View {
     @State private var pending: Set<UInt64> = []
     /// This visit's swipes, newest last, for Undo and "2 of 5".
     @State private var history: [UInt64] = []
-    /// The board tile opened on iPhone.
-    @State private var selected: Disposition?
     @State private var committed = 0
 
     var body: some View {
@@ -45,8 +43,6 @@ struct ReviewView: View {
                     .padding(.bottom, 16)
                     ReviewBoardView(
                         piles: piles,
-                        keepGroups: Review.keepByRoom(piles[0].items, layout: Review.savedLayout(in: store.snapshot)),
-                        selected: $selected,
                         onMove: move
                     )
                     closeups(items)
@@ -59,10 +55,10 @@ struct ReviewView: View {
         .navigationTitle("Review")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: UInt64.self) { ItemDetailView(itemId: $0) }
+        .navigationDestination(for: ReviewPileRoute.self) { ReviewPileScreen(destination: $0.destination) }
         .mooveScreen()
         .sensoryFeedback(.success, trigger: committed)
         .animation(.default, value: store.visibleItems)
-        .animation(.snappy, value: selected)
         .onChange(of: store.visibleItems) { _, items in
             // The store has the decision: stop hiding those cards (an undecided one comes back).
             let stillWaiting = Set(Review.deck(items).map(\.id))

@@ -1,69 +1,238 @@
 import SwiftUI
+import UIKit
 import MooveKit
 
-/// "Where it goes": the four destinations as tiles with their items fanned on top. On iPhone a
-/// 2×2 grid (tap a tile to open its list under the grid); on iPad four columns side by side,
-/// each with its list, and items can be dragged between them.
+/// "Where it goes": the four destinations as moving-box labels (a count, the figure that matters,
+/// a fan of their items), with no item lists. 2×2 on iPhone, four across on iPad, one column at
+/// accessibility sizes. A label opens its list (`ReviewPileScreen`), where items can be changed.
 struct ReviewBoardView: View {
     let piles: [ReviewPile]
-    let keepGroups: [ReviewKeepGroup]
-    @Binding var selected: Disposition?
     let onMove: (UInt64, Disposition) -> Void
 
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        if sizeClass == .regular && !dynamicTypeSize.isAccessibilitySize {
-            HStack(alignment: .top, spacing: 14) {
-                ForEach(piles) { pile in
-                    VStack(alignment: .leading, spacing: 10) {
-                        tile(pile, expandable: false)
-                        list(pile, compact: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .top)
+        let columns = dynamicTypeSize.isAccessibilitySize ? 1 : sizeClass == .regular ? 4 : 2
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: columns), spacing: 20) {
+            ForEach(piles) { pile in
+                NavigationLink(value: ReviewPileRoute(destination: pile.destination)) {
+                    ReviewPileTile(pile: pile)
                 }
+                .buttonStyle(ReviewLabelButtonStyle(tilt: dynamicTypeSize.isAccessibilitySize ? 0 : ReviewPileTile.tilt(pile.destination)))
+                .dropDestination(for: String.self) { ids, _ in
+                    let moved = ids.compactMap(UInt64.init)
+                    moved.forEach { onMove($0, pile.destination) }
+                    return !moved.isEmpty
+                }
+                .accessibilityLabel(ReviewPileTile.accessibilityLabel(pile))
+                .accessibilityIdentifier("review.pile.\(pile.destination.rawValue)")
             }
-        } else {
+        }
+        .padding(.top, 6)
+    }
+}
+
+/// Opens one destination's list from the board.
+struct ReviewPileRoute: Hashable {
+    let destination: Disposition
+}
+
+/// A label stuck on a note: slightly tilted (deterministic, none at accessibility sizes); pressing
+/// straightens it with a small spring, or just dims it under Reduce Motion.
+private struct ReviewLabelButtonStyle: ButtonStyle {
+    let tilt: Double
+
+    func makeBody(configuration: Configuration) -> some View {
+        Pressable(label: configuration.label, pressed: configuration.isPressed, tilt: tilt)
+    }
+
+    private struct Pressable<Label: View>: View {
+        let label: Label
+        let pressed: Bool
+        let tilt: Double
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        var body: some View {
+            label
+                .rotationEffect(.degrees(pressed && !reduceMotion ? 0 : tilt))
+                .scaleEffect(pressed && !reduceMotion ? 0.97 : 1)
+                .opacity(pressed && reduceMotion ? 0.75 : 1)
+                .animation(reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.55), value: pressed)
+        }
+    }
+}
+
+/// One destination as a moving-box label: a strip of tape, the destination printed in its color
+/// ("KEEP → New home"), the count written big in marker, a fan of its items and its total.
+struct ReviewPileTile: View {
+    let pile: ReviewPile
+
+    var body: some View {
+        let d = pile.destination
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: d.systemImage).font(.system(size: 12, weight: .bold))
+                Text(Self.heading(d))
+                    .font(ReviewHand.font(17, relativeTo: .headline))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Theme.accentInk)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(ReviewPalette.solid(d), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(pile.count)")
+                    .font(ReviewHand.font(40, relativeTo: .largeTitle))
+                    .foregroundStyle(Theme.text)
+                Text(pile.count == 1 ? "item" : "items")
+                    .font(ReviewHand.font(16, relativeTo: .body))
+                    .foregroundStyle(Theme.muted)
+            }
+            ItemFan(items: Array(pile.items.prefix(3)), destination: d)
+                .frame(maxWidth: .infinity)
+                .frame(height: 70)
+            Text(Self.total(pile))
+                .monoText(12.5, weight: .bold, maxScale: 1.6)
+                .foregroundStyle(pile.items.isEmpty ? Theme.muted : Theme.text)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 18)
+        .padding(.bottom, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(ReviewPalette.paper)
+                .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous).fill(ReviewPalette.solid(d).opacity(0.10)))
+                .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous).strokeBorder(Theme.line, lineWidth: 1))
+                .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+        }
+        .overlay(alignment: .top) {
+            // A strip of packing tape holding the label on.
+            Rectangle()
+                .fill(ReviewPalette.tape)
+                .overlay(Rectangle().strokeBorder(Theme.lineStrong.opacity(0.6), lineWidth: 0.5))
+                .frame(width: 56, height: 16)
+                .rotationEffect(.degrees(-4))
+                .offset(y: -8)
+                .accessibilityHidden(true)
+        }
+        .contentShape(Rectangle())
+    }
+
+    /// The tilt each label is stuck on with, in degrees (fixed, so the board never shuffles).
+    static func tilt(_ d: Disposition) -> Double {
+        switch d {
+        case .keep: -1.5
+        case .sell: 1.2
+        case .donate: -1
+        default: 1.6
+        }
+    }
+
+    static func heading(_ d: Disposition) -> String {
+        d == .keep ? "KEEP → New home" : d.label.uppercased()
+    }
+
+    /// The figure that matters: volume moving, expected sales, kg kept from landfill.
+    static func total(_ pile: ReviewPile) -> String {
+        if pile.items.isEmpty { return "Nothing here yet" }
+        switch pile.destination {
+        case .keep: return String(format: "%.1f m³ to move", pile.volumeM3)
+        case .sell: return "\(pile.valueCents.usd) expected"
+        case .donate: return "\(Int(pile.kg.rounded())) kg kept from landfill"
+        default: return "To the curb"
+        }
+    }
+
+    /// "Keep, 7 items, opens the list"; Sell and Donate add their total.
+    static func accessibilityLabel(_ pile: ReviewPile) -> String {
+        var parts = [pile.destination.label, pile.count == 1 ? "1 item" : "\(pile.count) items"]
+        if !pile.items.isEmpty {
+            switch pile.destination {
+            case .sell: parts.append("\(pile.valueCents.usd) expected")
+            case .donate: parts.append("about \(Int(pile.kg.rounded())) kilograms kept from landfill")
+            default: break
+            }
+        }
+        parts.append("opens the list")
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// The board labels' marker lettering: Marker Felt, else the rounded system font. Scales with
+/// Dynamic Type.
+enum ReviewHand {
+    static let name = "MarkerFelt-Wide"
+    static let available = UIFont(name: name, size: 12) != nil
+
+    static func font(_ size: CGFloat, relativeTo style: Font.TextStyle) -> Font {
+        available ? .custom(name, size: size, relativeTo: style) : .system(style, design: .rounded).weight(.bold)
+    }
+}
+
+/// One destination's items, opened from its label: each row with its reason and the ⇄ change
+/// menu (Keep grouped by the new home's rooms). On iPad, rows drag onto the other labels at the top.
+struct ReviewPileScreen: View {
+    let destination: Disposition
+    @Environment(MooveStore.self) private var store
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    var body: some View {
+        let piles = Review.piles(store.visibleItems)
+        let pile = piles.first { $0.destination == destination }
+        ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12),
-                                         count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: 12) {
-                    ForEach(piles) { tile($0, expandable: true) }
-                }
-                if let selected, let pile = piles.first(where: { $0.destination == selected }) {
-                    list(pile, compact: false)
-                        .padding(.top, 20)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                if let pile {
+                    Text(ReviewPileTile.total(pile)).monoMeta().padding(.bottom, 8)
+                    if sizeClass == .regular { moveTargets(piles) }
+                    list(pile, keepGroups: Review.keepByRoom(pile.items, layout: Review.savedLayout(in: store.snapshot)))
                 }
             }
+            .padding(.horizontal, Theme.gutter)
+            .padding(.top, 16)
+            .padding(.bottom, 48)
         }
+        .navigationTitle(destination.label)
+        .navigationBarTitleDisplayMode(.inline)
+        .mooveScreen()
+        .animation(.default, value: store.visibleItems)
     }
 
-    // MARK: Tile
-
-    private func tile(_ pile: ReviewPile, expandable: Bool) -> some View {
-        Button {
-            guard expandable else { return }
-            selected = selected == pile.destination ? nil : pile.destination
-        } label: {
-            ReviewPileTile(pile: pile, selected: expandable && selected == pile.destination)
+    /// The other three destinations as small labels to drop a dragged row on.
+    private func moveTargets(_ piles: [ReviewPile]) -> some View {
+        HStack(spacing: 10) {
+            Text("Drag a row to").monoMeta()
+            ForEach(piles.filter { $0.destination != destination }) { other in
+                let d = other.destination
+                Label(d.label, systemImage: d.systemImage)
+                    .font(ReviewHand.font(15, relativeTo: .subheadline))
+                    .foregroundStyle(Theme.accentInk)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(ReviewPalette.solid(d), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .rotationEffect(.degrees(ReviewPileTile.tilt(d)))
+                    .dropDestination(for: String.self) { ids, _ in
+                        let moved = ids.compactMap(UInt64.init)
+                        for id in moved {
+                            guard let item = store.items.first(where: { $0.id == id }) else { continue }
+                            Task { await store.setDisposition(d, for: item) }
+                        }
+                        return !moved.isEmpty
+                    }
+                    .accessibilityHidden(true)
+            }
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        .dropDestination(for: String.self) { ids, _ in
-            let moved = ids.compactMap(UInt64.init)
-            moved.forEach { onMove($0, pile.destination) }
-            return !moved.isEmpty
-        }
-        .accessibilityLabel(ReviewPileTile.accessibilityLabel(pile))
-        .accessibilityAddTraits(expandable && selected == pile.destination ? .isSelected : [])
-        .accessibilityHint(Text(expandable ? "Shows its items." as String : ""))
-        .accessibilityIdentifier("review.pile.\(pile.destination.rawValue)")
+        .padding(.vertical, 12)
     }
-
-    // MARK: List
 
     @ViewBuilder
-    private func list(_ pile: ReviewPile, compact: Bool) -> some View {
+    private func list(_ pile: ReviewPile, keepGroups: [ReviewKeepGroup]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if pile.items.isEmpty {
                 Text("Nothing here yet.")
@@ -77,25 +246,25 @@ struct ReviewBoardView: View {
                         .padding(.top, 14)
                         .padding(.bottom, 2)
                         .accessibilityAddTraits(.isHeader)
-                    rows(group.items, compact: compact)
+                    rows(group.items)
                 }
             } else {
-                rows(pile.items, compact: compact)
+                rows(pile.items)
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("review.list.\(pile.destination.rawValue)")
     }
 
-    private func rows(_ items: [Item], compact: Bool) -> some View {
+    private func rows(_ items: [Item]) -> some View {
         ForEach(items) { item in
-            ReviewBoardRow(item: item, compact: compact)
+            ReviewBoardRow(item: item)
                 .modifier(DraggableItem(id: item.id, enabled: sizeClass == .regular))
         }
     }
 }
 
-/// Rows drag between the iPad columns (a long press on iPhone opens the change menu instead).
+/// Rows drag onto the other labels on iPad (a long press on iPhone opens the change menu instead).
 private struct DraggableItem: ViewModifier {
     let id: UInt64
     let enabled: Bool
@@ -105,72 +274,7 @@ private struct DraggableItem: ViewModifier {
     }
 }
 
-/// One destination: its color, name, a fan of its items and the figure that matters for it.
-struct ReviewPileTile: View {
-    let pile: ReviewPile
-    var selected = false
-
-    var body: some View {
-        let d = pile.destination
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: d.systemImage).font(.system(size: 13, weight: .semibold)).foregroundStyle(d.tint)
-                Text(d.label).monoText(15, weight: .bold).foregroundStyle(Theme.text)
-                Spacer(minLength: 4)
-                Text("\(pile.count)").monoText(13.5).foregroundStyle(Theme.muted)
-            }
-            ItemFan(items: Array(pile.items.prefix(3)), destination: d)
-                .frame(maxWidth: .infinity)
-                .frame(height: 74)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(Self.figure(pile))
-                    .monoText(22, weight: .bold, maxScale: 1.5)
-                    .foregroundStyle(pile.items.isEmpty ? Theme.muted : Theme.text)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                Text(Self.caption(d)).monoText(12.5, maxScale: 1.6).foregroundStyle(Theme.muted).lineLimit(1)
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ReviewPalette.soft(d), in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
-                .strokeBorder(selected ? ReviewPalette.solid(d) : Theme.line, lineWidth: selected ? 2 : 1)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
-    }
-
-    /// The tile's big number: items moving, expected sales, kg kept from landfill, items to toss.
-    static func figure(_ pile: ReviewPile) -> String {
-        switch pile.destination {
-        case .sell: pile.valueCents.usd
-        case .donate: "\(Int(pile.kg.rounded())) kg"
-        default: pile.count == 1 ? "1 item" : "\(pile.count) items"
-        }
-    }
-
-    static func caption(_ d: Disposition) -> String {
-        switch d {
-        case .keep: "→ new home"
-        case .sell: "expected sales"
-        case .donate: "kept from landfill"
-        default: "to the curb"
-        }
-    }
-
-    static func accessibilityLabel(_ pile: ReviewPile) -> String {
-        let count = pile.count == 1 ? "1 item" : "\(pile.count) items"
-        switch pile.destination {
-        case .keep: return "Keep, \(count), moving to the new home"
-        case .sell: return "Sell, \(count), \(pile.valueCents.usd) expected"
-        case .donate: return "Donate, \(count), about \(Int(pile.kg.rounded())) kilograms kept from landfill"
-        default: return "Trash, \(count)"
-        }
-    }
-}
-
-/// Up to three voxel models (or photos) fanned like a hand of cards.
+/// Up to three voxel models fanned like a hand of cards.
 private struct ItemFan: View {
     let items: [Item]
     let destination: Disposition
@@ -185,9 +289,8 @@ private struct ItemFan: View {
             }
             ForEach(Array(items.enumerated().reversed()), id: \.element.id) { index, item in
                 let spread = Self.spread(index, of: items.count)
-                ItemArt(item: item, size: 60)
-                    .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
-                    .shadow(color: .black.opacity(0.08), radius: 3, y: 2)
+                ItemArt(item: item, size: 60, photo: .none)
+                    .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
                     .rotationEffect(.degrees(spread * 9))
                     .offset(x: spread * 30, y: abs(spread) * 5)
             }
@@ -312,6 +415,10 @@ enum ReviewPalette {
         case .undecided: Theme.dangerSoft
         }
     }
+
+    /// The board labels' paper and the tape holding them on.
+    static let paper = Color(uiColor: Theme.dynamicUIColor(0xFBF7EF, 0x2C261F))
+    static let tape = Color(uiColor: Theme.dynamicUIColor(0xE4D2AE, 0x5C4E37)).opacity(0.85)
 
     /// The deck's swipe direction for each choice.
     static func arrow(_ d: Disposition) -> String {
