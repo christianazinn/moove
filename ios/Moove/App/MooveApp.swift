@@ -17,7 +17,10 @@ struct MooveApp: App {
             defaults.set("scan", forKey: "moove.tab")
             defaults.set(false, forKey: AuthService.guestKey)
             defaults.set(MooveStore.BackendKind.spacetime.rawValue, forKey: MooveStore.backendKindKey)
-            defaults.removeObject(forKey: HiddenRooms.defaultsKey)
+            for key in [HiddenRooms.defaultsKey, MovingRooms.defaultsKey, ItemLabels.keptNamesDefaultsKey] {
+                defaults.removeObject(forKey: key)
+                defaults.removeObject(forKey: MooveStore.scopedKey(key, kind: .fixture, database: ""))
+            }
             defaults.set(Appearance.system.rawValue, forKey: Appearance.storageKey)
         }
         #endif
