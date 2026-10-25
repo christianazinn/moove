@@ -46,7 +46,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Report if wrong:** the piece, its Plan box (size, spot), what Voxel drew, and which of the two errors it is. Screenshots of both.
 
 ### 5. Inventory: the binder (a page per function, items on shelves)
-- **Taps:** Items → Inventory. Tap each colored index tab, then swipe the page left and right; tap an item on a shelf, then in its placard tap the story line and type "Grandma's, 1974", **Save**; long-press another item. Then rotate the iPad, try dark mode, the largest text size, and Reduce Motion.
+- **Taps:** Items → Inventory. Tap each index tab, then swipe the page left and right; tap an item on a shelf to open its placard; long-press another item; open the Rooms ⋯ menu. Then rotate the iPad, try dark mode, the largest text size, and Reduce Motion.
 - **Expected:**
   - A **Rooms** strip on top: one chip per room, newest scan first, with item count, scan time ("Today 15:42"), a **Demo** tag for **Load demo scan** rooms and "Shared by …" for joined ones, plus Share / **3D** / **⋯** (Add item here, Rename room, Hide room). Tapping a chip still narrows the binder to that room.
   - A binder: one page per function (Sleep, Work & study, …, biggest first, "Everything else" last). iPad: colored index tabs down the page's right edge; iPhone: folder tabs across the top that scroll sideways. Each tab says the name and count, and keeps its color (Sleep is always slate). The page heading is the name (serif) and "4 pieces · est. $610"; holes along the left edge.
