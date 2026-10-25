@@ -9,26 +9,28 @@ They match the [demo video](demo-video.md) and the commerce [video shot list](de
 |---|---|---|---|---|
 | 1 | `01-scan.png` (or a GIF) | CI `01-scan` | Scan | Scan a room with LiDAR and Moove rebuilds it as a voxel dollhouse, every piece where it stood (our recorded demo bedroom). |
 | 2 | `02-scan-dollhouse.png` | **by hand** (CI `01b-scan-finished` renders blank) | Scan | The finished scan: real walls, doors and windows, tall at the back and cut low at the front, each piece colored from the scan's own frames (demo scan shown). |
-| 3 | `03-review.png` | CI `04-review` | Items | Moove suggests keep, sell, donate or trash with a reason for each, and leaves possibly sentimental items like the guitar to you (fixture data). |
-| 4 | `04-spending.png` | CI `03-spending` | Sell & Buy | The pricing agent pays for its own comps, $0.01 USDC per lookup over x402: the Basescan row is a real Base Sepolia transaction, and every SIMULATED row is simulated. |
-| 5 | `05-approvals.png` | CI `05-approvals` | Sell & Buy | Claude writes the listing, and anything over your $100 limit waits for your OK, by Auth0 push or in the app (the eBay post is simulated). |
-| 6 | `06-scam-blocked.png` | CI `06-desk-chair-deals` | Sell & Buy | The buy agent screens every deal and refuses this planted Zelle-only "brand new" Aeron (fraud score 0.85); checkout runs on a labeled simulated Visa rail. |
-| 7 | `07-new-home.gif` | **by hand** (CI `07-new-home` renders blank) | Move | Everything you kept, plus what the buy agent bought, flies from its old spot into the new home's 3D layout (demo house shown). |
+| 3 | `03-review.png` | CI `04-review` | Items > Review | Moove suggests keep, sell, donate or trash with a reason for each, and leaves possibly sentimental items like the guitar to you (fixture data). |
+| 4 | `04-agents-receipts.png` | CI `03-spending` | Sell & Buy > Agents | The pricing agent pays for its own comps, $0.01 USDC per lookup over x402: the Base Sepolia line is a real transaction, and every SIMULATED line is simulated. |
+| 5 | `05-agents-approvals.png` | CI `05-approvals` | Sell & Buy > Agents | Claude writes the listing, and anything over your $100 limit waits for your OK, by Auth0 push or in the app (the eBay post is simulated). |
+| 6 | `06-scam-blocked.png` | CI `06-desk-chair-deals` | Sell & Buy > Shopping | The buy agent screens every deal and refuses this planted Zelle-only "brand new" Aeron (fraud score 0.85); checkout runs in the Visa Acceptance sandbox (no real money), and the offline demo shown here simulates it. |
+| 7 | `07-new-home.gif` | **by hand** (CI `07-new-home` renders blank) | Move > New Home | Everything you kept, plus what the buy agent bought, flies from its old spot into the new home's 3D layout (demo house shown). |
 | 8 | `08-summary-safe.png` | **by hand** (CI `08-summary` stops above the card) | Summary | The summary totals what you sold, spent and kept out of landfill, and shows every guardrail that fired; simulated money is tagged Simulated. |
 
-**Extras** (not in the 8, useful for a track write-up or if Devpost allows more): CI `02-items` (Items > Inventory, the museum: items in halls by function, each with a placard; caption idea "Your inventory as a little museum: every piece measured, priced and given a one-line story from what Moove knows.") and CI `03b-item-comps` (an item's price and its comparable listings). **Room shots** (by hand, see below): one furnished room on its own, to show the layouts look good, e.g. `09-room-bedroom.png` / `10-room-living.png`, caption "Each room of the new home, furnished with what you kept and bought (demo house shown)."
+**Must be captured by hand:** images 2, 7 and 8 (and the room-shot extras). Images 2 and 7 and the room shots are RealityKit `ARView` scenes, which come out blank under XCUITest in CI; image 8 is cut off in CI. The other five come straight from CI.
+
+**Extras** (not in the 8, useful for a track write-up or if Devpost allows more): CI `02-items` (Items > Inventory, the museum: items in halls by function, each a voxel exhibit with a short placard: name, brand and size, a one-line story, price; caption idea "Your inventory as a little museum: every piece measured, priced and given a one-line story from what Moove knows.") and CI `03b-item-comps` (an item's price and its comparable listings). **Room shots** (by hand, see below): one furnished room on its own, to show the layouts look good, e.g. `09-room-bedroom.png` / `10-room-living.png`, caption "Each room of the new home, furnished with what you kept and bought (demo house shown)."
 
 ## Getting the CI screenshots
-Every `ios-ui` CI run (on every push to `main`, and on PRs that touch `ios/`) uploads a `devpost-screenshots` artifact with `01-scan`, `01b-scan-finished`, `02-items`, `03-spending`, `03b-item-comps`, `04-review`, `05-approvals`, `06-desk-chair-deals`, `07-new-home` and `08-summary` (PNG, 1206 × 2622, light mode). The artifact can also hold other PNGs. Ignore anything not on that list.
+Every `ios-ui` CI run (on every push to `main`, and on PRs that touch `ios/`) uploads a `devpost-screenshots` artifact with `01-scan`, `01b-scan-finished`, `02-items`, `03-spending`, `03a-spending-top`, `03b-item-comps`, `04-review`, `05-approvals`, `06-desk-chair-deals`, `07-new-home` and `08-summary` (PNG, 1206 × 2622, light mode). The artifact can also hold other PNGs. Ignore anything not on that list.
 
 ```sh
 gh run list -R christianazinn/moove -b main -w CI -s success -L 5
 gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Desktop/moove-devpost
 ```
 
-- **Use a run from after #280** (merged Sat 12:12 PM PT), so the hero has the tall back walls (#269, #280). Main runs often get cancelled when the next merge supersedes them, so the newest *green* run can be older than the newest commit. Check its date. The last green one before this doc was 40098106518 (Sat 6:25 AM PT, before the wall change).
+- **Use a run from after #343** (merged Sat ~6:00 PM PT), so the shots show the 3-segment Sell & Buy (Listings · Shopping · Agents, #337), the Agents receipts (#316), the Review card deck (#311), the Shopping storefront (#312) and the museum Inventory with its shorter placards (#331, #343). Main runs often get cancelled when the next merge supersedes them, so the newest *green* run can be older than the newest commit. Check its date.
 - The shots show the **starting state** (Agents · 2, no purchases yet), so 4 to 6 match the captions as is.
-- Under XCUITest, the RealityKit dollhouses that don't auto-turn (the scan finished page and the new home) come out **blank**, and the Summary shot stops at "Where everything went". So images 2, 7 and 8 are captured by hand, below. The Scan hero (1) renders fine.
+- Under XCUITest, the RealityKit `ARView` scenes that don't auto-turn (the scan finished page, the new home, its room shots, and Pack's inline truck) come out **blank**, and the Summary shot stops at "Where everything went". So images 2, 7 and 8 are captured by hand, below. The Scan hero (1) renders fine.
 
 ## Capturing by hand (images 2, 7, 8)
 **Decision (Aiden's agent):** capture on the **Offline demo**: Settings (the gear at top right) > Backend > Data source **"Offline demo (fixtures)"**. The banner reads "Offline demo: fixture data, nothing is synced". It's the only data source whose rows are known in advance, and `DemoNumbersTests` checks its figures. It has the voxel dollhouse and the new home too, so nothing here needs the **Demo** backend.
@@ -54,14 +56,14 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 
 ### 2. Scan finished: the room as a dollhouse
 - **Source:** by hand. Scan tab > **Load demo scan**.
-- **State:** "Scan · Done", the **DEMO SCAN** tag, "12 items added", "A recorded bedroom, not a live scan. Offline demo: items, prices and colors are fixture data, as if the agents had run.", then the dollhouse: real walls with windows and a door, **back walls full height, near walls cut at 1.1 m**, items in their scanned spots and colors. Below it, "13 objects · 4.0 × 3.5 m", "1 placed by estimate", and the inventory starting with "Full size metal bed frame". Drag to turn it so two tall back walls frame the room before taking the shot.
+- **State:** the **Demo scan** tag, "12 items added", "Demo bedroom, not a live scan: items and prices are fixture data.", then the dollhouse: real walls with windows and a door, **back walls full height, near walls cut at 1.1 m**, items in their scanned spots and colors. Below it, "13 objects · 4.0 × 3.5 m", "1 placed by estimate", and the inventory starting with "Full size metal bed frame". Drag to turn it so two tall back walls frame the room before taking the shot.
 - **Caption:** "The finished scan: real walls, doors and windows, tall at the back and cut low at the front, each piece colored from the scan's own frames (demo scan shown)."
 - **Track:** Spacetime, Anthropic (the photo sweep runs next and names what the scanner couldn't).
 - Loading the demo scan adds a second room, so **relaunch** before images 7 and 8.
 
 ### 3. Items > Review: keep, sell, donate, trash
 - **Source:** CI `04-review`.
-- **State:** "Review", "Your call.", the **Needs you** deck ("1 of 1") with the **Yamaha acoustic guitar** card ("Sentimental" tag, $109, "Possibly sentimental - your call") and the Sell / Trash / Donate / Keep buttons under it, then the top of the **Where it goes** board: Keep (7 items, → new home), Sell ($500 expected sales), Donate and Trash tiles with the items' voxel models fanned on them.
+- **State:** the **Needs you** deck ("1 of 1") with the **Yamaha acoustic guitar** card ("Sentimental" tag, $109, "Possibly sentimental - your call") and the Sell / Trash / Donate / Keep buttons under it, then the top of the **Where it goes** board: Keep (7 items, → new home), Sell ($500 expected sales), Donate and Trash tiles with the items' voxel models fanned on them.
 - **Caption:** "Moove suggests keep, sell, donate or trash with a reason for each, and leaves possibly sentimental items like the guitar to you (fixture data)."
 - **Track:** Anthropic (knowing where the model shouldn't decide), Best Planet-First Hack (donate and resell over trash).
 
@@ -70,7 +72,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 - **State:** the Agents screen scrolled down to its paper receipts in Courier (a sideways carousel, paged to receipt 2 of 3), scrolled to the Pricing agent receipt ("MOOVE · AGENT SPENDING", "PRICING AGENT", "3 lookups"): the line "Premium comps for "Herman Miller Aeron"", `x402`, "$0.01", **"PAID ON BASE SEPOLIA"**, **"TX 0xc794…136c"**, and below it lines with the filled **SIMULATED** mark and no link. CI also saves `03a-spending-top` (scrolled to the totals tape "TOTALS · YOUR AGENTS": **SPENT $0.01**, **SIMULATED $180.005**, **REFUSED 1**).
 - **Caption:** "The pricing agent pays for its own comps, $0.01 USDC per lookup over x402: the Base Sepolia line is a real transaction, and every SIMULATED line is simulated."
 - **Track:** Coinbase x402 (the headline image), Apify (the comps come from Apify's eBay sold and Marketplace actors), Spacetime (each payment is a `payment` row).
-- Capture this on the Offline demo, whose rows are known in advance. (The hosted worker has CDP keys since Sat ~12:40 PM, but a joined phone's Spending shows only its own payments.)
+- Capture this on the Offline demo, whose rows are known in advance. (The hosted worker has CDP keys since Sat ~12:40 PM, but a joined phone's Agents receipts show only its own payments.)
 
 ### 5. Sell & Buy > Agents (top): a $410 listing waits for you
 - **Source:** CI `05-approvals`.
@@ -80,12 +82,12 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 
 ### 6. Sell & Buy > Shopping > Desk chair: the scam is blocked
 - **Source:** CI `06-desk-chair-deals` (Shopping is sorted by category: the Desk chair card is in the **Work & study** section, the scam also sits in **Blocked for your safety** at the bottom).
-- **State:** a big voxel picture of the desk chair, then three deals as product cards with voxel chairs (the Target chair has the **Best deal** ribbon). The planted deal, on a red-bordered card with its price struck through, **"Herman Miller Aeron, brand new, $95, Zelle only, ship only"**, seller "Planted demo scam (not a real listing)", the **Sample** badge, **"Likely fraud · 0.85"**, the reasons "asks for payment by Zelle" and "shipping only, no meetup", and the red **"Blocked: likely fraud"** tag where Choose would be.
-- **Caption:** "The buy agent screens every deal and refuses this planted Zelle-only "brand new" Aeron (fraud score 0.85); checkout runs on a labeled simulated Visa rail."
+- **State:** (reached from the Desk chair card, the hero's **See deals**, or the **Blocked for your safety** section) a big voxel picture of the desk chair, then three deals as product cards with voxel chairs (the Target chair has the **Best deal** ribbon and a filled **Choose**). The planted deal, on a red-bordered card with its price struck through, **"Herman Miller Aeron, brand new, $95, Zelle only, ship only"**, seller "Planted demo scam (not a real listing)", the **Sample** badge, **"Likely fraud · 0.85"**, the reasons "asks for payment by Zelle" and "shipping only, no meetup", and the red **"Blocked: likely fraud"** tag where Choose would be.
+- **Caption:** "The buy agent screens every deal and refuses this planted Zelle-only "brand new" Aeron (fraud score 0.85); checkout runs in the Visa Acceptance sandbox (no real money), and the offline demo shown here simulates it."
 - **Track:** Visa (fraud checks, trust and responsibility), Apify (deal search; fixture deals are labeled Sample).
 
 ### 7. Move > New Home: the fly-in
-- **Source:** by hand, best as a **GIF** (3 to 6 s). On a fresh fixture first do the video's taps so bought pieces fly in too: Sell & Buy > Agents > **Approve** the Aeron; Shopping > Desk chair > **Choose** the Target "Mesh task chair with arms, black"; back on Shopping, **Approve** the sofa ($429.99). Then Move tab > **New Home** > the **"Demo house · 2 bed, 1 bath"** card > **Use this home**, and tap **Fly in** to replay.
+- **Source:** by hand, best as a **GIF** (3 to 6 s). On a fresh fixture first do the video's taps so bought pieces fly in too: Sell & Buy > Agents > **Approve** the Aeron; Shopping > Desk chair > **Choose** the Target "Mesh task chair with arms, black", then **Pay $79.99 to target** in the confirm ("SIMULATED: no real card is charged."); back on Shopping, **Approve** the sofa ($429.99) on its **Needs you** card. Then Move tab > **New Home** > the **"Demo house · 2 bed, 1 bath"** card > **Use this home**. Wait for "Arranging your home…" to clear and the fly-in to finish, then tap **Fly in** to replay.
 - **State:** "New home", "Demo house · 2 bed, 1 bath", "6 rooms · 112 m²", the **DEMO HOUSE** tag, the voxel house with the back walls tall, and the kept pieces flying from the scanned room (drawn beside the house) to their new spots, plus the bought ones ("8" memory foam mattress, Full", "78" upholstered sofa, gray"). **Fly in** and **Save layout** under it.
 - **Caption:** "Everything you kept, plus what the buy agent bought, flies from its old spot into the new home's 3D layout (demo house shown)."
 - **Track:** Visa (bought items land in the new home), Best Planet-First Hack.
