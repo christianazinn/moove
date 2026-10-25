@@ -40,18 +40,17 @@ final class DevpostShotsTests: XCTestCase {
             app.navigationBars.buttons.firstMatch.tap()
         }
 
-        // 3. Sell & Buy > Spending: the x402 payments with the Basescan row.
-        open(tab: "Sell & Buy", segment: "Spending")
-        XCTAssertTrue(app.navigationBars["Spending"].waitForExistence(timeout: slow))
+        // 5. Sell & Buy > Agents, top: two requests wait for the user ("Needs your OK").
+        open(tab: "Sell & Buy", segment: "Agents")
+        XCTAssertTrue(app.navigationBars["Agents"].waitForExistence(timeout: slow))
+        shot("05-approvals")
+
+        // 3. Further down Agents: the x402 payments as receipts, with the Basescan row.
+        _ = scrollTo(byId("spending.totals"))
         shot("03a-spending-top")
         // The headline image: the pricing agent's receipt with the real Base Sepolia line.
         _ = scrollTo(byId("payment.basescan.500"))
         shot("03-spending")
-
-        // 5. Sell & Buy > Approvals: two requests wait for the user.
-        open(tab: "Sell & Buy", segment: "Approvals")
-        XCTAssertTrue(app.navigationBars["Approvals"].waitForExistence(timeout: slow))
-        shot("05-approvals")
 
         // 6. Sell & Buy > Shopping > Desk chair: the planted scam deal is blocked.
         open(tab: "Sell & Buy", segment: "Shopping")
@@ -96,7 +95,7 @@ final class DevpostShotsTests: XCTestCase {
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: slow), "tab bar")
     }
 
-    /// A tab, then (for grouped tabs) a segment of its pill picker. Segments may carry a count ("Approvals · 2").
+    /// A tab, then (for grouped tabs) a segment of its pill picker. Segments may carry a count ("Agents · 2").
     private func open(tab: String, segment: String? = nil) {
         app.tabBars.buttons[tab].tap()
         guard let segment else { return }

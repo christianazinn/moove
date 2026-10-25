@@ -45,14 +45,14 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 
 ### 5. 0:51–1:04 The agent pays for its own data (x402)
 - **VO:** "When the pricing agent needs premium data, it pays for it itself: one cent of USDC over x402 on Base Sepolia, from a Coinbase server wallet. This Basescan link is the real transaction. Rows tagged Simulated are simulated, and a request over the per-call cap was refused before anything was signed."
-- **ON SCREEN:** Sell & Buy > **Spending**. Totals **Spent $0.01**, **Simulated $180.005**, **Refused 1**. The $0.01 "Premium comps for "Herman Miller Aeron"" row, tap **Basescan 0xc794…136c** (Safari shows the tx). Scroll to the red **Refused** $0.25 row, "Nothing was signed or paid."
+- **ON SCREEN:** Sell & Buy > **Agents**, scrolled down to the receipts. Totals **Spent $0.01**, **Simulated $180.005**, **Refused 1**. The $0.01 "Premium comps for "Herman Miller Aeron"" row, tap **Basescan 0xc794…136c** (Safari shows the tx). Scroll to the red **Refused** $0.25 row, "Nothing was signed or paid."
 - **STATE:** Offline demo (the only state with the real payment's row; on Demo every x402 row is simulated with no Basescan link).
 - **TRACK:** Coinbase x402 (spending log, budget + per-call cap). Spacetime (every payment is a row).
 - **FALLBACK:** Laptop cutaway: `npm run x402:demo -- "Herman Miller Aeron"` in `agents/`, then the `On-chain:` link (a real 0.01 testnet USDC payment; its comps are canned fixture data, so don't call the data live). If the wallet is empty: open the proof tx https://sepolia.basescan.org/tx/0xc7942646380456c56dde204434aeb6115338b521b6e91a0901ec05dde1fe136c and say "settled earlier".
 
 ### 6. 1:04–1:15 Big decisions come to you (Auth0)
 - **VO:** "Claude writes the listing, and anything over your $100 limit waits for your OK, by an Auth0 push or right here. Once approved it posts. The eBay post is simulated today, and it says so."
-- **ON SCREEN:** Sell & Buy > **Approvals · 2**. "Needs you · 2", the Sell request "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition" **$410** with the SIMULATED pill, "Also sent to your phone via Auth0 Guardian when set up. Approving here works too." Tap **Approve**: it moves to History, "You approved it. The listing agent posts it." Optional flash of Listings: **"Posted (simulated)"**.
+- **ON SCREEN:** Sell & Buy > **Agents · 2**, the top of the screen. "Needs your OK · 2", the Sell request "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition" **$410** with the SIMULATED pill, "Also sent to your phone via Auth0 Guardian when set up. Approving here works too." Tap **Approve**: it moves to Decided, "You approved it. The listing agent posts it." Optional flash of Listings: **"Posted (simulated)"**.
 - **STATE:** Offline demo, fresh launch (continue in the same take through shot 11, don't relaunch).
 - **TRACK:** Auth0 (approval above the threshold). Anthropic (Claude-written listing).
 - **FALLBACK:** Demo with the seeded commerce chair (`SEED_COMMERCE=1`; re-arm with `npm run seed:demo -- --maincloud --reset-commerce`), approved from the joined phone (needs the #200 member-approval module on `moove-demo`). Never say "you just got a push".
@@ -104,7 +104,7 @@ Check `gh pr view <n> -R christianazinn/moove --json state` before recording. Us
 - [ ] **Seeded room:** both devices on Demo and joined to `4RZ9G8`, the Bedroom visible with prices. For the Demo approval fallback in shot 6, ask Christian to run `--reset-commerce`.
 - [ ] **Do Not Disturb** on every device and the laptop (no Guardian, Slack or message banners).
 - [ ] **Screen recording** in Control Center on each device; laptop browser tab with the Basescan proof tx loaded.
-- [ ] **Reset data:** force-quit and relaunch before the Offline demo take (resets "Approvals · 2" and the totals). Don't run **Load demo scan** on Demo before shot 1 (it adds a "Demo bedroom" room that then shows in the hero and the room list).
+- [ ] **Reset data:** force-quit and relaunch before the Offline demo take (resets "Agents · 2" and the totals). Don't run **Load demo scan** on Demo before shot 1 (it adds a "Demo bedroom" room that then shows in the hero and the room list).
 - [ ] Tap **"Continue without an account"** at login unless you're showing sign-in.
 
 ## Recording tips
