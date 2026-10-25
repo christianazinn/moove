@@ -176,9 +176,9 @@ public extension Item {
     }
 
     /// `attributes` without the user's turn, which only moves the placement (so turning an item
-    /// doesn't re-seed or rebuild its voxel model).
+    /// doesn't re-seed or rebuild its voxel model), and without the recheck's flags (`Recheck.*`).
     var modelAttributes: [String] {
-        attributes.filter { !$0.lowercased().hasPrefix(ItemFix.rotateType.lowercased() + ".") }
+        attributes.filter { !$0.lowercased().hasPrefix(ItemFix.rotateType.lowercased() + ".") && !ObjectRecheck.isRecheckAttribute($0) }
     }
 
     /// The user's extra turn (`UserRotate.*`): 0, 90, 180 or 270.

@@ -166,14 +166,17 @@ final class ScanSession {
 
     /// `ObjectRecheck` on each classified object: detector finds by `check`, RoomPlan's (by
     /// origin, not category name) by the reject-only `checkRoomPlan`. Rejects are dropped (and
-    /// listed in `recheckSkips`), relabels change the category. A name the user gave wins.
+    /// listed in `recheckSkips`), relabels change the category. Doubts keep the object, tagged
+    /// `Recheck.suspect` (vision may then veto it). Thresholds: the head's fitted policy. A name
+    /// the user gave wins.
     private func applyRecheck(_ scores: [UUID: [String: Double]]) {
+        let policy = ObjectClassifierHead.bundled?.policy ?? .shipped
         for (id, s) in scores {
             guard let object = objects.first(where: { $0.id == id }), object.label == nil, !object.manual else { continue }
             let verdict = detectorObjectIDs.contains(id)
                 ? ObjectRecheck.check(detectorCategory: object.category, scores: s,
-                                      width: object.widthM, height: object.heightM, depth: object.depthM)
-                : ObjectRecheck.checkRoomPlan(category: object.category, scores: s)
+                                      width: object.widthM, height: object.heightM, depth: object.depthM, policy: policy)
+                : ObjectRecheck.checkRoomPlan(category: object.category, scores: s, policy: policy)
             switch verdict {
             case .keep:
                 break
@@ -187,8 +190,20 @@ final class ScanSession {
                 print("[recheck] dropped \(object.category): \(reason)")
                 recheckSkips.append(ScanSkips.Entry(id: id.uuidString, why: reason))
                 remove(object)
+            case let .doubt(category, reason):
+                print("[recheck] suspect \(object.category)\(category.map { " → \($0)" } ?? ""): \(reason)")
+                if let category { setCategory(category, of: id) }
+                markSuspect(id)
             }
         }
+    }
+
+    /// Tags a doubted object `Recheck.suspect` (sent with `import_scan_v2`'s attributes).
+    private func markSuspect(_ id: UUID) {
+        guard let i = objects.firstIndex(where: { $0.id == id }),
+              !objects[i].attributes.contains(ObjectRecheck.suspectAttribute),
+              objects[i].attributes.count < ScanObject.maxAttributes else { return }
+        objects[i].attributes.append(ObjectRecheck.suspectAttribute)
     }
 
     private func setCategory(_ category: String, of id: UUID) {

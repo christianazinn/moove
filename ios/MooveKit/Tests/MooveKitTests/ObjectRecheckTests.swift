@@ -64,6 +64,7 @@ import Testing
             case let .relabel(cat, _): #expect(c.action == "relabel" && c.category == cat, "\(c.photo): relabel \(cat), expected \(c.action) \(c.category)")
             case .reject: #expect(c.action == "reject", "\(c.photo): rejected, expected \(c.action)")
             case .unknown: #expect(c.action == "unknown", "\(c.photo): unknown, expected \(c.action)")
+            case .doubt: Issue.record("\(c.photo): the shipped policy never doubts")
             }
         }
         // The headline cases.

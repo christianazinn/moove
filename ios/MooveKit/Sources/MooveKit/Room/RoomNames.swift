@@ -60,7 +60,7 @@ public enum RoomNames {
     /// ("washerDryer" → washerdryer, washer, dryer; "ChairType.swivel" → chairtype, chair, type, swivel).
     static func words(of object: Object) -> [String] {
         var out: [String] = []
-        for text in [object.name ?? "", object.category] + object.attributes {
+        for text in [object.name ?? "", object.category] + object.attributes where !ObjectRecheck.isRecheckAttribute(text) {
             for run in text.split(whereSeparator: { !$0.isLetter }) {
                 out.append(run.lowercased())
                 var part = ""
