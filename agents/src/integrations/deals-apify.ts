@@ -410,6 +410,17 @@ export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
  * APIFY_TOKEN searches live; without one it replays committed live searches (fixtures/deals-live-*.json,
  * labeled "cached replay"), then the hand-made sample data (labeled "sample data").
  */
+/**
+ * True when the deal source chosen from this env can never search live (DEALS_SOURCE=fixtures, or
+ * apify without APIFY_TOKEN), so every search is a replay or sample data. With a token, whether a
+ * given search was live is only known after it runs (the daily cap or an empty result can fall back
+ * to a replay), so read that from the returned candidates' `replay`, not from the source.
+ */
+export function dealSourceReplayOnly(env: Env = process.env): boolean {
+  const mode = env.DEALS_SOURCE?.trim().toLowerCase() || 'apify';
+  return mode !== 'apify' || !env.APIFY_TOKEN?.trim();
+}
+
 export function createDealSource(env: Env = process.env, overrides: Partial<ApifyDealOptions> = {}): DealSource {
   const token = env.APIFY_TOKEN?.trim() || undefined;
   // Default apify: live with a token, otherwise committed live replays, then the sample data.

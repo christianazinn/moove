@@ -6,7 +6,7 @@ import { logEvent } from '../events.js';
 import { visaCheckout } from '../checkout.js';
 import { CARD_CHECKOUT_SOURCES, rankDeals, sanitizeText, sellerInfo, type DealSource, type RankedDeal } from '../integrations/deals.js';
 import { approvalGate, dollars } from '../integrations/visa.js';
-import { createDealSource } from '../integrations/deals-apify.js';
+import { createDealSource, dealSourceReplayOnly } from '../integrations/deals-apify.js';
 import { afterExpiry, approvalExpiry } from './approval-expiry.js';
 
 // Buy agent (#15). For each open shopping_item:
@@ -34,6 +34,19 @@ const AUTO_CHOOSE = process.env.BUY_AUTO_CHOOSE === '1';
 // The one place the deal source is chosen: live Apify search (DEALS_SOURCE / APIFY_TOKEN), else
 // the labeled sample data. See integrations/deals-apify.ts.
 const dealSource: DealSource = createDealSource(process.env);
+// Fixed by configuration. Whether one search was live is only known after it runs (see searchLabel).
+const dealSourceIsReplayOnly = dealSourceReplayOnly(process.env);
+
+// Header for a deal search: marked "(not live)" only when the source can never search live. A
+// live-capable source may still fall back to a replay, which the result line labels per search.
+export function searchingMessage(sourceName: string, replayOnly: boolean, itemName: string): string {
+  return `Searching ${sourceName}${replayOnly ? ' (not live)' : ''} for "${itemName}"`;
+}
+
+// Per-search label for the best deal, from the deal itself: sample data, a cached replay, or live.
+export function searchLabel(d: { replay: boolean; sample?: boolean }): string {
+  return d.sample ? ' [sample data]' : d.replay ? ' [cached replay]' : ' [live search]';
+}
 
 const searching = new Set<bigint>(); // shopping item ids searched this session
 const busyItems = new Set<bigint>(); // shopping item ids in checkout
@@ -150,7 +163,7 @@ async function search(conn: Conn, s: ShoppingItem): Promise<void> {
   try {
     await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'searching' });
     logEvent(conn, { ...ref, kind: 'plan', message: `Looking for deals on "${s.name}"` });
-    logEvent(conn, { ...ref, kind: 'tool_call', message: `Searching ${dealSource.name}${dealSource.replay ? ' (not live)' : ''} for "${s.name}"`, data: { source: dealSource.name, replay: dealSource.replay, query: { name: s.name, category: s.category } } });
+    logEvent(conn, { ...ref, kind: 'tool_call', message: searchingMessage(dealSource.name, dealSourceIsReplayOnly, s.name), data: { source: dealSource.name, replayOnly: dealSourceIsReplayOnly, query: { name: s.name, category: s.category } } });
     const ranked = pickDealsToWrite(rankDeals(await withSearchSlot(() => dealSource.search({ name: s.name, category: s.category }, { onNotice: n => logEvent(conn, { ...ref, kind: 'result', message: n.message, data: n.data }) }))), MAX_DEALS);
     if (!ranked.length) {
       await conn.reducers.setShoppingStatus({ shoppingItemId: s.id, status: 'open' });
@@ -163,7 +176,7 @@ async function search(conn: Conn, s: ShoppingItem): Promise<void> {
     logEvent(conn, {
       ...ref,
       kind: 'result',
-      message: `Found ${ranked.length} deals for "${s.name}", best: ${ranked[0].title} at ${dollars(ranked[0].priceCents)} (${ranked[0].source})${ranked[0].sample ? ' [sample data]' : ranked[0].replay ? ' [cached replay]' : ''}`,
+      message: `Found ${ranked.length} deals for "${s.name}", best: ${ranked[0].title} at ${dollars(ranked[0].priceCents)} (${ranked[0].source})${searchLabel(ranked[0])}`,
       data: { replay: ranked[0].replay, sample: !!ranked[0].sample, ranking: ranked.map(d => ({ source: d.source, title: d.title, priceCents: d.priceCents, score: d.score, why: d.why })) },
     });
     await recommend(conn, s, ranked);
