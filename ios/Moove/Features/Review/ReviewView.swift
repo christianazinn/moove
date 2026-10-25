@@ -4,7 +4,7 @@ import MooveKit
 /// Items > Review. A strip with the kg kept out of landfill (`ReviewImpactBanner`), then flip cards for the whole move (`Review.flipDeck`): the items only you
 /// can decide first (possibly sentimental or undecided; Moove never decides those), then every
 /// item the agents sorted, with what Moove suggests, so you can confirm or change each. Swipe
-/// right to keep, left to sell (Donate and Trash are buttons, so a vertical scroll never decides).
+/// right to keep, left to sell, up to donate, down to trash.
 /// Below, "Where it goes": the Keep / Sell / Donate / Trash board. User decisions are never
 /// overwritten by the agents.
 struct ReviewView: View {
