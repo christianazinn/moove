@@ -116,16 +116,22 @@ public enum SyncStatus: Sendable, Equatable {
 }
 
 extension SyncStatus {
-    /// The connection is dead and nothing will bring it back by itself: the SDK gave up
-    /// (`failed`), or it's still retrying a socket iOS killed while the app was in the
-    /// background (error 53) and every retry so far failed. The app reconnects with a fresh
-    /// token when it comes back to the foreground or the network returns.
+    /// The connection dropped (iOS kills the socket when the device locks or the app is
+    /// backgrounded) and nothing else will bring it back: the app reconnects itself with a fresh
+    /// connection (the SDK's auto-reconnect is off). `disconnected` is a deliberate sign-out or
+    /// backend switch, left alone.
     public var needsReconnect: Bool {
         switch self {
-        case .failed: true
-        case .reconnecting(let attempt): attempt >= 3
+        case .failed, .reconnecting: true
         case .connected, .connecting, .disconnected: false
         }
+    }
+
+    /// Seconds to wait before the app's reconnect attempt number `attempt` (1-based) while the app
+    /// is open: 1, 2, 4, 8, then every 15 s. Coming back to the app or the network returning
+    /// reconnects at once.
+    public static func reconnectDelay(attempt: Int) -> Double {
+        min(15, pow(2, Double(max(0, attempt - 1))))
     }
 }
 

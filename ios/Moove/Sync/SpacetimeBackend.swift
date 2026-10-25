@@ -71,7 +71,10 @@ final class SpacetimeBackend: SyncBackend, @unchecked Sendable {
         }
         lock.withLock { self.client = client }
 
-        try await client.connect(token: token.map(AuthenticationToken.init(rawValue:)))
+        // The SDK's auto-reconnect only reconnects when a delegate is set (we use event streams),
+        // so it would just count "reconnecting" for minutes and give up. Report the drop instead
+        // and let the app reconnect (`AuthGate`, `SyncStatus.needsReconnect`).
+        try await client.connect(token: token.map(AuthenticationToken.init(rawValue:)), enableAutoReconnect: false)
 
         return try await withCheckedThrowingContinuation { continuation in
             track(Task { [weak self] in

@@ -20,9 +20,9 @@ struct ConnectionBanner: View {
                 strip("Reconnecting…", systemImage: "arrow.clockwise", tint: Theme.muted)
                     .accessibilityLabel("Reconnecting, attempt \(attempt)")
             case .failed(let why):
-                // The SDK gave up reconnecting (or the first connect failed): tap to try again.
-                strip(retrying ? "Connecting…" : "Offline · Tap to retry", systemImage: "wifi.exclamationmark", tint: Theme.muted)
-                    .accessibilityLabel(retrying ? "Connecting" : "Offline: \(why). Tap to retry.")
+                // Dropped: the app retries by itself (`AuthGate`); a tap retries right away.
+                strip(retrying ? "Connecting…" : "Reconnecting…", systemImage: "wifi.exclamationmark", tint: Theme.muted)
+                    .accessibilityLabel(retrying ? "Connecting" : "Reconnecting: \(why). Tap to retry now.")
                     .onTapGesture { retry() }
                     .accessibilityAddTraits(.isButton)
                     .accessibilityHint("Reconnects to the server")
