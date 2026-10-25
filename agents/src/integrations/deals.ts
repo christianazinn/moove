@@ -88,7 +88,7 @@ export function toCandidate(raw: Record<string, unknown>, replay: boolean): Deal
   };
 }
 
-type FixtureRow = Record<string, unknown> & { keywords?: string[]; planted?: boolean; plantedFor?: string[]; plantedExcept?: string[] };
+type FixtureRow = Record<string, unknown> & { keywords?: string[]; planted?: boolean; plantedKind?: string; plantedFor?: string[]; plantedExcept?: string[] };
 
 /** Lowercase words, punctuation dropped, simple plurals folded ("Desk-Chairs" -> ["desk", "chair"]). */
 export function nameWords(s: string): string[] {
@@ -131,9 +131,25 @@ function loadFixtureRows(): FixtureRow[] {
   return (JSON.parse(readFileSync(path, 'utf8')) as { deals: FixtureRow[] }).deals;
 }
 
-/** True when fixtures/deals.json has a planted demo scam for this shopping item. */
+// Listing descriptions aren't stored on deal rows (or in the live-search cache), but fixture rows may
+// carry one; the fraud agent's AI-text check scores title + description when it's known.
+let descriptions: Map<string, string> | undefined;
+export function fixtureDescription(url: string, rows?: FixtureRow[]): string {
+  if (rows) return String(rows.find(r => r.url === url && typeof r.description === 'string')?.description ?? '');
+  if (!descriptions) {
+    descriptions = new Map();
+    try {
+      for (const r of loadFixtureRows()) if (typeof r.url === 'string' && typeof r.description === 'string') descriptions.set(r.url, r.description);
+    } catch {
+      // no fixtures: titles only
+    }
+  }
+  return descriptions.get(url) ?? '';
+}
+
+/** True when fixtures/deals.json has a planted demo scam for this shopping item (not the AI-text demo listing). */
 export function hasPlantedDeal(q: DealQuery, rows: FixtureRow[] = loadFixtureRows()): boolean {
-  return rows.some(r => r.planted && plantedMatches(r, q));
+  return rows.some(r => r.planted && r.plantedKind !== 'ai-text' && plantedMatches(r, q));
 }
 
 /** Replays fixtures/deals.json: picks the keyword group that best matches the item. */
