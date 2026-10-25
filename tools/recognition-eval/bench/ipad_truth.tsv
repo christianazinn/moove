@@ -1,0 +1,124 @@
+0	sink	sink	
+1	storage	sink base cabinet	
+2	laptop	laptop	people's arms in frame
+3	chair	folding chair	blurry
+4	backpack	backpack	blurry
+5	none	interior window / wall	no object
+6	none	floor mop	not a vacuum
+7	none	broom and dustpan	not a vacuum
+8	none	interior window	pass-through window, not a mirror
+9	sink	sink	
+10	none	wall (sign, paper-towel dispenser)	no object
+11	unclear	unclear white panel	blurry, cannot tell
+12	none	interior window / fire extinguisher	not a mirror
+13	storage	sink base cabinet	
+14	unclear	white panel (partition or door)	ambiguous
+15	none	blackboard / projection screen on wall	not a refrigerator
+16	bean bag	bean bag	partial, blurry
+17	laptop	laptop	
+18	none	light stand (tripod)	not a vacuum
+19	none	light stand (tripod) with sandbag	not a vacuum
+20	storage	cabinet holding microwave + mini fridge	
+21	EXCLUDE	bunk bed with person	person face prominent
+22	table	desk	
+23	ottoman	ottoman / cube stool	under desk
+24	bed	bed	
+25	unclear	unclear dark corner	too dark/blurry
+26	laptop	laptop	very blurry, low light
+27	laptop	laptop	blurry, person partly in frame
+28	none	clothes pile	not a toy
+29	none	radiator	fixed fixture, not a movable heater
+30	fan	ceiling fan	fixed fixture
+31	none	wall switch plate	not art
+32	television	wall-mounted TV	
+33	none	door frame	
+34	bed	bed (corner)	detector said laptop
+35	chair	office chair	person's body partly in frame (no face)
+36	EXCLUDE	bed with person lying in it	person prominent
+37	unclear	dark object on floor (bag?)	too dark
+38	bed	bed	
+39	chair	office chair	
+40	bed	bunk bed ladder + mini fridge	ambiguous framing
+41	storage	cabinet holding microwave + mini fridge	
+42	lamp	floor lamp	
+43	television	wall-mounted TV	no category in geometry.json
+44	bag	black soft bag on floor	
+45	laptop	laptop	
+46	bed	bunk bed	
+47	television	TV (close-up of screen)	not an air purifier
+48	EXCLUDE	person	photo of a person
+49	none	towel rack	not a workbench
+50	bag	dark bag	blurry
+51	none	radiator	fixed fixture
+52	trash can	trash can	
+53	table	desk	
+54	storage	open cabinet / nightstand unit	
+55	sink	sink	
+56	toilet	toilet	
+57	EXCLUDE	bunk bed with person	person face visible
+58	shelf	wall shelf	
+59	none	clothes pile	not a toy
+60	lamp	floor lamp	
+61	none	towel rack / shower wall	not a humidifier
+62	television	wall-mounted TV	
+63	chair	office chair	
+64	trash can	trash can	blurry
+65	none	shower curtain	not a room divider
+66	bathtub	bathtub	
+67	bed	bed	
+68	bed	bed	detector said other
+69	backpack	backpack on floor	not a vacuum
+70	none	towel rack	not a humidifier
+71	bathtub	bathtub	
+72	chair	office chair	
+73	chair	office chair (partial)	detector said other
+74	trash can	trash can	
+75	laptop	laptop	
+76	bed	bunk bed	child's legs in frame (no face)
+77	sink	sink	
+78	storage	open cabinet / nightstand unit	
+79	backpack	backpack	detector said bag
+80	backpack	black backpack / soft roller bag	
+81	none	doorway	not storage
+82	none	door	not storage
+83	toilet	toilet	
+84	television	wall-mounted TV	
+85	none	clothes pile	not a bag
+86	none	radiator	fixed fixture
+87	trash can	trash can	
+88	bed	bed	
+89	shelf	wall shelf	
+90	table	desk	
+91	fan	ceiling fan	fixed fixture, blurry
+92	art	framed notice	
+93	none	towel rack	not a crib
+94	bicycle	bicycle	
+95	clothes rack	clothes rack with hangers	not a sewing machine
+96	none	black plastic sheeting / trash bags	not a bean bag
+97	cart	furniture dolly	not a yoga mat
+98	cart	furniture dolly	blurry; not a vacuum
+99	clothes rack	clothes rack with hangers	not a crib
+100	none	electrical panel	not a TV
+101	ladder	rolling step ladder	not a chair
+102	box	cardboard box	detector said bin
+103	scooter	e-scooter	detector said shoe rack
+104	clothes rack	wire garment rack (+ step ladder)	ambiguous framing
+105	unclear	clutter: boards, step ladder	
+106	box	cardboard boxes	detector said bin
+107	ladder	rolling step ladder	not a vacuum
+108	coat rack	coat/garment stand base	not a vacuum
+109	unclear	unclear blurry boxy object	
+110	scooter	e-scooter	
+111	box	cardboard box	detector said bin
+112	none	structural pole	not a room divider
+113	box	cardboard box	detector said bin
+114	bicycle	bicycle	
+115	box	cardboard box	detector said bin
+116	none	black plastic sheeting / trash bags	not a bag
+117	box	cardboard box	detector said bin
+118	cart	furniture dolly	not a yoga mat
+119	none	electrical panel	not a TV
+120	box	cardboard box	person's legs in frame; detector said bin
+121	scooter	e-scooter	not a vacuum
+122	unclear	dark flat panel leaning on wall (monitor/board?)	
+123	none	black plastic sheeting	not a workbench
