@@ -84,11 +84,9 @@ F. Team process
 \[05:13\] ones yeah and we can like make a cool visual well all like the items like fly out of your house and  
 \[05:18\] like into the new house and then like oh i like that yeah yeah this is gonna be great and then  
 \[05:26\] and like it will arrange them like in like multiple ways in your house oh yeah and you can  
-\[05:31\] like paper you can i do yeah this just sounds like forma no it's not for us like much simpler  
 \[05:40\] it does kind of size for like we don't care ours a little better for us not about moving right  
 \[05:45\] bro we just like slap the concept on top of like yeah but this is okay wait wait like we can't  
 \[05:52\] wait i think the point is like we came up with this idea about moving like independently  
-\[05:58\] true well yeah and then we we saw forma and then like over index on it yeah yeah wait and then we can  
 \[06:04\] like prioritize like the financial part yeah the financial part is like more anti-fraud like  
 \[06:18\] yeah yeah no we can put this transcript in the cloud and then clouds can like generate like  
 \[06:23\] curious like like that are like about you for like yeah and then we also have it coordinate like how to  
