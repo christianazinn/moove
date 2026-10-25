@@ -6,7 +6,7 @@ import type { Item } from "../src/module_bindings/types.js";
 // The vision agent (#5) against a fake connection: who gets identified, what gets written, the
 // failure paths, and the concurrency cap. Own file so VISION_CONCURRENCY is set before import.
 process.env.VISION_CONCURRENCY = "2";
-const { visionAgent, needsVision, setVisionDeps, visionPhotos, RECLASSIFY_TEXT, isDetectorFind, shouldVeto } = await import("../src/agents/vision.js");
+const { visionAgent, needsVision, setVisionDeps, visionPhotos, RECLASSIFY_TEXT, isDetectorFind, shouldVeto, isSuspect, SUSPECT_ATTRIBUTE } = await import("../src/agents/vision.js");
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const owner = { toHexString: () => "owner" };
@@ -295,6 +295,34 @@ test("#378 detector finds: not RoomPlan-only categories, RoomPlan furniture only
   assert.equal(shouldVeto({ category: "chair", attributesJson: "[]", scanObjectId: "X" }, { ...no, itemConfidence: "medium" }), false);
   assert.equal(shouldVeto({ category: "bed", attributesJson: "[]", scanObjectId: "X" }, no), false);
   assert.equal(shouldVeto({ category: "vacuum", attributesJson: "[]", scanObjectId: "X" }, { isItem: true, itemConfidence: "high" }), false);
+});
+
+test("R9 the scan's Recheck.* flags don't make a detector chair look like RoomPlan's; a suspect is vetoed at medium", () => {
+  const f = (category: string, attributesJson?: string) => isDetectorFind({ category, attributesJson, scanObjectId: "A1B2" });
+  assert.equal(SUSPECT_ATTRIBUTE, "Recheck.suspect");
+  assert.equal(f("chair", '["Recheck.suspect"]'), true);
+  assert.equal(f("sofa", '["Recheck.suspect","Recheck.other"]'), true);
+  assert.equal(f("chair", '["ChairType.swivel","Recheck.suspect"]'), false);
+  assert.equal(f("chair", "not json"), false, "invalid json: as before (not '[]')");
+  assert.equal(f("chair", '{"a":1}'), false);
+  assert.equal(f("chair"), true, "missing attributesJson: as before");
+  assert.equal(f("chair", "[]"), true);
+  assert.equal(isSuspect({ attributesJson: '["ChairType.swivel","Recheck.suspect"]' }), true);
+  assert.equal(isSuspect({ attributesJson: '["ChairType.swivel"]' }), false);
+  assert.equal(isSuspect({ attributesJson: "Recheck.suspect" }), false, "not a json array");
+  assert.equal(isSuspect({}), false);
+  const suspect = { category: "vacuum", attributesJson: '["Recheck.suspect"]', scanObjectId: "X" };
+  const plain = { category: "vacuum", attributesJson: "[]", scanObjectId: "X" };
+  const no = (itemConfidence: "high" | "medium" | "low") => ({ isItem: false, itemConfidence });
+  assert.equal(shouldVeto(suspect, no("medium")), true);
+  assert.equal(shouldVeto(suspect, no("high")), true);
+  assert.equal(shouldVeto(suspect, no("low")), false);
+  assert.equal(shouldVeto(plain, no("medium")), false);
+  assert.equal(shouldVeto(plain, no("high")), true);
+  assert.equal(shouldVeto(suspect, { isItem: true, itemConfidence: "medium" }), false);
+  assert.equal(shouldVeto({ ...suspect, category: "chair" }, no("medium")), true, "a suspect detector chair");
+  assert.equal(shouldVeto({ category: "chair", attributesJson: '["ChairType.swivel","Recheck.suspect"]', scanObjectId: "X" }, no("medium")), false, "RoomPlan's chair is never vetoed");
+  assert.equal(shouldVeto({ category: "bed", attributesJson: '["Recheck.suspect"]', scanObjectId: "X" }, no("high")), false);
 });
 
 test("#378 a detector find vision clearly says isn't an item is removed, with the reason; a RoomPlan bed is kept", async () => {
