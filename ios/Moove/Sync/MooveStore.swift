@@ -127,6 +127,7 @@ final class MooveStore {
     /// Connects with an Auth0 ID token when signed in, or the saved anonymous
     /// SpacetimeDB token otherwise (demo fallback from task #1).
     func connect(token: String?) async {
+        roomNameOverrides = loadRoomNames()
         startListening()
         status = .connecting
         let saved = token ?? Keychain.string(for: .spacetimeToken)
@@ -189,7 +190,7 @@ final class MooveStore {
         listeners = [
             Task { [weak self] in
                 for await snap in snapshots {
-                    self?.snapshot = snap
+                    self?.receive(snap)
                     self?.restoreKeptNames()
                     // Same rule as `uploadBaseURL` (a loopback announcement loses to the build's
                     // URL on a device), so the uploader and listing import agree with Settings.
@@ -223,9 +224,25 @@ final class MooveStore {
     /// The scan just imported into room `roomName`, once it reaches the snapshot
     /// (waits up to ~5 s, like `saveScanColors`).
     func newestScan(inRoomNamed roomName: String) async -> Scan? {
+        guard let room = await importedRoom(named: roomName) else { return nil }
+        return await newestScan(inRoom: room.id)
+    }
+
+    /// The newest scan of room `roomId`, waiting up to ~5 s for it to reach the snapshot.
+    /// By id, so it still finds the scan after the user renames the room.
+    func newestScan(inRoom roomId: UInt64) async -> Scan? {
         for attempt in 0..<20 {
-            if let room = newestRoom(named: roomName),
-               let scan = snapshot.scans.filter({ $0.roomId == room.id }).max(by: { $0.id < $1.id }) { return scan }
+            if let scan = snapshot.scans.filter({ $0.roomId == roomId }).max(by: { $0.id < $1.id }) { return scan }
+            if attempt < 19 { try? await Task.sleep(for: .milliseconds(250)) }
+        }
+        return nil
+    }
+
+    /// The room a scan import just created (the newest old-home room named `roomName`),
+    /// waiting up to ~5 s for it to reach the snapshot. Callers keep its id from then on.
+    func importedRoom(named roomName: String) async -> Room? {
+        for attempt in 0..<20 {
+            if let room = newestRoom(named: roomName) { return room }
             if attempt < 19 { try? await Task.sleep(for: .milliseconds(250)) }
         }
         return nil
@@ -356,13 +373,11 @@ final class MooveStore {
 
     /// After a scan import: keeps the names given in the checklist (`labels` by scan object id)
     /// on the items just imported into `roomName`, waiting up to ~5 s for them like `saveScanColors`.
-    func keepScanNames(_ labels: [String: ItemLabels.Label], roomName: String) async {
+    func keepScanNames(_ labels: [String: ItemLabels.Label], roomId: UInt64) async {
         guard labels.values.contains(where: { $0.cleanName != nil }) else { return }
         for attempt in 0..<20 {
-            if let room = newestRoom(named: roomName) {
-                let names = ItemLabels.keptNames(for: labels, in: items.filter { $0.roomId == room.id })
-                if !names.isEmpty { keepNames(names); return }
-            }
+            let names = ItemLabels.keptNames(for: labels, in: items.filter { $0.roomId == roomId })
+            if !names.isEmpty { keepNames(names); return }
             if attempt < 19 { try? await Task.sleep(for: .milliseconds(250)) }
         }
     }
@@ -378,13 +393,19 @@ final class MooveStore {
     /// Returns how many items were written.
     @discardableResult
     func saveScanColors(_ colors: ScanColors, roomName: String) async -> Int {
+        guard !colors.objectColors.isEmpty, let room = await importedRoom(named: roomName) else { return 0 }
+        return await saveScanColors(colors, roomId: room.id)
+    }
+
+    /// `saveScanColors` for a room already known by id (a real scan keeps its imported room's id,
+    /// so a rename in between doesn't lose it).
+    @discardableResult
+    func saveScanColors(_ colors: ScanColors, roomId: UInt64) async -> Int {
         guard !colors.objectColors.isEmpty else { return 0 }
         var updates: [ItemColorUpdate] = []
         for attempt in 0..<20 {
-            if let room = newestRoom(named: roomName) {
-                updates = colors.itemColorUpdates(for: items.filter { $0.roomId == room.id })
-                if !updates.isEmpty { break }
-            }
+            updates = colors.itemColorUpdates(for: items.filter { $0.roomId == roomId })
+            if !updates.isEmpty { break }
             if attempt < 19 { try? await Task.sleep(for: .milliseconds(250)) }
         }
         var written = 0
@@ -392,6 +413,91 @@ final class MooveStore {
             if await setItemColors(u.colors, forItemId: u.itemId) { written += 1 }
         }
         return written
+    }
+
+    // MARK: Room names (Lisa: "let the user name the room")
+
+    /// Room id → the name the user gave it here, shown in place of the synced name until the
+    /// snapshot has it. Until the module ships `rename_room` (#370) a rename lives only here
+    /// (UserDefaults `moove.roomNames`, per database); after that it's just a display cache.
+    /// Applied to `snapshot` itself, so Inventory, New Home's picker, Pack, Review and the
+    /// scan screens all show it without each looking it up.
+    private(set) var roomNameOverrides: [UInt64: String] = [:]
+
+    /// The name to show for `room`: the user's local rename if any, else the synced name.
+    func displayName(of room: Room) -> String {
+        roomNameOverrides[room.id] ?? snapshot.rooms.first { $0.id == room.id }?.name ?? room.name
+    }
+
+    /// The visible rooms' names, for "Bedroom 2" suggestions at scan time.
+    var visibleRoomNames: [String] { visibleRooms.filter { $0.home == .old }.map(\.name) }
+
+    /// Renames a room (`rename_room`). If the live module doesn't have the reducer yet (or the
+    /// call fails or takes over 8 s), the name is kept on this device instead, so it works today.
+    /// Returns false only for an empty name or an offline-demo failure.
+    @discardableResult
+    func renameRoom(_ room: Room, to name: String) async -> Bool {
+        guard let clean = RoomNames.clean(name) else { return false }
+        guard clean != displayName(of: room) else { return true }
+        let backend = backend, roomId = room.id
+        do {
+            try await Self.withTimeout(seconds: 8) { try await backend.renameRoom(roomId: roomId, name: clean) }
+            // The synced name follows in the next snapshot; drop any older local name.
+            if roomNameOverrides[roomId] != nil { setRoomNameOverride(roomId, nil) }
+            return true
+        } catch {
+            guard backendKind == .spacetime else {
+                lastError = "Couldn't rename the room: \(error.localizedDescription)"
+                return false
+            }
+            print("[rooms] rename_room unavailable (\(error)); keeping \"\(clean)\" on this device")
+            setRoomNameOverride(roomId, clean)
+            return true
+        }
+    }
+
+    private var roomNamesKey: String { RoomNames.defaultsKey(database: databaseName) }
+
+    private func loadRoomNames() -> [UInt64: String] {
+        // The offline demo renames for real (and starts fresh each launch): no overrides.
+        guard backendKind == .spacetime else { return [:] }
+        return RoomNames.decode(UserDefaults.standard.dictionary(forKey: roomNamesKey))
+    }
+
+    private func setRoomNameOverride(_ roomId: UInt64, _ name: String?) {
+        roomNameOverrides[roomId] = name
+        UserDefaults.standard.set(RoomNames.encode(roomNameOverrides), forKey: roomNamesKey)
+        if let name { snapshot = snapshot.renamingRooms([roomId: name]) }
+    }
+
+    /// Every backend snapshot comes in here: local room names on top, settled ones dropped.
+    private func receive(_ snap: SyncSnapshot) {
+        if !roomNameOverrides.isEmpty {
+            let pending = RoomNames.pending(roomNameOverrides, rooms: snap.rooms)
+            if pending != roomNameOverrides {
+                roomNameOverrides = pending
+                UserDefaults.standard.set(RoomNames.encode(pending), forKey: roomNamesKey)
+            }
+        }
+        snapshot = snap.renamingRooms(roomNameOverrides)
+    }
+
+    private struct RenameTimeout: LocalizedError {
+        var errorDescription: String? { "The server didn't answer" }
+    }
+
+    /// Runs `op`, but gives up after `seconds` (an unknown reducer must not hang the alert).
+    private static func withTimeout(seconds: Double, _ op: @escaping @Sendable () async throws -> Void) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            let first = FirstResult(continuation)
+            Task {
+                do { try await op(); first.resume(.success(())) } catch { first.resume(.failure(error)) }
+            }
+            Task {
+                try? await Task.sleep(for: .seconds(seconds))
+                first.resume(.failure(RenameTimeout()))
+            }
+        }
     }
 
     // MARK: Sharing (#10)
@@ -475,5 +581,21 @@ final class MooveStore {
         case .connecting, .reconnecting: return "Not saved: still connecting to the server. Try again in a moment."
         case .disconnected, .failed: return "Not saved: not connected to the server."
         }
+    }
+}
+
+/// Resumes a continuation once, with whichever result comes first.
+private final class FirstResult: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Error>?
+
+    init(_ continuation: CheckedContinuation<Void, Error>) { self.continuation = continuation }
+
+    func resume(_ result: Result<Void, Error>) {
+        lock.lock()
+        let c = continuation
+        continuation = nil
+        lock.unlock()
+        c?.resume(with: result)
     }
 }

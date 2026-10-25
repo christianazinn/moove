@@ -18,9 +18,14 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Expected:** the room disappears from Inventory, its totals, Review, the Scan hero, New Home and Pack. **Show hidden rooms (N)** appears at the bottom, and **Unhide** brings a room back.
 - **Report if wrong:** which screen still shows the hidden room, plus a screenshot.
 
+### 1b. Rename a room
+- **Taps:** Items → Inventory → a room chip's **⋯** → **Rename room** → type "Sam's room" → **Save**.
+- **Expected:** the chip, New Home's **Moving from** list, Pack's room rows and Review show "Sam's room" right away, and still do after quitting and reopening the app. (Until the module has `rename_room`, #370, the name is kept on this iPad only.)
+- **Report if wrong:** which screen shows the old name.
+
 ### 2. Fresh scan
-- **Taps:** Scan → **Scan a room** → sweep the room slowly → **Done** → **Looks right: check photos** → **Add N items**.
-- **Expected:** "Scan · Done" and "N items added". The "Also found: …" chip lists detector finds. If something was impossible, "N objects looked wrong and were skipped" appears.
+- **Taps:** Scan → **Scan a room** → sweep the room slowly → **Done** → **Looks right: check photos** → check the **Room** field at the top (change it with a chip or by typing) → **Add N items**.
+- **Expected:** the Room field is prefilled from what was found (bed → "Bedroom", sofa/TV → "Living room", stove/fridge → "Kitchen", desk + monitor → "Office", nothing telling → "Room"), and says "Bedroom 2" if you already have a Bedroom (a hint offers the number when you type a taken name; keeping it is fine for a re-scan). "Scan · Done" and "N items added". The new room has that name in Inventory, New Home's **Moving from** and Pack. The "Also found: …" chip lists detector finds. If something was impossible, "N objects looked wrong and were skipped" appears.
 - **Report if wrong:** the step where it stuck, plus the on-screen message.
 
 ### 3. Scan finished dollhouse
@@ -43,7 +48,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 ### 5. Inventory: the museum (halls by function, placards)
 - **Taps:** Items → Inventory. Scroll the halls; tap a placard's story line and type "Grandma's, 1974", **Save**; tap an exhibit; long-press another. Then rotate the iPad, and try the largest text size.
 - **Expected:**
-  - A **Rooms** strip on top: one chip per room, newest scan first, with item count, scan time ("Today 15:42"), a **Demo** tag for **Load demo scan** rooms and "Shared by …" for joined ones, plus Share / **3D** / **⋯** (Add item here, Hide room).
+  - A **Rooms** strip on top: one chip per room, newest scan first, with item count, scan time ("Today 15:42"), a **Demo** tag for **Load demo scan** rooms and "Shared by …" for joined ones, plus Share / **3D** / **⋯** (Add item here, Rename room, Hide room).
   - Halls by what things are for, biggest first ("The Work & Study Hall · 4 pieces · est. $610"), "Cabinet of Curiosities" last. An office chair is in Work & study, a nightstand in Sleep.
   - Each exhibit: the voxel model on a plinth under a soft light, the most valuable piece of each hall a bit taller, a gold ribbon on possibly sentimental ones. The placard: name (serif), catalog line in small caps ("HERMAN MILLER · 70 × 110 CM", "≈" for estimated sizes, "· WAS: STORAGE" on renamed scan items), a one-line story, the price and one origin chip (**Scanned**, **From photos**, **Added by photo**, **Added by you** or **Shared**), then "".
   - Your story replaces the auto one in quotes, and its year shows as "Acquired 1974 · catalogued …". It stays after relaunch (this iPad only).

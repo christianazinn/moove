@@ -40,7 +40,14 @@ final class ScanSession {
     }
 
     var phase: Phase = .capturing
-    var roomName = "Bedroom"
+    /// What the user calls this room (the photo step's Room field). Prefilled from what the
+    /// scan found (`suggestRoomName`), never a blanket "Bedroom".
+    var roomName = RoomNames.fallback
+    /// The user typed or picked a name, so later suggestions leave it alone.
+    var roomNameChosen = false
+    /// The room `import_scan_v2` created. Follow-up writes (colors, kept names, queued photos,
+    /// room photos) look it up by id, so renaming the room meanwhile doesn't lose them.
+    private(set) var importedRoomId: UInt64?
     private(set) var objects: [DetectedObject] = []
     private(set) var photos: [UUID: URL] = [:]
     /// Objects whose photo was cut from a scan keyframe (#82), not taken by the user.
@@ -168,7 +175,11 @@ final class ScanSession {
     private func persistColors() async {
         guard !colorsSaved, let store, let colors, !colors.objectColors.isEmpty else { return }
         colorsSaved = true
-        await store.saveScanColors(colors, roomName: roomName)
+        if let importedRoomId {
+            await store.saveScanColors(colors, roomId: importedRoomId)
+        } else {
+            await store.saveScanColors(colors, roomName: roomName)
+        }
     }
 
     /// An item RoomPlan missed, added by its photo. The vision agent names and
@@ -177,6 +188,16 @@ final class ScanSession {
         guard object.manual, !objects.contains(where: { $0.id == object.id }) else { return }
         objects.append(object)
         setPhoto(jpeg, for: object)
+    }
+
+    /// The room name guessed from the objects (bed → Bedroom, sofa/TV → Living room, ...),
+    /// numbered when a visible room already has it ("Bedroom 2"). Leaves a name the user chose.
+    func suggestRoomName(existing: [String]) {
+        guard !roomNameChosen else { return }
+        let guess = RoomNames.guess(objects.map {
+            RoomNames.Object(category: $0.category, attributes: $0.attributes, name: $0.label?.title)
+        })
+        roomName = RoomNames.numbered(guess, existing: existing)
     }
 
     func remove(_ object: DetectedObject) {
@@ -237,6 +258,7 @@ final class ScanSession {
             if let url = await send(file, "image/jpeg") { photoUrls[id] = url } else { pendingPhotos[id] = file }
         }
 
+        roomName = RoomNames.clean(roomName) ?? RoomNames.fallback
         let imported = await store.importScan(ScanImport(
             roomName: roomName,
             usdzUrl: usdzUrl,
@@ -252,9 +274,10 @@ final class ScanSession {
         phase = imported ? .finished : .failed(store.lastError ?? "Couldn't save the scan")
         if imported {
             self.store = store
+            importedRoomId = await store.importedRoom(named: roomName)?.id
             // Vision would replace the names given here; the store puts them back.
             let labels = Dictionary(objects.compactMap { o in o.label.map { (o.id.uuidString, $0) } }, uniquingKeysWith: { a, _ in a })
-            await store.keepScanNames(labels, roomName: roomName)
+            if let importedRoomId { await store.keepScanNames(labels, roomId: importedRoomId) }
             await persistColors()
             await sendRoomPhotos(to: store, uploader: uploader)
             if !pendingPhotos.isEmpty, !(uploader is LocalUploader) {
@@ -298,10 +321,10 @@ extension ScanSession {
     fileprivate func drainPendingPhotos(to store: MooveStore, uploader: Uploader) async {
         let deadline = Date.now.addingTimeInterval(15 * 60)
         while !pendingPhotos.isEmpty, Date.now < deadline, !Task.isCancelled {
-            guard let room = store.newestRoom(named: roomName) else { break }
+            guard let roomId = importedRoomId else { break }
             for (id, file) in pendingPhotos {
                 guard let url = try? await uploader.upload(file, contentType: "image/jpeg") else { break }
-                if let item = store.items.first(where: { $0.roomId == room.id && $0.scanObjectId == id.uuidString }),
+                if let item = store.items.first(where: { $0.roomId == roomId && $0.scanObjectId == id.uuidString }),
                    await store.addItemPhoto(itemId: item.id, url: url) {
                     pendingPhotos[id] = nil
                 }
@@ -322,7 +345,7 @@ extension ScanSession {
     /// Runs after `.finished` shows, so it doesn't touch `phase`.
     fileprivate func sendRoomPhotos(to store: MooveStore, uploader: Uploader) async {
         guard !roomPhotos.isEmpty, store.uploadBaseURL != nil, uploadProblem == nil,
-              let scan = await store.newestScan(inRoomNamed: roomName) else { return }
+              let roomId = importedRoomId, let scan = await store.newestScan(inRoom: roomId) else { return }
         var sent = 0
         for file in roomPhotos {
             guard let url = try? await uploader.upload(file, contentType: "image/jpeg") else { break }
