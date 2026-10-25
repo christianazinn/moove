@@ -76,7 +76,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 
 ### 5. Sell & Buy > Agents (top): a $410 listing waits for you
 - **Source:** CI `05-approvals`.
-- **State:** the Agents screen's top: the Waiting 2 / Decided 4 / Payments strip, then **"Needs your OK · 2"**: the Sell request "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition", **$410**, with the Sell tag and SIMULATED pill; the Buy request for the "78" upholstered sofa, gray", $429.99 "from wayfair", with its own **SIMULATED** pill; and "Also sent to your phone via Auth0 Guardian when set up. Approving here works too." Further down, Decided (last 3, "Show all 4") includes the $699 KIVIK sofa with an **EXPIRED** pill ("No answer in 12 h. The agent asked again.").
+- **State:** the Agents screen's top: **"Needs your OK · 2"**: the Sell request "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition", **$410**, with the Sell tag and SIMULATED pill; the Buy request for the "78" upholstered sofa, gray", $429.99 "from wayfair", with its own **SIMULATED** pill; and "Also sent to your phone via Auth0 Guardian when set up. Approving here works too." Further down, Decided (last 3, "Show all 4") includes the $699 KIVIK sofa with an **EXPIRED** pill ("No answer in 12 h. The agent asked again.").
 - **Caption:** "Claude writes the listing, and anything over your $100 limit waits for your OK, by Auth0 push or in the app (the eBay post is simulated)."
 - **Track:** Auth0 (approval over the limit; the in-app inbox is shown, the push isn't verified on a real tenant), Anthropic (the Claude-written listing).
 
@@ -93,7 +93,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 - **Track:** Visa (bought items land in the new home), Best Planet-First Hack.
 
 ### 8. Sell & Buy > Agents: "Agents kept you safe"
-- **Source:** CI `08-agents-safety` (Sell & Buy > Agents, scrolled to the card between "Needs your OK" and "Decided"). By hand works too: after the taps in image 7 (don't relaunch), Sell & Buy > Agents, scroll to the card.
+- **Source:** CI `08-agents-safety` (Sell & Buy > Agents, scrolled to the card between "Needs your OK" and the receipts). By hand works too: after the taps in image 7 (don't relaunch), Sell & Buy > Agents, scroll to the card.
 - **State:** **"Agents kept you safe"** (Simulated tag): "1 scam deal blocked · fraud score 0.85", the approvals line ("6 approvals asked · 1 approved · 2 denied · 2 waiting · 1 expired" in CI's starting state; "6 approvals asked · 3 approved · 2 denied · 1 expired" after the scripted taps), "Anything over $100 needs your OK", "1 sentimental item left for you", "Spent $0.025 of $10.00 data budget ($0.015 simulated)" and the card budget line ("Spent $179.99 of $1,500.00 card budget (simulated)" at the start, $689.97 after). If a second image is allowed, CI `08b-review-impact` (the kg kept out of landfill strip on Review) is a good partner.
 - **Caption:** "Agents kept you safe: every guardrail that fired, from the blocked scam deal to spend against each budget; simulated money is tagged Simulated."
 - **Track:** Coinbase and Visa (real and simulated spend kept apart), Auth0 (approvals counted); with `08b-review-impact`, Best Planet-First Hack.
