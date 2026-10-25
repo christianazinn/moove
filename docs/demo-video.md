@@ -80,7 +80,7 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 
 ### 10. 1:48–1:54 Pack: boxes by room, loaded into the truck
 - **VO:** "It plans the packing too: fewer, fuller boxes by room, each with a reason, loaded into the truck in order."
-- **ON SCREEN:** same Move page, scroll down to **Getting there**: the loaded voxel truck sits right on the truck card; tap **Load the truck** and the pieces arc in, in load order. Keep scrolling: the grid of kraft box cards under small room headings (9 boxes on the demo); tap one for its reasons (e.g. "Fragile: wrapped, nothing heavy, under 8 kg"). Optional if time: **Print labels** > **4 × 6 in labels** (PDF preview: room band, big number, QR code).
+- **ON SCREEN:** same Move page, scroll down to **Getting there**: the loaded voxel truck sits right on the truck card; tap **Load the truck** and the pieces arc in, in load order. Keep scrolling: the grid of kraft box cards under small room headings (6 boxes on the demo); tap one for its reasons (e.g. "Fragile: wrapped, nothing heavy, under 8 kg"). Optional if time: **Print labels** > **4 × 6 in labels** (PDF preview: room band, big number, QR code).
 - **STATE:** Offline demo (same take, after shot 9).
 - **TRACK:** None directly (product depth). The truck and crew figures are estimates and the card says so. On the offline demo the card says "Fits a cargo van by volume; packs best in a 10 ft truck." and the 3D truck is the 10 ft one, so say "truck", not a size. The inline truck is an ARView: record it on a device or Simulator, not from CI.
 - **FALLBACK:** Cut this shot and give shot 11 its six seconds back.
