@@ -18,6 +18,10 @@ struct PackView: View {
     /// Box groups (rooms, "first") showing their cards.
     /// Rooms whose estimate folder is flipped from its default (folded when the room has scanned boxes).
     @State private var showRooms = false
+    /// Long lists (furniture, supplies, schedule) start at their first few rows.
+    @State private var showAllFurniture = false
+    @State private var showAllSupplies = false
+    @State private var showAllSteps = false
     // Check-off state survives relaunches. Keys: "boxId:lineIndex" and supply names.
     @AppStorage("moove.pack.checked") private var checkedRaw = ""
     @AppStorage("moove.pack.supplies") private var suppliesRaw = ""
@@ -41,7 +45,7 @@ struct PackView: View {
                     if !plan.supplies.isEmpty { supplies(plan.supplies) }
                     if !plan.schedule.isEmpty { schedule(plan.schedule, boxes: plan.boxes) }
                 } else {
-                    ProgressView("Planning…").frame(maxWidth: .infinity).padding(.vertical, 40)
+                    LoadingLine(text: "Planning…").frame(maxWidth: .infinity).padding(.vertical, Theme.Space.section)
                 }
             }
             .padding(.horizontal, Theme.gutter)
@@ -156,17 +160,15 @@ struct PackView: View {
                 }
                 .frame(height: 6)
                 .accessibilityHidden(true)
-                Text("\(Int((fill * 100).rounded()))% full · \(plan.boxes.count) boxes · \(plan.furniture.count) furniture")
+                // Box and furniture counts are on their own sections below.
+                Text("\(Int((fill * 100).rounded()))% full · rough estimate, ask movers for a quote")
                     .monoMeta()
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text("Rough estimate. Ask movers for a quote.")
-                .monoMeta()
-                .fixedSize(horizontal: false, vertical: true)
             if let note = truckLoad?.sizeNote(planned: t.truck) { Text(note).monoMeta().foregroundStyle(Theme.ochreInk) }
         }
         .padding(18)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
     }
 
     /// The loaded truck right on the card (no gestures, so the page scrolls), with "Load the truck"
@@ -175,7 +177,7 @@ struct PackView: View {
         VStack(alignment: .leading, spacing: 10) {
             TruckSceneView(load: load, items: inputs.items, flyInToken: truckFlyIn, selected: .constant(nil), interactive: false)
                 .frame(height: 240)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
                 .accessibilityElement()
                 .accessibilityLabel(TruckView.summary(load))
                 .accessibilityAddTraits(.isImage)
@@ -237,7 +239,7 @@ struct PackView: View {
             }
             if !boxes.isEmpty {
                 if estimateCount > 0 {
-                    Text("\(boxes.count - estimateCount) with things you scanned · \(estimateCount) of everyday stuff (an estimate)")
+                    Text("\(estimateCount) of everyday stuff (an estimate)")
                         .monoMeta()
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -250,10 +252,7 @@ struct PackView: View {
                 .padding(.top, 14)
             }
             if boxes.isEmpty {
-                Text("No boxes needed. It's all furniture.")
-                    .monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 14)
+                EmptyState(title: "No boxes needed", detail: "It's all furniture.").padding(.top, 14)
             }
             // One heading per room (with its tape color) over a grid of big box cards, the way
             // Pack looked before #306; scanned boxes first, then everyday-stuff estimates.
@@ -261,7 +260,7 @@ struct PackView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     ListHeader(title: group.title, count: "\(group.boxes.count)") {
                         if !group.isFirst {
-                            RoundedRectangle(cornerRadius: 2)
+                            RoundedRectangle(cornerRadius: Theme.Radius.tag)
                                 .fill(BoxPalette.tape(for: group.title))
                                 .frame(width: 18, height: 10)
                                 .accessibilityHidden(true)
@@ -270,10 +269,10 @@ struct PackView: View {
                     .accessibilityIdentifier("pack.room.\(group.isFirst ? "openFirst" : group.title)")
                     boxGrid(group.scanned + group.estimated, checked: set)
                 }
-                .padding(.top, 24)
+                .padding(.top, Theme.Space.xl)
             }
         }
-        .padding(.top, 36)
+        .padding(.top, Theme.Space.section)
     }
 
     private func boxGrid(_ boxes: [MovingBox], checked set: Set<String>) -> some View {
@@ -291,7 +290,8 @@ struct PackView: View {
     private func furniture(_ notes: [FurnitureNote]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ListHeader(title: "Furniture", count: "\(notes.count)")
-            ForEach(notes) { note in
+            let cut = ShowAllButton.cuts(notes.count, limit: 5)
+            ForEach(showAllFurniture || !cut ? notes : Array(notes.prefix(5))) { note in
                 let open = expandedFurniture.contains(note.id)
                 VStack(alignment: .leading, spacing: 0) {
                     Button {
@@ -343,8 +343,9 @@ struct PackView: View {
                     }
                 }
             }
+            if cut { ShowAllButton(count: notes.count, expanded: $showAllFurniture, id: "pack.furniture") }
         }
-        .padding(.top, 40)
+        .padding(.top, Theme.Space.section)
     }
 
     // MARK: Delivered
@@ -352,18 +353,9 @@ struct PackView: View {
     /// Bought for the new home: it ships there, so it's not boxed and not on the truck.
     private func delivered(_ pieces: [DeliveredItem]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
+            // The header and each row's "Bought" tag say it: it ships there, nothing to pack.
             ListHeader(title: "Delivered to your new home", count: "\(pieces.count)")
-            Label {
-                Text("Bought: ships straight to the new place, nothing to pack.")
-                    .sansText(15)
-                    .foregroundStyle(Theme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            } icon: {
-                Image(systemName: "shippingbox.and.arrow.backward").foregroundStyle(Theme.accentStrong).accessibilityHidden(true)
-            }
-            .padding(.top, 12)
-            .padding(.bottom, 4)
-            ForEach(pieces) { piece in
+            CollapsedList(data: pieces, id: "pack.delivered") { piece in
                 LedgerRow(
                     title: piece.title,
                     meta: [piece.seller, "→ \(piece.room)"].filter { !$0.isEmpty }.joined(separator: " · ")
@@ -380,7 +372,7 @@ struct PackView: View {
                 .accessibilityIdentifier("pack.delivered.\(piece.id)")
             }
         }
-        .padding(.top, 40)
+        .padding(.top, Theme.Space.section)
     }
 
     // MARK: Supplies
@@ -389,7 +381,8 @@ struct PackView: View {
         let done = PackChecks.decode(suppliesRaw)
         return VStack(alignment: .leading, spacing: 0) {
             ListHeader(title: "Supplies", count: "\(lines.filter { done.contains($0.name) }.count) of \(lines.count)")
-            ForEach(lines, id: \.name) { line in
+            let cut = ShowAllButton.cuts(lines.count, limit: 5)
+            ForEach(showAllSupplies || !cut ? lines : Array(lines.prefix(5)), id: \.name) { line in
                 let have = done.contains(line.name)
                 Button {
                     var next = done
@@ -421,8 +414,9 @@ struct PackView: View {
                 .accessibilityValue(have ? "Got it" : "Still need")
                 .accessibilityAddTraits(have ? [.isButton, .isSelected] : .isButton)
             }
+            if cut { ShowAllButton(count: lines.count, expanded: $showAllSupplies, id: "pack.supplies") }
         }
-        .padding(.top, 40)
+        .padding(.top, Theme.Space.section)
     }
 
     // MARK: Schedule
@@ -431,10 +425,12 @@ struct PackView: View {
         let set = checked
         let byId = Dictionary(boxes.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let ordered = steps.sorted { $0.daysBeforeMove > $1.daysBeforeMove }
+        let cut = ShowAllButton.cuts(ordered.count, limit: 5)
+        let shown = showAllSteps || !cut ? ordered : Array(ordered.prefix(5))
         return VStack(alignment: .leading, spacing: 0) {
             ListHeader(title: "Schedule", count: "\(ordered.count) steps")
             Color.clear.frame(height: 16)
-            ForEach(Array(ordered.enumerated()), id: \.element.id) { index, step in
+            ForEach(Array(shown.enumerated()), id: \.element.id) { index, step in
                 let stepBoxes = step.boxIds.compactMap { byId[$0] }
                 let allSealed = !stepBoxes.isEmpty && stepBoxes.allSatisfy { isSealed($0, in: set) }
                 HStack(alignment: .top, spacing: 14) {
@@ -445,7 +441,7 @@ struct PackView: View {
                             .overlay(Circle().strokeBorder(allSealed ? Theme.accent : Theme.lineStrong, lineWidth: 1.5))
                             .frame(width: 12, height: 12)
                             .padding(.top, 4)
-                        if index < ordered.count - 1 {
+                        if index < shown.count - 1 {
                             Rectangle().fill(Theme.line).frame(width: 1).frame(maxHeight: .infinity)
                         }
                     }
@@ -479,8 +475,9 @@ struct PackView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            if cut { ShowAllButton(count: ordered.count, expanded: $showAllSteps, id: "pack.schedule") }
         }
-        .padding(.top, 40)
+        .padding(.top, Theme.Space.section)
     }
 
     static func when(_ days: Int) -> String {

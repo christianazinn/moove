@@ -196,8 +196,8 @@ private struct SelectedObjectCard: View {
         .padding(.leading, 14)
         .padding(.trailing, 6)
         .padding(.vertical, 12)
-        .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
+        .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("room.selection")
         .alert("Rename", isPresented: $renaming, presenting: item) { item in
@@ -245,7 +245,7 @@ private struct SelectedObjectCard: View {
                     .foregroundStyle(Theme.text)
                     .frame(width: 56, height: 56)
                     .background(Color(RoomPalette.category(object.category)).opacity(0.3),
-                                in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+                                in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 4) {

@@ -155,7 +155,7 @@ struct NewHomePicker: View {
                 FloorPlanSketch(plan: DemoHouse.floorPlan)
                     .frame(height: 220)
                     .padding(18)
-                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
                 HStack(alignment: .center, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(DemoHouse.name).blockTitle()
@@ -230,6 +230,8 @@ struct NewHomeDetail: View {
     @State private var ready = false
     /// True while the layouts are being solved off the main thread.
     @State private var arranging = false
+    /// Pieces starts at its first few rows.
+    @State private var showAllPieces = false
 
     private static let stageID = "stage"
 
@@ -356,7 +358,7 @@ struct NewHomeDetail: View {
                             flyInStarts: starts)
                 .frame(height: 420)
                 .overlay { if arranging { arrangingNotice } }
-                .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
                 .accessibilityElement()
                 .accessibilityLabel(arranging ? "Arranging your home" : stageLabel)
                 .accessibilityHint("Drag to orbit, pinch to zoom, double-tap to reset. Pick a room below to zoom in.")
@@ -386,7 +388,7 @@ struct NewHomeDetail: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
-        .background(Theme.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+        .background(Theme.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         .accessibilityHidden(true)
         .transition(.opacity)
     }
@@ -420,7 +422,8 @@ struct NewHomeDetail: View {
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ListHeader(title: "Layout", count: option.map { "\($0.placements.count) placed" })
+            // How many pieces are placed is on Pieces below.
+            ListHeader(title: "Layout")
             ScrollView(.horizontal, showsIndicators: false) {
                 PillPicker(options: LayoutSolver.Style.allCases, selection: $style) { $0.label }
             }
@@ -486,15 +489,11 @@ struct NewHomeDetail: View {
                 if furniture.isDemo { MonoTag(text: "Demo items") }
             }
             if rows.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(furniture.items.isEmpty ? "Nothing to place yet" : "Arranging…").blockTitle()
-                    Text("Kept items land here.").monoMeta()
-                }
-                .padding(.vertical, 28)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .ruled()
+                EmptyState(title: furniture.items.isEmpty ? "Nothing to place yet" : "Arranging…",
+                           detail: "Kept items land here.", ruledTop: false)
             }
-            ForEach(rows) { row in
+            let cut = ShowAllButton.cuts(rows.count, limit: 5)
+            ForEach(showAllPieces || !cut ? rows : Array(rows.prefix(5))) { row in
                 if let room = row.room {
                     Button {
                         focusRoom = room
@@ -518,11 +517,8 @@ struct NewHomeDetail: View {
                     .accessibilityLabel("\(row.item.name), \(Spoken.size(row.item.widthM, row.item.depthM)), \(row.stored ? "extra bed, to storage" : "didn't fit")")
                 }
             }
-            if furniture.isDemo {
-                Text("Nothing kept yet, so showing demo items.")
-                    .monoMeta()
-                    .padding(.top, 14)
-            }
+            // The header's "Demo items" tag says these aren't yours yet.
+            if cut { ShowAllButton(count: rows.count, expanded: $showAllPieces, id: "newHome.pieces") }
         }
     }
 

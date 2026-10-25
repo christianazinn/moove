@@ -195,7 +195,7 @@ struct SettingsView: View {
             ListHeader(title: title)
             content()
         }
-        .padding(.top, 40)
+        .padding(.top, Theme.Space.section)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

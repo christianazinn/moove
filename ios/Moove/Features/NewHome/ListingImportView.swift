@@ -164,8 +164,8 @@ struct ListingImportView: View {
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 72, height: 72)
-                                .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                                     .strokeBorder(Theme.line, lineWidth: 1))
                                 .accessibilityLabel("Floor plan screenshot \(index + 1) of \(shots.count)")
                         }
@@ -240,7 +240,7 @@ struct ListingImportView: View {
             FloorPlanSketch(plan: result.plan)
                 .frame(height: 220)
                 .frame(maxWidth: .infinity)
-                .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
                 .accessibilityLabel("Floor plan sketch, \(result.plan.rooms.count) rooms")
                 .accessibilityAddTraits(.isImage)
             VStack(alignment: .leading, spacing: 4) {
@@ -546,8 +546,8 @@ private struct ThemedField: View {
             .monoText(14)
             .padding(.horizontal, 14)
             .frame(minHeight: 44)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                 .strokeBorder(Theme.line, lineWidth: 1))
     }
 }

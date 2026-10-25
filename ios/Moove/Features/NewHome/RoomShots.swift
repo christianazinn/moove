@@ -123,7 +123,7 @@ struct RoomShotsSection: View {
                     }
                 }
                 .frame(width: size.width, height: size.height)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(room.name).blockTitle().lineLimit(1)
                     Text(pieces).monoMeta()

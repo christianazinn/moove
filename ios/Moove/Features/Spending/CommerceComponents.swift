@@ -13,6 +13,16 @@ struct CommercePlaceholder<Action: View>: View {
     @ViewBuilder var action: Action
 
     var body: some View {
+        switch state {
+        case .empty, .content:
+            EmptyState(title: emptyTitle, detail: emptyDetail, children: .contain) { action }
+        case .loading, .offline:
+            status
+        }
+    }
+
+    /// Connecting or offline, in the same frame as `EmptyState`.
+    private var status: some View {
         VStack(alignment: .leading, spacing: 6) {
             switch state {
             case .loading:
@@ -34,9 +44,7 @@ struct CommercePlaceholder<Action: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 4)
             case .empty, .content:
-                Text(emptyTitle).blockTitle()
-                Text(emptyDetail).monoMeta().fixedSize(horizontal: false, vertical: true)
-                action.padding(.top, 10)
+                EmptyView()
             }
         }
         .padding(.vertical, 28)

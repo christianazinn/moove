@@ -70,7 +70,7 @@ struct ScanResultsView: View {
                 }
             }
             .frame(height: 360)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
 
             HStack(spacing: 10) {
                 Circle().fill(Theme.accent).frame(width: 8, height: 8).accessibilityHidden(true)

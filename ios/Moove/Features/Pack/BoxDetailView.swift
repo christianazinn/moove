@@ -64,16 +64,11 @@ struct BoxDetailView: View {
                 .foregroundStyle(Theme.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
-            Text("\(box.size.label) · \(Int(box.weightKg.rounded())) kg · \(box.contents.count) \(box.contents.count == 1 ? "line" : "lines")")
+            // The line count is on Contents below, and the stamps are printed on the box above.
+            Text("\(box.size.label) · \(Int(box.weightKg.rounded())) kg")
                 .monoMeta()
                 .fixedSize(horizontal: false, vertical: true)
-                .accessibilityLabel("\(box.size.label), \(Int(box.weightKg.rounded())) kilograms, \(box.contents.count) \(box.contents.count == 1 ? "item" : "items")")
-            if !box.stamps.isEmpty {
-                Text(box.stamps.map(\.rawValue).joined(separator: " · "))
-                    .monoText(13.5, weight: .bold)
-                    .foregroundStyle(box.fragile ? Theme.danger : Theme.accentStrong)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+                .accessibilityLabel("\(box.size.label), \(Int(box.weightKg.rounded())) kilograms\(box.stamps.isEmpty ? "" : ", " + box.stamps.map(\.rawValue).joined(separator: ", "))")
             VStack(alignment: .leading, spacing: 6) {
                 if !box.reason.isEmpty { reasonLine(box.reason, symbol: "shippingbox") }
                 if !box.roomReason.isEmpty { reasonLine(box.roomReason, symbol: "arrow.right.circle") }
@@ -143,7 +138,7 @@ struct BoxDetailView: View {
                 }
             }
             if box.contents.contains(where: \.estimated) {
-                Text("Estimate: everyday stuff a room like this usually has, not from your scan. It counts toward the truck.")
+                Text("Estimate: typical everyday stuff, not from your scan.")
                     .monoMeta()
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)

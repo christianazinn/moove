@@ -14,10 +14,8 @@ struct ScanHomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                PageHeader(
-                    title: "Scan a room.",
-                    lede: "Walk around slowly. Moove finds and measures every piece."
-                )
+                // "How it works" below says how to scan, so no lede here.
+                PageHeader(title: "Scan a room.")
                 ScanHomeHero { openRoom = $0 }.padding(.top, 24)
                 startScan.padding(.top, 24)
                 if !store.visibleRooms.isEmpty {
@@ -143,7 +141,7 @@ private struct ScanNotice: View {
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.surface, in: UnevenRoundedRectangle(bottomTrailingRadius: Theme.radiusSmall, topTrailingRadius: Theme.radiusSmall))
+        .background(Theme.surface, in: UnevenRoundedRectangle(bottomTrailingRadius: Theme.Radius.chip, topTrailingRadius: Theme.Radius.chip))
         .overlay(alignment: .leading) { Rectangle().fill(tint).frame(width: 3) }
         .accessibilityElement(children: .combine)
     }
