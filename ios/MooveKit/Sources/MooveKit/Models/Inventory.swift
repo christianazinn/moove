@@ -122,6 +122,10 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
     /// 1 (broken) to 5 (like new), set by the vision agent.
     public var condition: Int?
     public var estValueCents: Int64?
+    /// The pricing agent's low/high for the estimate (`est_low_cents`/`est_high_cents`). nil when
+    /// the backend doesn't say (fixtures, older rows). Read through `estRange`.
+    public var estLowCents: Int64?
+    public var estHighCents: Int64?
     public var disposition: Disposition
     public var dispositionSource: DispositionSource
     public var dispositionReason: String?
@@ -150,7 +154,8 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
         dispositionReason: String? = nil, fragile: Bool = false, maybeSentimental: Bool = false, updatedAt: Date = .now,
         attributes: [String] = [], colors: ItemColors? = nil,
         detailsStatus: AgentStage? = nil, pricingStatus: AgentStage? = nil,
-        identifyConfidence: IdentifyConfidence? = nil, closeupHint: String? = nil
+        identifyConfidence: IdentifyConfidence? = nil, closeupHint: String? = nil,
+        estLowCents: Int64? = nil, estHighCents: Int64? = nil
     ) {
         self.id = id
         self.owner = owner
@@ -166,6 +171,8 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
         self.brand = brand
         self.condition = condition
         self.estValueCents = estValueCents
+        self.estLowCents = estLowCents
+        self.estHighCents = estHighCents
         self.disposition = disposition
         self.dispositionSource = dispositionSource
         self.dispositionReason = dispositionReason
@@ -329,6 +336,15 @@ extension Item {
 
     /// What the item adds to "expected sales" and other totals: nothing for a built-in fixture.
     public var saleValueCents: Int64? { isBuiltInFixture ? nil : estValueCents }
+
+    /// The agent's low–high around the estimate, only when it actually brackets the estimate, so a
+    /// range shown anywhere never disagrees with the single price shown everywhere else. nil for
+    /// built-in fixtures, unpriced items and degenerate ranges.
+    public var estRange: ClosedRange<Int64>? {
+        guard let est = saleValueCents, let lo = estLowCents, let hi = estHighCents,
+              lo < hi, lo <= est, est <= hi else { return nil }
+        return lo...hi
+    }
 
     /// An estimate from only one or two comparable listings is a rough guess, not a market price.
     /// Zero means none are recorded (seeded or demo rows), which isn't flagged.

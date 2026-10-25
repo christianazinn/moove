@@ -82,7 +82,7 @@ struct RoomVisualizationView: View {
         let item = items[object.id]
         var parts = [item?.name ?? object.category.capitalized]
         if let item { parts.append(item.disposition.label) }
-        if let value = item?.estValueCents { parts.append(value.usd) }
+        if let value = item?.saleValueCents { parts.append(value.usd) }
         let d = object.dimensions
         parts.append(String(format: "%.1f by %.1f meters", d.x, d.z))
         return parts.joined(separator: ", ")
@@ -160,7 +160,7 @@ private struct SelectedObjectCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(item?.name ?? object.category.capitalized).blockTitle().lineLimit(2)
                 Spacer(minLength: 4)
-                if let value = item?.estValueCents { Text(value.usd).rowValue() }
+                if let value = item?.saleValueCents { Text(value.usd).rowValue() }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .ignore)
@@ -191,7 +191,7 @@ private struct SelectedObjectCard: View {
     private var fullLabel: String {
         var parts = [item?.name ?? object.category.capitalized, size]
         if let item { parts.append(item.disposition.label) }
-        if let value = item?.estValueCents { parts.append(value.usd) }
+        if let value = item?.saleValueCents { parts.append(value.usd) }
         return parts.joined(separator: ", ")
     }
 

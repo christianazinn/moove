@@ -123,7 +123,8 @@ public struct MoveSummary: Sendable, Equatable {
     /// Listings (#11) replace these once they exist, since a later stage wins.
     public static func estimatedSales(from items: [Item]) -> [Sale] {
         items.compactMap { item in
-            guard item.disposition == .sell, let value = item.estValueCents, value > 0 else { return nil }
+            // saleValueCents, like every other sales total: a built-in fixture is never a sale.
+            guard item.disposition == .sell, let value = item.saleValueCents, value > 0 else { return nil }
             return Sale(itemId: item.id, priceCents: value, stage: .estimated, simulated: false)
         }
     }

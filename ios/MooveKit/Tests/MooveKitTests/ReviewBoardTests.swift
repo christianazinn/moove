@@ -141,6 +141,24 @@ import Testing
         #expect(Review.valueRange(items.first { $0.id == 18 }!, comps: snapshot.comps) == nil)
     }
 
+    /// A range shown next to an item always brackets the single estimate other screens show.
+    @Test func valueRangeAlwaysBracketsTheEstimate() {
+        func item(_ est: Int64?, low: Int64? = nil, high: Int64? = nil, name: String = "Chair") -> Item {
+            Item(id: 99, owner: "me", roomId: 1, name: name, category: "chair", widthM: 0.5, heightM: 0.9, depthM: 0.5,
+                 estValueCents: est, estLowCents: low, estHighCents: high)
+        }
+        let comps = [Comp(id: 1, itemId: 99, source: "ebay", title: "a", priceCents: 10_000, url: ""),
+                     Comp(id: 2, itemId: 99, source: "ebay", title: "b", priceCents: 12_000, url: "")]
+        // The agent's own range wins over the comps.
+        #expect(Review.valueRange(item(6_100, low: 4_500, high: 8_000), comps: comps) == 4_500...8_000)
+        // Comps that don't contain the estimate ($61 vs $100-$120, e.g. a "poor" item) aren't shown.
+        #expect(Review.valueRange(item(6_100), comps: comps) == nil)
+        #expect(Review.valueRange(item(11_000), comps: comps) == 10_000...12_000)
+        // A range that doesn't bracket the estimate, or a fixture, gives no range.
+        #expect(item(6_100, low: 7_000, high: 9_000).estRange == nil)
+        #expect(Review.valueRange(item(4_800, low: 4_000, high: 6_000, name: "Toilet"), comps: comps) == nil)
+    }
+
     // MARK: Swipes
 
     @Test func swipeDirections() {

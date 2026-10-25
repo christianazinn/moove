@@ -254,8 +254,12 @@ public struct AgentBudget: Sendable, Hashable, Identifiable {
     /// 0...1, for a progress bar.
     public var fractionUsed: Double {
         guard capUsdMicros > 0 else { return 1 }
-        let used = reportedRemainingUsdMicros.map { capUsdMicros - max(0, $0) } ?? spentUsdMicros
-        return min(1, max(0, Double(used) / Double(capUsdMicros)))
+        return min(1, max(0, Double(usedUsdMicros) / Double(capUsdMicros)))
+    }
+    /// How much of the cap is gone, the same figure the receipt, the tape's "left" and the Safety
+    /// card show: cap minus the worker-reported remaining, else this owner's own spend.
+    public var usedUsdMicros: Int64 {
+        reportedRemainingUsdMicros.map { max(0, capUsdMicros - max(0, $0)) } ?? spentUsdMicros
     }
     public var isExhausted: Bool { remainingUsdMicros == 0 }
 }
@@ -307,6 +311,8 @@ public struct SpendingLog: Sendable, Equatable {
     public var realSpentUsdMicros: Int64
     /// Non-failed simulated spend.
     public var simulatedSpentUsdMicros: Int64
+    /// Card (Visa) purchases refused by the card caps. Budgets only count x402 refusals.
+    public var cardRefusals: Int
 
     public init(payments: [Payment], events: [AgentEvent], capPerAgentUsdMicros: Int64 = UsdMicros.defaultAgentCap) {
         let refusals = events.filter(\.isRefusal)
@@ -343,6 +349,7 @@ public struct SpendingLog: Sendable, Equatable {
         // (Visa) spend has its own caps on the worker and shows up in `totalsByRail` instead.
         let x402Counted = counted.filter { $0.rail == .x402 }
         let x402Refusals = refusals.filter { $0.data.rail != "visa" }
+        cardRefusals = refusals.count - x402Refusals.count
         let agents = Set(payments.filter { $0.rail == .x402 }.map(\.agent))
             .union(x402Refusals.map(\.agent)).union(x402Events.map(\.agent))
         budgets = agents.sorted().map { agent in

@@ -50,7 +50,7 @@ struct ItemDetailView: View {
                     reclassifyAction(item)
                     let listings = store.snapshot.compCounts[item.id] ?? 0
                     let rough = item.saleValueCents != nil && Item.isRoughEstimate(compCount: listings)
-                    Text(item.saleValueCents == nil ? item.priceText.capitalizedFirst : rough ? "≈\(item.priceText)" : item.priceText)
+                    Text(valueText(item))
                         .monoText(32, weight: .bold, maxScale: 1.6)
                         .tracking(-0.3)
                         .foregroundStyle(item.saleValueCents == nil ? Theme.muted : Theme.text)
@@ -247,9 +247,18 @@ struct ItemDetailView: View {
         }
     }
 
+    /// The one value line the header and the Details row both show, so they never disagree:
+    /// the estimate ("≈" when it rests on 1-2 comps), or the price state ("Stays with the building",
+    /// "No price", "Pricing…") when there is no sale value.
+    private func valueText(_ item: Item) -> String {
+        guard item.saleValueCents != nil else { return item.priceText.capitalizedFirst }
+        let rough = Item.isRoughEstimate(compCount: store.snapshot.compCounts[item.id] ?? 0)
+        return rough ? "≈\(item.priceText)" : item.priceText
+    }
+
     @ViewBuilder private func details(_ item: Item) -> some View {
         ListHeader(title: "Details").padding(.top, 40)
-        detail("Estimated value", item.priceText.capitalizedFirst)
+        detail("Estimated value", valueText(item))
         detail("Category", item.category)
         if let material = item.material { detail("Material", material) }
         if let brand = item.brand { detail("Brand", brand) }

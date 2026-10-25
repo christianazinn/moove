@@ -146,13 +146,14 @@ struct ValueRange: Equatable {
     var low: Int
     var high: Int
 
-    /// From the item's comps (min–max) when there are any, else its estimate ±20%; nil if neither.
+    /// Around the same estimate every other screen shows: the review card's range (the pricing
+    /// agent's low–high, or comps that bracket the estimate), else the estimate ±20%. nil for
+    /// built-in fixtures and unpriced items. A $0 estimate is "$0", not "pricing…".
     static func of(_ item: Item, comps: [Comp]) -> ValueRange? {
-        let prices = comps.filter { $0.itemId == item.id && $0.priceCents > 0 }.map(\.priceCents)
-        if let lo = prices.min(), let hi = prices.max() {
-            return ValueRange(low: roundDown(Double(lo) / 100), high: roundUp(Double(hi) / 100))
+        guard let est = item.saleValueCents else { return nil }
+        if let r = Review.valueRange(item, comps: comps) {
+            return ValueRange(low: roundDown(Double(r.lowerBound) / 100), high: roundUp(Double(r.upperBound) / 100))
         }
-        guard let est = item.estValueCents, est > 0 else { return nil }
         let dollars = Double(est) / 100
         return ValueRange(low: roundDown(dollars * 0.8), high: roundUp(dollars * 1.2))
     }
