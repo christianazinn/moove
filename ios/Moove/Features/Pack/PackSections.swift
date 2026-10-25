@@ -18,22 +18,21 @@ struct PackInputs: Equatable {
     /// The "Moving from" rooms (empty for the demo items).
     var choices: [MovingRooms.Choice] = []
 
-    /// Kept items plus undecided sentimental ones (those may well come along) from the rooms that
-    /// are moving (the "Moving from" picks, `MooveStore.movingItems`: hidden rooms and older
-    /// re-scans stay out), plus what was bought for the new home (purchased only, not
-    /// still-shopping, shown as "Delivered"), with destination rooms from the newest saved layout
-    /// of the user's new home. Demo fixtures until anything is kept.
-    @MainActor static func current(_ store: MooveStore) -> PackInputs {
+    /// Move's one item set (`MooveStore.moveItems`, MooveKit `MoveItems`): Review's Keep pile plus
+    /// the sentimental things still waiting on you, from the rooms that are moving (hidden rooms
+    /// and older re-scans stay out), plus what was bought (shown as "Delivered"), with destination
+    /// rooms from the newest saved layout of the user's new home. The demo's set until there's
+    /// anything of the user's, the same one the layout uses.
+    @MainActor static func current(_ store: MooveStore, move: MoveItems) -> PackInputs {
         let snap = store.snapshot
-        func packable(_ item: Item) -> Bool { item.disposition == .keep || (item.disposition == .undecided && item.maybeSentimental) }
-        let demo = !store.visibleItems.contains(where: packable)
-        let items = demo ? DemoFixtures.inventory(owner: snap.me ?? "demo").items.filter(packable) : store.movingItems(where: packable)
+        let demo = move.isDemo
+        let items = move.packed
         var rooms: [UInt64: String] = [:]
         if let home = snap.myNewHome,
            let layout = snap.layouts(for: home.id).max(by: { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }) {
             for p in layout.placements { rooms[p.itemId] = p.room }
         }
-        return PackInputs(items: items, rooms: rooms, bought: snap.boughtPieces, demo: demo, choices: demo ? [] : store.movingChoices)
+        return PackInputs(items: items, rooms: rooms, bought: move.bought, demo: demo, choices: demo ? [] : store.movingChoices)
     }
 
     var itemsById: [UInt64: Item] { Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
@@ -51,115 +50,70 @@ enum PackSeal {
     }
 }
 
-/// Nothing kept yet: the plan uses demo items. Points at where to keep things.
-struct PackDemoNotice: View {
-    @AppStorage("moove.tab") private var tab = "move"
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Nothing kept yet. This plan uses demo items.")
-                .sansText(15)
-                .fixedSize(horizontal: false, vertical: true)
-            Button("Choose what to keep") { tab = "review" }
-                .buttonStyle(.pill(.outline, compact: true))
-        }
-        .padding(.vertical, 16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .ruled(.top)
-        .ruled()
-    }
-}
-
 // MARK: - Truck
 
-/// The truck and crew: the loaded truck in 3D right on the card (no gestures, so the page
-/// scrolls) with "Load the truck" to replay the fly-in and Full screen to orbit it and tap
-/// pieces, then the estimate.
+/// The loaded truck in 3D (no gestures, so the page scrolls), Load the truck and Full screen,
+/// then just the truck's size. Cost, crew and the size note are in VoiceOver and Full screen.
 struct TruckCard: View {
     var plan: PackingPlan
     var load: TruckLoad?
     var items: [Item]
+    /// One small "Demo" tag on the 3D when these aren't the user's things.
+    var demoTag = false
     /// Bumped by "Load the truck" to replay its fly-in.
     @State private var flyIn = 0
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            if let load { inlineTruck(load) }
-            TruckStats(estimate: plan.truck)
-            if let note = load?.sizeNote(planned: plan.truck.truck) { Text(note).monoMeta().foregroundStyle(Theme.ochreInk) }
-        }
-        .padding(18)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
-    }
-
-    private func inlineTruck(_ load: TruckLoad) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            TruckSceneView(load: load, items: items, flyInToken: flyIn, selected: .constant(nil), interactive: false)
-                .frame(height: 240)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
-                .accessibilityElement()
-                .accessibilityLabel(TruckView.summary(load))
-                .accessibilityAddTraits(.isImage)
-                .accessibilityIdentifier("pack.truck3D")
-            HStack(spacing: 10) {
-                Button { flyIn += 1 } label: {
-                    Label("Load the truck", systemImage: "shippingbox")
-                }
-                .buttonStyle(.pill(.primary, compact: true))
-                NavigationLink { TruckView(plan: plan, items: items, load: load) } label: {
-                    Label("Full screen", systemImage: "arrow.up.left.and.arrow.down.right")
-                }
-                .buttonStyle(.pill(.outline, compact: true))
-                .accessibilityHint("Turn the truck and tap pieces to see what they are")
-            }
-        }
-    }
-}
-
-/// Truck, load, movers and cost, then how full the truck is.
-private struct TruckStats: View {
-    var estimate: TruckEstimate
-    private var t: TruckEstimate { estimate }
-
-    private var fill: Double {
-        let capacity = Double(t.truck.capacityM3) * Double(max(t.trucks, 1))
-        return capacity > 0 ? min(t.loadM3 / capacity, 1) : 0
+    /// The truck the 3D shows (a size up when shapes don't fit the volume estimate).
+    private var truckLabel: String {
+        let t = plan.truck
+        let size = load?.truck.label ?? t.truck.label
+        return t.trucks > 1 ? "\(t.trucks) × \(size)" : size
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 18) {
-                GridRow {
-                    StatFigure(label: "Truck", value: t.trucks > 1 ? "\(t.trucks) × \(t.truck.label)" : t.truck.label)
-                        .accessibilityLabel("Truck, \(t.truck.label)\(t.trucks > 1 ? ", \(t.trucks) of them" : "")")
-                    StatFigure(label: "Load", value: "\(t.loadM3.formatted(.number.precision(.fractionLength(1)))) m³")
-                        .accessibilityLabel("Load, \(Spoken.volume(t.loadM3))")
-                }
-                GridRow {
-                    StatFigure(label: "Movers", value: "\(t.movers) × \(hours) h")
-                        .accessibilityLabel("\(t.movers) movers, \(hours) hours each")
-                    StatFigure(label: "Cost", value: "\(t.costLowCents.usd)–\(t.costHighCents.usd)", tint: Theme.accentStrong)
-                        .accessibilityLabel("Cost, \(t.costLowCents.usd) to \(t.costHighCents.usd)")
-                }
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Theme.line)
-                        Capsule().fill(Theme.accent).frame(width: max(6, geo.size.width * fill))
-                    }
-                }
-                .frame(height: 6)
-                .accessibilityHidden(true)
-                // Box and furniture counts are on their own sections below.
-                Text("\(Int((fill * 100).rounded()))% full · rough estimate, ask movers for a quote")
-                    .monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        VStack(alignment: .leading, spacing: 14) {
+            if let load { scene(load) }
+            Text(truckLabel)
+                .blockTitle()
+                .accessibilityLabel(spoken)
+            buttons
         }
     }
 
-    private var hours: String { t.moverHours.formatted(.number.precision(.fractionLength(0...1))) }
+    private func scene(_ load: TruckLoad) -> some View {
+        TruckSceneView(load: load, items: items, flyInToken: flyIn, selected: .constant(nil), interactive: false)
+            .frame(height: 240)
+            .overlay(alignment: .topLeading) {
+                if demoTag { MonoTag(text: "Demo").padding(12).accessibilityHidden(true) }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+            .accessibilityElement()
+            .accessibilityLabel(TruckView.summary(load) + (demoTag ? ", demo items" : ""))
+            .accessibilityAddTraits(.isImage)
+            .accessibilityIdentifier("pack.truck3D")
+    }
+
+    private var buttons: some View {
+        HStack(spacing: 10) {
+            Button { flyIn += 1 } label: {
+                Label("Load the truck", systemImage: "shippingbox")
+            }
+            .buttonStyle(.pill(.primary, compact: true))
+            NavigationLink { TruckView(plan: plan, items: items, load: load) } label: {
+                Label("Full screen", systemImage: "arrow.up.left.and.arrow.down.right")
+            }
+            .buttonStyle(.pill(.outline, compact: true))
+            .accessibilityHint("Turn the truck and tap pieces to see what they are")
+        }
+    }
+
+    /// The detail the screen no longer prints, for VoiceOver.
+    private var spoken: String {
+        let t = plan.truck
+        var parts = [truckLabel, "\(t.movers) movers", "about \(t.costLowCents.usd) to \(t.costHighCents.usd), a rough estimate"]
+        if let note = load?.sizeNote(planned: t.truck) { parts.append(note) }
+        return parts.joined(separator: ", ")
+    }
 }
 
 // MARK: - Boxes
@@ -199,58 +153,51 @@ struct BoxesSection: View {
     var body: some View {
         let set = PackChecks.decode(checkedRaw)
         VStack(alignment: .leading, spacing: 0) {
-            header(set)
+            header
             ForEach(Self.groups(boxes)) { group in
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 12) {
                     groupHeader(group)
                     grid(group.ordered, checked: set)
                 }
-                .padding(.top, Theme.Space.xl)
+                .padding(.top, 28)
             }
         }
     }
 
-    private func header(_ set: Set<String>) -> some View {
-        let sealedCount = boxes.filter { PackSeal.isSealed($0, in: set) }.count
-        let estimateCount = boxes.filter { $0.estimatedOnly && !$0.openFirst && !$0.keepWithYou }.count
-        return VStack(alignment: .leading, spacing: 0) {
-            ListHeader(title: "Boxes", count: "\(boxes.count)") {
-                Text("\(sealedCount) sealed").monoMeta()
-            }
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            MoveHeading(title: "Boxes")
             if boxes.isEmpty {
-                EmptyState(title: "No boxes needed", detail: "It's all furniture.").padding(.top, 14)
+                Text("No boxes").monoMeta().padding(.top, 14)
             } else {
-                if estimateCount > 0 {
-                    Text("\(estimateCount) of everyday stuff (an estimate)")
-                        .monoMeta()
-                        .fixedSize(horizontal: false, vertical: true)
-                }
                 PrintLabelsMenu(boxes: boxes) {
                     Label("Print labels", systemImage: "printer")
                 }
                 .buttonStyle(.pill(.outline, compact: true))
                 .accessibilityHint("Makes a PDF of every box label to print or save")
                 .accessibilityIdentifier("pack.printLabels")
-                .padding(.top, 14)
+                .padding(.top, 4)
             }
         }
     }
 
     private func groupHeader(_ group: BoxGroup) -> some View {
-        ListHeader(title: group.title, count: "\(group.boxes.count)") {
+        HStack(spacing: 8) {
             if !group.isFirst {
-                RoundedRectangle(cornerRadius: Theme.Radius.tag)
+                Circle()
                     .fill(BoxPalette.tape(for: group.title))
-                    .frame(width: 18, height: 10)
+                    .frame(width: 8, height: 8)
                     .accessibilityHidden(true)
             }
+            Text(group.title).monoText(13.5, weight: .bold).foregroundStyle(Theme.muted)
+                .accessibilityAddTraits(.isHeader)
         }
         .accessibilityIdentifier("pack.room.\(group.isFirst ? "openFirst" : group.title)")
     }
 
     private func grid(_ boxes: [MovingBox], checked set: Set<String>) -> some View {
         let columns = [GridItem(.flexible(), spacing: 12, alignment: .top), GridItem(.flexible(), spacing: 12, alignment: .top)]
-        return LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
             ForEach(boxes) { box in
                 MovingBoxCard(box: box, packed: PackSeal.packed(box, in: set)) { onOpen(box) }
                     .accessibilityIdentifier("pack.box.\(box.id)")
@@ -261,28 +208,23 @@ struct BoxesSection: View {
 
 // MARK: - Delivered
 
-/// Bought for the new home: it ships there, so it's not boxed and not on the truck.
+/// Bought for the new home: it ships there, so it's not boxed and not on the truck. Name and price.
 struct DeliveredSection: View {
     var pieces: [DeliveredItem]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // The header and each row's "Bought" tag say it: it ships there, nothing to pack.
-            ListHeader(title: "Delivered to your new home", count: "\(pieces.count)")
+            MoveHeading(title: "Delivered")
             CollapsedList(data: pieces, id: "pack.delivered") { piece in
-                LedgerRow(
-                    title: piece.title,
-                    meta: [piece.seller, "→ \(piece.room)"].filter { !$0.isEmpty }.joined(separator: " · ")
-                ) {
-                    VoxelThumbnail(spec: piece.voxelSpec, size: 56)
-                        .overlay(alignment: .bottom) {
-                            Capsule().fill(BoxPalette.tape(for: piece.room)).frame(width: 26, height: 4).padding(.bottom, 4)
-                        }
-                } trailing: {
-                    MonoTag(text: "Bought", tone: Theme.accentStrong)
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(piece.name).sansText(16).frame(maxWidth: .infinity, alignment: .leading)
+                    if let cents = piece.priceCents { Text(cents.usd).monoText(14).foregroundStyle(Theme.muted) }
                 }
+                .padding(.vertical, 12)
+                .frame(minHeight: 44)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel([piece.title, piece.seller, piece.reason, piece.roomReason].filter { !$0.isEmpty }.joined(separator: ", "))
+                .accessibilityLabel([piece.title, piece.priceCents?.usd, piece.seller, "delivered to \(piece.room)", piece.reason]
+                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", "))
                 .accessibilityIdentifier("pack.delivered.\(piece.id)")
             }
         }
@@ -313,33 +255,26 @@ struct FurnitureNotesList: View {
                 if open { expanded.remove(note.id) } else { expanded.insert(note.id) }
             }
         } label: {
-            LedgerRow(
-                title: note.name,
-                meta: [note.reason, "\(note.room.isEmpty ? "Any room" : note.room) · \(note.steps.count) \(note.steps.count == 1 ? "step" : "steps")"]
-                    .filter { !$0.isEmpty }.joined(separator: "\n")
-            ) {
-                IconTile(systemName: note.room == "Keep with you" ? "car.fill" : "wrench.and.screwdriver", size: 44)
-                    .overlay(alignment: .bottom) {
-                        Capsule().fill(BoxPalette.tape(for: note.room)).frame(width: 24, height: 4).padding(.bottom, 4)
-                    }
-            } trailing: {
+            HStack(spacing: 12) {
+                Text(note.name).sansText(16).frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(Theme.muted)
                     .rotationEffect(.degrees(open ? 180 : 0))
                     .accessibilityHidden(true)
             }
+            .padding(.vertical, 12)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel([note.name, note.reason, note.room].filter { !$0.isEmpty }.joined(separator: ", "))
         .accessibilityValue(open ? "Expanded" : "Collapsed")
         .accessibilityHint(open ? "Hides the steps" : "Shows the steps")
     }
 
     private func steps(_ note: FurnitureNote) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !note.roomReason.isEmpty {
-                Text(note.roomReason).monoMeta().fixedSize(horizontal: false, vertical: true)
-            }
             ForEach(Array(note.steps.enumerated()), id: \.offset) { i, step in
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(i + 1 < 10 ? "0\(i + 1)" : "\(i + 1)")
@@ -351,10 +286,9 @@ struct FurnitureNotesList: View {
                 .accessibilityLabel("Step \(i + 1), \(step)")
             }
         }
-        .padding(.leading, 60)
-        .padding(.vertical, 14)
+        .padding(.leading, 4)
+        .padding(.bottom, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .ruled()
         .transition(.opacity)
     }
 }
@@ -365,12 +299,6 @@ struct FurnitureNotesList: View {
 struct SuppliesList: View {
     var lines: [SupplyLine]
     @AppStorage("moove.pack.supplies") private var suppliesRaw = ""
-
-    /// "3 of 7", for the fold's header.
-    static func progress(_ lines: [SupplyLine], raw: String) -> String {
-        let done = PackChecks.decode(raw)
-        return "\(lines.filter { done.contains($0.name) }.count) of \(lines.count)"
-    }
 
     var body: some View {
         let done = PackChecks.decode(suppliesRaw)
@@ -404,7 +332,6 @@ struct SuppliesList: View {
             .padding(.vertical, 12)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
-            .ruled()
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)

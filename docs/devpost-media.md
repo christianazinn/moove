@@ -88,7 +88,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 
 ### 7. Move: the fly-in
 - **Source:** by hand, best as a **GIF** (3 to 6 s). On a fresh fixture first do the video's taps so bought pieces fly in too: Sell & Buy > Agents > **Approve** the Aeron; Shopping > Desk chair > **Choose** the Target "Mesh task chair with arms, black", then **Pay $79.99 to target** in the confirm ("SIMULATED: no real card is charged."); back on Shopping, **Approve** the sofa ($429.99) on its **Needs you** card. Then Move tab (one page, no segments) > the **"Demo house · 2 bed, 1 bath"** card at the top > **Use this home**. Wait for "Arranging your home…" to clear and the fly-in to finish, then tap **Fly in** to replay.
-- **State:** "New home", "Demo house · 2 bed, 1 bath", "6 rooms · 112 m²", the **DEMO HOUSE** tag, the voxel house with the back walls tall, and the kept pieces flying from the scanned room (drawn beside the house) to their new spots, plus the bought ones ("8" memory foam mattress, Full", "78" upholstered sofa, gray"). **Fly in** and **Save layout** under it.
+- **State:** "New home", "Demo house · 2 bed, 1 bath", a small **Demo** tag on the 3D (offline demo items), the voxel house with the back walls tall, and the kept pieces flying from the scanned room (drawn beside the house) to their new spots, plus the bought ones ("8" memory foam mattress, Full", "78" upholstered sofa, gray"). **Fly in** and **Save layout** under it.
 - **Caption:** "Everything you kept, plus what the buy agent bought, flies from its old spot into the new home's 3D layout (demo house shown)."
 - **Track:** Visa (bought items land in the new home), Best Planet-First Hack.
 

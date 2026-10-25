@@ -208,9 +208,12 @@ public struct DeliveredItem: Sendable, Hashable, Identifiable {
     public var roomReason: String
     /// The same voxel model the new-home layout draws for it.
     public var voxelSpec: VoxelItemSpec
+    /// What the chosen deal cost, nil without one.
+    public var priceCents: Int64?
 
     public init(id: UInt64, name: String, title: String, seller: String, room: String, reason: String, roomReason: String,
-                voxelSpec: VoxelItemSpec) {
+                voxelSpec: VoxelItemSpec, priceCents: Int64? = nil) {
+        self.priceCents = priceCents
         self.id = id
         self.name = name
         self.title = title
