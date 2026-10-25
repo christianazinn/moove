@@ -15,7 +15,8 @@ struct ListingsView: View {
     ]
 
     var body: some View {
-        let listings = store.snapshot.listings.sorted { $0.updatedAt > $1.updatedAt }
+        // A listing an older worker drafted for a built-in fixture (a toilet) isn't a real sale.
+        let listings = store.snapshot.listings.filter { item(for: $0)?.isBuiltInFixture != true }.sorted { $0.updatedAt > $1.updatedAt }
         let state = store.commerceState(hasRows: !listings.isEmpty)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {

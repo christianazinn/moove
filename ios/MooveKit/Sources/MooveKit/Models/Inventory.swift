@@ -303,9 +303,15 @@ extension Item {
     /// priced, and left out of sale totals even if an older worker priced them (Rio's hotel
     /// bathroom: a $48 toilet, a $64 tub, a $32 radiator). A sink caddy or a toilet brush is an item.
     public var isBuiltInFixture: Bool {
+        func words(_ s: String) -> Set<String> { Set(s.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map(String.init)) }
         let joined = "\(name) \(category)".lowercased()
-        let words = Set(joined.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map(String.init))
-        return (joined.contains("bath tub") || !words.isDisjoint(with: Self.fixtureWords)) && words.isDisjoint(with: Self.accessoryWords)
+        // Accessory words only count in the head noun phrase, as on the worker: "bathtub with
+        // shower curtain" is a tub, "shower curtain with rod" is a curtain.
+        let head = name.lowercased()
+            .components(separatedBy: CharacterSet(charactersIn: ",;("))[0]
+            .components(separatedBy: " with ")[0].components(separatedBy: " and ")[0].components(separatedBy: " plus ")[0]
+        let fixture = joined.contains("bath tub") || !words(joined).isDisjoint(with: Self.fixtureWords)
+        return fixture && words("\(head) \(category.lowercased())").isDisjoint(with: Self.accessoryWords)
     }
 
     private static let fixtureWords: Set<String> = ["toilet", "toilets", "bathtub", "bathtubs", "sink", "sinks", "washbasin", "washbasins",

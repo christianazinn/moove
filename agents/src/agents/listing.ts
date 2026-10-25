@@ -4,6 +4,7 @@ import { findUser, type Conn } from '../spacetime.js';
 import type { Approval, Item, Listing } from '../module_bindings/types.js';
 import { config } from '../config.js';
 import { logEvent } from '../events.js';
+import { isBuiltInFixture } from '../builtins.js';
 import { structuredCall } from '../integrations/anthropic.js';
 import { chooseEbay, dollars, simulatedEbay, type EbayPoster, type PublishResult } from '../integrations/ebay.js';
 import { buildDraftPrompt, clampPrice, finalizeCopy, LISTING_SYSTEM } from './listingPrompt.js';
@@ -75,7 +76,14 @@ const CLAIM_MAX_RETRIES = 5;
 // A listing only goes ahead while its item is still sorted to sell: the user (or a re-sort) can
 // move it to keep/donate at any point between drafting and posting.
 function stillSelling(conn: Conn, l: Pick<Listing, 'itemId'>): boolean {
-  return conn.db.item.id.find(l.itemId)?.disposition === 'sell';
+  const it = conn.db.item.id.find(l.itemId);
+  return it != null && listable(it);
+}
+
+// Sorted to sell, and not part of the building: a toilet or sink swiped to "sell" in Review
+// stays with the house (Rio's hotel bathroom had two of each listed).
+export function listable(it: Pick<Item, 'disposition' | 'name' | 'category'>): boolean {
+  return it.disposition === 'sell' && !isBuiltInFixture(it);
 }
 
 function hasListing(conn: Conn, itemId: bigint): boolean {
@@ -91,7 +99,7 @@ export function visionSettled(it: Pick<Item, 'detailsStatus' | 'photoUrls'>): bo
 
 function needsDraft(conn: Conn, it: Item): boolean {
   return (
-    it.disposition === 'sell' &&
+    listable(it) &&
     visionSettled(it) &&
     (it.pricingStatus === 'done' || it.pricingStatus === 'failed') &&
     !drafting.has(it.id) &&
