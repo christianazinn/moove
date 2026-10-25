@@ -39,12 +39,6 @@ struct ShoppingItemDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
                 ShoppingStatusChip(status: item.status).padding(.top, 10)
-                if !item.reason.isEmpty {
-                    Text(item.reason)
-                        .lede()
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 10)
-                }
 
                 ListHeader(title: "Checkout").padding(.top, Theme.Space.section)
                 ShoppingCheckoutView(checkout: checkout, searchProblem: snapshot.dealSearchProblem(for: item),
