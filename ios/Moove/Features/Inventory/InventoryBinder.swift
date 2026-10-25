@@ -67,7 +67,7 @@ struct BinderTabShape: Shape {
     }
 }
 
-/// One index tab: the hall's name and count; solid when it's the open page.
+/// One index tab: the hall's name; solid sage when it's the open page.
 struct BinderTabButton: View {
     let tab: BinderTab
     let selected: Bool
@@ -237,27 +237,17 @@ struct ShelfItemColumn: View {
     }
 }
 
-/// The voxel sprite, or the photo for items added by photo (they have no size, so no model).
+/// The item's voxel sprite.
 struct ShelfSprite: View {
     let item: Item
     let size: CGFloat
 
     var body: some View {
-        if item.origin == .photo, !item.photoUrls.isEmpty {
-            ItemPhoto(urls: item.photoUrls) { $0.resizable().scaledToFill() }
-                .background(Theme.surface2)
-                .frame(width: size * 0.62, height: size * 0.62)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.tag - 1))
-                .padding(4)
-                .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.Radius.tag + 1))
-                .mooveShadow(.paper)
-                .accessibilityHidden(true)
-        } else {
-            // The sprite's canvas has an inset; nudge it down so the model sits on the wood.
-            VoxelThumbnail(item, size: size, tile: false)
-                .offset(y: size * 0.1)
-                .mooveShadow(.paper)
-        }
+        // Voxel for every item (Lisa). The sprite's canvas has an inset; nudge it down so the
+        // model sits on the wood.
+        VoxelThumbnail(item, size: size, tile: false)
+            .offset(y: size * 0.1)
+            .mooveShadow(.paper)
     }
 }
 
@@ -281,11 +271,10 @@ struct BinderHoles: View {
 
 // MARK: Placard
 
-/// Tap an item: its placard (the model on a plinth, name, size, story, price + origin) and
+/// Tap an item: its placard (the model on a plinth, name, size, price) and
 /// what you can do with it.
 struct PlacardSheet: View {
     let info: ExhibitInfo
-    var onEditStory: () -> Void
     var onOpen: () -> Void
     var onRename: () -> Void
     var onDelete: () -> Void
@@ -297,7 +286,7 @@ struct PlacardSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ExhibitPlinth(item: info.item)
                         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
-                    ExhibitPlacard(info: info, onEditStory: onEditStory)
+                    ExhibitPlacard(info: info)
                         .padding(.horizontal, -12)
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 8) { actions }

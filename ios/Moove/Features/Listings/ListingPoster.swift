@@ -14,8 +14,8 @@ enum PosterInk {
     static func stamp(_ kind: PosterStamp.Kind) -> Color { color(palette.ink(for: kind)) }
 }
 
-/// One listing as a poster pinned to the wall: banner, the item's voxel model (or photo) as the
-/// art, a bold title, a giant price, the status as a rubber stamp, and blank tear-off tabs. Drafts are a pencil sketch, a failed post has a torn
+/// One listing as a plain poster pinned to the wall: the item's voxel model as the
+/// art, a bold title, a giant price and the status as a rubber stamp. Drafts are a pencil sketch, a failed post has a torn
 /// corner and its reason, a denied one is crossed out.
 struct ListingPoster: View {
     let listing: Listing
@@ -26,38 +26,17 @@ struct ListingPoster: View {
     @ScaledMetric(relativeTo: .body) private var artHeight: CGFloat = 112
 
     private var stamp: PosterStamp { PosterWall.stamp(for: listing.status, simulated: listing.simulated) }
-    /// A sketch is drawn on plain paper, whatever its style.
-    private var treatment: PosterTreatment { stamp.isSketch ? .paper : style.treatment }
-    private var look: PosterStyle { var s = style; s.treatment = treatment; return s }
 
     var body: some View {
-        let palette = PosterInk.palette
-        let ink = PosterInk.color(look.ink(paperInk: palette.paperInk))
-        let banner = look.banner(paper: palette.paper, paperInk: palette.paperInk)
+        // One plain look for every poster (Lisa): cream paper, dark ink; only the stamp has color.
+        let ink = PosterInk.paperInk
         let ax = dynamicTypeSize.isAccessibilitySize
         VStack(spacing: 0) {
-            Text(style.headline)
-                .monoText(11, weight: .heavy, maxScale: 1.6)
-                .tracking(1.6)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .foregroundStyle(PosterInk.color(banner.text))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                .background(stamp.isSketch ? Color.clear : PosterInk.color(banner.fill))
-                .overlay {
-                    if stamp.isSketch {
-                        Rectangle().strokeBorder(ink.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                    }
-                }
-                .padding([.horizontal, .top], 10)
-
             art
                 .frame(height: ax ? artHeight * 1.4 : artHeight)
                 .frame(maxWidth: .infinity)
-                .background(PosterInk.color(look.artBackground(paper: palette.paper)).opacity(treatment == .split ? 1 : 0))
-                .padding(.horizontal, treatment == .split ? 0 : 10)
-                .padding(.top, 8)
+                .padding(.horizontal, 10)
+                .padding(.top, 14)
                 .overlay {
                     if stamp.isBig { BigStamp(stamp: stamp) }
                 }
@@ -87,8 +66,6 @@ struct ListingPoster: View {
             .padding(.horizontal, 12)
             .padding(.top, 10)
             .padding(.bottom, 10)
-
-            TearOffTabs(ink: ink, count: ax ? 5 : 3)
         }
         .background(sheet)
         .overlay { if stamp.isCrossedOut { CrossOut().stroke(PosterInk.stamp(.denied).opacity(0.75), lineWidth: 3) } }
@@ -100,11 +77,10 @@ struct ListingPoster: View {
     }
 
     @ViewBuilder private var sheet: some View {
-        let palette = PosterInk.palette
         if stamp.isSketch {
             PosterInk.paper.opacity(0.8)
         } else {
-            PosterInk.color(look.sheet(paper: palette.paper))
+            PosterInk.paper
         }
     }
 
@@ -114,27 +90,19 @@ struct ListingPoster: View {
             .tracking(-0.6)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
-            .foregroundStyle(PosterInk.color(look.priceInk(paperInk: PosterInk.palette.paperInk)))
+            .foregroundStyle(PosterInk.paperInk)
             .amountText()
     }
 
     @ViewBuilder private var art: some View {
         Group {
-            if let item, item.origin == .photo, !item.photoUrls.isEmpty {
-                // Items added by photo have no size, so no voxel model: the photo, taped in.
-                ItemPhoto(urls: item.photoUrls) { $0.resizable().scaledToFill() }
-                    .background(PosterInk.paper.opacity(0.4))
-                    .frame(width: artHeight * 0.8, height: artHeight * 0.8)
-                    .clipShape(Rectangle())
-                    .padding(4)
-                    .background(PosterInk.paper)
-            } else if let item {
+            if let item {
                 VoxelThumbnail(item, size: artHeight, tile: false)
                     .mooveShadow(.lifted)
             } else {
                 Image(systemName: "tag")
                     .font(.system(size: artHeight * 0.36, weight: .light))
-                    .foregroundStyle(PosterInk.color(look.ink(paperInk: PosterInk.palette.paperInk)).opacity(0.6))
+                    .foregroundStyle(PosterInk.paperInk.opacity(0.6))
             }
         }
         .saturation(stamp.isSketch ? 0 : 1)
@@ -146,7 +114,7 @@ struct ListingPoster: View {
         switch style.fastener {
         case .pin:
             Circle()
-                .fill(RadialGradient(colors: [.white.opacity(0.7), PosterInk.color(style.swatch.accent)],
+                .fill(RadialGradient(colors: [.white.opacity(0.7), PosterInk.paperInk.opacity(0.55)],
                                      center: UnitPoint(x: 0.35, y: 0.3), startRadius: 0, endRadius: 8))
                 .frame(width: 15, height: 15)
                 .shadow(color: .black.opacity(0.35), radius: 1.5, x: 1, y: 2)
@@ -198,32 +166,6 @@ private struct SmallStamp: View {
             .background(PosterInk.paper.opacity(0.92))
             .overlay(Rectangle().strokeBorder(ink, style: StrokeStyle(lineWidth: 1.5, dash: stamp.isSketch ? [3, 2] : [])))
             .rotationEffect(.degrees(stamp.angleDegrees))
-    }
-}
-
-/// The strip of blank tear-off tabs at the bottom of a poster.
-private struct TearOffTabs: View {
-    let ink: Color
-    var count = 3
-    @ScaledMetric(relativeTo: .caption2) private var tabHeight: CGFloat = 26
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Line().stroke(ink.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [3, 3])).frame(height: 1)
-            HStack(spacing: 0) {
-                ForEach(0..<count, id: \.self) { i in
-                    if i > 0 {
-                        VLine().stroke(ink.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [3, 3])).frame(width: 1)
-                    }
-                    // Blank tabs (Lisa: no "eBay · simulated" text on them); the poster's own
-                    // SIMULATED tag still labels simulated listings.
-                    Color.clear
-                        .frame(maxWidth: .infinity)
-                        .frame(height: tabHeight)
-                }
-            }
-        }
-        .accessibilityHidden(true)
     }
 }
 
@@ -393,7 +335,7 @@ struct FlyerTotals: View {
     }
 }
 
-/// The top of a listing's page: its poster's banner, colors and stamp around a big model, so
+/// The top of a listing's page: its poster's paper and stamp around a big model, so
 /// opening a poster feels like holding it up close.
 struct ListingPosterHero: View {
     let listing: Listing
@@ -402,20 +344,8 @@ struct ListingPosterHero: View {
     @ScaledMetric(relativeTo: .body) private var artSize: CGFloat = 230
 
     var body: some View {
-        let palette = PosterInk.palette
         let stamp = PosterWall.stamp(for: listing.status, simulated: listing.simulated)
-        let banner = style.banner(paper: palette.paper, paperInk: palette.paperInk)
         VStack(spacing: 0) {
-            Text(style.headline)
-                .monoText(13, weight: .heavy, maxScale: 1.6)
-                .tracking(2.4)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .foregroundStyle(PosterInk.color(banner.text))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(PosterInk.color(banner.fill))
-                .padding([.horizontal, .top], 14)
             ZStack {
                 if let item {
                     VoxelThumbnail(item, size: min(artSize, 300), tile: false)
@@ -424,20 +354,19 @@ struct ListingPosterHero: View {
                         .opacity(stamp.isSketch ? 0.55 : 1)
                 } else {
                     Image(systemName: "tag").font(.system(size: 64, weight: .light))
-                        .foregroundStyle(PosterInk.color(style.ink(paperInk: palette.paperInk)).opacity(0.6))
+                        .foregroundStyle(PosterInk.paperInk.opacity(0.6))
                 }
                 if stamp.isBig { BigStamp(stamp: stamp).scaleEffect(1.3) }
             }
             .frame(height: min(artSize, 300) + 10)
             .frame(maxWidth: .infinity)
-            .background(PosterInk.color(style.artBackground(paper: palette.paper)).opacity(style.treatment == .split ? 1 : 0))
-            .padding(.top, style.treatment == .split ? 14 : 0)
+            .padding(.top, 14)
             .overlay(alignment: .bottomTrailing) {
                 if !stamp.isBig { SmallStamp(stamp: stamp).scaleEffect(1.25).padding(18) }
             }
         }
         .padding(.bottom, 8)
-        .background(PosterInk.color(style.sheet(paper: palette.paper)))
+        .background(PosterInk.paper)
         .overlay { if stamp.isCrossedOut { CrossOut().stroke(PosterInk.stamp(.denied).opacity(0.6), lineWidth: 3) } }
         .clipShape(PosterSheetShape(torn: stamp.isTorn))
         .compositingGroup()

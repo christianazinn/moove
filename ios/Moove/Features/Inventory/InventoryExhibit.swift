@@ -23,10 +23,7 @@ enum MuseumColors {
 struct ExhibitInfo {
     var item: Item
     var roomName: String
-    var story: String?
-    var autoStory: String
     var catalog: String
-    var acquired: String
     var price: String
     var priceTint: Color
     var tag: Item.OriginTag
@@ -73,28 +70,17 @@ struct ExhibitPlinth: View {
 
     @ViewBuilder
     private func model(size: CGFloat) -> some View {
-        // Items added by photo have no size, so no model: show the photo, framed.
-        if item.origin == .photo, !item.photoUrls.isEmpty {
-            ItemPhoto(urls: item.photoUrls) { $0.resizable().scaledToFill() }
-                .background(Theme.surface2)
-                .frame(width: size * 0.7, height: size * 0.7)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.tag))
-                .padding(5)
-                .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.Radius.tag + 2))
-                .mooveShadow(.paper)
-                .accessibilityHidden(true)
-        } else {
-            VoxelThumbnail(item, size: size, tile: false)
-                .mooveShadow(.lifted)
-        }
+        // Voxel for every item (Lisa); an item added by photo uses its kind's default size.
+        VoxelThumbnail(item, size: size, tile: false)
+            .mooveShadow(.lifted)
     }
 }
 
 /// The placard under an exhibit: name, a short size line, the story, and price + origin.
 struct ExhibitPlacard: View {
     let info: ExhibitInfo
-    var onEditStory: () -> Void
 
+    /// Name, size line and price; the origin tag is read by VoiceOver.
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(info.item.name)
@@ -102,85 +88,19 @@ struct ExhibitPlacard: View {
                 .foregroundStyle(Theme.text)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-            // Name, story, price: the catalog line, origin tag and the agents' note are read by
-            // VoiceOver only (Lisa: less on screen).
-            Button(action: onEditStory) {
-                Text(info.story.map { "“\($0)”" } ?? "Add a story")
-                    .serifType(13, italic: true)
-                    .foregroundStyle(info.story == nil ? Theme.muted : Theme.text)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(info.story.map { "Story: \($0)" } ?? "\(info.autoStory). Add a story")
-            .accessibilityHint(info.story == nil ? "Add your own story" : "Edit your story")
-            .accessibilityIdentifier("inventory.story.\(info.item.id)")
-            price
+            Text(info.catalog)
+                .catalogCaps()
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(info.price)
+                .monoText(13, weight: .bold, maxScale: 1.8)
+                .foregroundStyle(info.priceTint)
+                .lineLimit(1)
                 .padding(.top, 2)
-                .accessibilityLabel("\(info.price), \(info.catalog), \(info.tag.accessibilityLabel)")
+                .accessibilityLabel("\(info.price), \(info.tag.accessibilityLabel)")
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var price: some View {
-        Text(info.price).monoText(13, weight: .bold, maxScale: 1.8).foregroundStyle(info.priceTint).lineLimit(1)
-    }
-
-}
-
-/// Edit the one-line story on a placard ("Grandma's, 1974"). Kept on this device only.
-struct StoryEditor: View {
-    let item: Item
-    var current: String?
-    var onSave: (String) -> Void
-    @State private var text = ""
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 14) {
-                Text(item.name).serifType(20, weight: .semibold).foregroundStyle(Theme.text)
-                TextField("Grandma's, 1974", text: $text)
-                    .serifType(17, italic: true)
-                    .padding(12)
-                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.chip))
-                    .submitLabel(.done)
-                    .onSubmit(save)
-                    .accessibilityIdentifier("inventory.story.field")
-                Text("A year in it becomes the “Acquired” date. Saved on this phone.")
-                    .monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
-                if current != nil {
-                    Button("Remove story", role: .destructive) {
-                        onSave("")
-                        dismiss()
-                    }
-                    .buttonStyle(.pill(.danger, compact: true))
-                }
-                Spacer()
-            }
-            .padding(Theme.gutter)
-            .navigationTitle("Story")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save).accessibilityIdentifier("inventory.story.save")
-                }
-            }
-            .mooveScreen()
-        }
-        .presentationDetents([.medium])
-        .onAppear { text = current ?? "" }
-    }
-
-    private func save() {
-        onSave(String(text.prefix(ItemStories.maxLength)))
-        dismiss()
     }
 }
 

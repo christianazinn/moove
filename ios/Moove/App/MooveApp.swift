@@ -51,6 +51,8 @@ struct MooveApp: App {
         AuthGate()
             .environment(auth)
             .environment(store)
+            .overlay { LaunchSplash() }
             .followsAppAppearance()
+            .task { ScanHeroPreload.start(store) }
     }
 }
