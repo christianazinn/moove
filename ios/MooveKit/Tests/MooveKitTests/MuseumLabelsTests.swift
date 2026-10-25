@@ -31,8 +31,6 @@ import Testing
         let items = DemoFixtures.inventory(owner: "me").items
         let hall = Dictionary(uniqueKeysWithValues: items.map { ($0.name, FunctionHall.of($0)) })
         #expect(hall["Full size metal bed frame"] == .sleep)
-        #expect(hall["Nightstand"] == .sleep)
-        #expect(hall["Office chair"] == .workAndStudy)
         #expect(hall["Mesh office chair"] == .workAndStudy)
         #expect(hall["IKEA Micke desk"] == .workAndStudy)
         #expect(hall["Dell 27 inch monitor"] == .workAndStudy)
@@ -40,8 +38,10 @@ import Testing
         #expect(hall["Floor lamp"] == .lightAndDecor)
         #expect(hall["TCL 32 inch TV"] == .media)
         #expect(hall["Yamaha acoustic guitar"] == .music)
-        #expect(hall["Bean bag"] == .sitAndLounge)
         #expect(hall["Mini fridge"] == .kitchenAndDining)
+        // Not in the demo room any more (#332); still checked by name.
+        #expect(FunctionHall.of(item("Nightstand", "storage")) == .sleep)
+        #expect(FunctionHall.of(item("Bean bag", "sofa")) == .sitAndLounge)
     }
 
     @Test func chairsGoWhereTheyAreUsed() {
