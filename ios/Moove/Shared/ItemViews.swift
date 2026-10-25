@@ -60,7 +60,7 @@ struct ItemThumbnail: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size >= 120 ? Theme.radiusLarge : Theme.radiusMedium, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: size >= 120 ? Theme.Radius.panel : Theme.Radius.card, style: .continuous))
     }
 
     private var placeholder: some View {

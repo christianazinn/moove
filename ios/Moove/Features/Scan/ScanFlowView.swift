@@ -149,7 +149,7 @@ struct ScanFlowView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("RoomPlan didn't recognize any furniture", systemImage: "exclamationmark.magnifyingglass")
                             .blockTitle()
-                        Text("Add missed items by photo below, or scan again more slowly. The room is saved either way.")
+                        Text("Add missed items by photo below, or scan again more slowly.")
                             .sansText(14.5)
                             .foregroundStyle(Theme.muted)
                             .fixedSize(horizontal: false, vertical: true)
@@ -164,9 +164,6 @@ struct ScanFlowView: View {
                         Label("Add an item by photo", systemImage: "camera.badge.ellipsis").frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.pill(.outline))
-                    Text("For anything the scan missed.")
-                        .monoMeta()
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, 28)
                 .chromeRow()
@@ -196,7 +193,7 @@ struct ScanFlowView: View {
                                         Text("Named by you").monoMeta()
                                     } else if unnamed, !object.manual {
                                         // Unrecognized, or a size its label can't have (#182).
-                                        Text("Moove names it from its photo · or name it yourself").monoMeta()
+                                        Text("Moove names it from its photo").monoMeta()
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -349,7 +346,7 @@ struct ScanFlowView: View {
             }
         }
         .frame(width: 56, height: 56)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         .accessibilityHidden(true)
     }
 

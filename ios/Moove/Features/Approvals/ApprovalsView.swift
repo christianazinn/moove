@@ -22,8 +22,7 @@ struct ApprovalsSection: View {
         VStack(alignment: .leading, spacing: 0) {
             if pending.isEmpty && shared.isEmpty {
                 ListHeader(title: "Needs your OK", count: "0")
-                Label("Nothing waiting. Agents ask here before anything over your approval limit.",
-                      systemImage: "checkmark.circle")
+                Label("Nothing waiting", systemImage: "checkmark.circle")
                     .monoMeta()
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.vertical, 14)
@@ -53,7 +52,7 @@ struct ApprovalsSection: View {
             }
             if !shared.isEmpty {
                 // Shared rooms (#195, #200): any room member may decide a listing approval.
-                ListHeader(title: "Shared rooms", count: "\(shared.count)").padding(.top, pending.isEmpty ? 0 : 40)
+                ListHeader(title: "Shared rooms", count: "\(shared.count)").padding(.top, pending.isEmpty ? 0 : Theme.Space.section)
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(shared) { approval in
                         PendingApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
@@ -64,7 +63,7 @@ struct ApprovalsSection: View {
             }
             if !decided.isEmpty {
                 let shown = showAllDecided ? decided : Array(decided.prefix(Self.decidedPreview))
-                ListHeader(title: "Decided", count: "\(decided.count)").padding(.top, 40)
+                ListHeader(title: "Decided", count: "\(decided.count)").padding(.top, Theme.Space.section)
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(shown) { approval in
                         DecidedApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
@@ -72,13 +71,7 @@ struct ApprovalsSection: View {
                     }
                 }
                 if decided.count > Self.decidedPreview {
-                    Button(showAllDecided ? "Show fewer" : "Show all \(decided.count)") {
-                        withAnimation { showAllDecided.toggle() }
-                    }
-                    .monoText(13.5, weight: .bold)
-                    .foregroundStyle(Theme.accentStrong)
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("approvals.decided.showAll")
+                    ShowAllButton(count: decided.count, expanded: $showAllDecided, id: "approvals.decided")
                 }
             }
         }

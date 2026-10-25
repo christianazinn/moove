@@ -163,6 +163,6 @@ private struct SkippedObjectsNotice: View {
         }
         .tint(Theme.ochreInk)
         .padding(12)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 }

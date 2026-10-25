@@ -13,9 +13,10 @@ struct ListingDetailView: View {
         if let listing = store.snapshot.listings.first(where: { $0.id == listingId }) {
             content(listing, item: store.items.first { $0.id == listing.itemId })
         } else {
-            ContentUnavailableView("Listing removed", systemImage: "tag",
-                                   description: Text("This listing is no longer synced. Go back to see the rest."))
-                .foregroundStyle(Theme.muted)
+            EmptyState(title: "Listing removed", detail: "This listing is no longer synced.")
+                .padding(.horizontal, Theme.gutter)
+                .padding(.top, 32)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .mooveScreen()
         }
     }
@@ -193,7 +194,7 @@ struct ListingDetailView: View {
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.surface, in: UnevenRoundedRectangle(bottomTrailingRadius: Theme.radiusSmall, topTrailingRadius: Theme.radiusSmall))
+        .background(Theme.surface, in: UnevenRoundedRectangle(bottomTrailingRadius: Theme.Radius.chip, topTrailingRadius: Theme.Radius.chip))
         .overlay(alignment: .leading) { Rectangle().fill(tint).frame(width: 3) }
         .accessibilityElement(children: .combine)
     }

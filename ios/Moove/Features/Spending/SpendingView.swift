@@ -21,7 +21,7 @@ struct SpendingSection: View {
                     .padding(.top, 8)
                 receiptStack(receipts)
             } else {
-                Text("No payments yet. Agents pay to price an item (x402) or buy from your Shopping list (Visa).")
+                Text("No payments yet")
                     .monoMeta()
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.vertical, 14)

@@ -56,7 +56,7 @@ struct TruckView: View {
                 MonoTag(text: "\(Int((load.fill * 100).rounded()))% full", tone: Theme.accentStrong)
             }
             Text(load.truck.label).blockTitle()
-            Text("\(load.furnitureCount) furniture · \(load.boxCount) boxes · loaded cab first, open-first box by the door")
+            Text("\(load.furnitureCount) furniture · \(load.boxCount) boxes")
                 .monoMeta()
                 .fixedSize(horizontal: false, vertical: true)
             if let note {
@@ -75,7 +75,7 @@ struct TruckView: View {
         }
         .padding(16)
         .frame(maxWidth: 420, alignment: .leading)
-        .background(Theme.bg.opacity(0.92), in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+        .background(Theme.bg.opacity(0.92), in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         .padding(.horizontal, Theme.gutter)
         .padding(.top, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -113,7 +113,7 @@ struct TruckView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .frame(maxWidth: 420, alignment: .leading)
-                .background(Theme.bg.opacity(0.94), in: RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
+                .background(Theme.bg.opacity(0.94), in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
                 .accessibilityElement(children: .combine)
                 .transition(.opacity)
             }
