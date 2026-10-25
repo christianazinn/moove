@@ -15,14 +15,12 @@ struct MoveView: View {
     @Environment(MooveStore.self) private var store
     @AppStorage("moove.tab") private var tab = "move"
     @AppStorage("moove.pack.checked") private var checkedRaw = ""
-    @AppStorage("moove.pack.supplies") private var suppliesRaw = ""
 
     /// Shown when the save to `newHome` failed (e.g. live backend not ready), so the demo still works.
     @State private var unsaved: NewHomeChoice.Current?
     @State private var showPicker = false
     @State private var showImport = false
     @State private var showRooms = false
-    @State private var focusRoom: String?
     /// The layout on the stage, for Pieces.
     @State private var layout: LayoutOption?
     @State private var plan: PackingPlan?
@@ -43,14 +41,15 @@ struct MoveView: View {
     }
 
     var body: some View {
-        let input = PackInputs.current(store)
-        let furniture = NewHomeChoice.furniture(store)
+        let move = store.moveItems
+        let input = PackInputs.current(store, move: move)
+        let furniture = NewHomeChoice.furniture(move)
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     home(furniture: furniture, input: input).id(Self.homeAnchor)
                     gettingThere(input).id(Self.gettingThereAnchor)
-                    folds(furniture: furniture, proxy: proxy)
+                    folds(furniture: furniture)
                 }
                 .padding(.bottom, 40)
             }
@@ -92,7 +91,7 @@ struct MoveView: View {
                 .padding(.bottom, 28)
             movingFrom(input).padding(.bottom, 16)
             NewHomeStage(name: current.name, plan: current.plan, home: unsaved == nil ? store.newHome : nil,
-                         furniture: furniture, focusRoom: $focusRoom, layout: $layout)
+                         furniture: furniture, layout: $layout)
         } else {
             NewHomePickerContent(onPick: choose)
                 .padding(.horizontal, Theme.gutter)
@@ -143,37 +142,32 @@ struct MoveView: View {
 
     // MARK: 3. Folded
 
-    private func folds(furniture: Furniture, proxy: ScrollViewProxy) -> some View {
+    private func folds(furniture: Furniture) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if let plan, !plan.furniture.isEmpty {
-                FoldSection(title: "Furniture notes", count: "\(plan.furniture.count)", isOpen: binding(.furniture), id: "pack.furniture") {
+                FoldSection(title: "Furniture notes", isOpen: binding(.furniture), id: "pack.furniture") {
                     FurnitureNotesList(notes: plan.furniture)
                 }
             }
             if let plan, !plan.supplies.isEmpty {
-                FoldSection(title: "Supplies", count: SuppliesList.progress(plan.supplies, raw: suppliesRaw), isOpen: binding(.supplies), id: "pack.supplies") {
+                FoldSection(title: "Supplies", isOpen: binding(.supplies), id: "pack.supplies") {
                     SuppliesList(lines: plan.supplies)
                 }
             }
             if let plan, !plan.schedule.isEmpty {
-                FoldSection(title: "Schedule", count: "\(plan.schedule.count) steps", isOpen: binding(.schedule), id: "pack.schedule") {
+                FoldSection(title: "Schedule", isOpen: binding(.schedule), id: "pack.schedule") {
                     ScheduleList(steps: plan.schedule, boxes: plan.boxes) { openBox = $0 }
                 }
             }
-            if let current { pieces(current, furniture: furniture, proxy: proxy) }
+            if let current { pieces(current, furniture: furniture) }
         }
         .padding(.horizontal, Theme.gutter)
         .padding(.top, 48)
     }
 
-    private func pieces(_ current: NewHomeChoice.Current, furniture: Furniture, proxy: ScrollViewProxy) -> some View {
-        let count = PiecesList.rows(plan: current.plan, furniture: furniture, layout: layout).count
-        return FoldSection(title: "Pieces", count: "\(count)", tag: furniture.isDemo ? "Demo items" : nil,
-                           isOpen: binding(.pieces), id: "newHome.pieces") {
-            PiecesList(plan: current.plan, furniture: furniture, layout: layout, focusRoom: $focusRoom) { room in
-                focusRoom = room
-                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(NewHomeStage.stageID, anchor: .top) }
-            }
+    private func pieces(_ current: NewHomeChoice.Current, furniture: Furniture) -> some View {
+        FoldSection(title: "Pieces", tag: furniture.isDemo ? "Demo items" : nil, isOpen: binding(.pieces), id: "newHome.pieces") {
+            PiecesList(plan: current.plan, furniture: furniture, layout: layout)
         }
     }
 
@@ -234,10 +228,9 @@ struct MoveView: View {
     }
 }
 
-/// A section folded behind its header (title, count, chevron), closed until tapped.
+/// A section folded behind its header (title, chevron; no counts), closed until tapped.
 struct FoldSection<Content: View>: View {
     var title: String
-    var count: String
     var tag: String? = nil
     @Binding var isOpen: Bool
     /// Names the header button (`<id>.fold`).
@@ -266,7 +259,6 @@ struct FoldSection<Content: View>: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title).listHeading()
-            Text(count).monoText(13.5).foregroundStyle(Theme.muted)
             if let tag { MonoTag(text: tag) }
             Spacer(minLength: 8)
             Image(systemName: "chevron.down")

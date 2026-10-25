@@ -127,10 +127,8 @@ struct MovingBoxCard: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    private var meta: String {
-        let progress = sealed ? "sealed" : "\(packed)/\(box.contents.count) packed"
-        return "\(Int(box.weightKg.rounded())) kg · \(progress)"
-    }
+    /// One short line, no figures (the box's label already carries its number): sealed, or its size.
+    private var meta: String { sealed ? "Sealed" : box.size.label }
 
     private var accessibilityText: String {
         var parts = ["Box \(box.id)", box.title, box.roomName, box.size.label, "\(Int(box.weightKg.rounded())) kilograms"]

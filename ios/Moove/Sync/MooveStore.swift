@@ -104,8 +104,8 @@ final class MooveStore {
         UserDefaults.standard.set(MovingRooms.encode(movingRoomPicks), forKey: MovingRooms.defaultsKey)
     }
 
-    /// Kept items in visible rooms (before the room picks).
-    var keptItems: [Item] { visibleItems.filter { $0.disposition == .keep } }
+    /// Review's Keep pile in visible rooms (before the room picks).
+    var keptItems: [Item] { MoveItems.keep(visibleItems) }
 
     /// Every visible scanned room, newest first, with whether its kept items move.
     var movingChoices: [MovingRooms.Choice] {
@@ -115,6 +115,13 @@ final class MooveStore {
     /// What's actually moving: kept items from the picked rooms (by default the newest scan of
     /// each room name), re-scan duplicates dropped. New Home lays these out; Pack packs them.
     var movingItems: [Item] { MovingRooms.items(keptItems, choices: movingChoices) }
+
+    /// Everything Move shows (layout, fly-in, truck, boxes, delivered): Review's Keep pile and the
+    /// sentimental items still waiting on you, from the picked rooms, plus what was bought; the
+    /// demo's set when there's nothing yet (MooveKit `MoveItems`).
+    var moveItems: MoveItems {
+        MoveItems.of(visibleSnapshot, overrides: movingRoomPicks, demo: DemoFixtures.demo(owner: "demo"))
+    }
 
     /// The picked rooms' items that pass `include` (Pack also packs undecided sentimental ones),
     /// with the same room picks and re-scan dedupe as `movingItems`.

@@ -12,22 +12,15 @@ enum NewHomeChoice {
         var plan: FloorPlan
     }
 
-    /// Kept items from the rooms picked in "Moving from" (by default the newest scan of each
-    /// room name, so re-scans don't bring a second bed) plus bought ones (#15); the demo's if
-    /// nothing is kept or bought yet.
-    @MainActor static func furniture(_ store: MooveStore) -> Furniture {
+    /// Review's Keep pile from the rooms picked in "Moving from" (by default the newest scan of
+    /// each room name, so re-scans don't bring a second bed) plus bought ones (#15); the demo's if
+    /// there's nothing yet. The same set as the truck and boxes (`MooveStore.moveItems`).
+    static func furniture(_ move: MoveItems) -> Furniture {
         // Stored colors (`set_item_colors`); demo bedroom items without any use the demo room's.
         func layoutItem(_ item: Item) -> LayoutItem {
             item.colors == nil && DemoFixtures.isDemoItem(item) ? LayoutItem(item, colors: DemoFixtures.scanColors()) : LayoutItem(item)
         }
-        let bought = store.snapshot.boughtLayoutItems
-        if !store.keptItems.isEmpty || !bought.isEmpty {
-            let moving = store.movingItems
-            return Furniture(items: moving.map(layoutItem) + bought, isDemo: false, sources: moving)
-        }
-        let demo = DemoFixtures.demo(owner: "demo")
-        let demoKept = demo.items.filter { $0.disposition == .keep }
-        return Furniture(items: demoKept.map(layoutItem) + demo.boughtLayoutItems, isDemo: true, sources: demoKept)
+        return Furniture(items: move.kept.map(layoutItem) + move.boughtLayout, isDemo: move.isDemo, sources: move.kept)
     }
 }
 
@@ -147,10 +140,6 @@ struct NewHomeHeader: View {
         VStack(alignment: .leading, spacing: 0) {
             MooveWordmark(height: 32).padding(.bottom, 28)
             PageHeader(title: current.name)
-            Text("\(current.plan.rooms.count) rooms · \(Int(current.plan.totalAreaM2.rounded())) m²")
-                .monoMeta()
-                .padding(.top, 10)
-                .accessibilityLabel("\(current.plan.rooms.count) rooms, \(Spoken.area(current.plan.totalAreaM2))")
             HStack(spacing: 6) {
                 MonoTag(text: sourceLabel)
                 if !saved { MonoTag(text: "Not saved", tone: Theme.ochreInk) }
@@ -189,7 +178,7 @@ struct NewHomeHeader: View {
 /// The dollhouse: the 3D home large on the page with the fly-in, the room chips, layout controls
 /// and room shots. Solves the layouts off the main thread (cached in `LayoutCache`) and reports
 /// the shown layout through `layout`, so Move's Pieces list (further down) shows the same one.
-/// Tapping a room chip flies the camera to that room.
+/// No room chips (Lisa: too many buttons): drag to orbit, pinch to zoom.
 struct NewHomeStage: View {
     @Environment(MooveStore.self) private var store
     var name: String
@@ -197,7 +186,6 @@ struct NewHomeStage: View {
     /// The saved `newHome` row; nil while the plan is only local.
     var home: NewHome?
     var furniture: Furniture
-    @Binding var focusRoom: String?
     /// The layout shown in 3D once the fly-in is ready, nil before.
     @Binding var layout: LayoutOption?
 
@@ -213,27 +201,22 @@ struct NewHomeStage: View {
     /// True while the layouts are being solved off the main thread.
     @State private var arranging = false
 
-    /// Scroll target for "show this room" (Move's Pieces rows).
-    static let stageID = "newhome.stage"
-
     private var saved: Bool { home != nil }
     private var option: LayoutOption? { options.first { $0.style == style } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            stage.id(Self.stageID)
-            roomStrip.padding(.top, 10)
+            stage
             if !furniture.items.isEmpty {
                 controls
                     .padding(.horizontal, Theme.gutter)
-                    .padding(.top, 36)
+                    .padding(.top, 28)
             }
             if !shownPlacements.isEmpty {
                 RoomShotsSection(homeName: name, plan: plan, items: furniture.items, placements: shownPlacements, ready: ready)
                     .padding(.top, 44)
             }
         }
-        .onChange(of: plan) { focusRoom = nil }
         .onChange(of: shownOption, initial: true) { _, new in layout = new }
         // Re-runs (and cancels the previous run) whenever the plan or the items change.
         .task(id: SolveKey(plan: plan, items: furniture.items)) { await solve() }
@@ -290,14 +273,14 @@ struct NewHomeStage: View {
 
     private var stage: some View {
         VStack(alignment: .leading, spacing: 0) {
-            FloorPlan3DView(plan: plan, focusRoom: focusRoom, items: furniture.items, placements: shownPlacements, flyInToken: flyInToken,
+            FloorPlan3DView(plan: plan, focusRoom: nil, items: furniture.items, placements: shownPlacements, flyInToken: flyInToken,
                             flyInStarts: starts)
                 .frame(height: 420)
                 .overlay { if arranging { arrangingNotice } }
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
                 .accessibilityElement()
                 .accessibilityLabel(arranging ? "Arranging your home" : stageLabel)
-                .accessibilityHint("Drag to orbit, pinch to zoom, double-tap to reset. Pick a room below to zoom in.")
+                .accessibilityHint("Drag to orbit, pinch to zoom, double-tap to reset.")
             stageCaption
         }
         .padding(.horizontal, Theme.gutter)
@@ -306,15 +289,11 @@ struct NewHomeStage: View {
     private var stageCaption: some View {
         HStack(spacing: 10) {
             Circle().fill(Theme.accent).frame(width: 8, height: 8).accessibilityHidden(true)
-            Text(focusRoom.map { "Showing \($0)" } ?? (starts == nil ? "Drag to orbit · pinch to zoom" : "Flying in from your scanned room · drag to orbit"))
+            Text(starts == nil ? "Drag to orbit · pinch to zoom" : "Flying in from your scanned room · drag to orbit")
                 .monoText(13)
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
-            if focusRoom != nil {
-                Button("Whole home") { focusRoom = nil }
-                    .buttonStyle(.pill(.text, compact: true))
-            }
         }
         .frame(minHeight: 44)
         .padding(.top, 6)
@@ -333,37 +312,17 @@ struct NewHomeStage: View {
         .transition(.opacity)
     }
 
-    /// "3D view of Maple House: 6 rooms, 14 pieces placed, showing Bedroom".
+    /// "3D view of Maple House: 6 rooms, 14 pieces placed".
     private var stageLabel: String {
         let n = shownPlacements.count
-        var text = "3D view of \(name): \(plan.rooms.count) rooms, \(n) piece\(n == 1 ? "" : "s") placed"
-        if let focusRoom { text += ", showing \(focusRoom)" }
-        return text
-    }
-
-    private var roomStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ChoiceChip(title: "Whole home", selected: focusRoom == nil) { focusRoom = nil }
-                ForEach(plan.rooms.filter { $0.kind != .hallway }) { room in
-                    ChoiceChip(
-                        title: room.name,
-                        meta: String(format: "%.1f×%.1f", room.widthM, room.depthM),
-                        selected: focusRoom == room.name
-                    ) { focusRoom = room.name }
-                    .accessibilityLabel("\(room.name), \(Spoken.size(room.widthM, room.depthM))")
-                }
-            }
-            .padding(.horizontal, Theme.gutter)
-        }
+        return "3D view of \(name): \(plan.rooms.count) rooms, \(n) piece\(n == 1 ? "" : "s") placed"
     }
 
     // MARK: Layout
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // The Pieces list is folded at the bottom of Move, so the placed count stays here.
-            ListHeader(title: "Layout", count: option.map { "\($0.placements.count) placed" })
+            ListHeader(title: "Layout")
             ScrollView(.horizontal, showsIndicators: false) {
                 PillPicker(options: LayoutSolver.Style.allCases, selection: $style) { $0.label }
             }
@@ -422,7 +381,7 @@ enum Spoken {
             name: DemoHouse.name, plan: DemoHouse.floorPlan, home: nil,
             furniture: Furniture(items: DemoFixtures.inventory(owner: "demo").items.map(LayoutItem.init), isDemo: true,
                                  sources: DemoFixtures.inventory(owner: "demo").items),
-            focusRoom: .constant(nil), layout: .constant(nil)
+            layout: .constant(nil)
         )
     }
     .mooveScreen()

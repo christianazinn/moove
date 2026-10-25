@@ -2,14 +2,12 @@ import SwiftUI
 import MooveKit
 
 /// The placed pieces of the shown layout, in plan room order, then the ones that didn't fit.
-/// Folded at the bottom of Move; tapping a placed piece shows its room in 3D (`onShowRoom`).
+/// Folded at the bottom of Move. Rows say where each piece goes; they aren't buttons.
 struct PiecesList: View {
     var plan: FloorPlan
     var furniture: Furniture
     /// The layout on the stage (nil while it's arranging).
     var layout: LayoutOption?
-    @Binding var focusRoom: String?
-    var onShowRoom: (String) -> Void
 
     struct Row: Identifiable {
         var item: LayoutItem
@@ -59,28 +57,19 @@ struct PiecesList: View {
     }
 
     private func placedRow(_ row: Row, room: String) -> some View {
-        Button { onShowRoom(room) } label: {
-            LedgerRow(title: row.item.name, meta: [Self.size(row.item), row.onBed.map { "on the \($0)" }, room].compactMap { $0 }.joined(separator: " · "), chevron: true) {
-                VoxelThumbnail(row.item)
-            } trailing: {
-                if focusRoom == room { MonoTag(text: "In view", tone: Theme.accentStrong) }
-            }
+        LedgerRow(title: row.item.name, meta: [row.onBed.map { "on the \($0)" }, room].compactMap { $0 }.joined(separator: " · ")) {
+            VoxelThumbnail(row.item)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(row.item.name), \(Spoken.size(row.item.widthM, row.item.depthM)), \(room)\(focusRoom == room ? ", in view" : "")")
-        .accessibilityHint("Shows \(room) in 3D")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(row.item.name)\(row.onBed.map { ", on the \($0)" } ?? ""), \(room)")
     }
 
     private func unplacedRow(_ row: Row) -> some View {
-        LedgerRow(title: row.item.name, meta: Self.size(row.item), value: row.stored ? "Storage" : "Didn't fit",
+        LedgerRow(title: row.item.name, value: row.stored ? "Storage" : "Didn't fit",
                   valueTint: row.stored ? Theme.muted : Theme.danger) {
             VoxelThumbnail(row.item)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(row.item.name), \(Spoken.size(row.item.widthM, row.item.depthM)), \(row.stored ? "extra bed, to storage" : "didn't fit")")
-    }
-
-    static func size(_ item: LayoutItem) -> String {
-        String(format: "%.1f × %.1f m", item.widthM, item.depthM)
+        .accessibilityLabel("\(row.item.name), \(row.stored ? "extra bed, to storage" : "didn't fit")")
     }
 }

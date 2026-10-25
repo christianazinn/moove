@@ -18,22 +18,21 @@ struct PackInputs: Equatable {
     /// The "Moving from" rooms (empty for the demo items).
     var choices: [MovingRooms.Choice] = []
 
-    /// Kept items plus undecided sentimental ones (those may well come along) from the rooms that
-    /// are moving (the "Moving from" picks, `MooveStore.movingItems`: hidden rooms and older
-    /// re-scans stay out), plus what was bought for the new home (purchased only, not
-    /// still-shopping, shown as "Delivered"), with destination rooms from the newest saved layout
-    /// of the user's new home. Demo fixtures until anything is kept.
-    @MainActor static func current(_ store: MooveStore) -> PackInputs {
+    /// Move's one item set (`MooveStore.moveItems`, MooveKit `MoveItems`): Review's Keep pile plus
+    /// the sentimental things still waiting on you, from the rooms that are moving (hidden rooms
+    /// and older re-scans stay out), plus what was bought (shown as "Delivered"), with destination
+    /// rooms from the newest saved layout of the user's new home. The demo's set until there's
+    /// anything of the user's, the same one the layout uses.
+    @MainActor static func current(_ store: MooveStore, move: MoveItems) -> PackInputs {
         let snap = store.snapshot
-        func packable(_ item: Item) -> Bool { item.disposition == .keep || (item.disposition == .undecided && item.maybeSentimental) }
-        let demo = !store.visibleItems.contains(where: packable)
-        let items = demo ? DemoFixtures.inventory(owner: snap.me ?? "demo").items.filter(packable) : store.movingItems(where: packable)
+        let demo = move.isDemo
+        let items = move.packed
         var rooms: [UInt64: String] = [:]
         if let home = snap.myNewHome,
            let layout = snap.layouts(for: home.id).max(by: { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }) {
             for p in layout.placements { rooms[p.itemId] = p.room }
         }
-        return PackInputs(items: items, rooms: rooms, bought: snap.boughtPieces, demo: demo, choices: demo ? [] : store.movingChoices)
+        return PackInputs(items: items, rooms: rooms, bought: move.bought, demo: demo, choices: demo ? [] : store.movingChoices)
     }
 
     var itemsById: [UInt64: Item] { Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
@@ -86,7 +85,10 @@ struct TruckCard: View {
         VStack(alignment: .leading, spacing: 18) {
             if let load { inlineTruck(load) }
             TruckStats(estimate: plan.truck)
-            if let note = load?.sizeNote(planned: plan.truck.truck) { Text(note).monoMeta().foregroundStyle(Theme.ochreInk) }
+            // One line: the size note when the 3D truck is a size up, else the caveat.
+            Text(load?.sizeNote(planned: plan.truck.truck) ?? "Rough estimate with \(plan.truck.movers) movers. Ask for a quote.")
+                .monoMeta()
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
@@ -116,50 +118,22 @@ struct TruckCard: View {
     }
 }
 
-/// Truck, load, movers and cost, then how full the truck is.
+/// Which truck and what it costs, in two figures (Lisa: fewer numbers); the crew is in the
+/// line under them.
 private struct TruckStats: View {
     var estimate: TruckEstimate
     private var t: TruckEstimate { estimate }
 
-    private var fill: Double {
-        let capacity = Double(t.truck.capacityM3) * Double(max(t.trucks, 1))
-        return capacity > 0 ? min(t.loadM3 / capacity, 1) : 0
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 18) {
-                GridRow {
-                    StatFigure(label: "Truck", value: t.trucks > 1 ? "\(t.trucks) × \(t.truck.label)" : t.truck.label)
-                        .accessibilityLabel("Truck, \(t.truck.label)\(t.trucks > 1 ? ", \(t.trucks) of them" : "")")
-                    StatFigure(label: "Load", value: "\(t.loadM3.formatted(.number.precision(.fractionLength(1)))) m³")
-                        .accessibilityLabel("Load, \(Spoken.volume(t.loadM3))")
-                }
-                GridRow {
-                    StatFigure(label: "Movers", value: "\(t.movers) × \(hours) h")
-                        .accessibilityLabel("\(t.movers) movers, \(hours) hours each")
-                    StatFigure(label: "Cost", value: "\(t.costLowCents.usd)–\(t.costHighCents.usd)", tint: Theme.accentStrong)
-                        .accessibilityLabel("Cost, \(t.costLowCents.usd) to \(t.costHighCents.usd)")
-                }
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Theme.line)
-                        Capsule().fill(Theme.accent).frame(width: max(6, geo.size.width * fill))
-                    }
-                }
-                .frame(height: 6)
-                .accessibilityHidden(true)
-                // Box and furniture counts are on their own sections below.
-                Text("\(Int((fill * 100).rounded()))% full · rough estimate, ask movers for a quote")
-                    .monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        HStack(alignment: .top, spacing: 16) {
+            StatFigure(label: "Truck", value: t.trucks > 1 ? "\(t.trucks) × \(t.truck.label)" : t.truck.label)
+                .accessibilityLabel("Truck, \(t.truck.label)\(t.trucks > 1 ? ", \(t.trucks) of them" : "")")
+                .frame(maxWidth: .infinity, alignment: .leading)
+            StatFigure(label: "Cost", value: "\(t.costLowCents.usd)–\(t.costHighCents.usd)", tint: Theme.accentStrong)
+                .accessibilityLabel("Cost, \(t.costLowCents.usd) to \(t.costHighCents.usd), a rough estimate")
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
-
-    private var hours: String { t.moverHours.formatted(.number.precision(.fractionLength(0...1))) }
 }
 
 // MARK: - Boxes
@@ -199,7 +173,7 @@ struct BoxesSection: View {
     var body: some View {
         let set = PackChecks.decode(checkedRaw)
         VStack(alignment: .leading, spacing: 0) {
-            header(set)
+            header
             ForEach(Self.groups(boxes)) { group in
                 VStack(alignment: .leading, spacing: 14) {
                     groupHeader(group)
@@ -210,21 +184,12 @@ struct BoxesSection: View {
         }
     }
 
-    private func header(_ set: Set<String>) -> some View {
-        let sealedCount = boxes.filter { PackSeal.isSealed($0, in: set) }.count
-        let estimateCount = boxes.filter { $0.estimatedOnly && !$0.openFirst && !$0.keepWithYou }.count
-        return VStack(alignment: .leading, spacing: 0) {
-            ListHeader(title: "Boxes", count: "\(boxes.count)") {
-                Text("\(sealedCount) sealed").monoMeta()
-            }
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ListHeader(title: "Boxes", count: "\(boxes.count)")
             if boxes.isEmpty {
                 EmptyState(title: "No boxes needed", detail: "It's all furniture.").padding(.top, 14)
             } else {
-                if estimateCount > 0 {
-                    Text("\(estimateCount) of everyday stuff (an estimate)")
-                        .monoMeta()
-                        .fixedSize(horizontal: false, vertical: true)
-                }
                 PrintLabelsMenu(boxes: boxes) {
                     Label("Print labels", systemImage: "printer")
                 }
@@ -237,7 +202,7 @@ struct BoxesSection: View {
     }
 
     private func groupHeader(_ group: BoxGroup) -> some View {
-        ListHeader(title: group.title, count: "\(group.boxes.count)") {
+        ListHeader(title: group.title) {
             if !group.isFirst {
                 RoundedRectangle(cornerRadius: Theme.Radius.tag)
                     .fill(BoxPalette.tape(for: group.title))
@@ -268,7 +233,7 @@ struct DeliveredSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // The header and each row's "Bought" tag say it: it ships there, nothing to pack.
-            ListHeader(title: "Delivered to your new home", count: "\(pieces.count)")
+            ListHeader(title: "Delivered to your new home")
             CollapsedList(data: pieces, id: "pack.delivered") { piece in
                 LedgerRow(
                     title: piece.title,
@@ -365,12 +330,6 @@ struct FurnitureNotesList: View {
 struct SuppliesList: View {
     var lines: [SupplyLine]
     @AppStorage("moove.pack.supplies") private var suppliesRaw = ""
-
-    /// "3 of 7", for the fold's header.
-    static func progress(_ lines: [SupplyLine], raw: String) -> String {
-        let done = PackChecks.decode(raw)
-        return "\(lines.filter { done.contains($0.name) }.count) of \(lines.count)"
-    }
 
     var body: some View {
         let done = PackChecks.decode(suppliesRaw)
