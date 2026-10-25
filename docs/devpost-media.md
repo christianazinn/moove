@@ -41,7 +41,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 
 - [ ] Offline demo selected, then **"Continue without an account"** on the login screen.
 - [ ] **Relaunch** (force-quit and reopen) to reset the fixture.
-- [ ] Do Not Disturb on, light mode (to match the CI shots).
+- [ ] Do Not Disturb on, and Settings > **Appearance** > **Light** (to match the CI shots; the app's own setting overrides the system one, #352). Each tab now has its own color wash, so the shots differ in tint by tab.
 - [ ] Simulator works for all three: `xcrun simctl io booted screenshot ~/Desktop/moove-02.png`, or `xcrun simctl io booted recordVideo ~/Desktop/flyin.mov` (Ctrl-C to stop) for a GIF.
 
 ## The shots

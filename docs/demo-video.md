@@ -104,7 +104,7 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 
 ## Recording tips
 - Record each shot separately, with a second of stillness at each end. Cut in the edit.
-- Use the built-in iOS/iPadOS screen recording (Control Center) and export the edit at 60 fps so the dollhouse turn and fly-in stay smooth. Same orientation and appearance (light/dark) on every shot.
+- Use the built-in iOS/iPadOS screen recording (Control Center) and export the edit at 60 fps so the dollhouse turn and fly-in stay smooth. Same orientation and appearance on every shot: set it in the app, Settings > **Appearance** (System / Light / Dark), on every device.
 - Record the VO separately, after the cut, reading the lines above. Trim screen time to fit, not the words.
 - Shot 4: start both devices' screen recordings, then clap or tap at the same time to sync the split screen.
 - Move slowly while scanning (RoomPlan needs it), and let the fly-in finish before cutting. Turn the dollhouse slowly in shot 1 so the wall swap reads.
