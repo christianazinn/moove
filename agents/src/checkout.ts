@@ -45,21 +45,23 @@ export function visaSink(conn: Conn): VisaSink {
 
 let checkout: VisaCheckout | undefined;
 
-// One shared checkout per worker process, so the card budget spans every buy-agent run.
+// One shared checkout per worker process. The card budget is per agent and user, across every buy-agent run.
 export function visaCheckout(conn: Conn): VisaCheckout {
   if (!checkout) {
     checkout = createVisaCheckout(visaSink(conn));
-    // The card budget is per process; count the last 24h of pending/settled card payments so a
-    // restart doesn't hand the agents a fresh cap. Simulated rows never count, so rehearsals don't use
-    // up the demo budget (same idea as x402's seeding). VISA_SEED_BUDGETS=0 turns this off.
+    // The card budget is per process; count each user's last 24h of pending/settled card payments so a
+    // restart doesn't hand the agents a fresh cap. Sandbox rows (simulated=false) count, since they are the
+    // card rail here; simulated rows never do (same idea as x402's seeding). VISA_SEED_BUDGETS=0 turns this off.
     const since = Date.now() - 24 * 3600 * 1000;
-    const prior = new Map<string, bigint>();
+    const prior = new Map<string, { agent: string; owner: Identity; cents: bigint }>();
     for (const p of process.env.VISA_SEED_BUDGETS === '0' ? [] : conn.db.payment.iter()) {
       if (p.rail === 'visa' && !p.simulated && (p.status === 'pending' || p.status === 'settled') && p.createdAt.toMillis() >= since) {
-        prior.set(p.agent, (prior.get(p.agent) ?? 0n) + p.amountUsdMicros / 10_000n);
+        const key = `${p.agent}:${p.owner.toHexString()}`;
+        const cur = prior.get(key) ?? { agent: p.agent, owner: p.owner, cents: 0n };
+        prior.set(key, { ...cur, cents: cur.cents + p.amountUsdMicros / 10_000n });
       }
     }
-    for (const [agent, cents] of prior) checkout.seedSpent(agent, cents);
+    for (const { agent, owner, cents } of prior.values()) checkout.seedSpent(agent, owner, cents);
     console.log(`[visa] checkout ready (${checkout.simulated ? 'SIMULATED' : checkout.provider})`);
   }
   return checkout;

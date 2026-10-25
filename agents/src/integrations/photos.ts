@@ -1,6 +1,7 @@
 // Photo loading for the vision agent without SSRF (#44). Any room member can put a URL on an item,
 // and the worker would fetch it from its own host, so loadPhoto never fetches arbitrary URLs:
-// - our own uploads (PUBLIC_UPLOAD_BASE_URL + /files/<name>) are read straight from UPLOAD_DIR on disk;
+// - our own uploads (PUBLIC_UPLOAD_BASE_URL + /files/<name>, or https://<any>.trycloudflare.com/files/<name>
+//   from an earlier quick tunnel) are read straight from UPLOAD_DIR on disk;
 // - anything else must be https, on a host in ALLOWED_PHOTO_HOSTS (default empty), and resolve only to
 //   public addresses. Redirects are refused, so an allowed host can't bounce us to a private one.
 // Known gap: DNS can change between our lookup and fetch's own (rebinding). The allowlist is what
@@ -79,6 +80,12 @@ export function parseAllowedHosts(raw: string): string[] {
     .filter(Boolean);
 }
 
+// An upload URL from a Cloudflare quick tunnel (tunnel.sh), which always proxies the worker's root.
+function isQuickTunnelUpload(u: URL): boolean {
+  const host = u.hostname.toLowerCase();
+  return u.protocol === 'https:' && u.port === '' && host.endsWith('.trycloudflare.com') && u.pathname.startsWith('/files/');
+}
+
 // Decides where a photo URL may be read from, without touching the network or disk.
 export function resolvePhotoSource(raw: string, policy: PhotoPolicy): PhotoSource {
   let u: URL;
@@ -88,10 +95,14 @@ export function resolvePhotoSource(raw: string, policy: PhotoPolicy): PhotoSourc
     throw new PhotoUrlError('not a valid URL');
   }
 
-  // Our own upload server: read the file directly instead of fetching it.
+  // Our own upload server: read the file directly instead of fetching it. That includes uploads made
+  // under an earlier quick-tunnel URL: tunnel.sh gets a new *.trycloudflare.com host after a restart,
+  // but the stored URLs keep the old one, and the file is still in UPLOAD_DIR.
   const base = new URL(policy.publicUploadBaseUrl);
-  const prefix = `${base.pathname.replace(/\/+$/, '')}/files/`;
-  if (u.origin === base.origin && u.pathname.startsWith(prefix)) {
+  const ownPrefix = `${base.pathname.replace(/\/+$/, '')}/files/`;
+  const prefix =
+    u.origin === base.origin && u.pathname.startsWith(ownPrefix) ? ownPrefix : isQuickTunnelUpload(u) ? '/files/' : undefined;
+  if (prefix) {
     const name = u.pathname.slice(prefix.length);
     if (u.search || u.hash || u.username || u.password || !UPLOAD_NAME.test(name)) {
       throw new PhotoUrlError('not a file name the upload server issues');

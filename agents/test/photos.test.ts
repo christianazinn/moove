@@ -147,6 +147,27 @@ test("remote fetches refuse redirects and check DNS first", async () => {
   );
 });
 
+test("uploads stored under an earlier quick-tunnel URL are still read from disk", async () => {
+  const p = { ...policy, publicUploadBaseUrl: "https://new-tunnel-name.trycloudflare.com" };
+  const old = `https://old-tunnel-name.trycloudflare.com/files/${NAME}`;
+  assert.deepEqual(resolvePhotoSource(old, p), { kind: "local", file: path.join(uploadDir, NAME), ext: "jpg" });
+  const img = await loadPhoto(old, policy, { fetch: noFetch });
+  assert.equal(Buffer.from(img.data, "base64").toString(), "jpeg-bytes");
+  // Only names the upload server issues, over https on the default port, under /files/.
+  for (const url of [
+    "https://old-tunnel-name.trycloudflare.com/files/%2e%2e%2f.env.local",
+    "https://old-tunnel-name.trycloudflare.com/files/listing-1.html",
+    `https://old-tunnel-name.trycloudflare.com/files/${NAME}?x=1`,
+  ]) {
+    assert.throws(() => resolvePhotoSource(url, p), PhotoUrlError, url);
+  }
+  assert.throws(() => resolvePhotoSource(`http://old-tunnel-name.trycloudflare.com/files/${NAME}`, p), /only https/);
+  assert.throws(() => resolvePhotoSource(`https://old-tunnel-name.trycloudflare.com:8443/files/${NAME}`, p), /ALLOWED_PHOTO_HOSTS/);
+  assert.throws(() => resolvePhotoSource("https://old-tunnel-name.trycloudflare.com/a.jpg", p), /ALLOWED_PHOTO_HOSTS/);
+  assert.throws(() => resolvePhotoSource(`https://trycloudflare.com.evil.example/files/${NAME}`, p), /ALLOWED_PHOTO_HOSTS/);
+  assert.throws(() => resolvePhotoSource(`https://evil.example.net/files/${NAME}`, p), /ALLOWED_PHOTO_HOSTS/);
+});
+
 test("the simulated auto-approver is gone (#42): without Auth0 there is no gateway", () => {
   const { warn } = console;
   console.warn = () => {};

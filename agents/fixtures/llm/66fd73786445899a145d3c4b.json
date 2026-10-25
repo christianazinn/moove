@@ -1,0 +1,9 @@
+{
+  "model": "claude-haiku-5-5",
+  "output": {
+    "keep": [
+      7
+    ],
+    "reason": "Dropped non-table items (bag, print ad, lamps, vanity tray, jacket, vintage stool, dough box as vintage/antique); only listing 7 is a plain wood side table of the same kind, though its dimensions are unverified."
+  }
+}

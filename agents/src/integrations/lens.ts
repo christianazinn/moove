@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { isIP } from 'node:net';
 import path from 'node:path';
 import { config } from '../config.js';
-import { reserveApifySpend } from './apify.js';
+import { apifyDownReason, isApifyOutOfCredit, markApifyDown, releaseApifySpend, reserveApifySpend } from './apify.js';
 import { isBlockedAddress } from './photos.js';
 
 export const LENS_ACTOR = 'zen-studio~google-lens-visual-search';
@@ -22,7 +22,17 @@ export interface LensMatch {
   price: string;
 }
 
-export type LensResult = { matches: LensMatch[]; replayed: boolean; costUsd: number; refused?: boolean };
+/** `refused`: no search ran (daily cap, or Apify out of credit); `reason` says which. */
+export type LensResult = { matches: LensMatch[]; replayed: boolean; costUsd: number; refused?: boolean; reason?: string };
+
+// After a 402/403 (out of credit, or the actor refused us), skip Lens for a while instead of trying
+// (and erroring) once per item.
+const LENS_DOWN_MS = 10 * 60_000;
+let lensDownUntil = 0;
+/** Tests: forget an earlier 402/403. */
+export function clearLensDown(): void {
+  lensDownUntil = 0;
+}
 
 type Fetch = typeof fetch;
 
@@ -73,7 +83,9 @@ export async function lensSearch(
   if (!token) return { matches: [], replayed: false, costUsd: 0 };
   const max = opts.max ?? config.lens.maxMatches;
   const maxUsd = opts.maxUsd ?? config.lens.maxUsdPerSearch;
-  if (!reserveApifySpend(maxUsd)) return { matches: [], replayed: false, costUsd: 0, refused: true };
+  const unavailable = { matches: [], replayed: false, costUsd: 0, refused: true, reason: 'Apify unavailable (out of credit)' };
+  if (lensDownUntil > Date.now() || apifyDownReason()) return unavailable;
+  if (!reserveApifySpend(maxUsd)) return { matches: [], replayed: false, costUsd: 0, refused: true, reason: 'Apify daily spend cap reached' };
   const url = new URL(`https://api.apify.com/v2/acts/${LENS_ACTOR}/run-sync-get-dataset-items`);
   url.searchParams.set('maxTotalChargeUsd', String(maxUsd));
   url.searchParams.set('timeout', '90');
@@ -83,7 +95,18 @@ export async function lensSearch(
     body: JSON.stringify({ imageUrl: photoUrl, searchType: 'visual_matches', maxResults: max, countryCode: 'US' }),
     signal: AbortSignal.timeout(110_000),
   });
-  if (!res.ok) throw new Error(`apify ${LENS_ACTOR}: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) {
+    const err = `apify ${LENS_ACTOR}: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`;
+    if (isApifyOutOfCredit(err)) {
+      // Refused before the run started: nothing was charged, so give the booking back.
+      releaseApifySpend(maxUsd);
+      lensDownUntil = Date.now() + LENS_DOWN_MS;
+      if (/Monthly usage hard limit|platform-feature-disabled/i.test(err)) markApifyDown(err);
+      else console.warn(`[lens] ${err}; skipping Google Lens for ${LENS_DOWN_MS / 60_000} min`);
+      return unavailable;
+    }
+    throw new Error(err);
+  }
   const rows = (await res.json()) as unknown[];
   const errored = Array.isArray(rows) && rows.some(r => typeof (r as Record<string, unknown>)?.error === 'string');
   const matches = normalizeLensRows(Array.isArray(rows) ? rows : [], max);

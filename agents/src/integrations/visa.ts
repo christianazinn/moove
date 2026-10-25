@@ -18,7 +18,7 @@
 //
 // Every step writes an agent_event through the injected sink; every authorization writes a
 // `payment` row (rail=visa) that moves pending -> settled (captured) or failed (declined/voided).
-// Guardrails: a per-agent spend ledger + per-purchase max, and an approval gate that is checked
+// Guardrails: a spend ledger per agent and user + per-purchase max, and an approval gate that is checked
 // before authorizing and again right before capture.
 
 import crypto from 'node:crypto';
@@ -442,47 +442,55 @@ export class VisaSpendRefused extends Error {
 
 export const dollars = (cents: bigint): string => `$${centsToAmount(cents)}`;
 
-/** Per-agent card budget, in cents. Reserved at authorization, released on void/decline. */
+/**
+ * Card budget per agent and user, in cents. Reserved at authorization, released on void/decline.
+ * `owner` is the user's identity hex: each user gets their own `capPerAgentCents` (one shared pool
+ * would let a few users use up everyone's budget). Without an owner the key is the agent alone.
+ */
 export class CardSpendLedger {
   private spent = new Map<string, bigint>();
   constructor(
     readonly capPerAgentCents: bigint,
     readonly maxPerPurchaseCents: bigint,
   ) {}
-  spentBy(agent: string): bigint {
-    return this.spent.get(agent) ?? 0n;
+  private key(agent: string, owner?: string): string {
+    return owner ? `${agent}:${owner}` : agent;
   }
-  remaining(agent: string): bigint {
-    const left = this.capPerAgentCents - this.spentBy(agent);
+  spentBy(agent: string, owner?: string): bigint {
+    return this.spent.get(this.key(agent, owner)) ?? 0n;
+  }
+  remaining(agent: string, owner?: string): bigint {
+    const left = this.capPerAgentCents - this.spentBy(agent, owner);
     return left > 0n ? left : 0n;
   }
   /** Why `reserve` would refuse this amount right now, without reserving anything. */
-  check(agent: string, cents: bigint): string | undefined {
+  check(agent: string, cents: bigint, owner?: string): string | undefined {
     if (cents <= 0n) return `amount must be positive, got ${cents}`;
     if (cents > this.maxPerPurchaseCents) return `${dollars(cents)} is over the per-purchase max of ${dollars(this.maxPerPurchaseCents)}`;
-    if (this.spentBy(agent) + cents > this.capPerAgentCents) {
-      return `${dollars(cents)} would exceed the ${agent} card budget (${dollars(this.remaining(agent))} of ${dollars(this.capPerAgentCents)} left)`;
+    if (this.spentBy(agent, owner) + cents > this.capPerAgentCents) {
+      return `${dollars(cents)} would exceed the ${agent} card budget (${dollars(this.remaining(agent, owner))} of ${dollars(this.capPerAgentCents)} left)`;
     }
     return undefined;
   }
-  reserve(agent: string, cents: bigint): void {
-    if (cents <= 0n) throw new VisaSpendRefused(`amount must be positive, got ${cents}`);
-    if (cents > this.maxPerPurchaseCents) {
-      throw new VisaSpendRefused(`${dollars(cents)} is over the per-purchase max of ${dollars(this.maxPerPurchaseCents)}`);
-    }
-    if (this.spentBy(agent) + cents > this.capPerAgentCents) {
-      throw new VisaSpendRefused(`${dollars(cents)} would exceed the ${agent} card budget (${dollars(this.remaining(agent))} of ${dollars(this.capPerAgentCents)} left)`);
-    }
-    this.spent.set(agent, this.spentBy(agent) + cents);
+  reserve(agent: string, cents: bigint, owner?: string): void {
+    const refused = this.check(agent, cents, owner);
+    if (refused) throw new VisaSpendRefused(refused);
+    this.spent.set(this.key(agent, owner), this.spentBy(agent, owner) + cents);
   }
   /** Counts spend from before this process started (pending/settled payment rows). */
-  seed(agent: string, cents: bigint): void {
-    if (cents > 0n) this.spent.set(agent, this.spentBy(agent) + cents);
+  seed(agent: string, cents: bigint, owner?: string): void {
+    if (cents > 0n) this.spent.set(this.key(agent, owner), this.spentBy(agent, owner) + cents);
   }
-  release(agent: string, cents: bigint): void {
-    const next = this.spentBy(agent) - cents;
-    this.spent.set(agent, next > 0n ? next : 0n);
+  release(agent: string, cents: bigint, owner?: string): void {
+    const next = this.spentBy(agent, owner) - cents;
+    this.spent.set(this.key(agent, owner), next > 0n ? next : 0n);
   }
+}
+
+/** The ledger key for a user: the SpacetimeDB identity hex (anything else, e.g. a test id, as a string). */
+export function ownerKey(owner: Owner): string {
+  const hex = (owner as { toHexString?: () => string } | null)?.toHexString;
+  return typeof hex === 'function' ? hex.call(owner) : String(owner);
 }
 
 export interface ApprovalView {
@@ -598,16 +606,17 @@ export class VisaCheckout {
   get mode(): VisaCheckoutMode {
     return checkoutMode(this.backend, this.fallback);
   }
-  remaining(agent: string): bigint {
-    return this.ledger.remaining(agent);
+  /** What this agent may still spend on the card for this user. */
+  remaining(agent: string, owner: Owner): bigint {
+    return this.ledger.remaining(agent, ownerKey(owner));
   }
   /** Why a purchase of this amount would be refused by the card caps (checked before asking the user). */
-  spendBlocker(agent: string, cents: bigint): string | undefined {
-    return this.ledger.check(agent, cents);
+  spendBlocker(agent: string, owner: Owner, cents: bigint): string | undefined {
+    return this.ledger.check(agent, cents, ownerKey(owner));
   }
   /** Counts spend recorded before this process started, so a restart doesn't reset the cap. */
-  seedSpent(agent: string, cents: bigint): void {
-    this.ledger.seed(agent, cents);
+  seedSpent(agent: string, owner: Owner, cents: bigint): void {
+    this.ledger.seed(agent, cents, ownerKey(owner));
   }
 
   /** The whole flow: gate, reserve, authorize, re-check, capture (or void). Never throws for declines. */
@@ -649,11 +658,11 @@ export class VisaCheckout {
   /** Reserves budget and places an authorization hold; records a pending payment row. */
   async authorize(ctx: PurchaseContext): Promise<Hold> {
     try {
-      this.ledger.reserve(ctx.agent, ctx.amountCents);
+      this.ledger.reserve(ctx.agent, ctx.amountCents, ownerKey(ctx.owner));
     } catch (err) {
       await this.event(ctx, this.backend, 'error', `Refused card payment for ${ctx.purpose}: ${(err as Error).message}`, {
         refused: true,
-        remainingCents: this.ledger.remaining(ctx.agent).toString(),
+        remainingCents: this.ledger.remaining(ctx.agent, ownerKey(ctx.owner)).toString(),
       });
       throw err;
     }
@@ -691,7 +700,7 @@ export class VisaCheckout {
         r = await backend.authorize(req);
       }
     } catch (err) {
-      this.ledger.release(ctx.agent, ctx.amountCents);
+      this.ledger.release(ctx.agent, ctx.amountCents, ownerKey(ctx.owner));
       await this.event(ctx, backend, 'error', `${tag(backend)} Authorization for ${ctx.purpose} failed: ${(err as Error).message}`, { step: 'authorize' });
       throw err;
     }
@@ -717,13 +726,13 @@ export class VisaCheckout {
       });
     } catch (err) {
       // No row to track the hold by: release it rather than leave an untracked authorization.
-      this.ledger.release(ctx.agent, ctx.amountCents);
+      this.ledger.release(ctx.agent, ctx.amountCents, ownerKey(ctx.owner));
       if (authorized) await backend.void(r.id, ctx.amountCents, req.reference, 'could not record payment').catch(() => undefined);
       await this.event(ctx, backend, 'error', `${tag(backend)} Could not record the payment for ${ctx.purpose}: ${(err as Error).message}`, { authId: r.id, step: 'authorize' });
       throw err;
     }
     if (!authorized) {
-      this.ledger.release(ctx.agent, ctx.amountCents);
+      this.ledger.release(ctx.agent, ctx.amountCents, ownerKey(ctx.owner));
       await this.event(ctx, backend, 'error', `${tag(backend)} Card declined for ${ctx.purpose}: ${r.reason ?? r.processorStatus}`, { authId: r.id, processorStatus: r.processorStatus, paymentId: paymentId.toString() });
       throw new Error(`declined: ${r.reason ?? r.processorStatus}`);
     }
@@ -790,7 +799,7 @@ export class VisaCheckout {
     await this.sink.updatePayment(hold.paymentId, 'failed', '').catch(err => console.warn(`[visa] could not mark payment ${hold.paymentId} failed: ${(err as Error).message}`));
     if (failure === undefined) {
       // Only a confirmed reversal gives the budget back; a stuck hold keeps counting until it expires.
-      this.ledger.release(ctx.agent, hold.amountCents);
+      this.ledger.release(ctx.agent, hold.amountCents, ownerKey(ctx.owner));
       await this.event(ctx, backend, 'payment', `${tag(backend)} Released the ${dollars(hold.amountCents)} hold for ${ctx.purpose}: ${reason}`, { authId: hold.authId, reversalId: r!.id, processorStatus: r!.processorStatus, voided: true });
     } else {
       await this.event(ctx, backend, 'error', `${tag(backend)} Could not release the hold for ${ctx.purpose}: ${failure} (it expires on its own)`, { authId: hold.authId, voided: false, reason });

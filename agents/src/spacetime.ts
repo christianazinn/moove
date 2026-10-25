@@ -53,6 +53,14 @@ export function disconnectWatchdog(exit: () => void = () => process.exit(1), lim
   };
 }
 
+// Writes in flight at a drop (or sent while down) are rejected, not retried, so items can stay
+// 'running' forever. After an automatic reconnect, exit so run-worker.sh restarts the worker and the
+// startup recovery (running -> pending, stale holds, 'posting' listings) runs.
+export function exitAfterReconnect(exit: () => void = () => process.exit(1)) {
+  console.warn('[spacetime] reconnected; exiting so the supervisor restarts the worker and startup recovery runs');
+  setImmediate(exit);
+}
+
 // Connects as the worker identity, registers it, and subscribes to every table.
 // Resolves once the initial subscription has been applied (the local cache is populated).
 export function connect(): Promise<{ conn: Conn; identity: Identity }> {
@@ -84,6 +92,7 @@ export function connect(): Promise<{ conn: Conn; identity: Identity }> {
       .onAutomaticReconnect((_conn, _identity, token) => {
         watchdog.up();
         saveToken(config.workerTokenFile, token);
+        exitAfterReconnect();
       })
       .onConnectError((_ctx, err) => reject(err))
       .onDisconnect((_ctx, err) => {

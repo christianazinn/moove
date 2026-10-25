@@ -201,3 +201,28 @@ test("PRICING_PAY_X402 gate: on by default, 0 bypasses", () => {
   assert.equal(pricingPaysX402({ PRICING_PAY_X402: "0" }), false);
   assert.equal(pricingPaysX402({ PRICING_PAY_X402: "false" }), false);
 });
+
+test("Apify known down and no cache: no x402 payment at all, the lookup failure goes to pricing", async (t) => {
+  const served = stubLookup();
+  const paywall = await startCompsPaywall({ lookup: served.lookup, port: 0, env: {} });
+  t.after(() => paywall.server.close());
+  const { deps, payments, events, direct, logged } = setup();
+  const asked: string[] = [];
+  deps.unavailable = (q) => (asked.push(q), q === "uncached desk" ? "Apify unavailable (out of credit): HTTP 403 Monthly usage hard limit" : null);
+
+  await assert.rejects(createPaidCompsSource(deps, paywall.baseUrl)("uncached desk", item), (err: Error) => {
+    assert.ok(err instanceof CompsLookupFailedError);
+    assert.match(err.message, /^comps lookup failed \(x402 payment skipped\): Apify unavailable/);
+    return true;
+  });
+  assert.equal(payments.length, 0, "no failed payment row in the Spending feed");
+  assert.equal(events.length, 0, "no 'Paying ...' step");
+  assert.equal(served.calls.length + direct.calls.length, 0);
+  assert.equal(logged.length, 0);
+
+  // A query the check passes (e.g. an exact cache) still pays as usual.
+  const res = await createPaidCompsSource(deps, paywall.baseUrl)("cached chair", item);
+  assert.deepEqual(res, { comps: COMPS, replayed: false });
+  assert.equal(payments.length, 1);
+  assert.deepEqual(asked, ["uncached desk", "cached chair"]);
+});
