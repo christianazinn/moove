@@ -39,7 +39,7 @@ struct StorefrontImage: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous).fill(tint)
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).fill(tint)
             VoxelThumbnail(spec: spec, size: height * 0.92, tile: false)
         }
         .frame(maxWidth: .infinity)
@@ -100,8 +100,8 @@ struct PriceChip: View {
             .padding(.horizontal, large ? 12 : 9)
             .padding(.vertical, large ? 6 : 4)
             .foregroundStyle(Theme.text)
-            .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.line))
+            .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous).strokeBorder(Theme.line))
             .accessibilityHidden(true)
     }
 }
@@ -166,12 +166,12 @@ struct StorefrontSectionHeader: View {
                 .foregroundStyle(section.hall.shopTint)
                 .frame(width: 38, height: 38)
                 .background(section.hall.shopTint.opacity(0.16),
-                            in: RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
+                            in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
+                // Same serif display face as Inventory's halls (the same categories).
                 Text(section.title)
-                    .monoText(20, weight: .bold, maxScale: 1.8)
-                    .foregroundStyle(Theme.text)
+                    .displayTitle(22)
                     .fixedSize(horizontal: false, vertical: true)
                 if !section.subtitle.isEmpty {
                     Text(section.subtitle).monoMeta().fixedSize(horizontal: false, vertical: true)
@@ -283,7 +283,7 @@ struct StorefrontHeroBanner: View {
         }
         .padding(20)
         .background {
-            RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
+            RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
                 .fill(LinearGradient(colors: [Theme.accentSoft, Theme.surface], startPoint: .topLeading, endPoint: .bottomTrailing))
         }
         .accessibilityElement(children: .ignore)
@@ -383,9 +383,9 @@ struct StorefrontItemCard: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.surface.opacity(0.55), in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous).strokeBorder(Theme.line))
-        .contentShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .background(Theme.surface.opacity(0.55), in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous).strokeBorder(Theme.line))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken(payment: payment))
         .accessibilityHint("Opens the deals")
@@ -551,10 +551,10 @@ struct StorefrontDealCard: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(fill, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
+        .background(fill, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
             .strokeBorder(blocked ? Theme.danger : Theme.line, lineWidth: blocked ? 1.5 : 1))
-        .contentShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken)
     }

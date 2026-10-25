@@ -12,8 +12,10 @@ struct ShoppingItemDetailView: View {
         if let item = store.snapshot.shoppingItems.first(where: { $0.id == itemId }) {
             content(item)
         } else {
-            ContentUnavailableView("Removed from the list", systemImage: "cart",
-                                   description: Text("This item is no longer on your shopping list."))
+            EmptyState(title: "Removed from the list", detail: "This item is no longer on your shopping list.")
+                .padding(.horizontal, Theme.gutter)
+                .padding(.top, 32)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .mooveScreen()
         }
     }
@@ -44,7 +46,7 @@ struct ShoppingItemDetailView: View {
                         .padding(.top, 10)
                 }
 
-                ListHeader(title: "Checkout").padding(.top, 36)
+                ListHeader(title: "Checkout").padding(.top, Theme.Space.section)
                 ShoppingCheckoutView(checkout: checkout, searchProblem: snapshot.dealSearchProblem(for: item),
                                      checkoutProblem: item.chosenDealId.flatMap(snapshot.checkoutProblem(dealId:)))
                     .padding(.vertical, 16)
@@ -52,7 +54,7 @@ struct ShoppingItemDetailView: View {
                     .ruled()
 
                 if !deals.isEmpty {
-                    ListHeader(title: "Deals", count: "\(deals.count)").padding(.top, 40)
+                    ListHeader(title: "Deals", count: "\(deals.count)").padding(.top, Theme.Space.section)
                     let ribbons = snapshot.dealRibbons(for: item)
                     VStack(spacing: 12) {
                         ForEach(deals) { deal in
@@ -99,7 +101,7 @@ struct ShoppingCheckoutView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     step("No deals yet.", systemImage: "magnifyingglass", tint: Theme.ochreInk)
                     Text(searchProblem).monoMeta().fixedSize(horizontal: false, vertical: true)
-                    Text("The buy agent searches again when the list changes. You can also remove this item and add it with a different name.")
+                    Text("The buy agent searches again when the list changes.")
                         .monoMeta().fixedSize(horizontal: false, vertical: true)
                 }
             } else {
@@ -194,8 +196,8 @@ struct DealRow: View {
             actions(large: large, locked: locked)
         }
         .padding(12)
-        .background(cardFill, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
+        .background(cardFill, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
             .strokeBorder(cardBorder, lineWidth: isChosen || !deal.isChoosable ? 1.5 : 1))
     }
 
