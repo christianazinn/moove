@@ -106,8 +106,7 @@ struct ExhibitPlinth: View {
     }
 }
 
-/// The placard under an exhibit: name, catalog line, the story, price + origin, and when
-/// and where it was catalogued.
+/// The placard under an exhibit: name, a short size line, the story, and price + origin.
 struct ExhibitPlacard: View {
     let info: ExhibitInfo
     var onEditStory: () -> Void
@@ -142,11 +141,6 @@ struct ExhibitPlacard: View {
                 VStack(alignment: .leading, spacing: 6) { price; tag }
             }
             .padding(.top, 2)
-            Text("\(info.acquired) · \(MuseumLabel.fromRoom(info.roomName))")
-                .monoText(10.5, maxScale: 1.8)
-                .foregroundStyle(Theme.muted)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
