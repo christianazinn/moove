@@ -48,6 +48,13 @@ struct InventoryView: View {
         let stories = ItemStories.decode(storiesJSON)
         let focus = InventoryFocus.active(InventoryFocus.decode(focusJSON), rooms: rooms)
         let shown = InventoryFocus.items(store.visibleItems, focus: focus)
+        screen(rooms: rooms, stories: stories, focus: focus, shown: shown)
+            .sheet(item: $placard, onDismiss: runAfterPlacard) { placardSheet($0, shown: shown, stories: stories) }
+            // A piece added by hand or by photo: turn to its page so it's in view.
+            .onChange(of: store.visibleItems.map(\.id)) { old, new in itemsChanged(from: old, to: new) }
+    }
+
+    private func screen(rooms: [Room], stories: [UInt64: String], focus: Set<UInt64>, shown: [Item]) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if store.visibleItems.isEmpty {
@@ -59,10 +66,7 @@ struct InventoryView: View {
                     roomsStrip(rooms, focus: focus).padding(.top, 24)
                 }
                 sweepNotes(rooms)
-                let halls = FunctionHall.halls(shown)
-                if !halls.isEmpty {
-                    binder(halls, stories: stories).padding(.top, 28)
-                }
+                binderSection(shown, stories: stories)
                 hiddenRoomsFooter.padding(.top, 40)
             }
             .padding(.horizontal, Theme.gutter)
@@ -85,21 +89,6 @@ struct InventoryView: View {
             }
         }
         .sheet(item: $addingTo) { room in AddItemView(rooms: rooms, roomId: room.id) }
-        .sheet(item: $placard, onDismiss: runAfterPlacard) { ref in
-            if let item = store.visibleItems.first(where: { $0.id == ref.id }) {
-                let hallItems = shown.filter { FunctionHall.of($0) == FunctionHall.of(item) }
-                let isTop = hallItems.count > 1 && MuseumLabel.topPiece(hallItems) == item.id
-                let info = exhibitInfo(item, story: stories[item.id], isTop: isTop, compCounts: store.snapshot.compCounts)
-                PlacardSheet(info: info,
-                             onEditStory: { closePlacard(then: .story(item)) },
-                             onOpen: { closePlacard(then: .open(item.id)) },
-                             onRename: { closePlacard(then: .rename(item)) },
-                             onDelete: { closePlacard(then: .delete(item)) })
-            } else {
-                // Removed while open ("Not a real item"): nothing to show.
-                Color.clear.onAppear { placard = nil }
-            }
-        }
         .sheet(item: $sharing) { ShareRoomView(room: $0) }
         .roomRenameAlert($renamingRoom)
         .sheet(isPresented: $showJoin) { JoinRoomView() }
@@ -137,13 +126,31 @@ struct InventoryView: View {
         .mooveScreen()
         .animation(.default, value: store.items)
         .animation(.default, value: store.hiddenRoomIds)
-        // A piece added by hand or by photo: turn to its page so it's in view.
-        .onChange(of: store.visibleItems.map(\.id)) { old, new in
-            let added = Set(new).subtracting(old)
-            guard !old.isEmpty, let item = store.visibleItems.first(where: { added.contains($0.id) && ($0.origin == .manual || $0.origin == .photo) })
-            else { return }
-            turn(to: FunctionHall.of(item), forward: true)
+    }
+
+    @ViewBuilder
+    private func placardSheet(_ ref: PlacardRef, shown: [Item], stories: [UInt64: String]) -> some View {
+        if let item = store.visibleItems.first(where: { $0.id == ref.id }) {
+            let hall = FunctionHall.of(item)
+            let hallItems = shown.filter { FunctionHall.of($0) == hall }
+            let isTop = hallItems.count > 1 && MuseumLabel.topPiece(hallItems) == item.id
+            let info = exhibitInfo(item, story: stories[item.id], isTop: isTop, compCounts: store.snapshot.compCounts)
+            PlacardSheet(info: info,
+                         onEditStory: { closePlacard(then: .story(item)) },
+                         onOpen: { closePlacard(then: .open(item.id)) },
+                         onRename: { closePlacard(then: .rename(item)) },
+                         onDelete: { closePlacard(then: .delete(item)) })
+        } else {
+            // Removed while open ("Not a real item"): nothing to show.
+            Color.clear.onAppear { placard = nil }
         }
+    }
+
+    private func itemsChanged(from old: [UInt64], to new: [UInt64]) {
+        guard !old.isEmpty else { return }
+        let added = Set(new).subtracting(old)
+        let picked = store.visibleItems.first { added.contains($0.id) && ($0.origin == .manual || $0.origin == .photo) }
+        if let picked { turn(to: FunctionHall.of(picked), forward: true) }
     }
 
     // MARK: Rooms strip
@@ -259,6 +266,14 @@ struct InventoryView: View {
 
     // MARK: Binder
 
+    @ViewBuilder
+    private func binderSection(_ shown: [Item], stories: [UInt64: String]) -> some View {
+        let halls = FunctionHall.halls(shown)
+        if !halls.isEmpty {
+            binder(halls, stories: stories).padding(.top, 28)
+        }
+    }
+
     /// Index tabs (iPhone: folder tabs over the page; iPad: down the page's right edge) and
     /// the open page.
     @ViewBuilder
@@ -341,77 +356,101 @@ struct InventoryView: View {
     }
 
     private func binderPage(_ hall: FunctionHall, _ items: [Item], tab: BinderTab, stories: [UInt64: String]) -> some View {
-        let regular = sizeClass == .regular
-        let shelves = InventoryBinder.shelves(items, capacity: InventoryBinder.capacity(regularWidth: regular),
-                                              maxPerShelf: InventoryBinder.maxPerShelf(regularWidth: regular))
-        let compCounts = store.snapshot.compCounts
-        return VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(hall.name)
-                    .serifText(26, weight: .semibold)
-                    .foregroundStyle(Theme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(FunctionHall.subtitle(items)).monoMeta()
-            }
-            .padding(.horizontal, 8)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityIdentifier("inventory.hall.\(hall.rawValue)")
+        VStack(alignment: .leading, spacing: 0) {
+            pageHeader(hall, items)
             if dynamicTypeSize.isAccessibilitySize {
-                // Largest text sizes: a plain list, one row per item.
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(items) { item in
-                        shelfItem(item, price: priceText(item, compCounts: compCounts), hasStory: stories[item.id] != nil) {
-                            HStack(spacing: 12) {
-                                ShelfSprite(item: item, size: 56)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.name).blockTitle().fixedSize(horizontal: false, vertical: true)
-                                    Text(priceText(item, compCounts: compCounts)).monoMeta()
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            .padding(.vertical, 10)
-                            .contentShape(Rectangle())
-                        }
-                        .ruled()
-                    }
-                }
-                .padding(.top, 12)
+                pageList(items, stories: stories).padding(.top, 12)
             } else {
-                VStack(spacing: 6) {
-                    ForEach(Array(shelves.enumerated()), id: \.offset) { _, shelf in
-                        ShelfRow(shelf: shelf) { item in
-                            let index = shelf.items.firstIndex(of: item) ?? 0
-                            let price = priceText(item, compCounts: compCounts)
-                            shelfItem(item, price: price, hasStory: stories[item.id] != nil) {
-                                ShelfItemColumn(item: item, tier: shelf.tier, price: price, tilt: index % 2 == 0 ? -2 : 2)
-                            }
-                        }
-                    }
-                }
-                .padding(.top, 8)
+                pageShelves(items, stories: stories).padding(.top, 8)
             }
         }
         .padding(.leading, 18)
         .padding(.trailing, 12)
         .padding(.vertical, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(colors: [BinderColors.wall, BinderColors.wallShade], startPoint: .top, endPoint: .bottom),
-            in: RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-        )
+        .background(pageBackground)
         // The open tab's color runs along the page edge it's attached to.
-        .overlay(alignment: sizeClass == .regular ? .trailing : .top) {
-            let tint = BinderColors.tint(tab.tint)
-            if sizeClass == .regular {
-                Rectangle().fill(tint).frame(width: 4).padding(.vertical, 6)
-            } else {
-                Rectangle().fill(tint).frame(height: 4).padding(.horizontal, 6)
-            }
-        }
+        .overlay(alignment: sizeClass == .regular ? .trailing : .top) { tabEdge(tab) }
         .overlay(alignment: .leading) { BinderHoles().padding(.leading, 5) }
         .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
         .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 4)
+    }
+
+    private var pageBackground: some View {
+        RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+            .fill(LinearGradient(colors: [BinderColors.wall, BinderColors.wallShade], startPoint: .top, endPoint: .bottom))
+    }
+
+    @ViewBuilder
+    private func tabEdge(_ tab: BinderTab) -> some View {
+        let tint = BinderColors.tint(tab.tint)
+        if sizeClass == .regular {
+            Rectangle().fill(tint).frame(width: 4).padding(.vertical, 6)
+        } else {
+            Rectangle().fill(tint).frame(height: 4).padding(.horizontal, 6)
+        }
+    }
+
+    private func pageHeader(_ hall: FunctionHall, _ items: [Item]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(hall.name)
+                .serifText(26, weight: .semibold)
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(FunctionHall.subtitle(items)).monoMeta()
+        }
+        .padding(.horizontal, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityIdentifier("inventory.hall.\(hall.rawValue)")
+    }
+
+    /// Largest text sizes: a plain list, one row per item.
+    private func pageList(_ items: [Item], stories: [UInt64: String]) -> some View {
+        let compCounts = store.snapshot.compCounts
+        return VStack(alignment: .leading, spacing: 0) {
+            ForEach(items) { item in
+                let price = priceText(item, compCounts: compCounts)
+                shelfItem(item, price: price, hasStory: stories[item.id] != nil) {
+                    listRow(item, price: price)
+                }
+                .ruled()
+            }
+        }
+    }
+
+    private func listRow(_ item: Item, price: String) -> some View {
+        HStack(spacing: 12) {
+            ShelfSprite(item: item, size: 56)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.name).blockTitle().fixedSize(horizontal: false, vertical: true)
+                Text(price).monoMeta()
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+
+    private func pageShelves(_ items: [Item], stories: [UInt64: String]) -> some View {
+        let regular = sizeClass == .regular
+        let shelves = InventoryBinder.shelves(items, capacity: InventoryBinder.capacity(regularWidth: regular),
+                                              maxPerShelf: InventoryBinder.maxPerShelf(regularWidth: regular))
+        return VStack(spacing: 6) {
+            ForEach(Array(shelves.enumerated()), id: \.offset) { _, shelf in
+                ShelfRow(shelf: shelf) { item in
+                    shelfColumn(item, on: shelf, stories: stories)
+                }
+            }
+        }
+    }
+
+    private func shelfColumn(_ item: Item, on shelf: Shelf, stories: [UInt64: String]) -> some View {
+        let index = shelf.items.firstIndex(of: item) ?? 0
+        let price = priceText(item, compCounts: store.snapshot.compCounts)
+        return shelfItem(item, price: price, hasStory: stories[item.id] != nil) {
+            ShelfItemColumn(item: item, tier: shelf.tier, price: price, tilt: index % 2 == 0 ? -2 : 2)
+        }
     }
 
     /// One item: a single button that opens its placard; long-press keeps the fix-it menu.
@@ -431,8 +470,7 @@ struct InventoryView: View {
                 Button("Delete item", systemImage: "trash", role: .destructive) { deleting = item }
                     .accessibilityIdentifier("inventory.delete.\(item.id)")
             }
-            .accessibilityLabel([item.name, price, tag.accessibilityLabel, item.maybeSentimental ? "Possibly sentimental" : nil]
-                .compactMap { $0 }.joined(separator: ", "))
+            .accessibilityLabel(itemLabel(item, price: price, tag: tag))
             .accessibilityHint("Shows its placard")
             .accessibilityAction(named: "Open details") { opened = item.id }
             .accessibilityAction(named: "Edit story") { editingStory = item }
@@ -440,6 +478,13 @@ struct InventoryView: View {
             .accessibilityAction(named: "Turn around") { Task { await store.turn(item) } }
             .accessibilityAction(named: "Delete") { deleting = item }
             .accessibilityIdentifier("inventory.item.\(item.id)")
+    }
+
+    /// "Desk lamp, $40, Scanned with LiDAR" (+ ", Possibly sentimental").
+    private func itemLabel(_ item: Item, price: String, tag: Item.OriginTag) -> String {
+        var parts: [String] = [item.name, price, tag.accessibilityLabel]
+        if item.maybeSentimental { parts.append("Possibly sentimental") }
+        return parts.joined(separator: ", ")
     }
 
     /// "$120", "≈$40" when only one or two comparable listings back it.
