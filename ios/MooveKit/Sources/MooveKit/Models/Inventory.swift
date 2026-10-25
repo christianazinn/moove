@@ -290,6 +290,9 @@ extension Item {
         /// Vision hasn't finished with the photo yet, so pricing hasn't started.
         case identifying
         case pricing
+        /// A catch-all name ("storage", "other") and no photo: vision can't name it and pricing
+        /// can't look it up, so a photo (or a rename) is what it needs.
+        case needsPhoto
         /// The pricing agent gave up (no comparable listings, or a lookup error).
         case unpriced
         /// A toilet, tub, sink or radiator: part of the building, never sold or priced.
@@ -299,10 +302,16 @@ extension Item {
     public var priceState: PriceState {
         if isBuiltInFixture { return .builtIn }
         if let estValueCents { return .priced(estValueCents) }
+        if photoUrls.isEmpty, brand == nil, Self.genericNames.contains((name.isEmpty ? category : name).trimmingCharacters(in: .whitespaces).lowercased()) {
+            return .needsPhoto
+        }
         if pricingStatus == .failed { return .unpriced }
         if !photoUrls.isEmpty, detailsStatus == .pending || detailsStatus == .running { return .identifying }
         return .pricing
     }
+
+    /// Names too generic to price (the worker's `GENERIC_NAMES` in `agents/src/agents/pricing.ts`).
+    static let genericNames: Set<String> = ["", "other", "unknown", "object", "item", "storage"]
 }
 
 extension Item {
