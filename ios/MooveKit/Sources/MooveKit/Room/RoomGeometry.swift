@@ -48,12 +48,33 @@ public struct RoomGeometry: Codable, Sendable, Equatable {
         public var dimensions: SIMD3<Float>
         /// RoomTransform of the object's center.
         public var transform: RoomTransform
+        /// What the extra detector measured before placement; nil for RoomPlan's objects and in
+        /// scans saved before it existed.
+        public var measured: Measured?
 
-        public init(id: String, category: String, dimensions: SIMD3<Float>, transform: RoomTransform) {
+        public init(id: String, category: String, dimensions: SIMD3<Float>, transform: RoomTransform, measured: Measured? = nil) {
             self.id = id
             self.category = category
             self.dimensions = dimensions
             self.transform = transform
+            self.measured = measured
+        }
+    }
+
+    /// A detector find's raw evidence, kept with the scan (R3/R6 proposal): the recheck uses it,
+    /// and saved scans become test data for the next round. Every field is optional, so it can grow.
+    public struct Measured: Codable, Sendable, Equatable {
+        /// LiDAR box depth (m) before `DetectorPlacement` padded it to the category's minimum.
+        public var depth: Float?
+        /// Mean camera position over the sightings (world space).
+        public var camera: SIMD3<Float>?
+        /// Every label the detector gave it across frames (`SightingMerger.LabelHistory`).
+        public var labelHistory: SightingMerger.LabelHistory?
+
+        public init(depth: Float? = nil, camera: SIMD3<Float>? = nil, labelHistory: SightingMerger.LabelHistory? = nil) {
+            self.depth = depth
+            self.camera = camera
+            self.labelHistory = labelHistory
         }
     }
 

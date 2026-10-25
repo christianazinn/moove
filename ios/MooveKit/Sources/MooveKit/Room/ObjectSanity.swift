@@ -80,6 +80,16 @@ public enum ObjectSanity {
         }
     }
 
+    /// `fitsFootprint`, falling back to RoomPlan's `ranges` for categories without a footprint
+    /// (table, storage, bed, television...). `ObjectRecheck` uses it on a relabel's target, so the
+    /// classifier can't rename a 9 cm tall backpack "table". Nil without either prior.
+    public static func fitsSizePrior(_ category: String, width: Double, height: Double, depth: Double, factor: Double = 1 + tolerance) -> Bool? {
+        if let fits = fitsFootprint(category, width: width, height: height, depth: depth, factor: factor) { return fits }
+        guard let r = ranges[category] else { return nil }
+        let v = [min(width, depth), max(width, depth), height]
+        return zip(v, [r.short, r.long, r.height]).allSatisfy { x, b in x >= b.lowerBound / factor && x <= b.upperBound * factor }
+    }
+
     public static func check(category: String, width: Double, height: Double, depth: Double) -> Result {
         let dims = [width, height, depth]
         guard dims.allSatisfy(\.isFinite) else { return .drop(reason: "size isn't a number") }

@@ -117,13 +117,40 @@ export function isDetectorFind(it: Pick<Item, 'category' | 'scanObjectId'> & { a
   if (it.scanObjectId.startsWith('photo:')) return false;
   const c = it.category.toLowerCase();
   if (ROOMPLAN_ONLY.has(c)) return false;
-  if (ROOMPLAN_WITH_ATTRIBUTES.has(c)) return (it.attributesJson ?? '[]') === '[]';
+  if (ROOMPLAN_WITH_ATTRIBUTES.has(c)) {
+    // The app's crop-classifier recheck adds `Recheck.*` flags to detector finds too.
+    const attrs = attributeList(it.attributesJson);
+    if (!attrs) return (it.attributesJson ?? '[]') === '[]';
+    return attrs.every(a => typeof a === 'string' && a.startsWith(RECHECK_PREFIX));
+  }
   return true;
 }
 
-/** A detector find whose photos clearly show no item (a person, a wall, a built-in): remove it. */
+const RECHECK_PREFIX = 'Recheck.';
+/** The app's on-device recheck thought this might not be an item (`ObjectRecheck.suspectAttribute`). */
+export const SUSPECT_ATTRIBUTE = 'Recheck.suspect';
+
+/** attributesJson as an array, or undefined when it's missing or not a JSON array. */
+function attributeList(json: string | undefined): unknown[] | undefined {
+  if (json === undefined) return undefined;
+  try {
+    const v: unknown = JSON.parse(json);
+    return Array.isArray(v) ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The scan's crop classifier doubted this object (`Recheck.suspect` attribute). */
+export function isSuspect(it: { attributesJson?: string }): boolean {
+  return attributeList(it.attributesJson)?.includes(SUSPECT_ATTRIBUTE) ?? false;
+}
+
+/** A detector find whose photos clearly show no item (a person, a wall, a built-in): remove it.
+ *  One the scan's classifier already doubted only needs vision's medium confidence. */
 export function shouldVeto(it: Pick<Item, 'category' | 'scanObjectId'> & { attributesJson?: string }, d: Pick<Details, 'isItem' | 'itemConfidence'>): boolean {
-  return d.isItem === false && d.itemConfidence === 'high' && isDetectorFind(it);
+  if (d.isItem !== false || !isDetectorFind(it)) return false;
+  return d.itemConfidence === 'high' || (d.itemConfidence === 'medium' && isSuspect(it));
 }
 
 export function needsVision(it: Item): boolean {
