@@ -11,7 +11,6 @@ import MooveKit
 struct ScanResultsView: View {
     var room: Room?
     var items: [Item]
-    var comps: [Comp]
     var onSelect: (Item) -> Void
     /// The scan's real room (walls, doors, windows, object positions). Nil: estimate a room.
     var geometry: RoomGeometry?
@@ -19,11 +18,10 @@ struct ScanResultsView: View {
     /// `colors?.wallColor` / `floorColor` are for the dollhouse shell (VoxelHouse) once it takes them.
     var colors: ScanColors?
 
-    init(room: Room?, items: [Item], comps: [Comp], geometry: RoomGeometry? = nil, colors: ScanColors? = nil,
+    init(room: Room?, items: [Item], geometry: RoomGeometry? = nil, colors: ScanColors? = nil,
          onSelect: @escaping (Item) -> Void = { _ in }) {
         self.room = room
         self.items = items
-        self.comps = comps
         self.geometry = geometry
         self.colors = colors
         self.onSelect = onSelect
@@ -79,10 +77,6 @@ struct ScanResultsView: View {
     // MARK: Inventory
 
     private var inventory: some View {
-        let ranges: [UInt64: ValueRange] = Dictionary(
-            items.compactMap { item in ValueRange.of(item, comps: comps).map { (item.id, $0) } },
-            uniquingKeysWith: { a, _ in a }
-        )
         return VStack(alignment: .leading, spacing: 0) {
             if items.isEmpty {
                 Text("Nothing found yet.").monoMeta().padding(.vertical, 28).frame(maxWidth: .infinity, alignment: .leading).ruled()
@@ -91,15 +85,15 @@ struct ScanResultsView: View {
                 Button { onSelect(item) } label: {
                     LedgerRow(
                         title: item.name,
-                        value: ranges[item.id]?.text ?? "…",
-                        valueTint: ranges[item.id] == nil ? Theme.muted : Theme.text
+                        value: item.saleValueCents == nil ? "…" : item.priceText,
+                        valueTint: item.saleValueCents == nil ? Theme.muted : Theme.text
                     ) {
                         VoxelThumbnail(spec: Self.spec(item, colors: colors), size: 44)
                     }
                 }
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Self.spokenRow(item, value: ranges[item.id]))
+                .accessibilityLabel(Self.spokenRow(item))
                 .accessibilityAddTraits(.isButton)
             }
         }
@@ -117,8 +111,8 @@ struct ScanResultsView: View {
     }
 
     /// The row's full detail for VoiceOver: name, value, size, condition, "needs you".
-    static func spokenRow(_ item: Item, value: ValueRange?) -> String {
-        var parts = [item.name, value?.text ?? "pricing", meta(item)]
+    static func spokenRow(_ item: Item) -> String {
+        var parts = [item.name, item.saleValueCents == nil ? "pricing" : item.priceText, meta(item)]
         if item.maybeSentimental { parts.append("needs you") }
         return parts.joined(separator: ", ")
     }
@@ -138,37 +132,6 @@ struct ScanResultsView: View {
         case 5?: "like new"
         default: nil
         }
-    }
-}
-
-/// A low–high value in whole dollars.
-struct ValueRange: Equatable {
-    var low: Int
-    var high: Int
-
-    /// Around the same estimate every other screen shows: the review card's range (the pricing
-    /// agent's low–high, or comps that bracket the estimate), else the estimate ±20%. nil for
-    /// built-in fixtures and unpriced items. A $0 estimate is "$0", not "pricing…".
-    static func of(_ item: Item, comps: [Comp]) -> ValueRange? {
-        guard let est = item.saleValueCents else { return nil }
-        if let r = Review.valueRange(item, comps: comps) {
-            return ValueRange(low: roundDown(Double(r.lowerBound) / 100), high: roundUp(Double(r.upperBound) / 100))
-        }
-        let dollars = Double(est) / 100
-        return ValueRange(low: roundDown(dollars * 0.8), high: roundUp(dollars * 1.2))
-    }
-
-    /// "$80–$140", or one figure when both ends match.
-    var text: String {
-        let lo = Self.usd(low), hi = Self.usd(high)
-        return low == high ? lo : "\(lo)–\(hi)"
-    }
-
-    private static func step(_ dollars: Double) -> Double { dollars >= 100 ? 10 : dollars >= 20 ? 5 : 1 }
-    private static func roundDown(_ d: Double) -> Int { Int((d / step(d)).rounded(.down) * step(d)) }
-    private static func roundUp(_ d: Double) -> Int { Int((d / step(d)).rounded(.up) * step(d)) }
-    private static func usd(_ dollars: Int) -> String {
-        dollars.formatted(.currency(code: "USD").precision(.fractionLength(0)))
     }
 }
 
@@ -242,7 +205,7 @@ struct EstimatedRoom {
 #Preview {
     let snap = DemoFixtures.inventory(owner: "me")
     return ScrollView {
-        ScanResultsView(room: snap.rooms.first, items: snap.items, comps: snap.comps)
+        ScanResultsView(room: snap.rooms.first, items: snap.items)
             .padding(.horizontal, Theme.gutter)
             .padding(.vertical, 24)
     }

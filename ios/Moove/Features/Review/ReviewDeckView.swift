@@ -10,7 +10,6 @@ import MooveKit
 struct ReviewDeckView: View {
     /// Cards still to go, top first.
     let cards: [Item]
-    let comps: [Comp]
     /// Cards done on this pass, for "4 of 12".
     let doneCount: Int
     let canUndo: Bool
@@ -97,9 +96,8 @@ struct ReviewDeckView: View {
         let pointing = ReviewSwipe.pointing(dx: drag.width, dy: drag.height)
         let progress = ReviewSwipe.progress(dx: drag.width, dy: drag.height, threshold: Self.threshold)
         let armed = progress >= 1 ? pointing : nil
-        let range = Review.valueRange(item, comps: comps)
         let shape = RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
-        return ReviewCardFront(item: item, range: range)
+        return ReviewCardFront(item: item)
             .clipShape(shape)
             .background(shape.fill(Theme.bg).mooveShadow(.lifted))
             .frame(height: cardHeight)
@@ -143,7 +141,7 @@ struct ReviewDeckView: View {
             )
             .sensoryFeedback(.selection, trigger: armed)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Self.spoken(item, range: range))
+            .accessibilityLabel(Self.spoken(item))
             .accessibilityIdentifier("review.card.\(item.id)")
             .accessibilityAddTraits(.isButton)
             .accessibilityHint("Double-tap for details. Swipe right to keep, left to sell, up to donate, down to trash.")
@@ -171,11 +169,11 @@ struct ReviewDeckView: View {
     }
 
     /// "Yamaha acoustic guitar, needs you, possibly sentimental, $109. Moove says keep. <reason>"
-    private static func spoken(_ item: Item, range: ClosedRange<Int64>?) -> String {
+    private static func spoken(_ item: Item) -> String {
         var parts = [item.name]
         if ReviewSection.of(item) == .needsYou { parts.append("needs you") }
         if item.maybeSentimental { parts.append("possibly sentimental") }
-        parts.append(range.map { "\($0.lowerBound.usd) to \($0.upperBound.usd)" } ?? item.priceText)
+        parts.append(item.priceText)
         if let verdict = Review.verdict(item) { parts.append("Moove says \(verdict)") }
         if item.dispositionSource == .user { parts.append("you chose \(item.disposition.label.lowercased())") }
         if let reason = item.dispositionReason, item.dispositionSource == .auto { parts.append(reason) }
@@ -256,7 +254,6 @@ struct ReviewDeckView: View {
 /// The card: the item's voxel model, big, its name and value.
 private struct ReviewCardFront: View {
     let item: Item
-    let range: ClosedRange<Int64>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -273,7 +270,7 @@ private struct ReviewCardFront: View {
                         .foregroundStyle(Theme.text)
                         .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(Self.value(item, range))
+                    Text(item.priceText)
                         .monoText(14, weight: .bold)
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
@@ -285,10 +282,6 @@ private struct ReviewCardFront: View {
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
     }
 
-    static func value(_ item: Item, _ range: ClosedRange<Int64>?) -> String {
-        if let range { return "\(range.lowerBound.usd)–\(range.upperBound.usd)" }
-        return item.priceText
-    }
 }
 
 /// "Moove says: Sell · worth $30, costs ~$24 to move", or "You chose Keep" once it's yours.
