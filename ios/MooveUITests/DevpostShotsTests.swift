@@ -20,7 +20,30 @@ final class DevpostShotsTests: XCTestCase {
 
         // 2. Items > Inventory.
         open(tab: "Items", segment: "Inventory")
+        // The binder's first page, with its index tabs in view.
+        let tabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'inventory.tab.'"))
+        scrollTo(tabs.firstMatch)
         shot("02-items")
+
+        // 2b. A second page of the binder (tap its tab).
+        let second = tabs.element(boundBy: 1)
+        if second.waitForExistence(timeout: slow) {
+            second.tap()
+            sleep(1)  // page turn
+            shot("02b-items-binder-page2")
+        }
+
+        // 2c. An item's placard, opened by tapping it on its shelf.
+        let item = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'inventory.item.'")).firstMatch
+        if scrollTo(item) {
+            item.tap()
+            let open = byId("inventory.placard.open")
+            XCTAssertTrue(open.waitForExistence(timeout: slow), "item placard")
+            sleep(1)
+            shot("02c-items-placard")
+            app.buttons["Done"].firstMatch.tap()
+            XCTAssertTrue(open.waitForNonExistence(timeout: slow), "placard closed")
+        }
 
         // 4. Items > Review (before 3b, which opens an item from here): the flip cards (the
         // guitar, which needs you, on top; "1 of 12") over the Where it goes board.
