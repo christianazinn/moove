@@ -99,7 +99,7 @@ struct ShoppingView: View {
         }
 
         if !approvals.isEmpty {
-            ListHeader(title: "Needs you", count: "\(approvals.count)")
+            ListHeader(title: "To approve", count: "\(approvals.count)")
                 .padding(.top, Theme.Space.section)
                 .padding(.horizontal, Theme.gutter)
             ForEach(approvals) { approval in

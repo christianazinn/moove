@@ -212,6 +212,13 @@ struct DealRow: View {
         var text = isChosen ? "Chosen deal. " : ""
         if let ribbon { text += "\(ribbon.label). " }
         text += deal.accessibilitySummary
+        text += deal.supportsCardCheckout ? ". Visa checkout" : ". Message seller"
+        if !deal.sellerDetails.isEmpty { text += ". " + deal.sellerDetails }
+        if let level = deal.fraudLevel, let score = deal.fraudScore {
+            text += ". Fraud check \(level.label), \(score.formatted(.number.precision(.fractionLength(2))))"
+        } else {
+            text += ". Not fraud-screened yet"
+        }
         if !deal.fraudReasons.isEmpty, deal.fraudLevel != .low {
             text += ". " + deal.fraudReasons.joined(separator: ". ")
         }
@@ -232,46 +239,22 @@ struct DealRow: View {
         let tint: Color = deal.isChoosable ? StorefrontTint.color(for: deal.id) : Theme.dangerSoft
         return StorefrontImage(spec: ShoppingThumbnails.spec(for: deal, item: item), tint: tint, height: large ? 160 : 108)
             .frame(width: large ? nil : 108)
-            .overlay(alignment: .topLeading) {
-                if let ribbon { RibbonTag(ribbon: ribbon).scaleEffect(0.85, anchor: .topLeading).padding(4) }
-            }
     }
 
+    /// Price only beside the picture (Lisa); the title, source, seller, checkout kind and fraud
+    /// check are in the VoiceOver label, and a blocked deal says so by its Choose button.
     private func info(large: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if isChosen {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.accentStrong)
-                }
-                Text(deal.title).blockTitle().lineLimit(large ? 8 : 3).fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
-                if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if isChosen {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.accentStrong)
             }
-            AdaptiveLine {
-                priceText()
-                Text(deal.source).monoMeta()
-                Spacer(minLength: 8)
-                Label(deal.supportsCardCheckout ? "Visa checkout" : "Message seller",
-                      systemImage: deal.supportsCardCheckout ? "creditcard" : "envelope")
-                    .monoMeta()
-                    .lineLimit(large ? 2 : 1)
-            }
-            if !deal.sellerDetails.isEmpty {
-                Text(deal.sellerDetails).sansText(14).foregroundStyle(Theme.muted).lineLimit(large ? 8 : 3)
-            }
-            if let level = deal.fraudLevel, let score = deal.fraudScore {
-                FraudChip(level: level, score: score)
-                if level != .low {
-                    ForEach(deal.fraudReasons, id: \.self) { reason in
-                        Text("· \(reason)").monoMeta().fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            } else {
-                Text("Not fraud-screened yet").monoMeta()
-            }
+            priceText()
+            Spacer(minLength: 8)
+            if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func actions(large: Bool, locked: Bool) -> some View {
