@@ -20,7 +20,7 @@ import Testing
         for id in UInt64(190)..<210 {
             #expect(PosterWall.style(forListingId: id).swatch != PosterWall.style(forListingId: id + 1).swatch)
         }
-        // The demo's six listings use all six swatches.
+        // The demo's six listings use every swatch.
         let names = Set((UInt64(198)...203).map { PosterWall.style(forListingId: $0).swatch.name })
         #expect(names.count == palette.swatches.count)
     }
