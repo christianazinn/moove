@@ -41,7 +41,7 @@ Lisa: "can we remove the summary page entirely but keep the however many kg save
 Lisa: "for the move tab, can we make instead of the 'pieces' on the first page just add the truck and boxes to the first page? idk somehow merge these two tabs and simplify UI" (#335).
 
 - **Move has no segments.** `TabGroup.move` has one screen key, "move" (`Features/Move/MoveView.swift`), one scroll top to bottom:
-  1. **Your new home**: the header (name, size, source, **Change home** and **Paste a Zillow link**), or the picker until a home is chosen; one shared **Moving from** row (or the demo notice when nothing is kept); the 3D stage with the fly-in; layout style + **Save layout**; room shots.
+  1. **Your new home**: the header (name, size, source, **Change home** and **Paste a Zillow link**), or the picker until a home is chosen; one shared **Moving from** row (now the app-wide **Rooms** button, 0300 addendum) (or the demo notice when nothing is kept); the 3D stage with the fly-in; layout style + **Save layout**; room shots.
   2. **Getting there**: the truck card (inline 3D truck, **Load the truck**, **Full screen**, the estimate), then **Boxes** (the card grid by room, **Print labels**), then **Delivered to your new home**.
   3. Folded at the bottom, closed by default, each a header with its count: **Furniture notes**, **Supplies**, **Schedule** and **Pieces** (the old New Home list).
 - The sections are reusable views in their feature folders (`NewHomeHeader`, `NewHomeStage`, `NewHomePickerContent`, `PiecesList` in `Features/NewHome/`; `TruckCard`, `BoxesSection`, `DeliveredSection`, `FurnitureNotesList`, `SuppliesList`, `ScheduleList` in `Features/Pack/PackSections.swift`). The duplicated headers, eyebrows and second Moving from row are gone.

@@ -158,7 +158,7 @@ final class MooveSmokeTests: XCTestCase {
         snap("03-scan-finished")
         done.tap()
         XCTAssertTrue(app.navigationBars["Inventory"].waitForExistence(timeout: slow), "jumped to Inventory")
-        XCTAssertTrue(scrollTo(text(matching: "Demo bedroom")), "new room in Inventory")
+        XCTAssertTrue(text(containing: "Demo bedroom").waitForExistence(timeout: slow), "new room in the Rooms button")
         snap("03-inventory")
         // Offline photo sweep (#181): the room photos "find" a plant RoomPlan missed. It stands
         // on the binder's Light & decor page.
@@ -173,10 +173,8 @@ final class MooveSmokeTests: XCTestCase {
     func testRoomIn3D() {
         launch()
         open(tab: "Items", segment: "Inventory")
-        // Room actions live in the Rooms ⋯ menu (room chips show only the name).
-        let actions = app.buttons["inventory.roomActions"].firstMatch
-        XCTAssertTrue(actions.waitForExistence(timeout: slow) || scrollTo(actions), "room actions menu")
-        actions.tap()
+        // Room actions live on each row's ⋯ in the Rooms sheet.
+        openRoomActions(1)
         let view3D = app.buttons["View room in 3D"].firstMatch
         XCTAssertTrue(view3D.waitForExistence(timeout: slow))
         view3D.tap()
@@ -203,9 +201,7 @@ final class MooveSmokeTests: XCTestCase {
     func testShareAndJoinRoom() {
         launch()
         open(tab: "Items", segment: "Inventory")
-        let actions = app.buttons["inventory.roomActions"].firstMatch
-        XCTAssertTrue(actions.waitForExistence(timeout: slow) || scrollTo(actions), "room actions menu")
-        actions.tap()
+        openRoomActions(1)
         let share = app.buttons["Share Bedroom"].firstMatch
         XCTAssertTrue(share.waitForExistence(timeout: slow))
         share.tap()
@@ -217,11 +213,13 @@ final class MooveSmokeTests: XCTestCase {
         app.buttons["Done"].firstMatch.tap()
 
         join("DEMO42")
-        // The chip shows only the room's name; who shared it is in its VoiceOver label.
+        // The Rooms row shows only the room's name; who shared it is in its VoiceOver label.
+        openRooms()
         let shared = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "shared by Sam")).firstMatch
-        XCTAssertTrue(scrollTo(shared, down: false) || shared.exists, "roommate's room appears")
+        XCTAssertTrue(shared.waitForExistence(timeout: slow), "roommate's room appears")
         XCTAssertTrue(shared.label.hasPrefix("Living room"))
         snap("05-joined")
+        app.buttons["rooms.done"].tap()
 
         join("WRONG9", expectDismiss: false)
         let error = app.descendants(matching: .any)["join.error"].firstMatch
@@ -305,7 +303,7 @@ final class MooveSmokeTests: XCTestCase {
         snap("02-add-item-added")
     }
 
-    func testInventoryFocusesOnPickedRooms() {
+    func testRoomsPickerNarrowsInventory() {
         launch()
         // A second room: the demo scan, whose photo sweep adds a potted monstera.
         open(tab: "Scan")
@@ -318,17 +316,20 @@ final class MooveSmokeTests: XCTestCase {
         let plant = inventoryItem(named: "Potted monstera")
         turnPage("lightAndDecor")
         XCTAssertTrue(plant.waitForExistence(timeout: slow), "sweep item on the Light & decor page")
-        app.swipeDown(); app.swipeDown(); app.swipeDown()
-        // Focus on the original Bedroom (room 1): the demo bedroom's plant drops out.
-        let bedroom = app.buttons["inventory.focus.1"]
-        XCTAssertTrue(bedroom.waitForExistence(timeout: slow) || scrollTo(bedroom, down: false), "Bedroom card")
-        bedroom.tap()
-        XCTAssertTrue(app.buttons["inventory.showAllRooms"].waitForExistence(timeout: slow), "focus is on")
-        XCTAssertTrue(plant.waitForNonExistence(timeout: slow), "other room's items are hidden")
-        snap("02-inventory-focus")
-        app.buttons["inventory.showAllRooms"].tap()
+        // Uncheck the demo bedroom in Rooms: its plant drops out of Inventory.
+        let demoRoom = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'rooms.room.' AND label ==[c] 'Demo bedroom'")).firstMatch
+        openRooms()
+        XCTAssertTrue(demoRoom.waitForExistence(timeout: slow), "Demo bedroom row")
+        XCTAssertTrue(demoRoom.isSelected, "new rooms are in")
+        demoRoom.tap()
+        snap("02-rooms-picker")
+        app.buttons["rooms.done"].tap()
+        XCTAssertTrue(plant.waitForNonExistence(timeout: slow), "the unchecked room's items are out")
+        openRooms()
+        demoRoom.tap()
+        app.buttons["rooms.done"].tap()
         turnPage("lightAndDecor")
-        XCTAssertTrue(plant.waitForExistence(timeout: slow), "every room again")
+        XCTAssertTrue(plant.waitForExistence(timeout: slow), "back in")
     }
 
     func testMoveIsOnePage() {
@@ -391,6 +392,23 @@ final class MooveSmokeTests: XCTestCase {
     }
 
     /// Swipes until `element` is on screen (lazy lists don't load rows below the fold).
+    /// Opens the Rooms sheet from the button at the top of the screen.
+    private func openRooms() {
+        let button = app.buttons["rooms.button"]
+        XCTAssertTrue(button.waitForExistence(timeout: slow) || scrollTo(button, down: false), "Rooms button")
+        if !button.isHittable { _ = scrollTo(button, down: false) }
+        button.tap()
+        XCTAssertTrue(app.buttons["rooms.done"].waitForExistence(timeout: slow), "Rooms sheet")
+    }
+
+    /// Opens one room's ⋯ menu in the Rooms sheet.
+    private func openRoomActions(_ roomId: UInt64) {
+        openRooms()
+        let actions = app.buttons["rooms.actions.\(roomId)"]
+        XCTAssertTrue(actions.waitForExistence(timeout: slow), "room actions menu")
+        actions.tap()
+    }
+
     private func scrollTo(_ element: XCUIElement, down: Bool = true, maxSwipes: Int = 8) -> Bool {
         _ = element.waitForExistence(timeout: 2)
         for _ in 0..<maxSwipes where !(element.exists && element.isHittable) {

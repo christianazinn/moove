@@ -3,7 +3,7 @@ import MooveKit
 
 /// The Move tab: one page, no segments (Lisa, #335). Top to bottom:
 /// 1. **Your new home**: the name + Change home (or the picker until a home is chosen), the
-///    "Moving from" chip, the 3D stage with the fly-in and Rearrange; the one "By function" layout
+///    Rooms button ("Rooms in this move", `RoomsSheet`), the 3D stage with the fly-in and Rearrange; the one "By function" layout
 ///    saves itself (`Features/NewHome/`).
 /// 2. **Getting there**: the truck in 3D (tap it for full screen) with Load the truck, the box
 ///    cards by room with Print labels, and what's delivered (`Features/Pack/`).
@@ -46,7 +46,7 @@ struct MoveView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    home(furniture: furniture, input: input).id(Self.homeAnchor)
+                    home(furniture: furniture).id(Self.homeAnchor)
                     gettingThere(input).id(Self.gettingThereAnchor)
                     folds(furniture: furniture)
                 }
@@ -64,7 +64,7 @@ struct MoveView: View {
             plan = next
             truckLoad = TruckLoader.load(plan: next, items: new.items)
         }
-        .sheet(isPresented: $showRooms) { MovingRoomsSheet { showRooms = false } }
+        .sheet(isPresented: $showRooms) { RoomsSheet() }
         .sheet(isPresented: $showPicker) { pickerSheet }
         .sheet(item: $openBox) { box in
             // Look the box up again so a re-plan while the sheet is open shows fresh contents.
@@ -75,40 +75,34 @@ struct MoveView: View {
 
     // MARK: 1. Your new home
 
-    private func home(furniture: Furniture, input: PackInputs) -> some View {
-        VStack(alignment: .leading, spacing: 0) { homeContent(furniture: furniture, input: input) }
+    private func home(furniture: Furniture) -> some View {
+        VStack(alignment: .leading, spacing: 0) { homeContent(furniture: furniture) }
     }
 
     @ViewBuilder
-    private func homeContent(furniture: Furniture, input: PackInputs) -> some View {
+    private func homeContent(furniture: Furniture) -> some View {
         if let current {
             NewHomeHeader(current: current, onChange: { showPicker = true })
                 .padding(.horizontal, Theme.gutter)
                 .padding(.top, 20)
                 .padding(.bottom, 16)
-            movingFrom(input).padding(.bottom, 20)
+            roomsButton.padding(.bottom, 20)
             NewHomeStage(name: current.name, plan: current.plan, home: unsaved == nil ? store.newHome : nil,
                          furniture: furniture, layout: $layout, demoTag: furniture.isDemo)
         } else {
             NewHomePickerContent(onPick: choose)
                 .padding(.horizontal, Theme.gutter)
                 .padding(.top, 16)
-            movingFrom(input).padding(.top, 28)
+            roomsButton.padding(.top, 28)
         }
     }
 
-    /// One compact "Moving from" chip (it drives the layout, the boxes and the truck). Nothing for
-    /// the demo items: the small Demo tag on the 3D says so.
+    /// The Rooms button (it drives the layout, the boxes and the truck), once there are rooms.
     @ViewBuilder
-    private func movingFrom(_ input: PackInputs) -> some View {
-        Group {
-            if !input.demo && !input.choices.isEmpty {
-                MovingFromRow(movingFrom: MovingFrom(choices: input.choices, itemCount: input.items.count), idPrefix: "pack") {
-                    showRooms = true
-                }
-            }
+    private var roomsButton: some View {
+        if !store.snapshot.rooms.isEmpty {
+            RoomsButton { showRooms = true }.padding(.horizontal, Theme.gutter)
         }
-        .padding(.horizontal, Theme.gutter)
     }
 
     // MARK: 2. Getting there

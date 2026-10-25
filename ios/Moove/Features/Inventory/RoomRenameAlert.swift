@@ -1,7 +1,7 @@
 import SwiftUI
 import MooveKit
 
-/// Inventory room chip ⋯ → **Rename room**: an alert with the room's name in a text field.
+/// Rooms sheet row ⋯ → **Rename room**: an alert with the room's name in a text field.
 /// `MooveStore.renameRoom` calls `rename_room` (#370), or keeps the name on this device until
 /// the module has it, so every screen shows the new name either way.
 struct RoomRenameAlert: ViewModifier {

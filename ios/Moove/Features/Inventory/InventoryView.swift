@@ -4,7 +4,8 @@ import MooveKit
 /// The user's things as a tabbed binder (Lisa, #335): one page per function hall (MooveKit
 /// `FunctionHall`) behind a colored index tab, each page a wall of wooden shelves the items
 /// stand on (`InventoryBinder.shelves`). Tap an item for its placard (`MuseumLabel`).
-/// Room-level actions (share, 3D, hide, add) sit on the Rooms strip on top.
+/// The Rooms button on top picks which rooms are in ("Rooms in this move", `RoomsSheet`); its
+/// rows' ⋯ have Share, 3D, Add item and Rename.
 struct InventoryView: View {
     @Environment(MooveStore.self) private var store
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -14,7 +15,9 @@ struct InventoryView: View {
     /// Room opened in 3D from the room actions menu.
     @State private var room3D: Room?
     @State private var showJoin = false
-    @State private var showHidden = false
+    /// The Rooms sheet, and what a row's ⋯ asked for, run once it closes.
+    @State private var showRooms = false
+    @State private var roomAction: (RoomAction, Room)?
     /// Room id → (scan object id → the scanner's category), from each room's scan geometry,
     /// for the "was: storage" marker on items a later pass renamed (#267).
     @State private var scannedCategories: [UInt64: [String: String]] = [:]
@@ -25,8 +28,6 @@ struct InventoryView: View {
     @State private var deleting: Item?
     /// Add item (by hand) sheet, opened on this room.
     @State private var addingTo: Room?
-    /// Rename room alert (room chip ⋯), open on this room.
-    @State private var renamingRoom: Room?
     /// Item detail, pushed by tapping an exhibit.
     @State private var opened: UInt64?
     /// The binder page picked (a tab, a swipe); falls back to the first page.
@@ -44,34 +45,30 @@ struct InventoryView: View {
     @State private var retaking: Item?
     /// The user's own placard stories (item id → line), on this device only.
     @AppStorage(ItemStories.defaultsKey) private var storiesJSON = ""
-    /// Rooms Inventory is narrowed to (tap a room card); empty shows every room.
-    @AppStorage(InventoryFocus.defaultsKey) private var focusJSON = ""
 
     var body: some View {
         let rooms = store.snapshot.roomsNewestFirst(store.visibleRooms)
         let stories = ItemStories.decode(storiesJSON)
-        let focus = InventoryFocus.active(InventoryFocus.decode(focusJSON), rooms: rooms)
-        let shown = InventoryFocus.items(store.visibleItems, focus: focus)
-        screen(rooms: rooms, stories: stories, focus: focus, shown: shown)
+        let shown = store.visibleItems
+        screen(rooms: rooms, stories: stories, shown: shown)
             .sheet(item: $placard, onDismiss: runAfterPlacard) { placardSheet($0, shown: shown, stories: stories) }
             // A piece added by hand or by photo: turn to its page so it's in view.
             .onChange(of: store.visibleItems.map(\.id)) { old, new in itemsChanged(from: old, to: new) }
     }
 
-    private func screen(rooms: [Room], stories: [UInt64: String], focus: Set<UInt64>, shown: [Item]) -> some View {
+    private func screen(rooms: [Room], stories: [UInt64: String], shown: [Item]) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                if store.visibleItems.isEmpty {
+                if !store.snapshot.rooms.isEmpty {
+                    RoomsButton { showRooms = true }
+                }
+                if shown.isEmpty {
                     emptyState.padding(.top, 32)
                 } else {
                     totals(shown).padding(.top, 24)
                 }
-                if !rooms.isEmpty {
-                    roomsStrip(rooms, focus: focus).padding(.top, 24)
-                }
                 sweepNotes(rooms)
                 binderSection(shown, stories: stories)
-                hiddenRoomsFooter.padding(.top, Theme.Space.section)
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.top, 16)
@@ -95,7 +92,12 @@ struct InventoryView: View {
         }
         .sheet(item: $addingTo) { room in AddItemView(rooms: rooms, roomId: room.id) }
         .sheet(item: $sharing) { ShareRoomView(room: $0) }
-        .roomRenameAlert($renamingRoom)
+        .sheet(isPresented: $showRooms, onDismiss: runRoomAction) {
+            RoomsSheet { action, room in
+                roomAction = (action, room)
+                showRooms = false
+            }
+        }
         .sheet(isPresented: $showJoin) { JoinRoomView() }
         .fullScreenCover(item: $retaking) { item in
             CameraPicker { jpeg in
@@ -144,7 +146,7 @@ struct InventoryView: View {
         .task(id: geometryKey) { await loadScannedCategories() }
         .mooveScreen()
         .animation(.default, value: store.items)
-        .animation(.default, value: store.hiddenRoomIds)
+        .animation(.default, value: store.roomPicks)
     }
 
     @ViewBuilder
@@ -172,87 +174,17 @@ struct InventoryView: View {
         if let picked { turn(to: FunctionHall.of(picked), forward: true) }
     }
 
-    // MARK: Rooms strip
+    // MARK: Rooms
 
-    /// One chip per visible room, newest scan first: just its name (tap to focus). Every room
-    /// action (Share, 3D, Add item, Rename, Hide) is in one ⋯ menu by the heading, for the focused
-    /// rooms (or all of them), and in each chip's long-press menu.
-    private func roomsStrip(_ rooms: [Room], focus: Set<UInt64>) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center) {
-                Text("Rooms")
-                    .eyebrow()
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-                if !focus.isEmpty {
-                    Button("Show all rooms") { focusJSON = "" }
-                        .monoText(13, weight: .bold, maxScale: 1.4)
-                        .foregroundStyle(Theme.accentStrong)
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("inventory.showAllRooms")
-                }
-                Menu {
-                    ForEach(focus.isEmpty ? rooms : rooms.filter { focus.contains($0.id) }) { room in
-                        Section(room.name) { roomActions(room) }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 18))
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .foregroundStyle(Theme.muted)
-                .accessibilityLabel("Room actions")
-                .accessibilityIdentifier("inventory.roomActions")
-            }
-            ChipFlow(spacing: 8) {
-                ForEach(rooms) { roomChip($0, focus: focus) }
-            }
+    private func runRoomAction() {
+        guard let pending = roomAction else { return }
+        roomAction = nil
+        let (action, room) = pending
+        switch action {
+        case .share: sharing = room
+        case .view3D: room3D = room
+        case .addItem: addingTo = room
         }
-    }
-
-    /// Share, 3D, Add item here, Rename and Hide for one room.
-    @ViewBuilder
-    private func roomActions(_ room: Room) -> some View {
-        let shared = !isMine(room)
-        if !shared {
-            Button("Share \(room.name)", systemImage: "person.badge.plus") { sharing = room }
-        }
-        Button("View room in 3D", systemImage: "cube.transparent") { room3D = room }
-        Button("Add item here", systemImage: "plus") { addingTo = room }
-        if !shared {
-            Button("Rename room", systemImage: "pencil") { renamingRoom = room }
-                .accessibilityIdentifier("inventory.renameRoom.\(room.id)")
-        }
-        hideButton(room)
-    }
-
-    /// A room's name on a quiet capsule; sage when focused.
-    private func roomChip(_ room: Room, focus: Set<UInt64>) -> some View {
-        let shared = !isMine(room)
-        let count = store.visibleItems.filter { $0.roomId == room.id }.count
-        let focused = focus.contains(room.id)
-        return Button {
-            focusJSON = InventoryFocus.encode(InventoryFocus.toggling(room.id, in: focus))
-        } label: {
-            Text(room.name)
-                .monoText(13.5, weight: focused ? .bold : .regular, maxScale: 1.6)
-                .lineLimit(1)
-                .padding(.horizontal, 14)
-                .frame(minHeight: 40)
-                .foregroundStyle(focused ? Theme.accentInk : Theme.text)
-                .background(Capsule().fill(focused ? Theme.accentFill : Theme.surface))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .contextMenu { roomActions(room) }
-        // VoiceOver keeps what the chip used to print: demo, item count, scan date, who shared it.
-        .accessibilityLabel(roomSpoken(room, shared: shared, count: count))
-        .accessibilityValue(focused ? "Shown" : focus.isEmpty ? "" : "Not shown")
-        .accessibilityHint(focused ? "Stops focusing on this room" : "Shows only the rooms you pick")
-        .accessibilityIdentifier("inventory.focus.\(room.id)")
-        .accessibilityAction(named: "Hide room") { store.setRoom(room.id, hidden: true) }
-        .accessibilityAction(named: "Rename room") { if !shared { renamingRoom = room } }
     }
 
     /// Room photo sweep (#92): the worker is naming "other" boxes and adding missed items.
@@ -562,56 +494,6 @@ struct InventoryView: View {
         renaming = item
     }
 
-    private func hideButton(_ room: Room) -> some View {
-        Button("Hide room", systemImage: "eye.slash") { store.setRoom(room.id, hidden: true) }
-    }
-
-    /// "Bedroom, demo scan, 12 items, scanned Today 10:42, shared by Sam".
-    private func roomSpoken(_ room: Room, shared: Bool, count: Int) -> String {
-        var parts = [room.name]
-        if store.snapshot.isDemoRoom(room.id) { parts.append("demo scan") }
-        parts.append(count == 1 ? "1 item" : "\(count) items")
-        if let date = store.snapshot.scanDate(ofRoom: room.id).map({ ScanDateLabel.text($0) }) { parts.append("scanned \(date)") }
-        if shared { parts.append("shared by \(ownerName(of: room))") }
-        return parts.joined(separator: ", ")
-    }
-
-    // MARK: Hidden rooms
-
-    @ViewBuilder
-    private var hiddenRoomsFooter: some View {
-        let hidden = store.snapshot.roomsNewestFirst(store.hiddenRooms)
-        if !hidden.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                Button {
-                    showHidden.toggle()
-                } label: {
-                    Label(showHidden ? "Hide hidden rooms" : "Show hidden rooms (\(hidden.count))",
-                          systemImage: showHidden ? "chevron.up" : "eye")
-                }
-                .buttonStyle(.pill(.outline, compact: true))
-                if showHidden {
-                    ForEach(hidden) { room in
-                        let count = store.items.filter { $0.roomId == room.id }.count
-                        let date = store.snapshot.scanDate(ofRoom: room.id).map { ScanDateLabel.text($0) }
-                        let demo = store.snapshot.isDemoRoom(room.id)
-                        LedgerRow(
-                            title: room.name,
-                            meta: [demo ? "Demo" : nil, date, "\(count) items"].compactMap { $0 }.joined(separator: " · ")
-                        ) {
-                            IconTile(systemName: "eye.slash")
-                        } trailing: {
-                            Button("Unhide") { store.setRoom(room.id, hidden: false) }
-                                .buttonStyle(.pill(.outline, compact: true))
-                                .accessibilityLabel("Unhide \(room.name)")
-                        }
-                    }
-                    .padding(.top, 12)
-                }
-            }
-        }
-    }
-
     // MARK: Scan geometry (rename marker)
 
     /// Changes when a visible room's newest scan changes.
@@ -631,21 +513,23 @@ struct InventoryView: View {
         scannedCategories = out
     }
 
+    @ViewBuilder
     private var emptyState: some View {
-        EmptyState(title: "No items yet", detail: "Scan a room to build your inventory, or join a shared one with its code.") {
-            Button("Join a room") { showJoin = true }
-                .buttonStyle(.pill(.outline, compact: true))
+        if store.snapshot.items.contains(where: { !$0.isBuiltInFixture }) {
+            EmptyState(title: "No rooms selected", detail: "Pick rooms to see their items.", children: .contain) {
+                Button("Choose rooms") { showRooms = true }
+                    .buttonStyle(.pill(.outline, compact: true))
+            }
+        } else {
+            EmptyState(title: "No items yet", detail: "Scan a room to build your inventory, or join a shared one with its code.") {
+                Button("Join a room") { showJoin = true }
+                    .buttonStyle(.pill(.outline, compact: true))
+            }
         }
     }
 
     /// Rooms are mine unless someone shared them with me through a join code (#10).
     private func isMine(_ room: Room) -> Bool { room.owner == store.snapshot.me }
-
-    /// The owner's name when their user row is visible; the live app only subscribes
-    /// to its own user row, so shared rooms usually say "someone".
-    private func ownerName(of room: Room) -> String {
-        store.snapshot.users.first { $0.identity == room.owner }?.name ?? "someone"
-    }
 
     /// Item count, room count and estimated value between rules, split by hairlines.
     /// The one number that matters here: what it's all worth.

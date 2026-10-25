@@ -4,7 +4,7 @@
 
 **Decision.**
 
-*Which items move* (MooveKit `MovingRooms`, New Home's "Moving from" row and picker):
+*Which items move* (MooveKit `MovingRooms`, New Home's "Moving from" row and picker; since replaced by the one Rooms selection, see the addendum at the end):
 - By default only the newest scan of each room name moves. Older rooms with the same name are treated as re-scans. A room with nothing kept counts as picked.
 - **Moving from N rooms · M items ›** opens a checklist of every visible scanned room (name, scan time, kept-item count, Demo tag) with Select all and None. The picks are saved on this device (UserDefaults `moove.newHome.rooms`, like the hidden rooms in #271), and ids of deleted rooms are dropped. With no rooms picked, New Home shows a "Choose rooms" empty state.
 - If two same-named rooms are both picked, near-identical items in them (same role, sizes within 15% or 12 cm) are deduped one for one. Rooms with different names are never deduped, since two kids' rooms can have the same bed.
@@ -45,3 +45,10 @@ Styles: **By function** uses the full rules. **Compact** uses fewer rooms (the d
 - Havenly, living room layout. https://havenly.com/blog/living-room-layout ; Rayon, living room rules. https://rayon.design/knowledge-base/living-room/rules : coffee table 14–18", seats 7–10 ft apart.
 - Homes & Gardens, bed placement. https://homesandgardens.com/interior-design/bedrooms/where-should-a-bed-be-placed-in-a-room ; Livingetc, headboard wall. https://www.livingetc.com/news/bed-headboard-layout-tip : solid wall, not under a window, see the door but not in line with it.
 - Bedroom clearance guide. https://checkout.mattressstoreslosangeles.com/blogs/mattress-buying-guide/how-to-arrange-bedroom-furniture : 24–36" beside the bed, 36" in front of a dresser, 30–36" main walkways.
+
+## Addendum: one room selection (Oct 25, #335)
+
+**Context.** Three overlapping room choices had grown up: Inventory's room focus (#336, tap a room chip), Hide room (#271, `moove.hiddenRooms`, "Show hidden rooms" footer) and Move's "Moving from" picks (#307/#320, `MovingRooms`, `moove.newHome.rooms`). Lisa approved merging them into one.
+
+**Decision.** One per-device setting, **Rooms in this move** (MooveKit `RoomSelection`, `MooveStore.roomPicks` / `roomChoices`, UserDefaults `moove.rooms`). Default as above: the newest scan of each room name is in, older same-named rooms are out, a room with no items is in. Only the user's changes to the default are stored ("+id" / "-id"), so a new scan joins and a re-scan replaces its namesake on its own. Not selected == hidden: `visibleSnapshot` / `visibleItems` / `visibleRooms` drop those rooms, so Inventory, Review (deck, board, kg banner), Scan home and Move (layout, fly-in, truck, boxes via `MoveItems`) agree; Listings, Shopping and Agents read the full snapshot, so money stays visible for every room. Near-duplicates between two kept-in same-named rooms are still deduped (`RoomSelection.moving`). One UI: a compact **Rooms** pill (`rooms.button`, `Shared/RoomsPicker.swift`) at the top of Inventory and Move opens the same checklist (`RoomsSheet`: names only, Select all / None, `rooms.room.<id>`; each row's ⋯ `rooms.actions.<id>` or long-press has Share, View room in 3D, Add item here on Inventory, and Rename room). Hide room, Show hidden rooms, the room chips' focus tap and the Moving from row are gone. The old values are folded in once by `RoomSelection.load` (moving picks, then focused rooms in, then hidden rooms out; rooms outside an old focus aren't taken out) and the old keys removed.
+

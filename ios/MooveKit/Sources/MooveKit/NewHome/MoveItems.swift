@@ -2,13 +2,13 @@ import Foundation
 
 /// The one set of things Move works with, so the layout, the fly-in, the truck and the boxes all
 /// show the items Review shows under **Keep** (#335):
-/// - `kept`: Review's Keep pile (`ReviewSection.of == .keep`) from the rooms picked in "Moving
-///   from" (`MovingRooms.items`: older re-scans of a room are left out). New Home lays these out,
-///   and the truck and boxes carry them.
+/// - `kept`: Review's Keep pile (`ReviewSection.of == .keep`) from the selected rooms
+///   (`RoomSelection`; near-duplicates from a kept-in re-scan dropped by `RoomSelection.moving`).
+///   New Home lays these out, and the truck and boxes carry them.
 /// - `withYou`: sentimental things still waiting on you (Review's Needs you, not sold or thrown
 ///   out). Never auto-decided, so they aren't laid out; Pack puts them in "Keep with you".
 /// - `bought`: purchased shopping items, delivered to the new home (not packed, not on the truck).
-/// Pass the visible snapshot (hidden rooms and built-ins already out, like Inventory and Review).
+/// Pass the visible snapshot (unselected rooms and built-ins already out, like Inventory and Review).
 /// With nothing kept, sentimental or bought yet, Move shows the offline demo's set instead
 /// (`isDemo`), worked out the same way.
 public struct MoveItems: Sendable, Equatable {
@@ -33,21 +33,19 @@ public struct MoveItems: Sendable, Equatable {
     }
 
     /// - Parameters:
-    ///   - visible: the snapshot without hidden rooms and built-ins.
-    ///   - overrides: the user's "Moving from" picks (`MovingRooms`).
-    ///   - demo: the fixture to fall back on when there's nothing of the user's.
-    public static func of(_ visible: SyncSnapshot, overrides: [UInt64: Bool], demo: @autoclosure () -> SyncSnapshot) -> MoveItems {
-        let mine = resolve(visible, overrides: overrides, isDemo: false)
+    ///   - visible: the snapshot with only the selected rooms, without built-ins.
+    ///   - demo: the fixture to fall back on when there's nothing of the user's (its default
+    ///     room selection applies).
+    public static func of(_ visible: SyncSnapshot, demo: @autoclosure () -> SyncSnapshot) -> MoveItems {
+        let mine = resolve(visible, isDemo: false)
         if !mine.packed.isEmpty || !mine.bought.isEmpty { return mine }
-        return resolve(demo().withoutBuiltIns(), overrides: [:], isDemo: true)
+        return resolve(demo().withoutBuiltIns().selectingRooms([:]), isDemo: true)
     }
 
-    static func resolve(_ snapshot: SyncSnapshot, overrides: [UInt64: Bool], isDemo: Bool) -> MoveItems {
-        let keep = keep(snapshot.items)
-        let choices = MovingRooms.choices(snapshot, keptItems: keep, overrides: overrides)
-        return MoveItems(
-            kept: MovingRooms.items(keep, choices: choices),
-            withYou: MovingRooms.items(waitingSentimental(snapshot.items), choices: choices),
+    static func resolve(_ snapshot: SyncSnapshot, isDemo: Bool) -> MoveItems {
+        MoveItems(
+            kept: RoomSelection.moving(keep(snapshot.items), in: snapshot),
+            withYou: RoomSelection.moving(waitingSentimental(snapshot.items), in: snapshot),
             bought: snapshot.boughtPieces,
             boughtLayout: snapshot.boughtLayoutItems,
             isDemo: isDemo

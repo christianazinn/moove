@@ -55,7 +55,7 @@ import Testing
     }
 }
 
-/// Commerce screens and hidden rooms (#271): hiding a room is a local Inventory filter. Money and
+/// Commerce screens and unchecked rooms (#271, now the Rooms selection): leaving a room out is a local filter. Money and
 /// approvals for its items are real, so the commerce rows must survive `hidingRooms`.
 @Suite struct CommerceHiddenRoomTests {
     @Test func hidingARoomKeepsEveryCommerceRow() {

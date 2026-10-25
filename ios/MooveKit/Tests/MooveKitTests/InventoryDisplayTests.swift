@@ -20,10 +20,7 @@ import Testing
         return s
     }
 
-    @Test func hiddenRoomsRoundTripAndFilter() {
-        #expect(HiddenRooms.decode(HiddenRooms.encode([3, 1])) == [1, 3])
-        #expect(HiddenRooms.decode(nil).isEmpty)
-        #expect(HiddenRooms.decode(["7", "junk"]) == [7])
+    @Test func hidingRoomsFilters() {
         let s = snapshot
         let visible = s.hidingRooms([1])
         #expect(visible.rooms.map(\.id) == [2, 3])

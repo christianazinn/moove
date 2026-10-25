@@ -24,7 +24,7 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 
 ### 2. 0:15–0:27 Claude names what it sees
 - **VO:** "Claude looks at the photos the scan already took, plus the LiDAR sizes, and names each item: brand, material, condition. It also catches things the scanner missed."
-- **ON SCREEN:** **See inventory** > Items > Inventory, the museum: "Identifying items from room photos…", then names filling in on the exhibits, grouped into halls by function ("The Sleep Hall", "The Work & Study Hall"…), each a voxel model on a plinth with a short placard (name, brand · size, a one-line story, price). Each placard's chip says where it came from: **Scanned** (LiDAR box) or **From photos** (the sweep found it). Tap the room's card in the Rooms strip to focus on just this scan ("Showing 1 of N rooms").
+- **ON SCREEN:** **See inventory** > Items > Inventory, the museum: "Identifying items from room photos…", then names filling in on the exhibits, grouped into halls by function ("The Sleep Hall", "The Work & Study Hall"…), each a voxel model on a plinth with a short placard (name, brand · size, a one-line story, price). Each placard's chip says where it came from: **Scanned** (LiDAR box) or **From photos** (the sweep found it). **Rooms** at the top shows which scans are in; uncheck one to leave it out.
 - **STATE:** Live scan on Demo (vision and the photo sweep need the worker and photos; each costs Claude calls).
 - **TRACK:** Anthropic (vision + room photo sweep).
 - **FALLBACK:** Offline demo after **Load demo scan**: the offline demo plays the sweep (a potted monstera appears). Then the names are fixture data, so cut "Claude names" to "Moove names" or say it's sample data.
@@ -95,7 +95,7 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 ## Before recording
 - [ ] **Devices:** a LiDAR iPad Pro or iPhone for shot 1, a second phone for shot 4, both on the latest `main` build, charged.
 - [ ] **Backend:** `cd agents && npm run status` shows `moove-demo` UP (worker online, uploads healthy). Check the Claude/Apify daily caps aren't used up (`docs/demo.md`, "Before the demo").
-- [ ] **Hide old test rooms** on every device, on Demo and Live: Items > Inventory > the room's card in the Rooms strip > **⋯** > **Hide room**. It's local to the device and deletes nothing; **Show hidden rooms (N)** at the bottom brings them back. Hidden rooms also stay out of the Scan hero, Review's kg-kept banner, New Home and Pack.
+- [ ] **Uncheck old test rooms** on every device, on Demo and Live: Items > Inventory > **Rooms** (top) > uncheck them > Done. It's local to the device and deletes nothing; check a room again to bring it back. Unchecked rooms also stay out of the Scan hero, Review (and its kg-kept banner) and Move.
 - [ ] **Seeded room:** both devices on Demo and joined to `4RZ9G8`, the Bedroom visible with prices. For the Demo approval fallback in shot 6, ask Christian to run `--reset-commerce`.
 - [ ] **Do Not Disturb** on every device and the laptop (no Guardian, Slack or message banners).
 - [ ] **Screen recording** in Control Center on each device; laptop browser tab with the Basescan proof tx loaded.
