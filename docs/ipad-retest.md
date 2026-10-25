@@ -45,16 +45,16 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
   - The **Plan box is right but the voxel piece is wrong**: that's a model error.
 - **Report if wrong:** the piece, its Plan box (size, spot), what Voxel drew, and which of the two errors it is. Screenshots of both.
 
-### 5. Inventory: the museum (halls by function, placards)
-- **Taps:** Items → Inventory. Scroll the halls; tap a placard's story line and type "Grandma's, 1974", **Save**; tap an exhibit; long-press another. Then rotate the iPad, and try the largest text size.
+### 5. Inventory: the binder (a page per function, items on shelves)
+- **Taps:** Items → Inventory. Tap each colored index tab, then swipe the page left and right; tap an item on a shelf, then in its placard tap the story line and type "Grandma's, 1974", **Save**; long-press another item. Then rotate the iPad, try dark mode, the largest text size, and Reduce Motion.
 - **Expected:**
-  - A **Rooms** strip on top: one chip per room, newest scan first, with item count, scan time ("Today 15:42"), a **Demo** tag for **Load demo scan** rooms and "Shared by …" for joined ones, plus Share / **3D** / **⋯** (Add item here, Rename room, Hide room).
-  - Halls by what things are for, biggest first ("The Work & Study Hall · 4 pieces · est. $610"), "Cabinet of Curiosities" last. An office chair is in Work & study, a nightstand in Sleep.
-  - Each exhibit: the voxel model on a plinth under a soft light, the most valuable piece of each hall a bit taller, a gold ribbon on possibly sentimental ones. The placard: name (serif), catalog line in small caps ("HERMAN MILLER · 70 × 110 CM", "≈" for estimated sizes, "· WAS: STORAGE" on renamed scan items), a one-line story, the price and one origin chip (**Scanned**, **From photos**, **Added by photo**, **Added by you** or **Shared**), then "".
-  - Your story replaces the auto one in quotes, and its year shows as "Acquired 1974 · catalogued …". It stays after relaunch (this iPad only).
-  - Tap opens the item; long-press shows Open, Edit story, Rename, What is it?, Turn around, Rotate 90°, Not a real item, Delete item.
-  - iPad: three columns, staggered like a hung wall (iPhone two, largest text sizes one). Dark mode reads well.
-- **Report if wrong:** the item, its hall or line, what it should be, plus a screenshot (this is the first look on an iPad).
+  - A **Rooms** strip on top: one chip per room, newest scan first, with item count, scan time ("Today 15:42"), a **Demo** tag for **Load demo scan** rooms and "Shared by …" for joined ones, plus Share / **3D** / **⋯** (Add item here, Rename room, Hide room). Tapping a chip still narrows the binder to that room.
+  - A binder: one page per function (Sleep, Work & study, …, biggest first, "Everything else" last). iPad: colored index tabs down the page's right edge; iPhone: folder tabs across the top that scroll sideways. Each tab says the name and count, and keeps its color (Sleep is always slate). The page heading is the name (serif) and "4 pieces · est. $610"; holes along the left edge.
+  - Each page is a wall of chunky wooden shelves (5 cm blocks, grain, brackets): smallest things on the top planks, larger pieces sharing planks with them when they fit (each at its own size), beds/sofas/bookcases/floor lamps on the floor row. iPad fits about 6 per plank, iPhone 2–3; a plank rarely holds just one thing. Each item stands on the wood as its voxel model with a small hanging tag (name, price; a gold bookmark on possibly sentimental ones).
+  - Swiping turns the page with a slide; with Reduce Motion it crossfades. An office chair is on Work & study, a nightstand on Sleep.
+  - Tapping an item opens its placard: the model on a plinth, name, a short size line, the one-line story, price and origin chip, with **Open details**, **Fix it** and **Delete**. Your story replaces the auto one and stays after relaunch (this iPad only). Long-press still shows Open, Edit story, Rename, What is it?, Turn around, Rotate 90°, Not a real item, Delete item.
+  - Largest text sizes: each page becomes a plain list. Dark mode: walnut shelves on a deep wall. VoiceOver: tabs read "Sleep, 4 pieces, page 1 of 6", each item is one button, three-finger swipe turns pages.
+- **Report if wrong:** the item, its page or shelf, what it should be, plus a screenshot.
 
 ### 6. Misread pieces
 - **Taps:** the 3D pill → **Voxel**. Find the pieces that were wrong this morning.
