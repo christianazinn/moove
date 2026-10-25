@@ -106,6 +106,33 @@ test('a run that fits under the cap still goes live; only the rest are skipped',
   assert.equal(Number(apifySpentToday().usd.toFixed(3)), 0.45);
 });
 
+test('Apify out of credit (403): the bookings are given back, the search says why, later searches skip live runs', async () => {
+  const { clearApifyDown } = await import('../src/integrations/apify.js');
+  setSpent(0.1, 1);
+  calls = [];
+  const broke = (async (u: URL | string) => {
+    calls.push(String(u).match(/acts\/([^/]+)\//)![1]);
+    return new Response('{"error":{"type":"platform-feature-disabled","message":"Monthly usage hard limit exceeded"}}', { status: 403 });
+  }) as typeof fetch;
+  const notices: { message: string; data?: Record<string, unknown> }[] = [];
+  const src = () => createDealSource(process.env, { fetch: broke, cacheDir: mkdtempSync(path.join(dir, 'cache-')), replayDir, fallback: fixtureDealSource([]) });
+  await src().search({ name: 'Bookshelf', category: 'bookshelf' }, { onNotice: n => notices.push(n) });
+  assert.equal(calls.length, 2);
+  const spent = () => ({ usd: Number(apifySpentToday().usd.toFixed(6)), runs: apifySpentToday().runs });
+  assert.deepEqual(spent(), { usd: 0.1, runs: 1 }, 'no phantom spend for runs that never started');
+  assert.equal(notices.length, 1);
+  assert.match(notices[0].message, /^Live Apify search for "Bookshelf" failed \(.*HTTP 403.*\), using cached replays \/ sample deals instead/);
+  assert.equal(notices[0].data?.apifyError, true);
+
+  calls = [];
+  notices.length = 0;
+  await src().search({ name: 'Lamp', category: 'lamp' }, { onNotice: n => notices.push(n) });
+  assert.equal(calls.length, 0, 'no doomed runs while Apify is out of credit');
+  assert.deepEqual(spent(), { usd: 0.1, runs: 1 });
+  assert.match(notices[0].message, /^Apify unavailable \(out of credit\): skipped the live search for "Lamp"/);
+  clearApifyDown();
+});
+
 test('cached replays are free: no token never books spend', async () => {
   setSpent(0, 0);
   const noToken = { ...process.env, APIFY_TOKEN: '' };

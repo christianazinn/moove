@@ -83,3 +83,22 @@ test("no APIFY_TOKEN: no search", async () => {
   const r = await lensSearch("https://t.trycloudflare.com/files/x.jpg", { token: "" });
   assert.deepEqual(r, { matches: [], replayed: false, costUsd: 0 });
 });
+
+test("Apify out of credit (403): no error, the booking is given back, and Lens rests for a while", async () => {
+  const { clearLensDown } = await import("../src/integrations/lens.js");
+  let calls = 0;
+  const fake = (async () => {
+    calls++;
+    return new Response('{"error":{"type":"platform-feature-disabled","message":"Monthly usage hard limit exceeded"}}', { status: 403 });
+  }) as unknown as typeof fetch;
+  const before = apifySpentToday();
+  const r = await lensSearch("https://t.trycloudflare.com/files/broke.jpg", { token: "test", fetch: fake, maxUsd: 0.005 });
+  assert.equal(r.refused, true);
+  assert.match(r.reason ?? "", /Apify unavailable/);
+  assert.equal(calls, 1);
+  assert.equal(Number(apifySpentToday().usd.toFixed(6)), Number(before.usd.toFixed(6)), "nothing was charged, nothing stays booked");
+  const again = await lensSearch("https://t.trycloudflare.com/files/broke2.jpg", { token: "test", fetch: fake, maxUsd: 0.005 });
+  assert.equal(again.refused, true);
+  assert.equal(calls, 1, "no second doomed call");
+  clearLensDown();
+});
