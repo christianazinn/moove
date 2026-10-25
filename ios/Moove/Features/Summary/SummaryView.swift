@@ -1,12 +1,24 @@
 import SwiftUI
 import MooveKit
 
-/// The closing screen of the demo: what happened to everything, the money,
-/// what the agents did, and how much stayed out of landfill. Live: it
-/// recomputes from the store on every snapshot.
+/// The closing screen of the demo, "Your move, handled." (#335): the new home turning slowly
+/// with the kept pieces in place, the story in one line, Made / Spent / Net, where everything
+/// went, the landfill impact, the guardrails as a receipt, the agents' key steps and
+/// "Share my move". Live: it recomputes from the store on every snapshot.
 struct SummaryView: View {
     @Environment(MooveStore.self) private var store
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @AppStorage("moove.tab") private var tab = "summary"
+
+    @State private var heroImage: UIImage?
+    @State private var heroShots = 0
+    @State private var shareImage: Image?
+    @State private var openPile: OpenPile?
+
+    private struct OpenPile: Identifiable {
+        let destination: Disposition
+        var id: String { destination.rawValue }
+    }
 
     /// Spend and agent steps come from the `payment` and `agent_event` tables. With no
     /// rows yet (nothing has run), show labeled demo lines so the closing slide isn't empty.
@@ -14,31 +26,38 @@ struct SummaryView: View {
 
     private var sales: [MoveSummary.Sale] { MoveSummary.sales(from: store.snapshot) }
 
+    private static let timelineLimit = 12
+
     private var summary: MoveSummary {
         let snap = store.visibleSnapshot
-        guard usingDemoActivity else { return MoveSummary(snapshot: snap) }
-        return MoveSummary(items: snap.items, sales: sales, spend: SummaryDemo.spend, events: SummaryDemo.events())
+        guard usingDemoActivity else { return MoveSummary(snapshot: snap, timelineLimit: Self.timelineLimit) }
+        return MoveSummary(items: snap.items, sales: sales, spend: SummaryDemo.spend, events: SummaryDemo.events(),
+                           timelineLimit: Self.timelineLimit)
     }
+
+    private var simulatedTag: Bool { summary.hasSimulatedMoney || usingDemoActivity }
 
     var body: some View {
         let s = summary
+        let home = SummaryHome.current(store)
+        let story = SummaryPayoff.story(s)
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                MooveWordmark(height: 36).padding(.top, 8).padding(.bottom, 32)
-                PageHeader(
-                    title: "Your move, handled.",
-                    lede: store.visibleItems.isEmpty ? nil : "\(s.itemCount) items, start to finish."
-                )
+                MooveWordmark(height: 32).padding(.top, 8).padding(.bottom, 24)
                 if store.visibleItems.isEmpty {
+                    PageHeader(title: SummaryHero.title)
                     emptyState.padding(.top, 36)
                 } else {
-                    stats(s).padding(.top, 32)
-                    dispositions(s)
-                    itemLists(s)
-                    money(s)
+                    SummaryHero(home: home, story: story) { image in
+                        heroImage = image
+                        heroShots += 1
+                    }
+                    figures(s).padding(.top, 24)
+                    share(s, home: home, story: story).padding(.top, 16)
+                    whereItWent
                     impact(s)
-                    agents(s)
                     safety(SafetySummary(snapshot: store.snapshot))
+                    agents(s)
                 }
             }
             .padding(.horizontal, Theme.gutter)
@@ -48,6 +67,17 @@ struct SummaryView: View {
         .navigationTitle("Summary")
         .navigationBarTitleDisplayMode(.inline)
         .mooveScreen()
+        .sheet(item: $openPile) { pile in
+            NavigationStack {
+                ReviewPileScreen(destination: pile.destination)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { openPile = nil }.monoText(13, weight: .bold, maxScale: 1.4)
+                        }
+                    }
+            }
+            .environment(store)
+        }
     }
 
     private var emptyState: some View {
@@ -64,171 +94,40 @@ struct SummaryView: View {
         .ruled()
     }
 
-    // MARK: Sections
+    // MARK: Made / Spent / Net
 
-    /// Two headline figures side by side, split by a hairline, between rules.
-    private func stats(_ s: MoveSummary) -> some View {
-        HStack(spacing: 0) {
-            StatFigure(label: "Net", value: s.netMicros.netUSD, tint: s.netMicros >= 0 ? Theme.accentStrong : Theme.danger)
-                .padding(.vertical, 18)
-                .padding(.trailing, 20)
-            Rectangle().fill(Theme.line).frame(width: 1).accessibilityHidden(true)
-            StatFigure(label: "Kept from landfill", value: "\(Int(s.divertedKg.rounded())) kg")
-                .accessibilityLabel("Kept from landfill, \(Int(s.divertedKg.rounded())) kilograms")
-                .padding(.vertical, 18)
-                .padding(.leading, 20)
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .ruled(.top)
-        .ruled()
-    }
-
-    private static let order: [Disposition] = [.keep, .sell, .donate, .trash, .undecided]
-
-    private func dispositions(_ s: MoveSummary) -> some View {
-        section("Where everything went", count: "\(s.itemCount)") {
-            let total = max(s.itemCount, 1)
-            GeometryReader { geo in
-                HStack(spacing: 2) {
-                    ForEach(Self.order.filter { (s.counts[$0] ?? 0) > 0 }, id: \.self) { d in
-                        Rectangle()
-                            .fill(Self.color(d))
-                            .frame(width: max(4, geo.size.width * CGFloat(s.counts[d] ?? 0) / CGFloat(total) - 2))
-                    }
+    /// Net big on top, Made and Spent side by side under it (one column at accessibility sizes),
+    /// then one line per payment rail. Same figures as before the redesign (`DemoNumbersTests`).
+    private func figures(_ s: MoveSummary) -> some View {
+        let simulated = s.rails.map(\.simulatedMicros).reduce(0, +)
+        let real = s.spentMicros - simulated
+        let net = SummaryFigure(
+            label: "Net", value: s.netMicros.netUSD, tint: s.netMicros >= 0 ? Theme.accentStrong : Theme.danger, size: 38,
+            meter: SummaryPayoff.inShare(s), meterTint: Theme.accent, meterRest: Theme.ochre.opacity(0.55),
+            caption: "In \((s.soldCents + s.pendingSalesCents).usd) · out \(UsdMicros.format(s.spentMicros)). Unsold items at listing price or estimate.",
+            tag: simulatedTag ? "Simulated" : nil)
+        let made = SummaryFigure(
+            label: "Made", value: s.soldCents.usd, tint: Theme.accentStrong,
+            meter: SummaryPayoff.soldShare(s), meterTint: Theme.accent,
+            caption: s.pendingSalesCents > 0 ? "+\(s.pendingSalesCents.usd) still selling" : "Nothing left to sell",
+            spoken: "Made, \(s.soldCents.usd) sold, \(s.pendingSalesCents.usd) still selling")
+        let spent = SummaryFigure(
+            label: "Spent", value: UsdMicros.format(s.spentMicros), tint: Theme.ochreInk,
+            meter: s.spentMicros > 0 ? SummaryPayoff.simulatedShare(s) : nil, meterTint: Theme.ochre, meterRest: Theme.accent,
+            caption: simulated > 0 ? "\(UsdMicros.format(simulated)) simulated · \(UsdMicros.format(real)) real" : nil,
+            tag: simulatedTag ? "Sim" : nil)
+        return VStack(alignment: .leading, spacing: 12) {
+            net
+            if dynamicTypeSize.isAccessibilitySize {
+                made
+                spent
+            } else {
+                HStack(alignment: .top, spacing: 12) {
+                    made
+                    spent
                 }
-                .clipShape(Capsule())
+                .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(height: 8)
-            .padding(.vertical, 18)
-            .accessibilityHidden(true)
-            ForEach(Self.order, id: \.self) { d in
-                HStack(spacing: 12) {
-                    Circle().fill(Self.color(d)).frame(width: 8, height: 8).accessibilityHidden(true)
-                    Text(Self.label(d)).monoText(13.5)
-                    Spacer()
-                    Text("\(s.counts[d] ?? 0)").monoText(13.5, weight: .bold)
-                }
-                .padding(.vertical, 12)
-                .frame(minHeight: 44)
-                .ruled()
-                .accessibilityElement(children: .combine)
-            }
-            if s.needsYou > 0 {
-                Text("\(s.needsYou) still need you · sentimental or undecided")
-                    .monoText(13.5)
-                    .foregroundStyle(Theme.danger)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 12)
-            }
-        }
-    }
-
-    /// The items themselves: what's coming along, what went where, what's still open.
-    @ViewBuilder
-    private func itemLists(_ s: MoveSummary) -> some View {
-        let items = store.visibleItems.sorted { a, b in
-            let ra = Self.order.firstIndex(of: a.disposition) ?? 0, rb = Self.order.firstIndex(of: b.disposition) ?? 0
-            return ra != rb ? ra < rb : a.name < b.name
-        }
-        let sale = bestSales
-        let kept = items.filter { $0.disposition == .keep }
-        let goneTo: Set<Disposition> = [.sell, .donate, .trash]
-        let gone = items.filter { goneTo.contains($0.disposition) }
-        let open = items.filter { $0.disposition == .undecided }
-
-        if !kept.isEmpty {
-            section("Coming with you", count: "\(kept.count)") {
-                ForEach(kept) { item in
-                    itemRow(item, state: "Kept", value: item.estValueCents.map(\.usd), sale: nil)
-                }
-                Text("\(s.keptVolumeM3, format: .number.precision(.fractionLength(1))) m³ to move")
-                    .monoMeta()
-                    .accessibilityLabel("\(Spoken.volume(s.keptVolumeM3)) to move")
-                    .padding(.top, 12)
-            }
-        }
-        if !gone.isEmpty {
-            section("Let go", count: "\(gone.count)") {
-                ForEach(gone) { item in
-                    let line = sale[item.id]
-                    itemRow(item, state: Self.state(item.disposition, line), value: line.map { $0.priceCents.usd }, sale: line)
-                }
-            }
-        }
-        if !open.isEmpty {
-            section("Still deciding", count: "\(open.count)") {
-                ForEach(open) { item in
-                    itemRow(item, state: item.maybeSentimental ? "Sentimental · yours to call" : "Undecided", value: nil, sale: nil)
-                }
-            }
-        }
-    }
-
-    private func itemRow(_ item: Item, state: String, value: String?, sale: MoveSummary.Sale?) -> some View {
-        LedgerRow(
-            title: item.name,
-            meta: "\(String(format: "%.1f × %.1f m", item.widthM, item.depthM)) · \(state)",
-            value: value,
-            valueTint: sale?.stage == .sold ? Theme.accentStrong : Theme.text
-        ) {
-            VoxelThumbnail(item)
-        } trailing: {
-            if sale?.simulated == true && sale?.stage != .estimated { MonoTag(text: "Sim", tone: Theme.ochreInk) }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(([
-            item.name, Spoken.size(item.widthM, item.depthM), state, value,
-            sale?.simulated == true && sale?.stage != .estimated ? "simulated" : nil,
-        ] as [String?]).compactMap { $0 }.joined(separator: ", "))
-    }
-
-    /// One sale line per item, the furthest-along stage winning (the same rule `MoveSummary` totals with).
-    private var bestSales: [UInt64: MoveSummary.Sale] {
-        func rank(_ stage: MoveSummary.Sale.Stage) -> Int {
-            switch stage {
-            case .estimated: 0
-            case .listed: 1
-            case .sold: 2
-            }
-        }
-        var best: [UInt64: MoveSummary.Sale] = [:]
-        for line in sales where (best[line.itemId].map { rank($0.stage) < rank(line.stage) } ?? true) {
-            best[line.itemId] = line
-        }
-        return best
-    }
-
-    private static func state(_ d: Disposition, _ sale: MoveSummary.Sale?) -> String {
-        switch d {
-        case .sell:
-            switch sale?.stage {
-            case .sold?: "Sold"
-            case .listed?: "Listed"
-            case .estimated?: "Selling · estimate"
-            case nil: "Selling"
-            }
-        case .donate: "Donated"
-        case .trash: "Trashed"
-        case .keep: "Kept"
-        case .undecided: "Undecided"
-        }
-    }
-
-    private func money(_ s: MoveSummary) -> some View {
-        section("Money", tag: s.hasSimulatedMoney || usingDemoActivity ? "Simulated" : nil) {
-            Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 0) {
-                GridRow {
-                    StatFigure(label: "Sold", value: s.soldCents.usd, tint: Theme.accentStrong).padding(.vertical, 18)
-                    StatFigure(label: "Still selling", value: s.pendingSalesCents.usd).padding(.vertical, 18)
-                }
-                Rectangle().fill(Theme.line).frame(height: 1).gridCellUnsizedAxes(.horizontal).accessibilityHidden(true)
-                GridRow {
-                    StatFigure(label: "Spent", value: UsdMicros.format(s.spentMicros), tint: Theme.ochreInk).padding(.vertical, 18)
-                    StatFigure(label: "Net", value: s.netMicros.netUSD, tint: s.netMicros >= 0 ? Theme.accentStrong : Theme.danger)
-                        .padding(.vertical, 18)
-                }
-            }
-            .ruled()
             ForEach(s.rails) { rail in
                 HStack(spacing: 8) {
                     Text(rail.rail == "x402" ? "x402 data payments" : rail.rail == "visa" ? "Visa purchases" : rail.rail)
@@ -239,112 +138,85 @@ struct SummaryView: View {
                     Spacer()
                     Text(UsdMicros.format(rail.micros)).rowValue()
                 }
-                .padding(.vertical, 12)
+                .padding(.vertical, 10)
                 .frame(minHeight: 44)
                 .ruled()
                 .accessibilityElement(children: .combine)
             }
-            Text("Unsold items at listing price or estimate.").monoMeta().padding(.top, 12)
+        }
+        .accessibilityIdentifier("summary.figures")
+    }
+
+    // MARK: Share
+
+    private struct ShareKey: Hashable {
+        var story: String?
+        var made: String
+        var spent: String
+        var net: String
+        var shots: Int
+        var simulated: Bool
+    }
+
+    private func share(_ s: MoveSummary, home: SummaryHome?, story: String?) -> some View {
+        let key = ShareKey(story: story, made: s.soldCents.usd, spent: UsdMicros.format(s.spentMicros), net: s.netMicros.netUSD,
+                           shots: heroShots, simulated: simulatedTag)
+        return Group {
+            if let shareImage {
+                ShareLink(item: shareImage, preview: SharePreview(SummaryHero.title, image: shareImage)) {
+                    Label("Share my move", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
+                }
+            } else {
+                Button {} label: {
+                    Label("Share my move", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
+                }
+                .disabled(true)
+            }
+        }
+        .buttonStyle(.pill(.primary))
+        .accessibilityIdentifier("summary.share")
+        .task(id: key) {
+            let card = SummaryShareCard(heroImage: heroImage, plan: home?.plan, story: key.story, made: key.made, spent: key.spent,
+                                        net: key.net, netTint: s.netMicros >= 0 ? Theme.accentStrong : Theme.danger,
+                                        simulated: key.simulated)
+            let renderer = ImageRenderer(content: card)
+            renderer.scale = 3
+            shareImage = renderer.uiImage.map(Image.init(uiImage:))
         }
     }
 
-    private func impact(_ s: MoveSummary) -> some View {
-        section("Impact") {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text("~\(Int(s.divertedKg.rounded())) kg")
-                        .monoText(30, weight: .bold, maxScale: 1.6)
-                        .foregroundStyle(Theme.accentStrong)
-                    Text("kept out of landfill").monoText(13.5).foregroundStyle(Theme.muted)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("About \(Int(s.divertedKg.rounded())) kilograms kept out of landfill")
-                Text("\(s.divertedItems) items sold or donated, not trashed.")
-                    .sansText(15.5)
-                    .lineSpacing(3)
-                    .foregroundStyle(Theme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("Rough weights by type and size.").monoMeta()
+    // MARK: Where everything went
+
+    private var whereItWent: some View {
+        let segments = SummaryPayoff.segments(store.visibleItems)
+        return section("Where everything went", count: "\(store.visibleItems.count)") {
+            SummaryDispositionBar(segments: segments) { seg in
+                if let d = seg.destination { openPile = OpenPile(destination: d) } else { tab = "review" }
             }
             .padding(.top, 18)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(SummaryPayoff.spokenSegments(segments))
         }
     }
 
-    private func agents(_ s: MoveSummary) -> some View {
-        section("What the agents did", tag: usingDemoActivity ? "Demo" : nil) {
-            if s.agents.isEmpty {
-                Text("No agent activity yet.").monoMeta().padding(.top, 16)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(s.agents) { a in
-                            HStack(spacing: 6) {
-                                Text(a.agent).monoText(13, maxScale: 1.5).foregroundStyle(Theme.muted)
-                                Text("\(a.steps)").monoText(13, weight: .bold, maxScale: 1.5)
-                            }
-                            .padding(.horizontal, 12)
-                            .frame(minHeight: 30)
-                            .background(Capsule().fill(Theme.surface))
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel("\(a.agent), \(a.steps) step\(a.steps == 1 ? "" : "s")")
-                        }
-                    }
-                }
-                .padding(.vertical, 16)
-                ForEach(Array(s.timeline.enumerated()), id: \.offset) { _, e in
-                    HStack(alignment: .top, spacing: 14) {
-                        Image(systemName: Self.icon(e.kind))
-                            .font(.system(size: 14, weight: .light))
-                            .foregroundStyle(Theme.accentStrong)
-                            .frame(width: 18)
-                            .padding(.top, 2)
-                            .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(e.message).sansText(15).fixedSize(horizontal: false, vertical: true)
-                            Text("\(e.agent) · \(e.createdAt, style: .relative) ago").monoMeta()
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.vertical, 14)
-                    .ruled(.top)
-                    .accessibilityElement(children: .combine)
-                }
-            }
+    // MARK: Impact
+
+    private func impact(_ s: MoveSummary) -> some View {
+        let items = store.visibleItems
+        let diverted = items.filter { $0.disposition == .sell || $0.disposition == .donate }
+        return section("Impact") {
+            SummaryImpact(kg: s.divertedKg, divertedItems: diverted, divertedShare: SummaryPayoff.divertedShare(items))
+                .padding(.top, 18)
         }
     }
 
-    /// The guardrails that fired (#225): scams blocked, approvals asked, sentimental items left
-    /// alone, spend against the caps. Simulated money says so in the line and gets a tag.
+    // MARK: Agents kept you safe
+
+    /// The guardrails that fired (#225) as a receipt: scams blocked, approvals asked, sentimental
+    /// items left alone, spend against the caps. Simulated money says so in the line and gets SIM.
     private func safety(_ safety: SafetySummary) -> some View {
-        let lines = safety.lines
-        return section("Agents kept you safe", tag: lines.contains(where: \.simulated) ? "Simulated" : nil) {
-            if lines.isEmpty {
-                Text(SafetySummary.emptyText).monoMeta().padding(.top, 16)
-            } else {
-                ForEach(lines) { line in
-                    HStack(alignment: .top, spacing: 14) {
-                        Image(systemName: Self.safetyIcon(line.kind))
-                            .font(.system(size: 14, weight: .light))
-                            .foregroundStyle(Theme.accentStrong)
-                            .frame(width: 18)
-                            .padding(.top, 2)
-                            .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(line.text).monoText(13.5).fixedSize(horizontal: false, vertical: true)
-                            if let detail = line.detail {
-                                Text(detail).monoMeta().lineLimit(2)
-                            }
-                        }
-                        Spacer(minLength: 0)
-                        if line.simulated { MonoTag(text: "Sim", tone: Theme.ochreInk) }
-                    }
-                    .padding(.vertical, 12)
-                    .frame(minHeight: 44)
-                    .ruled()
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(line.spoken)
-                }
-            }
+        section("Agents kept you safe", tag: safety.lines.contains(where: \.simulated) ? "Simulated" : nil) {
+            SafetyReceipt(safety: safety).padding(.top, 18)
         }
     }
 
@@ -360,36 +232,18 @@ struct SummaryView: View {
         }
     }
 
-    // MARK: Pieces
+    // MARK: What the agents did
 
-    private func section<Content: View>(_ title: String, count: String? = nil, tag: String? = nil, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ListHeader(title: title, count: count) {
-                if let tag { MonoTag(text: tag, tone: Theme.ochreInk) }
+    private func agents(_ s: MoveSummary) -> some View {
+        let steps = SummaryPayoff.keySteps(s.timeline)
+        let total = s.agents.map(\.steps).reduce(0, +)
+        return section("What the agents did", count: total > 0 ? "\(s.agents.count) agents · \(total) steps" : nil,
+                       tag: usingDemoActivity ? "Demo" : nil) {
+            if s.timeline.isEmpty {
+                Text("No agent activity yet.").monoMeta().padding(.top, 16)
+            } else {
+                SummaryAgentTimeline(key: steps.key, rest: steps.rest).padding(.top, 18)
             }
-            content()
-        }
-        .padding(.top, 48)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    static func color(_ d: Disposition) -> Color {
-        switch d {
-        case .keep: Theme.accent
-        case .sell: Theme.ochre
-        case .donate: Theme.slate
-        case .trash: Theme.stone
-        case .undecided: Theme.danger
-        }
-    }
-
-    static func label(_ d: Disposition) -> String {
-        switch d {
-        case .keep: "Kept"
-        case .sell: "Selling"
-        case .donate: "Donated"
-        case .trash: "Trashed"
-        case .undecided: "Undecided"
         }
     }
 
@@ -400,8 +254,21 @@ struct SummaryView: View {
         case "tool_call": "magnifyingglass"
         case "plan": "list.bullet"
         case "error": "exclamationmark.triangle"
-        default: "checkmark.circle"
+        default: "checkmark"
         }
+    }
+
+    // MARK: Pieces
+
+    private func section<Content: View>(_ title: String, count: String? = nil, tag: String? = nil, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ListHeader(title: title, count: count) {
+                if let tag { MonoTag(text: tag, tone: Theme.ochreInk) }
+            }
+            content()
+        }
+        .padding(.top, 44)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

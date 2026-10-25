@@ -68,6 +68,8 @@ public struct MoveSummary: Sendable, Equatable {
     /// Sentimental or undecided items still waiting on the user.
     public var needsYou: Int
     public var soldCents: Int64
+    /// Items with a sold listing (for the story line, #335).
+    public var soldItems: Int
     /// Listed but not sold yet, plus sell items not listed yet (at their estimate).
     public var pendingSalesCents: Int64
     public var spentMicros: Int64
@@ -97,6 +99,7 @@ public struct MoveSummary: Sendable, Equatable {
         var best: [UInt64: Sale] = [:]
         for s in sales where (best[s.itemId].map { rank[$0.stage]! < rank[s.stage]! } ?? true) { best[s.itemId] = s }
         soldCents = best.values.filter { $0.stage == .sold }.reduce(0) { $0 + $1.priceCents }
+        soldItems = best.values.filter { $0.stage == .sold }.count
         pendingSalesCents = best.values.filter { $0.stage != .sold }.reduce(0) { $0 + $1.priceCents }
 
         spentMicros = spend.reduce(0) { $0 + $1.amountMicros }
