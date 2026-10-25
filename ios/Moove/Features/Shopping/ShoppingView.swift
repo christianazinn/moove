@@ -11,6 +11,7 @@ struct ShoppingView: View {
     @Environment(MooveStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showAdd = false
+    @State private var showCart = false
 
     var body: some View {
         let items = store.shoppingItems
@@ -43,6 +44,12 @@ struct ShoppingView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, 40)
             }
+            // The cart floats over the bottom right, above the tab bar; the inset keeps the last card clear of it.
+            .safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
+                ShoppingCartButton(cart: store.snapshot.shoppingCart()) { showCart = true }
+                    .padding(.trailing, Theme.gutter)
+                    .padding(.bottom, 12)
+            }
         }
         .navigationTitle("Shopping")
         .navigationBarTitleDisplayMode(.inline)
@@ -54,6 +61,13 @@ struct ShoppingView: View {
             }
         }
         .sheet(isPresented: $showAdd) { AddShoppingItemSheet() }
+        .sheet(isPresented: $showCart) {
+            ShoppingCartSheet()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(28)
+                .presentationBackground(Theme.bg)
+        }
         .mooveScreen()
         .animation(reduceMotion ? nil : .default, value: items)
         .animation(reduceMotion ? nil : .default, value: approvals)
