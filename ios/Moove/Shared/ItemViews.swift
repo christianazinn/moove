@@ -42,29 +42,16 @@ extension Disposition {
     static let choices: [Disposition] = [.keep, .sell, .donate, .trash]
 }
 
-/// Photo if we have one, otherwise an icon for the RoomPlan category.
+/// The item's voxel model on a tile (Lisa: voxel for every item image, no photos).
 struct ItemThumbnail: View {
     let item: Item
     var size: CGFloat = 48
 
     var body: some View {
-        // ItemPhoto moves photos from an earlier tunnel host onto the current upload URL.
-        ZStack {
-            placeholder
-            if !item.photoUrls.isEmpty {
-                ItemPhoto(urls: item.photoUrls) { $0.resizable().scaledToFill() }
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size >= 120 ? Theme.Radius.panel : Theme.Radius.card, style: .continuous))
-    }
-
-    private var placeholder: some View {
-        Image(systemName: Self.icon(for: item.category))
-            .font(.system(size: size * 0.32, weight: .light))
-            .foregroundStyle(Theme.muted)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        VoxelThumbnail(item, size: size, tile: false)
+            .frame(width: size, height: size)
             .background(Theme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: size >= 120 ? Theme.Radius.panel : Theme.Radius.card, style: .continuous))
     }
 
     static func icon(for category: String) -> String {
