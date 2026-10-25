@@ -14,7 +14,7 @@ They match the [demo video](demo-video.md) and the commerce [video shot list](de
 | 5 | `05-agents-approvals.png` | CI `05-approvals` | Sell & Buy > Agents | Claude writes the listing, and anything over your $100 limit waits for your OK, by Auth0 push or in the app (the eBay post is simulated). |
 | 6 | `06-scam-blocked.png` | CI `06-desk-chair-deals` | Sell & Buy > Shopping | The buy agent screens every deal and refuses this planted Zelle-only "brand new" Aeron (fraud score 0.85); checkout runs in the Visa Acceptance sandbox (no real money), and the offline demo shown here simulates it. |
 | 7 | `07-new-home.gif` | **by hand** (CI `07-new-home` renders blank) | Move > New Home | Everything you kept, plus what the buy agent bought, flies from its old spot into the new home's 3D layout (demo house shown). |
-| 8 | `08-summary-safe.png` | **by hand** (CI `08-summary` stops above the card) | Summary | The summary totals what you sold, spent and kept out of landfill, and shows every guardrail that fired; simulated money is tagged Simulated. |
+| 8 | `08-summary-safe.png` | **by hand** (CI `08-summary` shows the top, with a blank hero) | Summary | Your move, handled: the new home with everything you kept, what you made, spent and kept out of landfill, and every guardrail that fired; simulated money is tagged Simulated. |
 
 **Must be captured by hand:** images 2, 7 and 8 (and the room-shot extras). Images 2 and 7 and the room shots are RealityKit `ARView` scenes, which come out blank under XCUITest in CI; image 8 is cut off in CI. The other five come straight from CI.
 
@@ -30,7 +30,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 
 - **Use a run from after #343** (merged Sat ~6:00 PM PT), so the shots show the 3-segment Sell & Buy (Listings · Shopping · Agents, #337), the Agents receipts (#316), the Review card deck (#311), the Shopping storefront (#312) and the museum Inventory with its shorter placards (#331, #343). Main runs often get cancelled when the next merge supersedes them, so the newest *green* run can be older than the newest commit. Check its date.
 - The shots show the **starting state** (Agents · 2, no purchases yet), so 4 to 6 match the captions as is.
-- Under XCUITest, the RealityKit `ARView` scenes that don't auto-turn (the scan finished page, the new home, its room shots, and Pack's inline truck) come out **blank**, and the Summary shot stops at "Where everything went". So images 2, 7 and 8 are captured by hand, below. The Scan hero (1) renders fine.
+- Under XCUITest, the RealityKit `ARView` scenes that don't auto-turn (the scan finished page, the new home, its room shots, and Pack's inline truck) come out **blank**, and the Summary shot (#335) shows the top with a blank hero. So images 2, 7 and 8 are captured by hand, below. The Scan hero (1) renders fine.
 
 ## Capturing by hand (images 2, 7, 8)
 **Decision (Aiden's agent):** capture on the **Offline demo**: Settings (the gear at top right) > Backend > Data source **"Offline demo (fixtures)"**. The banner reads "Offline demo: fixture data, nothing is synced". It's the only data source whose rows are known in advance, and `DemoNumbersTests` checks its figures. It has the voxel dollhouse and the new home too, so nothing here needs the **Demo** backend.
@@ -93,9 +93,9 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 - **Track:** Visa (bought items land in the new home), Best Planet-First Hack.
 
 ### 8. Summary: "Agents kept you safe"
-- **Source:** by hand, after the taps in image 7 (don't relaunch in between). Summary tab, scrolled to the bottom so **Money** and the **"Agents kept you safe"** card are both visible.
-- **State:** **Money** with the **Simulated** tag ("Visa purchases" tagged Simulated, "x402 data payments" tagged with its simulated share), then **"Agents kept you safe"** (Simulated tag): "1 scam deal blocked · fraud score 0.85", the approvals line ("6 approvals asked · 3 approved · 2 denied · 1 expired", "Anything over $100 needs your OK"), "1 sentimental item left for you", "Spent $0.025 of $10.00 data budget ($0.015 simulated)" and "Spent $689.97 of $1,500.00 card budget (simulated)". If a second image is allowed, CI `08-summary` (the top: Net, "Kept from landfill 49 kg", "Where everything went") is a good partner.
-- **Caption:** "The summary totals what you sold, spent and kept out of landfill, and shows every guardrail that fired; simulated money is tagged Simulated."
+- **Source:** by hand, after the taps in image 7 (don't relaunch in between, so the demo house is the new home). Summary tab at the top (#335): the hero is the new home turning slowly with the kept pieces in place, "Your move, handled." and "7 things kept, 1 sold, 3 still selling — and ~49 kg kept out of landfill.", then **Net** (−$202, Simulated tag), **Made** $18 and **Spent** $689.995. Wait a turn of the orbit for a good angle. Alternative: tap **Share my move** and save the rendered image (the home still, the story and the three figures), which is already a gallery card.
+- **State (optional second image):** scroll to **"Agents kept you safe"**, now a receipt: "1 scam deal blocked · fraud score 0.85", the approvals line ("6 approvals asked · 3 approved · 2 denied · 1 expired", "Anything over $100 needs your OK"), "1 sentimental item left for you", "Spent $0.025 of $10.00 data budget ($0.015 simulated)" and "Spent $689.97 of $1,500.00 card budget (simulated)" with SIM marks, and the "SIM LINES: SIMULATED — NO MONEY MOVED" stamp.
+- **Caption:** "Your move, handled: the new home with everything you kept, what you made, spent and kept out of landfill, and every guardrail that fired; simulated money is tagged Simulated."
 - **Track:** Best Planet-First Hack, Coinbase and Visa (real and simulated spend kept apart), Auth0 (approvals counted).
 
 ### Room shots (extras)

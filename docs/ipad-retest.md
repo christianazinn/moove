@@ -91,9 +91,9 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Report if wrong:** the box number, what's off (density, colors, a model that doesn't match), plus a screenshot or the PDF.
 
 ### 12. Summary
-- **Taps:** Summary tab → scroll to **Agents kept you safe**.
-- **Expected:** the scam deal blocked, the approvals, sentimental items left to you, and spend against the caps, with **Simulated** tags where simulated.
-- **Report if wrong:** the line that's wrong or missing, plus a screenshot.
+- **Taps:** Summary tab (after picking the demo house in Move > New Home). Tap a chip under "Where everything went", then **Done**. Tap **Share my move**. Scroll to **Agents kept you safe** and **What the agents did** → **Show all**. Repeat at the largest text size and with Reduce Motion on.
+- **Expected:** the hero is the new home turning slowly (480 pt tall on iPad) with the kept pieces in place and "Your move, handled." plus the story line over it; Net, then Made and Spent side by side; the chip opens that pile's list; the share sheet shows an image of the home and the three figures. "Agents kept you safe" is a paper receipt with the scam deal blocked, the approvals, sentimental items left to you, and spend against the caps, with SIM marks and the no-money-moved stamp. At the largest text size the title and story move under the hero and the figures stack in one column; with Reduce Motion the house stops turning.
+- **Report if wrong:** the block or line that's wrong or missing, plus a screenshot.
 
 ### 13. Sell & Buy at the largest text size
 - **Taps:** iPad Settings → Accessibility → Display & Text Size → **Larger Text** → turn it on and drag to the maximum. In Moove, open Sell & Buy → **Listings**, **Shopping**, **Agents** (scroll all the way down to the receipts).

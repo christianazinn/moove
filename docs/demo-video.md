@@ -87,7 +87,7 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 
 ### 11. 1:54–2:00 Summary: agents kept you safe
 - **VO:** "The summary shows every guardrail that fired, real and simulated. Moove runs your move, and you stay in control."
-- **ON SCREEN:** **Summary** tab, "Your move, handled.", Money with its **Simulated** tag, then scroll to **Agents kept you safe**: "1 scam deal blocked · fraud score 0.85", the approvals line, "1 sentimental item left for you", spend against the data and card budgets with Sim tags.
+- **ON SCREEN:** **Summary** tab (#335): the new home turning slowly with the kept pieces in place under "Your move, handled." and "7 things kept, 1 sold, 3 still selling — and ~49 kg kept out of landfill.", then Net / Made / Spent with the **Simulated** tag, then scroll past the "Where everything went" bar and the leaf meter to **Agents kept you safe**, printed as a receipt: "1 scam deal blocked · fraud score 0.85", the approvals line, "1 sentimental item left for you", spend against the data and card budgets with SIM marks and the no-money-moved stamp. Optional end card: **Share my move**'s image.
 - **STATE:** Offline demo (same take, after shots 6–10).
 - **TRACK:** All of them in one card. Visa trust, Coinbase spend caps, Auth0 approvals.
 - **FALLBACK:** If a figure looks off, hold on Agents kept you safe only (the VO names no numbers).
