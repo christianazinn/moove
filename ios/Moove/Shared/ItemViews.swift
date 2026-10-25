@@ -174,7 +174,7 @@ struct ItemThumbnail: View {
     }
 }
 
-/// Disposition as a colored dot and a mono label on a quiet capsule.
+/// Disposition as a colored dot and a mono label (no capsule fill).
 struct DispositionChip: View {
     let disposition: Disposition
 
@@ -184,10 +184,8 @@ struct DispositionChip: View {
             Text(disposition.label).monoText(12, weight: .bold, maxScale: 1.6)
         }
         .lineLimit(1)
-        .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .foregroundStyle(Theme.text)
-        .background(Capsule().fill(Theme.surface))
         .accessibilityElement(children: .combine)
     }
 }

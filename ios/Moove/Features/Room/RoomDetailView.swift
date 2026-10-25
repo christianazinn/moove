@@ -12,7 +12,7 @@ struct RoomDetailView: View {
     var body: some View {
         Group {
             if let geometry {
-                RoomVisualizationView(geometry: geometry, items: itemsByScanObject, initialMode: .decision,
+                RoomVisualizationView(geometry: geometry, items: itemsByScanObject,
                                       roomName: room.name, roomItems: store.items.filter { $0.roomId == room.id })
             } else if !loaded {
                 ProgressView {
@@ -22,17 +22,11 @@ struct RoomDetailView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .mooveScreen()
             } else {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("No 3D scan for this room").blockTitle()
-                    Text(failure ?? "This room was added without a RoomPlan scan.")
-                        .monoMeta()
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 28)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .ruled(.top)
-                .ruled()
-                .accessibilityElement(children: .combine)
+                Text("No 3D scan")
+                    .blockTitle()
+                    .padding(.vertical, 28)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityLabel("No 3D scan for this room. \(failure ?? "It was added without a RoomPlan scan.")")
                 .padding(.horizontal, Theme.gutter)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .mooveScreen()

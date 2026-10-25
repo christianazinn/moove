@@ -167,7 +167,7 @@ extension View {
 
     /// A 1 pt rule under (or over) the view, like a row in a ledger.
     func ruled(_ edge: VerticalEdge = .bottom) -> some View {
-        overlay(alignment: edge == .bottom ? .bottom : .top) { Rectangle().fill(Theme.line).frame(height: 1) }
+        overlay(alignment: edge == .bottom ? .bottom : .top) { Rectangle().fill(Theme.line.opacity(0.6)).frame(height: 1) }
     }
 }
 
@@ -554,8 +554,8 @@ private struct DisplaySerif: ViewModifier {
     }
 }
 
-/// A screen or section with nothing to show yet: a bold title, a mono line saying what to do, and an
-/// optional next step, between two rules. Every screen's empty state uses it.
+/// A screen or section with nothing to show yet: a bold title and an optional next step (what to
+/// do is spoken, not shown). Every screen's empty state uses it.
 struct EmptyState<Action: View>: View {
     var title: String
     var detail: String
@@ -566,15 +566,13 @@ struct EmptyState<Action: View>: View {
     @ViewBuilder var action: Action
 
     var body: some View {
+        // Title only on screen (Lisa: "less overstimulating"); `detail` is the VoiceOver hint.
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            Text(title).blockTitle()
-            Text(detail).monoMeta().fixedSize(horizontal: false, vertical: true)
+            Text(title).blockTitle().accessibilityHint(detail)
             action.padding(.top, Theme.Space.m)
         }
         .padding(.vertical, 28)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .top) { if ruledTop { Rectangle().fill(Theme.line).frame(height: 1) } }
-        .ruled()
         .accessibilityElement(children: children)
     }
 }

@@ -12,10 +12,8 @@ struct ShareRoomView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    PageHeader(
-                        title: "Share \(room.name).",
-                        lede: "On the other phone, open Inventory → Join a room and enter this code. You'll both see and edit the same items, live."
-                    )
+                    PageHeader(title: "Share \(room.name).")
+                        .accessibilityHint("On the other phone, open Inventory, Join a room, and enter this code")
                     if let code = room.joinCode {
                         Text(code)
                             .monoText(44, weight: .bold, maxScale: 1.4)
@@ -24,9 +22,7 @@ struct ShareRoomView: View {
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 28)
-                            .ruled(.top)
-                            .ruled()
-                            .padding(.top, 28)
+                            .padding(.top, Theme.Space.l)
                             .accessibilityLabel("Join code " + code.map(String.init).joined(separator: " "))
                             .accessibilityIdentifier("share.code")
                         HStack(spacing: 12) {
@@ -44,13 +40,11 @@ struct ShareRoomView: View {
                         }
                         .padding(.top, 20)
                     } else {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("No code yet").blockTitle()
-                            Text("This room doesn't have a join code yet. Try again in a moment.").monoMeta()
-                        }
-                        .padding(.vertical, 28)
-                        .ruled(.top)
-                        .padding(.top, 28)
+                        Text("No code yet")
+                            .blockTitle()
+                            .padding(.vertical, 28)
+                            .padding(.top, Theme.Space.l)
+                            .accessibilityHint("Try again in a moment")
                     }
                 }
                 .padding(.horizontal, Theme.gutter)
