@@ -74,8 +74,9 @@ struct ExhibitPlinth: View {
     @ViewBuilder
     private func model(size: CGFloat) -> some View {
         // Items added by photo have no size, so no model: show the photo, framed.
-        if item.origin == .photo, let url = item.photoUrls.first.flatMap(URL.init(string:)) {
-            AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { Theme.surface2 }
+        if item.origin == .photo, !item.photoUrls.isEmpty {
+            ItemPhoto(urls: item.photoUrls) { $0.resizable().scaledToFill() }
+                .background(Theme.surface2)
                 .frame(width: size * 0.7, height: size * 0.7)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.tag))
                 .padding(5)
