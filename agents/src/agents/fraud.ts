@@ -4,6 +4,7 @@ import type { Deal } from '../module_bindings/types.js';
 import { logEvent } from '../events.js';
 import { cachedComps } from '../integrations/apify.js';
 import { chooseAiTextDetector, type AiTextDetector } from '../integrations/aitext.js';
+import { fixtureDescription } from '../integrations/deals.js';
 
 // Fraud screening (#18). Every deal with fraud_score = -1 gets five rule-based signals, each 0..1,
 // combined into one fraud_score with set_deal_fraud. No Claude calls: it's cheap, deterministic
@@ -194,8 +195,9 @@ export function cachedCompPrices(query: string): number[] {
   }
 }
 
-// Listing copy sent to the detector. Deals only carry a title today; too-short text is skipped
-// (detectors are unreliable on a few words) and stays -1.
+// Listing copy sent to the detector: the title, plus the listing's description when a fixture row
+// has one (deal rows don't store descriptions). Too-short text is skipped (detectors are unreliable
+// on a few words) and stays -1.
 export const AI_TEXT_MIN_CHARS = Number(process.env.FRAUD_AI_TEXT_MIN_CHARS ?? '20');
 
 let detector: AiTextDetector | null | undefined;
@@ -210,7 +212,7 @@ const timers = new Map<bigint, NodeJS.Timeout>();
 const inFlight = new Set<bigint>();
 
 async function aiScore(conn: Conn, d: Deal): Promise<number> {
-  const text = d.title.trim();
+  const text = [d.title.trim(), fixtureDescription(d.url).trim()].filter(Boolean).join('\n\n');
   if (!detector || text.length < AI_TEXT_MIN_CHARS) return -1;
   try {
     return await detector.score(text);
