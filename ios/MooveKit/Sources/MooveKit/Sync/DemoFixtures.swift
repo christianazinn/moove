@@ -192,9 +192,15 @@ extension DemoFixtures {
             objects: items.map {
                 ScanObject(scanObjectId: $0.scanObjectId ?? "demo-\($0.id)", category: $0.category,
                            widthM: $0.widthM, heightM: $0.heightM, depthM: $0.depthM, photoUrl: $0.photoUrls.first,
-                           attributes: $0.attributes)
+                           attributes: $0.attributes, name: $0.name)
             }
         )
+    }
+
+    /// Scan object ids of the demo items that are possibly sentimental (the guitar). A scan
+    /// import can't carry the flag, so "Load demo scan" on a live database sets it afterwards.
+    public static var sentimentalScanObjectIds: Set<String> {
+        Set(inventory(owner: "demo").items.filter(\.maybeSentimental).compactMap(\.scanObjectId))
     }
 
     /// What the offline photo sweep "finds" in the demo bedroom (#181): an item RoomPlan

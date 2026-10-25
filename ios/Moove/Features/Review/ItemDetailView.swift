@@ -206,7 +206,7 @@ struct ItemDetailView: View {
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .ruled()
-        detail("Decided by", item.dispositionSource == .user ? "You" : "Moove (auto)")
+        detail("Decided by", Self.decidedBy(item, me: store.snapshot.me))
         if let reason = item.dispositionReason {
             Text(reason)
                 .sansText(15)
@@ -229,6 +229,14 @@ struct ItemDetailView: View {
         .ruled()
     }
 
+    /// Who chose the pile. Sentimental items are left undecided on purpose, so never "Moove";
+    /// `disposition_source` doesn't say which user, so another member's pick isn't "You".
+    static func decidedBy(_ item: Item, me: IdentityHex?) -> String {
+        if item.disposition == .undecided { return "Left to you" }
+        guard item.dispositionSource == .user else { return "Moove (auto)" }
+        return me == nil || item.owner == me ? "You" : "A room member"
+    }
+
     /// Same behavior as the old menu picker: choosing the current value does nothing.
     @ViewBuilder private func dispositionChoices(_ item: Item) -> some View {
         ForEach(Disposition.choices, id: \.self) { d in
@@ -241,7 +249,7 @@ struct ItemDetailView: View {
 
     @ViewBuilder private func details(_ item: Item) -> some View {
         ListHeader(title: "Details").padding(.top, 40)
-        detail("Estimated value", item.estValueCents?.usd ?? "Pricing…")
+        detail("Estimated value", item.priceText.capitalizedFirst)
         detail("Category", item.category)
         if let material = item.material { detail("Material", material) }
         if let brand = item.brand { detail("Brand", brand) }
