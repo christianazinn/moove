@@ -119,7 +119,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Report if wrong:** the item, plus a screenshot.
 
 ### 15. Review: flip cards and board (Lisa's redesign)
-- **Taps:** Items → Review. The flip cards are always on top: tap the top card to flip it, tap again to flip back. Drag it right and left slowly without letting go, then swipe it for real; tap **Undo**; then decide it with a button under the card. Go through to the end and tap **Start over**. Below, look at **Where it goes**, tap a tile, then drag a row onto one of the small labels at the top of its list.
+- **Taps:** Items → Review. The cards are always on top: tap the top card to open its detail page, then go back. Drag it right and left slowly without letting go, then swipe it for real; tap **Undo**; then decide it with a button under the card. Go through to the end and tap **Start over**. Below, look at **Where it goes**, tap a tile, then drag a row onto one of the small labels at the top of its list.
 - **Expected:**
   - The stack holds every item ("1 of 12"): the ones that need you first, with a **Needs you** badge (a heart when possibly sentimental), then everything the agents sorted, each saying "Moove says: Sell · worth $30, costs ~$24 to move". Items you already decided are skipped until **Start over**.
   - The front is the item's photo, big; if no photo loads, its voxel model. Tapping turns the card in 3D to the back: voxel model, size, value range, condition, the agent's reason and the sentimental note. With Reduce Motion on (Settings → Accessibility → Motion) it crossfades and nothing tilts.

@@ -2,11 +2,11 @@ import SwiftUI
 import UIKit
 import MooveKit
 
-/// The flip cards at the top of Review: the whole move as a stack (`Review.flipDeck`), the items
-/// that need you first. The front is the item's voxel model; tap to flip to a smaller model and the
-/// details. Swipe right = Keep, left = Sell, up = Donate, down = Trash (`ReviewSwipe`), on either
-/// side, or use the buttons; the card's drag outranks the page scroll. The parent owns the
-/// decisions and the undo stack.
+/// The cards at the top of Review: the whole move as a stack (`Review.flipDeck`), the items
+/// that need you first. The card shows the item's voxel model, name and value; tap it to open the
+/// item's detail page (`ItemDetailView`, the same push as the board's rows and the "i" button).
+/// Swipe right = Keep, left = Sell, up = Donate, down = Trash (`ReviewSwipe`), or use the buttons;
+/// the card's drag outranks the page scroll. The parent owns the decisions and the undo stack.
 struct ReviewDeckView: View {
     /// Cards still to go, top first.
     let cards: [Item]
@@ -20,10 +20,8 @@ struct ReviewDeckView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var drag: CGSize = .zero
-    /// Showing the details side; `turn` is the card's rotation while it flips (0 at rest).
-    @State private var flipped = false
-    @State private var turn: Double = 0
-    @State private var turning = false
+    /// The item whose detail page is pushed (a tap on the card).
+    @State private var details: UInt64?
     /// Set while the top card flies off, so a second swipe can't hit it.
     @State private var leaving: Disposition?
 
@@ -53,15 +51,17 @@ struct ReviewDeckView: View {
                 .padding(.bottom, 22 + 12 * CGFloat(min(cards.count - 1, 2)))
                 .frame(maxWidth: 440)
                 .frame(maxWidth: .infinity)
-                .onChange(of: top.id) {
-                    flipped = false
-                    turn = 0
-                }
                 actions(top)
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("review.deck")
+        .navigationDestination(item: $details) { ItemDetailView(itemId: $0) }
+    }
+
+    private func openDetails(_ item: Item) {
+        guard leaving == nil, drag == .zero else { return }
+        details = item.id
     }
 
     // MARK: Header
@@ -98,9 +98,10 @@ struct ReviewDeckView: View {
         let progress = ReviewSwipe.progress(dx: drag.width, dy: drag.height, threshold: Self.threshold)
         let armed = progress >= 1 ? pointing : nil
         let range = Review.valueRange(item, comps: comps)
-        return ReviewFlipCard(flipped: flipped, turn: turn,
-                              front: ReviewCardFront(item: item, range: range),
-                              back: ReviewCardBack(item: item, range: range))
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
+        return ReviewCardFront(item: item, range: range)
+            .clipShape(shape)
+            .background(shape.fill(Theme.bg).mooveShadow(.lifted))
             .frame(height: cardHeight)
             .overlay {
                 if let pointing {
@@ -118,8 +119,9 @@ struct ReviewDeckView: View {
             }
             .offset(drag)
             .rotationEffect(.degrees(reduceMotion ? 0 : Double(drag.width) / 18), anchor: .bottom)
-            .contentShape(Rectangle())
-            .onTapGesture { flip() }
+            .contentShape(shape)
+            // One tap opens the item's detail page; a drag (high priority, below) decides it instead.
+            .onTapGesture { openDetails(item) }
             // High priority: up/down decide too, so the page mustn't scroll from under the card.
             .highPriorityGesture(
                 DragGesture(minimumDistance: 8)
@@ -143,8 +145,9 @@ struct ReviewDeckView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Self.spoken(item, range: range))
             .accessibilityIdentifier("review.card.\(item.id)")
-            .accessibilityHint("Swipe right to keep, left to sell, up to donate, down to trash. Double-tap to flip.")
-            .accessibilityAction { flip() }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Double-tap for details. Swipe right to keep, left to sell, up to donate, down to trash.")
+            .accessibilityAction { openDetails(item) }
             .accessibilityActions {
                 ForEach(Disposition.choices, id: \.self) { d in
                     Button(d.label) { fly(item, d) }
@@ -165,27 +168,6 @@ struct ReviewDeckView: View {
                 .opacity(drag == .zero ? 1 : 0)
                 .padding(6)
             }
-    }
-
-    private func flip() {
-        guard leaving == nil else { return }
-        if reduceMotion {
-            withAnimation(.easeInOut(duration: 0.2)) { flipped.toggle() }
-            return
-        }
-        // Turn edge-on, swap sides out of sight, then turn the rest of the way.
-        guard !turning else { return }
-        turning = true
-        let direction: Double = flipped ? -1 : 1
-        withAnimation(.easeIn(duration: 0.16)) { turn = 90 * direction } completion: {
-            var t = Transaction()
-            t.disablesAnimations = true
-            withTransaction(t) {
-                flipped.toggle()
-                turn = -90 * direction
-            }
-            withAnimation(.easeOut(duration: 0.2)) { turn = 0 } completion: { turning = false }
-        }
     }
 
     /// "Yamaha acoustic guitar, needs you, possibly sentimental, $109. Moove says keep. <reason>"
@@ -225,11 +207,7 @@ struct ReviewDeckView: View {
         onDecide(item, d)
         var t = Transaction()
         t.disablesAnimations = true
-        withTransaction(t) {
-            drag = .zero
-            flipped = false
-            turn = 0
-        }
+        withTransaction(t) { drag = .zero }
         leaving = nil
     }
 
@@ -275,30 +253,7 @@ struct ReviewDeckView: View {
     }
 }
 
-/// Shows `front` or `back`, turned by `turn` degrees around the vertical axis. The deck turns it
-/// edge-on, swaps sides, and turns it back (so the back never shows mirrored); under Reduce
-/// Motion `turn` stays 0 and the sides crossfade.
-private struct ReviewFlipCard<Front: View, Back: View>: View {
-    let flipped: Bool
-    let turn: Double
-    let front: Front
-    let back: Back
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
-        ZStack {
-            front.opacity(flipped ? 0 : 1)
-            back.opacity(flipped ? 1 : 0)
-        }
-        // Clip both sides to the card before turning it, so a photo can never draw outside the
-        // card mid-flip; the shadow goes on a shape behind, outside the clip.
-        .clipShape(shape)
-        .background(shape.fill(Theme.bg).mooveShadow(.lifted))
-        .rotation3DEffect(.degrees(turn), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
-    }
-}
-
-/// Front: the item's voxel model, big.
+/// The card: the item's voxel model, big, its name and value.
 private struct ReviewCardFront: View {
     let item: Item
     let range: ClosedRange<Int64>?
@@ -318,7 +273,7 @@ private struct ReviewCardFront: View {
                         .foregroundStyle(Theme.text)
                         .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(ReviewCardBack.value(item, range))
+                    Text(Self.value(item, range))
                         .monoText(14, weight: .bold)
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
@@ -329,63 +284,10 @@ private struct ReviewCardFront: View {
         .background(ReviewCardPaper())
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
     }
-}
-
-/// Back: the voxel model and the facts behind the call.
-private struct ReviewCardBack: View {
-    let item: Item
-    let range: ClosedRange<Int64>?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ItemArt(item: item, size: 150, photo: .none)
-                .frame(maxWidth: .infinity)
-                .frame(height: 170)
-                .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
-                .overlay(alignment: .topLeading) { ReviewCardBadge(item: item).padding(10) }
-            Text(item.name.capitalizedFirst)
-                .serifType(20, weight: .semibold)
-                .foregroundStyle(Theme.text)
-                .lineLimit(2)
-            // One line of why (Lisa: less on the card); size, value and condition are read by VoiceOver.
-            Text(Self.reason(item))
-                .sansText(14.5)
-                .foregroundStyle(Theme.muted)
-                .lineLimit(1)
-            Spacer(minLength: 0)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Self.spoken(item, range))
-        .padding(16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(ReviewCardPaper())
-    }
-
-    /// "Possibly sentimental", else the agents' reason, else what Moove suggests or you chose.
-    static func reason(_ item: Item) -> String {
-        if item.maybeSentimental { return "Possibly sentimental" }
-        if let reason = item.dispositionReason, item.dispositionSource == .auto { return reason.capitalizedFirst }
-        if let verdict = Review.verdict(item) { return "Moove says: \(verdict)" }
-        if item.dispositionSource == .user, item.disposition != .undecided { return "You chose \(item.disposition.label)" }
-        return ""
-    }
-
-    static func spoken(_ item: Item, _ range: ClosedRange<Int64>?) -> String {
-        var parts = [item.name.capitalizedFirst, "size \(size(item))", "value \(value(item, range))"]
-        if let condition = item.condition { parts.append("condition \(condition) of 5") }
-        let why = reason(item)
-        if !why.isEmpty { parts.append(why) }
-        return parts.joined(separator: ", ")
-    }
 
     static func value(_ item: Item, _ range: ClosedRange<Int64>?) -> String {
         if let range { return "\(range.lowerBound.usd)–\(range.upperBound.usd)" }
         return item.priceText
-    }
-
-    static func size(_ item: Item) -> String {
-        func cm(_ m: Double) -> String { "\(Int((m * 100).rounded()))" }
-        return "\(cm(item.widthM))×\(cm(item.depthM))×\(cm(item.heightM)) cm"
     }
 }
 
