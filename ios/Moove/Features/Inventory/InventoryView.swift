@@ -38,27 +38,22 @@ struct InventoryView: View {
     /// The item whose placard sheet is up, and what to do once it closes.
     @State private var placard: PlacardRef?
     @State private var afterPlacard: AfterPlacard?
-    /// Placard story being edited.
-    @State private var editingStory: Item?
     /// "Not a vacuum? Take a photo": the camera is open for this item's reclassify retake.
     @State private var retaking: Item?
-    /// The user's own placard stories (item id → line), on this device only.
-    @AppStorage(ItemStories.defaultsKey) private var storiesJSON = ""
     /// Rooms Inventory is narrowed to (tap a room card); empty shows every room.
     @AppStorage(InventoryFocus.defaultsKey) private var focusJSON = ""
 
     var body: some View {
         let rooms = store.snapshot.roomsNewestFirst(store.visibleRooms)
-        let stories = ItemStories.decode(storiesJSON)
         let focus = InventoryFocus.active(InventoryFocus.decode(focusJSON), rooms: rooms)
         let shown = InventoryFocus.items(store.visibleItems, focus: focus)
-        screen(rooms: rooms, stories: stories, focus: focus, shown: shown)
-            .sheet(item: $placard, onDismiss: runAfterPlacard) { placardSheet($0, shown: shown, stories: stories) }
+        screen(rooms: rooms, focus: focus, shown: shown)
+            .sheet(item: $placard, onDismiss: runAfterPlacard) { placardSheet($0, shown: shown) }
             // A piece added by hand or by photo: turn to its page so it's in view.
             .onChange(of: store.visibleItems.map(\.id)) { old, new in itemsChanged(from: old, to: new) }
     }
 
-    private func screen(rooms: [Room], stories: [UInt64: String], focus: Set<UInt64>, shown: [Item]) -> some View {
+    private func screen(rooms: [Room], focus: Set<UInt64>, shown: [Item]) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if store.visibleItems.isEmpty {
@@ -70,7 +65,7 @@ struct InventoryView: View {
                     roomsStrip(rooms, focus: focus).padding(.top, 24)
                 }
                 sweepNotes(rooms)
-                binderSection(shown, stories: stories)
+                binderSection(shown)
                 hiddenRoomsFooter.padding(.top, Theme.Space.section)
             }
             .padding(.horizontal, Theme.gutter)
@@ -111,11 +106,6 @@ struct InventoryView: View {
             }
             .ignoresSafeArea()
         }
-        .sheet(item: $editingStory) { item in
-            StoryEditor(item: item, current: stories[item.id]) { text in
-                storiesJSON = ItemStories.setting(text, for: item.id, in: storiesJSON)
-            }
-        }
         .alert("Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }), presenting: renaming) { item in
             TextField("Name", text: $newName)
             Button("Save") { Task { await store.renameItem(item, to: newName) } }
@@ -148,14 +138,13 @@ struct InventoryView: View {
     }
 
     @ViewBuilder
-    private func placardSheet(_ ref: PlacardRef, shown: [Item], stories: [UInt64: String]) -> some View {
+    private func placardSheet(_ ref: PlacardRef, shown: [Item]) -> some View {
         if let item = store.visibleItems.first(where: { $0.id == ref.id }) {
             let hall = FunctionHall.of(item)
             let hallItems = shown.filter { FunctionHall.of($0) == hall }
             let isTop = hallItems.count > 1 && MuseumLabel.topPiece(hallItems) == item.id
-            let info = exhibitInfo(item, story: stories[item.id], isTop: isTop, compCounts: store.snapshot.compCounts)
+            let info = exhibitInfo(item, isTop: isTop, compCounts: store.snapshot.compCounts)
             PlacardSheet(info: info,
-                         onEditStory: { closePlacard(then: .story(item)) },
                          onOpen: { closePlacard(then: .open(item.id)) },
                          onRename: { closePlacard(then: .rename(item)) },
                          onDelete: { closePlacard(then: .delete(item)) })
@@ -276,24 +265,24 @@ struct InventoryView: View {
     // MARK: Binder
 
     @ViewBuilder
-    private func binderSection(_ shown: [Item], stories: [UInt64: String]) -> some View {
+    private func binderSection(_ shown: [Item]) -> some View {
         let halls = FunctionHall.halls(shown)
         if !halls.isEmpty {
-            binder(halls, stories: stories).padding(.top, 28)
+            binder(halls).padding(.top, 28)
         }
     }
 
     /// Index tabs (iPhone: folder tabs over the page; iPad: down the page's right edge) and
     /// the open page.
     @ViewBuilder
-    private func binder(_ halls: [(hall: FunctionHall, items: [Item])], stories: [UInt64: String]) -> some View {
+    private func binder(_ halls: [(hall: FunctionHall, items: [Item])]) -> some View {
         let tabs = InventoryBinder.tabs(halls)
         let current = InventoryBinder.page(page, in: tabs)
         let entry = halls.first { $0.hall == current } ?? halls[0]
         let tab = tabs.first { $0.hall == entry.hall } ?? tabs[0]
         if sizeClass == .regular {
             HStack(alignment: .top, spacing: 0) {
-                pageStack(entry, tab: tab, tabs: tabs, stories: stories)
+                pageStack(entry, tab: tab, tabs: tabs)
                 VStack(spacing: 4) {
                     ForEach(tabs) { t in
                         BinderTabButton(tab: t, selected: t.hall == entry.hall, edge: .trailing) { pick(t.hall, tabs: tabs) }
@@ -322,20 +311,19 @@ struct InventoryView: View {
                         withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo(hall, anchor: .center) }
                     }
                 }
-                pageStack(entry, tab: tab, tabs: tabs, stories: stories)
+                pageStack(entry, tab: tab, tabs: tabs)
             }
         }
     }
 
     /// The open page; slides in from the side it was turned from (a crossfade with Reduce
     /// Motion), and follows a horizontal swipe.
-    private func pageStack(_ entry: (hall: FunctionHall, items: [Item]), tab: BinderTab, tabs: [BinderTab],
-                           stories: [UInt64: String]) -> some View {
+    private func pageStack(_ entry: (hall: FunctionHall, items: [Item]), tab: BinderTab, tabs: [BinderTab]) -> some View {
         let slide: AnyTransition = reduceMotion ? .opacity : .asymmetric(
             insertion: .move(edge: turnedForward ? .trailing : .leading).combined(with: .opacity),
             removal: .opacity)
         return ZStack(alignment: .top) {
-            binderPage(entry.hall, entry.items, tab: tab, stories: stories)
+            binderPage(entry.hall, entry.items, tab: tab)
                 .id(entry.hall)
                 .transition(slide)
         }
@@ -364,13 +352,13 @@ struct InventoryView: View {
         }
     }
 
-    private func binderPage(_ hall: FunctionHall, _ items: [Item], tab: BinderTab, stories: [UInt64: String]) -> some View {
+    private func binderPage(_ hall: FunctionHall, _ items: [Item], tab: BinderTab) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             pageHeader(hall, items)
             if dynamicTypeSize.isAccessibilitySize {
-                pageList(items, stories: stories).padding(.top, 12)
+                pageList(items).padding(.top, 12)
             } else {
-                pageShelves(items, stories: stories).padding(.top, 8)
+                pageShelves(items).padding(.top, 8)
             }
         }
         .padding(.leading, 18)
@@ -414,12 +402,12 @@ struct InventoryView: View {
     }
 
     /// Largest text sizes: a plain list, one row per item.
-    private func pageList(_ items: [Item], stories: [UInt64: String]) -> some View {
+    private func pageList(_ items: [Item]) -> some View {
         let compCounts = store.snapshot.compCounts
         return VStack(alignment: .leading, spacing: 0) {
             ForEach(items) { item in
                 let price = priceText(item, compCounts: compCounts)
-                shelfItem(item, price: price, hasStory: stories[item.id] != nil) {
+                shelfItem(item, price: price) {
                     listRow(item, price: price)
                 }
                 .ruled()
@@ -440,29 +428,29 @@ struct InventoryView: View {
         .contentShape(Rectangle())
     }
 
-    private func pageShelves(_ items: [Item], stories: [UInt64: String]) -> some View {
+    private func pageShelves(_ items: [Item]) -> some View {
         let regular = sizeClass == .regular
         let shelves = InventoryBinder.shelves(items, capacity: InventoryBinder.capacity(regularWidth: regular),
                                               maxPerShelf: InventoryBinder.maxPerShelf(regularWidth: regular))
         return VStack(spacing: 6) {
             ForEach(Array(shelves.enumerated()), id: \.offset) { _, shelf in
                 ShelfRow(shelf: shelf) { item in
-                    shelfColumn(item, on: shelf, stories: stories)
+                    shelfColumn(item, on: shelf)
                 }
             }
         }
     }
 
-    private func shelfColumn(_ item: Item, on shelf: Shelf, stories: [UInt64: String]) -> some View {
+    private func shelfColumn(_ item: Item, on shelf: Shelf) -> some View {
         let index = shelf.items.firstIndex(of: item) ?? 0
         let price = priceText(item, compCounts: store.snapshot.compCounts)
-        return shelfItem(item, price: price, hasStory: stories[item.id] != nil) {
+        return shelfItem(item, price: price) {
             ShelfItemColumn(item: item, tier: shelf.tier, price: price, tilt: index % 2 == 0 ? -2 : 2)
         }
     }
 
     /// One item: a single button that opens its placard; long-press keeps the fix-it menu.
-    private func shelfItem<Content: View>(_ item: Item, price: String, hasStory: Bool,
+    private func shelfItem<Content: View>(_ item: Item, price: String,
                                          @ViewBuilder label: () -> Content) -> some View {
         let room = store.snapshot.rooms.first { $0.id == item.roomId }
         let tag = item.originTag(inSharedRoom: room.map { !isMine($0) } ?? false)
@@ -471,7 +459,6 @@ struct InventoryView: View {
             // Fix-it (long press): rename, what is it, turn, remove a misread scan item. Delete asks first.
             .contextMenu {
                 Button("Open", systemImage: "info.circle") { opened = item.id }
-                Button(hasStory ? "Edit story" : "Add a story", systemImage: "text.quote") { editingStory = item }
                 Divider()
                 ItemFixMenu(item: item, onRename: { startRename(item) }, onReclassify: { retaking = item })
                 Divider()
@@ -481,7 +468,6 @@ struct InventoryView: View {
             .accessibilityLabel(itemLabel(item, price: price, tag: tag))
             .accessibilityHint("Shows its placard")
             .accessibilityAction(named: "Open details") { opened = item.id }
-            .accessibilityAction(named: "Edit story") { editingStory = item }
             .accessibilityAction(named: "Rename") { startRename(item) }
             .accessibilityAction(named: "Reclassify from a photo") { retaking = item }
             .accessibilityAction(named: "Turn around") { Task { await store.turn(item) } }
@@ -531,25 +517,20 @@ struct InventoryView: View {
         afterPlacard = nil
         switch action {
         case .open(let id): opened = id
-        case .story(let item): editingStory = item
         case .rename(let item): startRename(item)
         case .delete(let item): deleting = item
         }
     }
 
-    private func exhibitInfo(_ item: Item, story: String?, isTop: Bool, compCounts: [UInt64: Int]) -> ExhibitInfo {
+    private func exhibitInfo(_ item: Item, isTop: Bool, compCounts: [UInt64: Int]) -> ExhibitInfo {
         // "≈" marks an estimate from only one or two comparable listings
         let rough = item.saleValueCents != nil && Item.isRoughEstimate(compCount: compCounts[item.id] ?? 0)
         let room = store.snapshot.rooms.first { $0.id == item.roomId }
         let catalog = MuseumLabel.catalogLine(item)
-        let catalogued = store.snapshot.scanDate(ofRoom: item.roomId) ?? item.updatedAt
         return ExhibitInfo(
             item: item,
             roomName: room.map { store.displayName(of: $0) } ?? "",
-            story: story,
-            autoStory: MuseumLabel.autoStory(item, isTopPiece: isTop),
             catalog: catalog,
-            acquired: MuseumLabel.acquiredLine(cataloguedAt: catalogued, story: story),
             price: rough ? "≈\(item.priceText)" : item.priceText,
             priceTint: item.saleValueCents == nil ? Theme.muted : Theme.text,
             tag: item.originTag(inSharedRoom: room.map { !isMine($0) } ?? false),
@@ -671,7 +652,6 @@ struct PlacardRef: Identifiable, Hashable {
 /// What a placard's button asked for, run once the sheet is gone.
 enum AfterPlacard {
     case open(UInt64)
-    case story(Item)
     case rename(Item)
     case delete(Item)
 }

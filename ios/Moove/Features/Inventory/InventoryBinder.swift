@@ -67,7 +67,7 @@ struct BinderTabShape: Shape {
     }
 }
 
-/// One index tab: the hall's name and count; solid when it's the open page.
+/// One index tab: the hall's name; solid sage when it's the open page.
 struct BinderTabButton: View {
     let tab: BinderTab
     let selected: Bool
@@ -280,11 +280,10 @@ struct BinderHoles: View {
 
 // MARK: Placard
 
-/// Tap an item: its placard (the model on a plinth, name, size, story, price + origin) and
+/// Tap an item: its placard (the model on a plinth, name, size, price) and
 /// what you can do with it.
 struct PlacardSheet: View {
     let info: ExhibitInfo
-    var onEditStory: () -> Void
     var onOpen: () -> Void
     var onRename: () -> Void
     var onDelete: () -> Void
@@ -296,7 +295,7 @@ struct PlacardSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ExhibitPlinth(item: info.item)
                         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
-                    ExhibitPlacard(info: info, onEditStory: onEditStory)
+                    ExhibitPlacard(info: info)
                         .padding(.horizontal, -12)
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 8) { actions }

@@ -18,13 +18,6 @@ import Testing
              fragile: fragile, sentimental: sentimental, attributes: attributes)
     }
 
-    private let utc: Calendar = {
-        var c = Calendar(identifier: .gregorian)
-        c.timeZone = TimeZone(identifier: "UTC")!
-        return c
-    }()
-    private let us = Locale(identifier: "en_US")
-
     // MARK: Halls
 
     @Test func demoBedroomSpreadsAcrossFunctionHalls() {
@@ -98,36 +91,6 @@ import Testing
         #expect(MuseumLabel.catalogLine(item("Washer", "washerDryer", (0, 0, 0))) == "Washer dryer")
     }
 
-    @Test func acquiredLineIsHonestAboutDates() {
-        let date = Date(timeIntervalSince1970: 1_792_800_000) // Oct 24, 2026 UTC
-        #expect(MuseumLabel.acquiredLine(cataloguedAt: date, story: nil, now: date, calendar: utc, locale: us) == "Catalogued Oct 24, 2026")
-        #expect(MuseumLabel.acquiredLine(cataloguedAt: date, story: "Grandma's, 1974", now: date, calendar: utc, locale: us)
-                == "Acquired 1974 · catalogued Oct 24, 2026")
-        #expect(MuseumLabel.storyYear("Grandma's, 1974", now: date, calendar: utc) == 1974)
-        #expect(MuseumLabel.storyYear("Room 12345 on 2099", now: date, calendar: utc) == nil, "too long, and in the future")
-        #expect(MuseumLabel.storyYear("Since 1850", now: date, calendar: utc) == nil)
-        #expect(MuseumLabel.storyYear("From the 1990s flat", now: date, calendar: utc) == 1990)
-    }
-
-    @Test func autoStoryPicksTheMostTellingTruth() {
-        #expect(MuseumLabel.autoStory(item("Guitar", "instrument", value: 10_900, sentimental: true))
-                == "Possibly sentimental. Moove leaves this one to you.")
-        var decided = item("Guitar", "instrument", value: 10_900, sentimental: true)
-        decided.disposition = .keep
-        decided.dispositionSource = .user
-        #expect(MuseumLabel.autoStory(decided) == "Coming along: your call.")
-        // ~$30 chair, 0.4 m³ → ~$24 to move: keep needs $30+, so selling wins.
-        let chair = item("Mesh office chair", "chair", (0.64, 1.02, 0.62), value: 3_000)
-        #expect(MuseumLabel.autoStory(chair) == "Worth ~$30, cheaper to sell than to move.")
-        #expect(MuseumLabel.autoStory(chair, isTopPiece: true) == "Worth ~$30, the hall's most valuable piece.")
-        #expect(MuseumLabel.autoStory(item("Mug", "kitchenware", (0.1, 0.1, 0.1), value: 500)) == "Worth ~$5, too little to list.")
-        #expect(MuseumLabel.autoStory(item("Vase", "decor", (0.2, 0.3, 0.2), value: 6_000, fragile: true)) == "Fragile; handle with care.")
-        #expect(MuseumLabel.autoStory(item("Plant", "plant", scanObjectId: "photo:3")) == "Spotted in the room photos; size estimated.")
-        #expect(MuseumLabel.autoStory(item("Box", "box", scanObjectId: nil)) == "Added by hand.")
-        #expect(MuseumLabel.autoStory(item("Toilet", "toilet")) == "Part of the building; it stays.")
-        #expect(MuseumLabel.autoStory(item("Box", "box")) == "Measured by the LiDAR scan.")
-    }
-
     @Test func smallHelpers() {
         #expect(MuseumLabel.piecesLine(pieces: 12, valueCents: 104_900) == "12 pieces · est. $1,049")
         #expect(MuseumLabel.piecesLine(pieces: 1, valueCents: 0) == "1 piece")
@@ -136,18 +99,5 @@ import Testing
         #expect(MuseumLabel.dollars(123_456_789) == "$1,234,568")
         #expect(MuseumLabel.topPiece([item(1, "a", "box", value: 100), item(2, "b", "box", value: 900), item(3, "c", "box")]) == 2)
         #expect(MuseumLabel.topPiece([item(1, "a", "box")]) == nil)
-    }
-
-    // MARK: Stories
-
-    @Test func storiesRoundTripAndStayOneShortLine() {
-        var json = ItemStories.setting("Grandma's, 1974", for: 18, in: "")
-        json = ItemStories.setting("  first\ncamera  ", for: 7, in: json)
-        #expect(ItemStories.decode(json) == [18: "Grandma's, 1974", 7: "first camera"])
-        json = ItemStories.setting("   ", for: 18, in: json)
-        #expect(ItemStories.decode(json) == [7: "first camera"])
-        #expect(ItemStories.clean(String(repeating: "x", count: 100))?.count == ItemStories.maxLength)
-        #expect(ItemStories.decode("not json").isEmpty)
-        #expect(ItemStories.decode(#"{"abc":"x","5":""}"#).isEmpty)
     }
 }
