@@ -255,11 +255,27 @@ struct DealRow: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
             Text(Self.storeName(deal.source)).monoMeta().lineLimit(1)
+            if !seller.isEmpty {
+                Text(seller).monoMeta().lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Where it's from, by store name only ("Craigslist", "IKEA"); the seller is in the VoiceOver label.
+    /// The seller's details without what's shown elsewhere (store name, checkout kind, agent score):
+    /// "Marketplace seller, Albany (4.9 stars) · good · 4 mi", or "new · ships" for a store.
+    private var seller: String {
+        let store = Self.storeName(deal.source).lowercased()
+        return deal.sellerDetails.components(separatedBy: " · ")
+            .filter { part in
+                let p = part.lowercased()
+                return p != store && p != deal.source.lowercased() && !p.hasPrefix("score")
+                    && p != "visa checkout" && p != "message seller"
+            }
+            .joined(separator: " · ")
+    }
+
+    /// Where it's from, by store name ("Craigslist", "IKEA").
     private static func storeName(_ source: String) -> String {
         switch source.lowercased() {
         case "ebay": "eBay"
