@@ -15,8 +15,7 @@ enum PosterInk {
 }
 
 /// One listing as a poster pinned to the wall: banner, the item's voxel model (or photo) as the
-/// art, a bold title, a giant price, the status as a rubber stamp, and tear-off tabs that say
-/// where it's posted ("eBay · simulated"). Drafts are a pencil sketch, a failed post has a torn
+/// art, a bold title, a giant price, the status as a rubber stamp, and blank tear-off tabs. Drafts are a pencil sketch, a failed post has a torn
 /// corner and its reason, a denied one is crossed out.
 struct ListingPoster: View {
     let listing: Listing
@@ -94,7 +93,7 @@ struct ListingPoster: View {
             .padding(.top, 10)
             .padding(.bottom, 10)
 
-            TearOffTabs(text: PosterWall.tabText(for: listing), ink: ink, count: ax ? 7 : 4)
+            TearOffTabs(ink: ink, count: ax ? 7 : 4)
         }
         .background(sheet)
         .overlay { if stamp.isCrossedOut { CrossOut().stroke(PosterInk.stamp(.denied).opacity(0.75), lineWidth: 3) } }
@@ -206,9 +205,8 @@ private struct SmallStamp: View {
     }
 }
 
-/// The strip of tear-off tabs at the bottom, each saying where the listing is posted.
+/// The strip of blank tear-off tabs at the bottom of a poster.
 private struct TearOffTabs: View {
-    let text: String
     let ink: Color
     var count = 4
     @ScaledMetric(relativeTo: .caption2) private var tabHeight: CGFloat = 84
@@ -221,19 +219,11 @@ private struct TearOffTabs: View {
                     if i > 0 {
                         VLine().stroke(ink.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [3, 3])).frame(width: 1)
                     }
-                    // In an overlay, so the turned text's unrotated width never widens the strip.
+                    // Blank tabs (Lisa: no "eBay · simulated" text on them); the poster's own
+                    // SIMULATED tag still labels simulated listings.
                     Color.clear
                         .frame(maxWidth: .infinity)
                         .frame(height: tabHeight)
-                        .overlay {
-                            Text(text)
-                                .monoText(8.5, weight: .semibold, maxScale: 1.3)
-                                .lineLimit(1)
-                                .fixedSize()
-                                .foregroundStyle(ink.opacity(0.85))
-                                .rotationEffect(.degrees(-90))
-                        }
-                        .clipped()
                 }
             }
         }
