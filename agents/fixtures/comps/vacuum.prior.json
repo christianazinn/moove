@@ -1,9 +1,14 @@
 {
-  "94ec70b837b0aa19": {
-    "item": "vacuum",
+  "5583c5372ab9b329": {
+    "identifiedProduct": "Generic vacuum cleaner (brand and model unspecified)",
+    "itemForm": "full_product",
+    "specificity": 0.1,
     "newRetailUsd": 250,
-    "usedUsd": 75,
-    "reason": "Assumed a common mid-range upright or canister vacuum (e.g., Shark or Bissell-class) at about $250 new, with roughly a 70% used discount for typical Bay Area resale.",
-    "model": "claude-sonnet-5-5"
+    "p10": 15,
+    "p50": 55,
+    "p90": 200,
+    "item": "vacuum",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

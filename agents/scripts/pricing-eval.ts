@@ -38,7 +38,7 @@ for (const [q, label] of Object.entries(labels.items)) {
     },
   });
   const p = await pricePrior(it as never, { cacheFile: priorCacheFile(q), cacheOnly: !fill, enabled: true });
-  const priorCents = p.status === "ok" || p.status === "cached" ? p.cents : undefined;
+  const prior = p.status === "ok" || p.status === "cached" ? p : undefined;
   if (p.status === "failed") console.warn(`prior failed for "${q}": ${p.error}`);
   rows.push({
     q,
@@ -48,10 +48,10 @@ for (const [q, label] of Object.entries(labels.items)) {
     n: f.comps.length,
     est: {
       baseline: estimate(f.comps, ""),
-      "k=1": priorCents ? estimate(f.comps, "", { priorCents, priorWeight: 1 }) : null,
-      "+prior": priorCents ? estimate(f.comps, "", { priorCents }) : null,
-      "k=6": priorCents ? estimate(f.comps, "", { priorCents, priorWeight: 6 }) : null,
-      prior: priorCents ? estimate([], "", { priorCents }) : null,
+      "k=1": prior ? estimate(f.comps, "", { prior, priorWeight: 1 }) : null,
+      "+prior": prior ? estimate(f.comps, "", { prior }) : null,
+      "k=6": prior ? estimate(f.comps, "", { prior, priorWeight: 6 }) : null,
+      prior: prior ? estimate([], "", { prior }) : null,
     },
   });
 }

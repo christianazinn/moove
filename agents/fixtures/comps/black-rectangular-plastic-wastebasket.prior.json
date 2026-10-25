@@ -1,9 +1,14 @@
 {
-  "8f01c3e5d29ba1d3": {
-    "item": "black rectangular plastic wastebasket",
+  "edbb5cdcea34248b": {
+    "identifiedProduct": "Generic black rectangular plastic wastebasket (small to medium household trash can)",
+    "itemForm": "full_product",
+    "specificity": 0.2,
     "newRetailUsd": 12,
-    "usedUsd": 3,
-    "reason": "Assumed a common mid-size plastic rectangular wastebasket (~7-13 gal, Rubbermaid/Sterilite style); low-value household item sells for about 25% of new.",
-    "model": "claude-sonnet-5-5"
+    "p10": 1.5,
+    "p50": 4,
+    "p90": 9,
+    "item": "black rectangular plastic wastebasket",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

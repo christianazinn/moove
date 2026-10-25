@@ -1,9 +1,14 @@
 {
-  "8ddd28e6f1974d29": {
-    "item": "black floating wall shelf",
+  "b780932a4fabdc6d": {
+    "identifiedProduct": "Generic black floating wall shelf (wood/MDF, approx. 24-36 inch)",
+    "itemForm": "full_product",
+    "specificity": 0.2,
     "newRetailUsd": 30,
-    "usedUsd": 10,
-    "reason": "Assumed a common mid-range 24-inch black floating wall shelf (IKEA/Amazon style) at about $30 new, sold used at roughly 33% of new.",
-    "model": "claude-sonnet-5-5"
+    "p10": 6,
+    "p50": 14,
+    "p90": 30,
+    "item": "black floating wall shelf",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

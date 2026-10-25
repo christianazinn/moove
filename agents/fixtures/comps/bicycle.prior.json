@@ -1,9 +1,14 @@
 {
-  "c5968e03391f0b00": {
+  "a66f1d74aa2734e0": {
+    "identifiedProduct": "Generic used bicycle (type, brand, and size unspecified)",
+    "itemForm": "full_product",
+    "specificity": 0.1,
+    "newRetailUsd": 450,
+    "p10": 40,
+    "p50": 150,
+    "p90": 500,
     "item": "bicycle",
-    "newRetailUsd": 600,
-    "usedUsd": 200,
-    "reason": "Assumed a mid-range adult hybrid/commuter bike (Trek/Specialized entry level, ~$600 new); typical used sale at about 33% of new in good condition.",
-    "model": "claude-sonnet-5-5"
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

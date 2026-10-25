@@ -1,9 +1,14 @@
 {
-  "eb82465a621077dd": {
-    "item": "refrigerator",
+  "c6b0371bd6e500b1": {
+    "identifiedProduct": "Generic household refrigerator (brand, size, and style unspecified)",
+    "itemForm": "full_product",
+    "specificity": 0.15,
     "newRetailUsd": 1400,
-    "usedUsd": 350,
-    "reason": "Assumed a common mid-range 18-21 cu ft top-freezer or French-door refrigerator (~$1400 new); bulky appliance used in good condition sells for about 25% of new.",
-    "model": "claude-sonnet-5-5"
+    "p10": 100,
+    "p50": 350,
+    "p90": 900,
+    "item": "refrigerator",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

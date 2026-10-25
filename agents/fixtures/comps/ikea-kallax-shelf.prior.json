@@ -1,16 +1,26 @@
 {
-  "c2e98fc826afad94": {
-    "item": "ikea kallax shelf",
-    "newRetailUsd": 90,
-    "usedUsd": 40,
-    "reason": "Assumed a standard IKEA Kallax 4x2 (8-cube) shelf unit in white or black-brown, about $90 new; used flat-pack furniture sells for roughly 40-45% of new in good condition locally.",
-    "model": "claude-sonnet-5-5"
-  },
-  "1ccdcfcb67a9ae58": {
+  "bfb68c6ba48edd2c": {
+    "identifiedProduct": "IKEA Kallax shelf unit, 2x4 cube (77 x147 cm), white or similar",
+    "itemForm": "full_product",
+    "specificity": 0.8,
+    "newRetailUsd": 110,
+    "p10": 30,
+    "p50": 55,
+    "p90": 85,
     "item": "IKEA Kallax shelf; category storage; 0.77 x 1.47 x 0.39 m (W x H x D)",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  },
+  "6fc5f57aa83ccc17": {
+    "identifiedProduct": "IKEA KALLAX shelf unit (size/color unspecified, likely 4x2 or 2x2 white)",
+    "itemForm": "full_product",
+    "specificity": 0.5,
     "newRetailUsd": 90,
-    "usedUsd": 40,
-    "reason": "Assumed IKEA Kallax 2x4 cube unit (30x57 in, about 77x147 cm) in white/black-brown, new about $90-100; used flat-pack furniture sells at roughly 40-45% of new.",
-    "model": "claude-sonnet-5-5"
+    "p10": 25,
+    "p50": 50,
+    "p90": 95,
+    "item": "ikea kallax shelf",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

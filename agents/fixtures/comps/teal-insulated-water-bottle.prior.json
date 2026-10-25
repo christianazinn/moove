@@ -1,9 +1,14 @@
 {
-  "07bf8b3130567f58": {
+  "c238de0a07d48eaa": {
+    "identifiedProduct": "Generic teal insulated stainless steel water bottle (brand and size unspecified)",
+    "itemForm": "full_product",
+    "specificity": 0.25,
+    "newRetailUsd": 30,
+    "p10": 6,
+    "p50": 15,
+    "p90": 30,
     "item": "teal insulated water bottle",
-    "newRetailUsd": 35,
-    "usedUsd": 12,
-    "reason": "Assumed a mid-range 24-32 oz stainless insulated bottle (Hydro Flask/Stanley type) at about $35 new, discounted roughly 65% for ordinary used resale.",
-    "model": "claude-sonnet-5-5"
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

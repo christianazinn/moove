@@ -1,9 +1,14 @@
 {
-  "b0cd1943ce67595d": {
-    "item": "black flat screen tv",
+  "df0f8f03cd4ed55c": {
+    "identifiedProduct": "Black flat screen TV (generic, unknown brand, size, or resolution)",
+    "itemForm": "full_product",
+    "specificity": 0.15,
     "newRetailUsd": 350,
-    "usedUsd": 90,
-    "reason": "Assumed a common mid-range 50-inch 4K LED smart TV (Hisense/TCL/Vizio class) at about $350 new, with roughly 25% of new for typical used resale in the Bay Area.",
-    "model": "claude-sonnet-5-5"
+    "p10": 30,
+    "p50": 90,
+    "p90": 280,
+    "item": "black flat screen tv",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

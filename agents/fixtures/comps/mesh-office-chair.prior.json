@@ -1,16 +1,26 @@
 {
-  "643bc6f017de4d5d": {
-    "item": "mesh office chair",
-    "newRetailUsd": 180,
-    "usedUsd": 60,
-    "reason": "Assumed a generic mid-range mesh ergonomic office chair (non-Herman Miller/Steelcase) with adjustable arms; roughly 33% of new for local resale.",
-    "model": "claude-sonnet-5-5"
-  },
-  "103668cda6bbe93d": {
+  "8d50d970e7462ccf": {
+    "identifiedProduct": "Generic mesh ergonomic office chair (unbranded, adjustable, with casters)",
+    "itemForm": "full_product",
+    "specificity": 0.2,
+    "newRetailUsd": 150,
+    "p10": 20,
+    "p50": 50,
+    "p90": 110,
     "item": "Mesh office chair; category chair; 0.64 x 1.02 x 0.62 m (W x H x D)",
-    "newRetailUsd": 200,
-    "usedUsd": 60,
-    "reason": "Assumed a generic mid-range mesh ergonomic office chair (non-Herman Miller/Steelcase) at about $200 new, sold used at roughly 30% of new.",
-    "model": "claude-sonnet-5-5"
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  },
+  "2f67e83eef043a22": {
+    "identifiedProduct": "Generic mesh office chair (unspecified brand, ergonomic task chair)",
+    "itemForm": "full_product",
+    "specificity": 0.2,
+    "newRetailUsd": 150,
+    "p10": 25,
+    "p50": 55,
+    "p90": 140,
+    "item": "mesh office chair",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

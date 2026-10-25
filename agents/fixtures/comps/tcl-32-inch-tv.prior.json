@@ -1,16 +1,26 @@
 {
-  "5ee2263c5910e276": {
-    "item": "tcl 32 inch tv",
-    "newRetailUsd": 130,
-    "usedUsd": 45,
-    "reason": "Assumed a TCL 32-inch 720p/1080p Roku smart TV (S3 series, about $130 new); used sells at roughly 35% of new for mainstream, low-cost electronics.",
-    "model": "claude-sonnet-5-5"
-  },
-  "01da87f44b9505a8": {
+  "2d13e08b43a20326": {
+    "identifiedProduct": "TCL 32 inch LED TV (likely Roku/Smart 3-Series 32S3xx or similar 720p/1080p)",
+    "itemForm": "full_product",
+    "specificity": 0.45,
+    "newRetailUsd": 140,
+    "p10": 35,
+    "p50": 60,
+    "p90": 95,
     "item": "TCL 32 inch TV; category television; 0.73 x 0.48 x 0.18 m (W x H x D)",
-    "newRetailUsd": 130,
-    "usedUsd": 50,
-    "reason": "Assumed a TCL 32-inch 720p/1080p Roku/Smart LED TV (about $130 new); mainstream electronics discounted about 60% for local resale.",
-    "model": "claude-sonnet-5-5"
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  },
+  "38df4f093911115e": {
+    "identifiedProduct": "TCL 32 inch LED HD/Smart TV (likely 3-Series or S3 32S327 Roku/Google TV)",
+    "itemForm": "full_product",
+    "specificity": 0.45,
+    "newRetailUsd": 125,
+    "p10": 40,
+    "p50": 70,
+    "p90": 110,
+    "item": "tcl 32 inch tv",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

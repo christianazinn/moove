@@ -1,16 +1,26 @@
 {
-  "31f10ae9f04648de": {
-    "item": "herman miller office chair",
-    "newRetailUsd": 1400,
-    "usedUsd": 450,
-    "reason": "Assumed a mid-range Herman Miller Aeron or Mirra 2 in good condition (new ~$1,400); brand-name task chairs hold value, so ~30% of new, typical Bay Area used sale price.",
-    "model": "claude-sonnet-5-5"
-  },
-  "520ba11fea8c64bb": {
+  "a6c01036de7b91ff": {
+    "identifiedProduct": "Herman Miller office chair (model unspecified, likely Aeron or Mirra/Embody class ergonomic task chair)",
+    "itemForm": "full_product",
+    "specificity": 0.35,
+    "newRetailUsd": 1200,
+    "p10": 150,
+    "p50": 350,
+    "p90": 750,
     "item": "Herman Miller office chair; category chair; 0.69 x 1.04 x 0.67 m (W x H x D)",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  },
+  "162d75d5a05cbe4c": {
+    "identifiedProduct": "Herman Miller office chair (model unspecified, likely Aeron or Mirra/Sayl class ergonomic task chair)",
+    "itemForm": "full_product",
+    "specificity": 0.3,
     "newRetailUsd": 1400,
-    "usedUsd": 450,
-    "reason": "Assumed a Herman Miller Aeron (size B, mid-range) at about $1,400 new; used ones in good condition sell for roughly 30-35% of new in the Bay Area, since brand-name office chairs hold value.",
-    "model": "claude-sonnet-5-5"
+    "p10": 150,
+    "p50": 400,
+    "p90": 850,
+    "item": "herman miller office chair",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

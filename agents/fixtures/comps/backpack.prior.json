@@ -1,9 +1,14 @@
 {
-  "c524a29b80123f48": {
+  "f18bbfd8c997dffe": {
+    "identifiedProduct": "Generic backpack (unspecified brand, size, or condition)",
+    "itemForm": "full_product",
+    "specificity": 0.1,
+    "newRetailUsd": 50,
+    "p10": 8,
+    "p50": 20,
+    "p90": 55,
     "item": "backpack",
-    "newRetailUsd": 60,
-    "usedUsd": 20,
-    "reason": "Assumed a common mid-range brand daypack/laptop backpack (e.g., Jansport/North Face/Targus style); typical used soft goods sell for about 30-35% of new.",
-    "model": "claude-sonnet-5-5"
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

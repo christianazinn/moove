@@ -6,6 +6,7 @@ import { isBuiltInFixture } from '../builtins.js';
 import { filterCacheFile, isApifyUnavailable, lookupComps, similarCachedComps, type Comp, type CompsResult } from '../integrations/apify.js';
 import { filterComps, type FilterResult } from './comp-filter.js';
 import { pricePrior, priorCacheFile, type PriorResult } from './price-prior.js';
+import type { ImageInput } from '../integrations/photos.js';
 
 // Where comps come from. Defaults to calling Apify directly; once the x402 rail (#7) is wired,
 // swap in a source that buys them from the paywalled /x402/comps endpoint so every lookup is a
@@ -14,6 +15,12 @@ export type CompsSource = (query: string, item: Item) => Promise<CompsResult>;
 let compsSource: CompsSource = q => lookupComps(q);
 export function setCompsSource(src: CompsSource): void {
   compsSource = src;
+}
+
+// The price guess sees the item's latest photo (1.13 -> 0.95 RMSLE on real listing photos). Swappable in tests.
+let loadPriorPhoto = async (url: string): Promise<ImageInput> => (await import('../integrations/anthropic.js')).loadImage(url);
+export function setPriorPhotoLoader(f: typeof loadPriorPhoto): void {
+  loadPriorPhoto = f;
 }
 
 // Comps are mostly used listings in "good" shape; scale for the item's condition.
@@ -26,39 +33,48 @@ const quantile = (sorted: number[], q: number) => {
   return sorted[lo] + (sorted[Math.min(lo + 1, sorted.length - 1)] - sorted[lo]) * (i - lo);
 };
 
-// How many comps the prior counts as: with 1-2 comps it dominates, with 15 it barely moves the median.
-export const PRIOR_WEIGHT = Number(process.env.PRICING_PRIOR_WEIGHT ?? 3);
+// How many comps the prior counts as: with 1-3 comps it dominates, with 20 it moves the median a quarter.
+// 6, not 3, since the prior names the product and sees the photo: k=6 beat k=3 on the hand labels
+// (44% vs 47% mean error) and on 500 Mercari sold listings with text-matched comps (0.55-0.70 vs 0.59-0.81 RMSLE).
+export const PRIOR_WEIGHT = Number(process.env.PRICING_PRIOR_WEIGHT ?? 6);
 
 export interface EstimateOpts {
-  /** Sold-equivalent price in cents for the item with no comps (Claude's guess, see price-prior.ts). */
-  priorCents?: number;
+  /** Claude's guess in cents (see price-prior.ts), already for the item's condition: comps get the condition factor, the prior doesn't. */
+  prior?: { cents: number; lowCents: number; highCents: number };
   priorWeight?: number;
+  /** Comps borrowed from a similar item (Apify down): together they count as one comp, not n. On 174 real
+   *  listing photos, loosely matched comps at full weight took RMSLE from 0.94 (the prior alone) to 1.1-1.4. */
+  borrowed?: boolean;
 }
 
 export type Estimate = { est: number; low: number; high: number; n: number; fromPrior: boolean };
 
 export function estimate(comps: Comp[], condition: string, opts: EstimateOpts = {}): Estimate | null {
   const k = opts.priorWeight ?? PRIOR_WEIGHT;
-  const prior = opts.priorCents && opts.priorCents > 0 ? opts.priorCents : 0;
+  const prior = opts.prior && opts.prior.cents > 0 ? opts.prior : null;
   const prices = comps.map(c => c.priceCents).sort((a, b) => a - b);
   const f = CONDITION_FACTOR[condition] ?? 1;
-  const r = (x: number) => Math.round((x * f) / 100) * 100; // whole dollars
+  const r = (x: number) => Math.round(x / 100) * 100; // whole dollars
   if (prices.length === 0) {
-    // No comps at all: the prior alone, with a wide range.
-    return prior ? { est: r(prior), low: r(prior * 0.6), high: r(prior * 1.4), n: 0, fromPrior: true } : null;
+    // No comps at all: the prior alone, with its own range.
+    return prior ? { est: r(prior.cents), low: r(prior.lowCents), high: r(prior.highCents), n: 0, fromPrior: true } : null;
   }
   // Drop outliers (bundles, parts-only, typos): anything beyond 3x either side of the median.
   const m = quantile(prices, 0.5);
   const trimmed = prices.filter(p => p >= m / 3 && p <= m * 3);
   const n = trimmed.length;
-  // Shrink toward the prior: n comps vs k pseudo-comps. The prior's own band is +-30%.
-  const blend = (x: number, p: number) => (prior ? (n * x + k * p) / (n + k) : x);
+  const w = opts.borrowed ? 1 : n;
+  // Shrink toward the prior: w comps vs k pseudo-comps, each quartile toward the prior's range.
+  const blend = (q: number, p: number | undefined) => {
+    const x = quantile(trimmed, q) * f;
+    return p === undefined ? x : (w * x + k * p) / (w + k);
+  };
   return {
-    est: r(blend(quantile(trimmed, 0.5), prior)),
-    low: r(blend(quantile(trimmed, 0.25), prior * 0.7)),
-    high: r(blend(quantile(trimmed, 0.75), prior * 1.3)),
+    est: r(blend(0.5, prior?.cents)),
+    low: r(blend(0.25, prior?.lowCents)),
+    high: r(blend(0.75, prior?.highCents)),
     n,
-    fromPrior: prior > 0,
+    fromPrior: !!prior,
   };
 }
 
@@ -127,7 +143,10 @@ async function price(conn: Conn, it: Item, retry: (it: Item, delayMs: number) =>
   try {
     let similarTo = '';
     // Claude's comps-free guess runs alongside the lookup; it never fails pricing.
-    const priorP = pricePrior(it, { cacheFile: priorCacheFile(q) }).catch((err: unknown): PriorResult => ({ status: 'failed', error: String(err) }));
+    const photoUrl = it.photoUrls.at(-1);
+    const priorP = (photoUrl ? loadPriorPhoto(photoUrl).catch(() => undefined) : Promise.resolve(undefined))
+      .then(photo => pricePrior(it, { cacheFile: priorCacheFile(q), photo }).then(r => ({ r, photo: !!photo })))
+      .catch((err: unknown) => ({ r: { status: 'failed', error: String(err) } as PriorResult, photo: false }));
     const { comps: raw, replayed } = await compsSource(q, it).catch((err: unknown) => {
       // Apify can't run (out of credit, daily cap, no token): reuse the real cached comps of the most
       // similar item we have, labeled as such. The relevance filter below still checks them against
@@ -202,22 +221,23 @@ async function price(conn: Conn, it: Item, retry: (it: Item, delayMs: number) =>
         comps: comps.slice(0, 20).map(c => ({ source: c.source, title: c.title, url: c.url, priceCents: BigInt(c.priceCents) })),
       });
     }
-    const prior = await priorP;
+    const { r: prior, photo: sawPhoto } = await priorP;
     if (prior.status === 'ok' || prior.status === 'cached') {
       logEvent(conn, {
         owner: it.owner,
         agent: 'pricing',
         kind: 'tool_call',
-        message: `${prior.status === 'cached' ? '[REPLAYED] ' : ''}Claude's price guess without comps: ~$${Math.round(prior.cents / 100)} (${prior.reason})`,
+        message: `${prior.status === 'cached' ? '[REPLAYED] ' : ''}Claude's price guess without comps${sawPhoto ? ', from the photo' : ''}: ~$${Math.round(prior.cents / 100)} ($${Math.round(prior.lowCents / 100)}-$${Math.round(prior.highCents / 100)}) for ${prior.reason}`,
         refTable: 'item',
         refId: it.id,
-        data: { query: q, priorCents: prior.cents, replayed: prior.status === 'cached' },
+        data: { query: q, priorCents: prior.cents, priorLowCents: prior.lowCents, priorHighCents: prior.highCents, photo: sawPhoto, replayed: prior.status === 'cached' },
       });
     } else if (prior.status === 'failed') {
       logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'error', message: `Claude price guess failed (${prior.error.slice(0, 160)}), estimating from comps alone`, refTable: 'item', refId: it.id, data: { query: q, fallback: true } });
     }
-    const priorCents = prior.status === 'ok' || prior.status === 'cached' ? prior.cents : undefined;
-    const e = estimate(comps, it.condition, { priorCents });
+    const priorOk = prior.status === 'ok' || prior.status === 'cached' ? prior : undefined;
+    const priorCents = priorOk?.cents;
+    const e = estimate(comps, it.condition, { prior: priorOk, borrowed: similarTo !== '' });
     if (!e) {
       conn.reducers.setEstValue({ itemId: it.id, estValueCents: 0n, estLowCents: 0n, estHighCents: 0n });
       logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'result', message: `No comps for "${q}", valued at $0`, refTable: 'item', refId: it.id });

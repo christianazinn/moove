@@ -171,7 +171,10 @@ try {
   console.log(`item for the filter/prior: ${describeItem(priced)}`);
 
   // ---------- 2. prior (runs alongside the comps lookup, like pricing.ts) ----------
-  const priorP = pricePrior(priced, { cacheFile: stagedCache(priorCacheFile(q)) }).catch(err => ({ status: 'failed' as const, error: String(err) }));
+  // The guess sees the latest photo, as in pricing.ts.
+  const last = photos.length - 1;
+  const photo = { mediaType: `image/${kinds[last] === 'jpg' ? 'jpeg' : kinds[last]}`, data: readFileSync(photos[last]).toString('base64') } as import('../src/integrations/photos.js').ImageInput;
+  const priorP = pricePrior(priced, { cacheFile: stagedCache(priorCacheFile(q)), photo }).catch(err => ({ status: 'failed' as const, error: String(err) }));
 
   // ---------- 3. comps ----------
   hr('Comps');
@@ -217,11 +220,11 @@ try {
   // ---------- 4. prior ----------
   hr('Prior (Claude, no comps)');
   const prior = await priorP;
-  let priorCents: number | undefined;
+  let priorR: { cents: number; lowCents: number; highCents: number } | undefined;
   if (prior.status === 'ok' || prior.status === 'cached') {
-    priorCents = prior.cents;
+    priorR = prior;
     steps.push(prior.status === 'ok' ? `price prior: ${config.models.estimate} (live)` : 'price prior: [REPLAYED] cached answer, no call');
-    console.log(`${prior.status === 'cached' ? '[REPLAYED] ' : ''}~${usd(prior.cents)} used, good condition: ${prior.reason}`);
+    console.log(`${prior.status === 'cached' ? '[REPLAYED] ' : ''}~${usd(prior.cents)} (${usd(prior.lowCents)}-${usd(prior.highCents)}) used, condition "${d.condition}", from the photo: ${prior.reason}`);
   } else {
     console.log(prior.status === 'failed' ? `failed: ${prior.error}` : `${prior.status} (PRICING_PRIOR=0?)`);
   }
@@ -230,12 +233,12 @@ try {
   hr('Estimate');
   const tag = label.startsWith('[REPLAYED, similar') ? '[similar item] ' : label.startsWith('[REPLAYED]') ? '[REPLAYED] ' : '';
   const fmt = (e: ReturnType<typeof estimate>) => (e ? `${usd(e.est)}  (${usd(e.low)}-${usd(e.high)})` : '-');
-  const final = estimate(f.comps, d.condition, { priorCents });
+  const final = estimate(f.comps, d.condition, { prior: priorR, borrowed: label.startsWith('[REPLAYED, similar') });
   const compsOnly = estimate(f.comps, d.condition);
-  const priorOnly = priorCents ? estimate([], d.condition, { priorCents }) : null;
+  const priorOnly = priorR ? estimate([], d.condition, { prior: priorR }) : null;
   console.log(`FINAL:       ${tag}${fmt(final)}  ${final ? (final.n === 0 ? "from Claude's guess alone" : `from ${final.n} comps${final.fromPrior ? " + Claude's guess" : ''}`) : 'no comps and no prior'}`);
   console.log(`comps only:  ${tag}${fmt(compsOnly)}${compsOnly ? `  (${compsOnly.n} comps after 3x-median trim)` : ''}`);
-  console.log(`prior only:  ${fmt(priorOnly)}  (condition "${d.condition}" applied, +-40%)`);
+  console.log(`prior only:  ${fmt(priorOnly)}  (Claude's guess for condition "${d.condition}", with its range)`);
 
   // ---------- 6. Claude calls ----------
   hr('Claude calls');

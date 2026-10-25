@@ -1,16 +1,26 @@
 {
-  "06e9a6a72b8b81f3": {
-    "item": "full size metal bed frame",
+  "38a91ae6e18bc8a6": {
+    "identifiedProduct": "Generic full-size metal bed frame (platform/standard frame, approx. 1.40 m wide)",
+    "itemForm": "full_product",
+    "specificity": 0.3,
     "newRetailUsd": 150,
-    "usedUsd": 45,
-    "reason": "Assumed a standard mid-range full size platform or Zinus-style metal bed frame, about $150 new; bulky furniture discounted to roughly 30% of new.",
-    "model": "claude-sonnet-5-5"
-  },
-  "8f37943d451d9a08": {
+    "p10": 25,
+    "p50": 55,
+    "p90": 110,
     "item": "Full size metal bed frame; category bed; 1.40 x 0.36 x 1.95 m (W x H x D)",
-    "newRetailUsd": 150,
-    "usedUsd": 50,
-    "reason": "Assumed a common mid-range full-size metal platform bed frame (~$150 new) sold used at about 33% of new, since bulky furniture sells for 20-40% of new.",
-    "model": "claude-sonnet-5-5"
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  },
+  "7468cf45cfdcd6b5": {
+    "identifiedProduct": "Generic full size (double) metal bed frame",
+    "itemForm": "full_product",
+    "specificity": 0.3,
+    "newRetailUsd": 130,
+    "p10": 25,
+    "p50": 55,
+    "p90": 120,
+    "item": "full size metal bed frame",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

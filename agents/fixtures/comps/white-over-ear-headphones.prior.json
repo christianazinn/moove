@@ -1,9 +1,14 @@
 {
-  "0b2c9b55089fd001": {
+  "6a2c57a3e062ffc0": {
+    "identifiedProduct": "Generic white over-ear headphones (brand and model unknown)",
+    "itemForm": "full_product",
+    "specificity": 0.15,
+    "newRetailUsd": 90,
+    "p10": 12,
+    "p50": 40,
+    "p90": 150,
     "item": "white over-ear headphones",
-    "newRetailUsd": 100,
-    "usedUsd": 40,
-    "reason": "Assumed a mid-range white wireless over-ear headphone (generic or mainstream brand, ~$100 new) at about 40% of new for good used condition.",
-    "model": "claude-sonnet-5-5"
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

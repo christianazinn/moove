@@ -1,9 +1,14 @@
 {
-  "6c7ef13140d94e89": {
-    "item": "black fabric duffel bag",
+  "76d5e9ff8803bff1": {
+    "identifiedProduct": "Generic black fabric duffel bag (unbranded/unknown brand, medium size)",
+    "itemForm": "full_product",
+    "specificity": 0.15,
     "newRetailUsd": 40,
-    "usedUsd": 12,
-    "reason": "Assumed a generic mid-range black fabric gym/travel duffel (unbranded or basic brand like Amazon Basics/Under Armour); soft goods sell at about 30% of new.",
-    "model": "claude-sonnet-5-5"
+    "p10": 6,
+    "p50": 15,
+    "p90": 38,
+    "item": "black fabric duffel bag",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

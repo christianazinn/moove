@@ -1,9 +1,14 @@
 {
-  "956faacee09bf117": {
-    "item": "sofa",
+  "1d8a42998890b927": {
+    "identifiedProduct": "Generic sofa (unspecified brand, size, material, or style)",
+    "itemForm": "full_product",
+    "specificity": 0.1,
     "newRetailUsd": 900,
-    "usedUsd": 250,
-    "reason": "Assumed a common mid-range 3-seat fabric sofa (e.g., Article/West Elm/IKEA tier) in good condition; roughly 28% of new for bulky furniture.",
-    "model": "claude-sonnet-5-5"
+    "p10": 60,
+    "p50": 225,
+    "p90": 700,
+    "item": "sofa",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

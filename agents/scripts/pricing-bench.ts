@@ -50,7 +50,7 @@ for (const r of rows) {
   const it = itemOf(r);
   const o: Out = { id: r.id, name: r.name, cat: top(r), cond: r.condition, truth: Math.round(r.priceUsd * 100) };
   const p = await pricePrior(it as never, { cacheFile: priorFile, enabled: true });
-  if (p.status === "ok" || p.status === "cached") o.prior = estimate([], r.condition, { priorCents: p.cents })!.est;
+  if (p.status === "ok" || p.status === "cached") o.prior = estimate([], r.condition, { prior: p })!.est;
   else if (p.status === "failed") o.error = `prior: ${p.error}`;
   if (fullIds.has(r.id)) {
     const q = queryFor({ ...it } as never);
@@ -59,7 +59,7 @@ for (const r of rows) {
       const f = await filterComps(it as never, raw, { cacheFile: filterCacheFile(q) });
       o.nComps = f.comps.length;
       o.comps = estimate(f.comps, r.condition)?.est;
-      if (p.status === "ok" || p.status === "cached") o.blend = estimate(f.comps, r.condition, { priorCents: p.cents })?.est;
+      if (p.status === "ok" || p.status === "cached") o.blend = estimate(f.comps, r.condition, { prior: p })?.est;
     } catch (err) {
       o.error = `comps: ${String(err).slice(0, 160)}`;
     }

@@ -1,16 +1,26 @@
 {
-  "98f951f7927aebcc": {
-    "item": "dell 27 inch monitor",
+  "367ae84bac547932": {
+    "identifiedProduct": "Dell 27 inch LCD monitor (unspecified model, likely S2721/P2723/SE2722 series)",
+    "itemForm": "full_product",
+    "specificity": 0.35,
     "newRetailUsd": 200,
-    "usedUsd": 70,
-    "reason": "Assumed a mid-range Dell 27-inch 1080p/1440p IPS monitor (S2721/P2723 class) at about $200 new, with roughly a 65% discount for typical local used sales.",
-    "model": "claude-sonnet-5-5"
-  },
-  "903fe46a2fa7a72e": {
+    "p10": 50,
+    "p50": 90,
+    "p90": 170,
     "item": "Dell 27 inch monitor; category electronics; 0.61 x 0.45 x 0.18 m (W x H x D)",
-    "newRetailUsd": 200,
-    "usedUsd": 70,
-    "reason": "Assumed a Dell 27-inch 1080p/1440p IPS monitor (S2721/P2722 class) at about $200 new; used at about 35% of new for mainstream electronics.",
-    "model": "claude-sonnet-5-5"
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  },
+  "0baa4b923a20d519": {
+    "identifiedProduct": "Dell 27 inch LCD monitor (model unspecified, likely S2721 / P2722H / SE2722H class)",
+    "itemForm": "full_product",
+    "specificity": 0.35,
+    "newRetailUsd": 220,
+    "p10": 45,
+    "p50": 85,
+    "p90": 170,
+    "item": "dell 27 inch monitor",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }

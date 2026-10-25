@@ -1,9 +1,14 @@
 {
-  "536ff03a2c3216eb": {
+  "94a96c7c6a1b44fe": {
+    "identifiedProduct": "Gray metal twin-over-twin bunk bed frame with ladder (generic, unspecified brand)",
+    "itemForm": "full_product",
+    "specificity": 0.35,
+    "newRetailUsd": 300,
+    "p10": 60,
+    "p50": 120,
+    "p90": 220,
     "item": "gray metal twin bunk bed with ladder",
-    "newRetailUsd": 350,
-    "usedUsd": 100,
-    "reason": "Assumed a common mid-range gray metal twin-over-twin bunk bed with ladder (mattresses not included), about $350 new; bulky furniture sells at roughly 30% of new locally.",
-    "model": "claude-sonnet-5-5"
+    "model": "claude-sonnet-5-5",
+    "photo": ""
   }
 }
