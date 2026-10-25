@@ -4,8 +4,8 @@ import MooveKit
 
 /// The flip cards at the top of Review: the whole move as a stack (`Review.flipDeck`), the items
 /// that need you first. The front is the item's photo; tap to flip to the voxel model and the
-/// details. Swipe right = Keep, left = Sell (`ReviewSwipe`), on either side, or use the buttons
-/// (Donate and Trash are buttons only, so a vertical scroll never decides). The parent owns the
+/// details. Swipe right = Keep, left = Sell, up = Donate, down = Trash (`ReviewSwipe`), on either
+/// side, or use the buttons; the card's drag outranks the page scroll. The parent owns the
 /// decisions and the undo stack.
 struct ReviewDeckView: View {
     /// Cards still to go, top first.
@@ -120,7 +120,8 @@ struct ReviewDeckView: View {
             .rotationEffect(.degrees(reduceMotion ? 0 : Double(drag.width) / 18), anchor: .bottom)
             .contentShape(Rectangle())
             .onTapGesture { flip() }
-            .gesture(
+            // High priority: up/down decide too, so the page mustn't scroll from under the card.
+            .highPriorityGesture(
                 DragGesture(minimumDistance: 8)
                     .onChanged { value in
                         guard leaving == nil else { return }
@@ -142,7 +143,7 @@ struct ReviewDeckView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Self.spoken(item, range: range))
             .accessibilityIdentifier("review.card.\(item.id)")
-            .accessibilityHint("Swipe right to keep, left to sell. Double-tap to flip.")
+            .accessibilityHint("Swipe right to keep, left to sell, up to donate, down to trash. Double-tap to flip.")
             .accessibilityAction { flip() }
             .accessibilityActions {
                 ForEach(Disposition.choices, id: \.self) { d in
