@@ -75,17 +75,23 @@ struct ScanFinishedScreen: View {
     var pendingPhotos = 0
     /// How many items the import sent, for the title before the rows sync back.
     var importedCount: Int? = nil
+    /// Detector finds the app's crop classifier left out before the import (`ObjectRecheck`).
+    var localSkips: [ScanSkips.Entry] = []
     var onDone: () -> Void
 
     /// What the module skipped on import (#177/#180), once the event syncs back.
-    private var skips: ScanSkips? {
+    private var moduleSkips: ScanSkips? {
         guard let room = store.newestRoom(named: roomName),
               let scan = store.snapshot.scans.filter({ $0.roomId == room.id }).max(by: { $0.id < $1.id }) else { return nil }
         return store.snapshot.skips(forScan: scan.id)
     }
 
+    /// The module's skips plus the app's own, as one notice.
+    private var skips: ScanSkips? { ScanSkips.combined(moduleSkips, local: localSkips) }
+
     private var itemCount: Int {
-        if let importedCount { return max(importedCount - (skips?.count ?? 0), 0) }
+        // Local skips were never sent, so only the module's come off the imported count.
+        if let importedCount { return max(importedCount - (moduleSkips?.count ?? 0), 0) }
         guard let room = store.newestRoom(named: roomName) else { return 0 }
         return store.items.filter { $0.roomId == room.id }.count
     }
@@ -104,7 +110,7 @@ struct ScanFinishedScreen: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
                 if let skips {
-                    SkippedObjectsNotice(skips: skips).padding(.top, 16)
+                    SkippedObjectsNotice(skips: skips, rechecked: !localSkips.isEmpty).padding(.top, 16)
                 }
                 ScanFinishedResults(roomName: roomName, colors: colors)
                     .padding(.top, 28)
@@ -139,6 +145,8 @@ struct ScanFinishedScreen: View {
 /// "2 objects looked wrong and were skipped", with what was wrong with each (#180).
 private struct SkippedObjectsNotice: View {
     var skips: ScanSkips
+    /// Some were dropped by the on-device classifier (a wall, door or fixture, not an object).
+    var rechecked = false
 
     var body: some View {
         DisclosureGroup {
@@ -149,7 +157,9 @@ private struct SkippedObjectsNotice: View {
                 if skips.count > skips.entries.count {
                     Text("and \(skips.count - skips.entries.count) more").monoMeta()
                 }
-                Text("Their sizes or labels were impossible (a scanning glitch). Everything else was added.")
+                Text(rechecked
+                     ? "Their photos showed a wall, door or fixture rather than something you'd move, or their sizes or labels were impossible (a scanning glitch). Everything else was added."
+                     : "Their sizes or labels were impossible (a scanning glitch). Everything else was added.")
                     .monoMeta()
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 4)

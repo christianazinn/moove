@@ -56,6 +56,11 @@ final class ScanSession {
     private(set) var roomPhotos: [URL] = []
     /// True while auto photos are being cut after the scan.
     private(set) var autoPhotosPending = false
+    /// Detector finds the crop classifier rejected (a wall, door, radiator...), shown in the
+    /// finished screen's skipped-objects notice with the module's own skips.
+    private(set) var recheckSkips: [ScanSkips.Entry] = []
+    /// Auto photos + the classifier recheck; `submit` waits for it so the import sees its verdicts.
+    @ObservationIgnored private var autoPhotoTask: Task<Void, Never>?
     private(set) var geometry: RoomGeometry?
     /// Wall, floor and per-object colors sampled from the capture's camera frames. Nil until
     /// the analysis finishes (a second or two after capture), or if no frames were kept.
@@ -120,19 +125,63 @@ final class ScanSession {
         objects = Self.sanitized(objects)
         phase = .reviewing
         analyzeColors()
-        if let photographer, let geometry = self.geometry { takeAutoPhotos(of: geometry.objects, with: photographer) }
+        if let photographer, let geometry = self.geometry {
+            let detectorIDs = Set(extras.map(\.id))
+            takeAutoPhotos(of: geometry.objects, recheck: geometry.objects.filter { detectorIDs.contains($0.id) }, with: photographer)
+        }
     }
 
-    private func takeAutoPhotos(of objects: [RoomGeometry.Object], with photographer: AutoPhotographer) {
+    /// Cuts every object's photo, then has the crop classifier recheck the detector's finds
+    /// (`recheck`; RoomPlan's own objects aren't rechecked). Without the model it only cuts photos.
+    private func takeAutoPhotos(of objects: [RoomGeometry.Object], recheck: [RoomGeometry.Object], with photographer: AutoPhotographer) {
         autoPhotosPending = true
-        Task.detached(priority: .userInitiated) { [weak self] in
+        autoPhotoTask = Task.detached(priority: .userInitiated) { [weak self] in
             let started = Date()
             let jpegs = photographer.photos(for: objects)
             let room = photographer.roomPhotos()
             print("[auto-photos] \(jpegs.count) of \(objects.count) objects + \(room.count) room photos in \(Int(Date().timeIntervalSince(started) * 1000)) ms")
             await self?.applyAutoPhotos(jpegs)
             await self?.saveRoomPhotos(room)
+            guard !recheck.isEmpty, let classifier = ObjectClassifier() else { return }
+            let t = Date()
+            let crops = photographer.classifierCrops(for: recheck)
+            var scores: [UUID: [String: Double]] = [:]
+            for object in recheck {
+                guard let id = UUID(uuidString: object.id) else { continue }
+                let s = classifier.scores(crops[object.id] ?? [])
+                if !s.isEmpty { scores[id] = s }
+            }
+            print("[recheck] classified \(scores.count) of \(recheck.count) detector objects (\(crops.values.map(\.count).reduce(0, +)) crops) in \(Int(Date().timeIntervalSince(t) * 1000)) ms")
+            await self?.applyRecheck(scores)
         }
+    }
+
+    /// `ObjectRecheck` on each classified detector object: rejects are dropped (and listed in
+    /// `recheckSkips`), relabels change the category. A name the user gave wins.
+    private func applyRecheck(_ scores: [UUID: [String: Double]]) {
+        for (id, s) in scores {
+            guard let object = objects.first(where: { $0.id == id }), object.label == nil else { continue }
+            switch ObjectRecheck.check(detectorCategory: object.category, scores: s,
+                                       width: object.widthM, height: object.heightM, depth: object.depthM) {
+            case .keep:
+                break
+            case let .relabel(category, reason):
+                print("[recheck] \(object.category) → \(category): \(reason)")
+                setCategory(category, of: id)
+            case let .unknown(reason):
+                print("[recheck] \(object.category) → \(ObjectSanity.relabelCategory): \(reason)")
+                setCategory(ObjectSanity.relabelCategory, of: id)
+            case let .reject(reason):
+                print("[recheck] dropped \(object.category): \(reason)")
+                recheckSkips.append(ScanSkips.Entry(id: id.uuidString, why: reason))
+                remove(object)
+            }
+        }
+    }
+
+    private func setCategory(_ category: String, of id: UUID) {
+        guard let i = objects.firstIndex(where: { $0.id == id }) else { return }
+        objects[i].category = category
     }
 
     private func applyAutoPhotos(_ jpegs: [String: Data]) {
@@ -229,6 +278,9 @@ final class ScanSession {
         // A double tap on "Add N items" must not import the scan twice.
         if case .uploading = phase { return }
         if phase == .finished { return }
+        phase = .uploading(done: 0, total: 2 + photos.count)
+        // Auto photos and the classifier's verdicts (a few seconds after the scan) go in too.
+        await autoPhotoTask?.value
         let total = 2 + photos.count
         var done = 0
         phase = .uploading(done: 0, total: total)

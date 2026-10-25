@@ -49,6 +49,37 @@ public enum ObjectSanity {
         "bathtub": Range(short: 0.5...1.3, long: 0.9...2.3, height: 0.25...0.9),
     ]
 
+    /// Footprint priors for detector categories (short × long × height, m), one entry per
+    /// common shape (a kick scooter and an e-scooter are both "scooter"). Detector boxes are
+    /// noisy (partial views, merged neighbors), so `check` doesn't enforce these;
+    /// `ObjectRecheck` uses them only to veto a label the box clearly can't be.
+    public static let footprints: [String: [Range]] = [
+        "scooter": [Range(short: 0.40...0.65, long: 0.95...1.25, height: 1.00...1.30),    // e-scooter
+                    Range(short: 0.10...0.45, long: 0.55...1.00, height: 0.60...1.05)],   // kick scooter
+        "vacuum": [Range(short: 0.25...0.40, long: 0.28...0.45, height: 1.00...1.20),     // upright
+                   Range(short: 0.18...0.30, long: 0.20...0.32, height: 1.00...1.32),     // stick
+                   Range(short: 0.28...0.36, long: 0.28...0.36, height: 0.07...0.11)],    // robot
+        "mop": [Range(short: 0.03...0.20, long: 0.15...0.45, height: 1.10...1.50)],       // mop / broom
+        "bicycle": [Range(short: 0.40...0.80, long: 1.50...1.90, height: 0.90...1.20)],
+        "stroller": [Range(short: 0.45...0.70, long: 0.75...1.05, height: 0.95...1.10)],
+        "box": [Range(short: 0.30...0.34, long: 0.40...0.43, height: 0.30...0.34),        // moving boxes: small
+                Range(short: 0.44...0.47, long: 0.45...0.48, height: 0.39...0.42),        // medium
+                Range(short: 0.44...0.47, long: 0.45...0.62, height: 0.58...0.63)],       // large
+        // Fixtures (not movable; `ObjectRecheck` rejects them).
+        "radiator": [Range(short: 0.05...0.25, long: 0.40...2.00, height: 0.30...0.90)],
+        "shower curtain": [Range(short: 0.02...0.30, long: 1.50...2.00, height: 1.60...2.00)],
+    ]
+
+    /// Whether a box fits one of `category`'s `footprints`, each bound widened by
+    /// `factor` (`lower / factor ... upper * factor`; 1.15 ≈ `tolerance`). Nil without a prior.
+    public static func fitsFootprint(_ category: String, width: Double, height: Double, depth: Double, factor: Double = 1 + tolerance) -> Bool? {
+        guard let shapes = footprints[category] else { return nil }
+        let v = [min(width, depth), max(width, depth), height]
+        return shapes.contains { r in
+            zip(v, [r.short, r.long, r.height]).allSatisfy { x, b in x >= b.lowerBound / factor && x <= b.upperBound * factor }
+        }
+    }
+
     public static func check(category: String, width: Double, height: Double, depth: Double) -> Result {
         let dims = [width, height, depth]
         guard dims.allSatisfy(\.isFinite) else { return .drop(reason: "size isn't a number") }
