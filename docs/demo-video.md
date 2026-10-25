@@ -17,14 +17,14 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 
 ### 1. 0:00–0:15 Scan → voxel dollhouse
 - **VO:** "Moving is mostly deciding what to do with your stuff. With Moove, you scan your room with the phone's LiDAR, and it rebuilds the room in 3D, every piece where it stood."
-- **ON SCREEN:** Scan tab, the turning voxel dollhouse hero ("Scan a room."). Tap **Scan a room**, sweep a corner (the "Also found: …" chip if the detector catches a bike, plant or guitar), **Done**, **Looks right: check photos** (auto photos marked Auto), **Add N items**. The finished page: "Scan · Done", "N items added", the voxel dollhouse with real walls, doors and windows, colored from the scan. Drag it a quarter turn: the back walls stand full height with curtains at the window tops, the near walls stay cut low, and they swap as the camera turns. Keep the "N placed by estimate" caption in frame (pieces without a scanned spot).
+- **ON SCREEN:** Scan tab, the turning voxel dollhouse hero ("Scan a room."). Tap **Scan a room**, sweep a corner (the "Also found" chips, newest first, if the detector catches a bike, plant or guitar), **Done**, **Looks right: check photos** (auto photos marked Auto), **Add N items**. The finished page: "N items added", the voxel dollhouse with real walls, doors and windows, colored from the scan. Drag it a quarter turn: the back walls stand full height with curtains at the window tops, the near walls stay cut low, and they swap as the camera turns. Keep the "N placed by estimate" caption in frame (pieces without a scanned spot).
 - **STATE:** Live scan, on Demo.
 - **TRACK:** Spacetime (the scan imports through the `import_scan_v2` reducer). Sets up Anthropic (shot 2).
-- **FALLBACK:** Offline demo, Scan tab > **Load demo scan**: the same finished page, tagged **Demo scan** ("A recorded bedroom, not a live scan…"). Change the VO's last line to "here's a recorded bedroom".
+- **FALLBACK:** Offline demo, Scan tab > **Load demo scan**: the same finished page, tagged **Demo scan** ("Demo bedroom, not a live scan: items and prices are fixture data."). Change the VO's last line to "here's a recorded bedroom".
 
 ### 2. 0:15–0:27 Claude names what it sees
 - **VO:** "Claude looks at the photos the scan already took, plus the LiDAR sizes, and names each item: brand, material, condition. It also catches things the scanner missed."
-- **ON SCREEN:** **See inventory** > Items > Inventory. "Identifying items from room photos…" under the room, then names filling in on the item rows (voxel thumbnails, dimensions). Each row's chip says where it came from: **Scanned** (LiDAR box) or **From photos** (the sweep found it). A renamed box reads e.g. "Lamp · was: storage".
+- **ON SCREEN:** **See inventory** > Items > Inventory, the museum: "Identifying items from room photos…", then names filling in on the exhibits, grouped into halls by function ("The Sleep Hall", "The Work & Study Hall"…), each a voxel model on a plinth with a short placard (name, brand · size, a one-line story, price). Each placard's chip says where it came from: **Scanned** (LiDAR box) or **From photos** (the sweep found it). Tap the room's card in the Rooms strip to focus on just this scan ("Showing 1 of N rooms").
 - **STATE:** Live scan on Demo (vision and the photo sweep need the worker and photos; each costs Claude calls).
 - **TRACK:** Anthropic (vision + room photo sweep).
 - **FALLBACK:** Offline demo after **Load demo scan**: the offline demo plays the sweep (a potted monstera appears). Then the names are fixture data, so cut "Claude names" to "Moove names" or say it's sample data.
@@ -58,31 +58,31 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 - **FALLBACK:** Demo with the seeded commerce chair (`SEED_COMMERCE=1`; re-arm with `npm run seed:demo -- --maincloud --reset-commerce`), approved from the joined phone (needs the #200 member-approval module on `moove-demo`). Never say "you just got a push".
 
 ### 7. 1:15–1:28 The fraud screen blocks a scam (Visa trust)
-- **VO:** "For the new place, the buy agent shops deals and screens every one for fraud. This Zelle-only 'brand new' Aeron is a scam we planted for the demo. It scores 0.85, and the agent won't buy it. The $79 chair checks out on a simulated Visa rail."
-- **ON SCREEN:** Sell & Buy > **Shopping** > **Desk chair**. "Herman Miller Aeron, brand new, $95, Zelle only, ship only", seller "Planted demo scam (not a real listing)", **"Likely fraud · 0.85"**, "asks for payment by Zelle", "shipping only, no meetup", red **"Blocked: likely fraud"**. Tap **Choose** on the Target "Mesh task chair with arms, black" ($79.99): "Paid through the simulated Visa rail. No real card was charged."
+- **VO:** "For the new place, the buy agent shops deals and screens every one for fraud. This Zelle-only 'brand new' Aeron is a scam we planted for the demo. It scores 0.85, and the agent won't buy it. The $79 chair checks out after you confirm. In this offline take that checkout is simulated."
+- **ON SCREEN:** Sell & Buy > **Shopping**, the storefront: the hero ("Your new place still needs 4 things", the Desk chair's -65% saving) and the category chips; flick to the bottom for the **Blocked for your safety** section with the struck-through Aeron. Tap **See deals** (or the Desk chair card in **Work & study**) > **Desk chair**. "Herman Miller Aeron, brand new, $95, Zelle only, ship only", seller "Planted demo scam (not a real listing)", **"Likely fraud · 0.85"**, "asks for payment by Zelle", "shipping only, no meetup", red **"Blocked: likely fraud"**. Tap **Choose** on the Target "Mesh task chair with arms, black" ($79.99): the confirm "Buy this for $79.99?" with "SIMULATED: no real card is charged."; tap **Pay $79.99 to target**: "Paid through the simulated Visa rail. No real card was charged."
 - **STATE:** Offline demo (same take). The 0.85 is a fixture value; the real fraud rules give the same planted deal 0.85 live.
 - **TRACK:** Visa (fraud check, trust and responsibility). Apify (deal search; fixture deals carry a Sample badge).
 - **FALLBACK:** If the screen misbehaves, relaunch and redo shots 6–7. Fraud screening is rules, not Claude, so don't credit Claude here.
 
 ### 8. 1:28–1:36 Over the limit, it asks before paying
-- **VO:** "Over your limit, it asks first and pays with Visa only after you approve. Our Visa sandbox isn't processing cards yet, so this checkout is a labeled simulation."
-- **ON SCREEN:** Shopping list, the **Needs you · 1** card: "78" upholstered sofa, gray", "$429.99 from wayfair", "Over your approval limit. The agent pays with Visa only after you approve." Tap **Approve**.
+- **VO:** "Over your limit, it asks first and pays with Visa only after you approve. On our hosted worker that's a real Visa Acceptance sandbox charge, test card, no real money. In this offline take it's a labeled simulation."
+- **ON SCREEN:** Back on Shopping, the **Needs you · 1** card under the hero: "78" upholstered sofa, gray", "$429.99 from wayfair", "Over your approval limit. The agent pays with Visa only after you approve." Tap **Approve**.
 - **STATE:** Offline demo (same take).
 - **TRACK:** Visa (approval before checkout). Auth0.
 - **FALLBACK:** Cut this shot if over time (it buys 8 s); shots 9–11 still work (only the Summary figures change).
 
 ### 9. 1:36–1:48 Everything flies into the new home
 - **VO:** "Paste the new place's listing link, and Moove builds the floor plan. Everything you kept flies from where it stood into the new home, with what the agent bought."
-- **ON SCREEN:** Move > **New Home** > **Paste a Zillow link** (top of the picker; Zillow, Redfin or Realtor.com): paste a link, add a floor-plan screenshot, **Build floor plan**, **Use this home**. (With a home already chosen, tap **Change home** at the top left first, or the **Paste a Zillow link** button under the title.) The fly-in: pieces lift from the scanned room drawn beside the house, arc over the walls and land. Tap **Fly in** to replay; flash a layout style. To end the shot on a room, scroll to **Room shots** and tap the bedroom card: the full-screen room photo (swipe once to the living room).
+- **ON SCREEN:** Move > **New Home** > **Paste a Zillow link** (top of the picker; Zillow, Redfin or Realtor.com): paste a link, add a floor-plan screenshot, **Build floor plan**, **Use this home**. (With a home already chosen, tap **Change home** at the top left first, or the **Paste a Zillow link** button under the title.) The **Moving from N rooms** row under the title picks which scans move (the newest of each room by default). After "Arranging your home…", the fly-in: pieces lift from the scanned room drawn beside the house, arc over the walls and land in a designer layout (furniture grouped by what each room is for, walkways kept clear). Tap **Fly in** to replay; flash a layout style. To end the shot on a room, scroll to **Room shots** and tap the bedroom card: the full-screen room photo (swipe once to the living room).
 - **STATE:** Offline demo (same take) for the house; the import needs the worker (Claude reads the floor-plan screenshot), so record the import part on Demo and cut it in.
 - **TRACK:** Anthropic (floor plan from screenshots). Visa (bought items land in the layout).
 - **FALLBACK:** The **Demo house** card > **Use this home**, and drop the first sentence of the VO. With no worker reachable, the import builds an estimate from beds, baths and square feet (labeled Estimated); say "estimated".
 
-### 10. 1:48–1:54 Pack: boxes by room, printable labels
-- **VO:** "It plans the packing too: boxes by room, each with a reason, and labels you can print."
-- **ON SCREEN:** Move > **Pack**: the room-colored box cards with their reasons (e.g. "Fragile: wrapped, nothing heavy, under 8 kg"). Tap **Print labels** > **4 × 6 in labels**: the share sheet's PDF preview (room band, big number, QR code). Hold a second on the Truck and crew card's "Rough estimate. Ask movers for a quote."
+### 10. 1:48–1:54 Pack: boxes by room, loaded into the truck
+- **VO:** "It plans the packing too: fewer, fuller boxes by room, each with a reason, loaded into the truck in order."
+- **ON SCREEN:** Move > **Pack**: the grid of big room-colored box cards under each room's heading (9 boxes on the demo) with their reasons (e.g. "Fragile: wrapped, nothing heavy, under 8 kg"). Scroll to the Truck and crew card: the loaded voxel truck sits right on it; tap **Load the truck** and the pieces arc in, in load order. Hold a second on "Rough estimate. Ask movers for a quote." Optional if time: **Print labels** > **4 × 6 in labels** (PDF preview: room band, big number, QR code).
 - **STATE:** Offline demo (same take, after shot 9).
-- **TRACK:** None directly (product depth). The truck and crew figures are estimates and the card says so.
+- **TRACK:** None directly (product depth). The truck and crew figures are estimates and the card says so. On the offline demo the card says "Fits a cargo van by volume; packs best in a 10 ft truck." and the 3D truck is the 10 ft one, so say "truck", not a size. The inline truck is an ARView: record it on a device or Simulator, not from CI.
 - **FALLBACK:** Cut this shot and give shot 11 its six seconds back.
 
 ### 11. 1:54–2:00 Summary: agents kept you safe
@@ -92,15 +92,10 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 - **TRACK:** All of them in one card. Visa trust, Coinbase spend caps, Auth0 approvals.
 - **FALLBACK:** If a figure looks off, hold on Agents kept you safe only (the VO names no numbers).
 
-### If merged: Pack additions (still open PRs as of Sat 12:35 PM PDT)
-Check `gh pr view <n> -R christianazinn/moove --json state` before recording. Use these only if merged and rebuilt; keep shot 10 at 6 s by swapping, not adding.
-- **#286, truck in 3D:** in shot 10, replace the labels beat with Pack > the 3D truck on the Truck and crew card > **Load the truck** (pieces arc into the voxel truck in load order). VO: "...boxes by room, loaded into the truck in order." On the offline demo the 3D legend may say "These shapes don't fit a cargo van, so this is a 10 ft truck" while the card says Cargo van; keep the legend out of frame or say "about a 10-foot truck".
-- **#285, mover quotes:** Pack > Truck and crew > **Get mover quotes**: three cards, each tagged **Estimate**, with "Estimates from published rates. Call to book." Keep the Estimate tags in frame. VO, if used: "and estimated mover quotes, labeled as estimates". Never say "booked" or "quoted by movers".
-
 ## Before recording
 - [ ] **Devices:** a LiDAR iPad Pro or iPhone for shot 1, a second phone for shot 4, both on the latest `main` build, charged.
 - [ ] **Backend:** `cd agents && npm run status` shows `moove-demo` UP (worker online, uploads healthy). Check the Claude/Apify daily caps aren't used up (`docs/demo.md`, "Before the demo").
-- [ ] **Hide old test rooms** on every device, on Demo and Live: Items > Inventory > room header **⋯** (or long-press) > **Hide room**. It's local to the device and deletes nothing; **Show hidden rooms (N)** at the bottom brings them back. Hidden rooms also stay out of the Scan hero, New Home, Pack and Summary.
+- [ ] **Hide old test rooms** on every device, on Demo and Live: Items > Inventory > the room's card in the Rooms strip > **⋯** > **Hide room**. It's local to the device and deletes nothing; **Show hidden rooms (N)** at the bottom brings them back. Hidden rooms also stay out of the Scan hero, New Home, Pack and Summary.
 - [ ] **Seeded room:** both devices on Demo and joined to `4RZ9G8`, the Bedroom visible with prices. For the Demo approval fallback in shot 6, ask Christian to run `--reset-commerce`.
 - [ ] **Do Not Disturb** on every device and the laptop (no Guardian, Slack or message banners).
 - [ ] **Screen recording** in Control Center on each device; laptop browser tab with the Basescan proof tx loaded.
