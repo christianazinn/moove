@@ -2,12 +2,12 @@ import SwiftUI
 import MooveKit
 
 /// The Move tab: one page, no segments (Lisa, #335). Top to bottom:
-/// 1. **Your new home**: the header (or the picker until a home is chosen), the shared "Moving
-///    from" row (or the demo notice when nothing is kept), the 3D stage with the fly-in, layout
-///    style + Save layout, and room shots (`Features/NewHome/`).
-/// 2. **Getting there**: the truck card with the loaded truck in 3D, the box cards by room with
-///    Print labels, and what's delivered (`Features/Pack/`).
-/// 3. Folded: furniture notes, supplies, schedule and the placed pieces, closed by default.
+/// 1. **Your new home**: the name + Change home (or the picker until a home is chosen), the
+///    "Moving from" chip, the 3D stage with the fly-in and Rearrange; the one "By function" layout
+///    saves itself (`Features/NewHome/`).
+/// 2. **Getting there**: the truck in 3D (tap it for full screen) with Load the truck, the box
+///    cards by room with Print labels, and what's delivered (`Features/Pack/`).
+/// 3. Folded: the placed pieces, closed by default.
 ///
 /// The old "newhome" and "pack" screen keys land here (`TabGroup.segment(for:)`); "pack" scrolls
 /// to Getting there.
@@ -28,7 +28,7 @@ struct MoveView: View {
     /// Folded sections that are open (all closed by default).
     @State private var open: Set<Fold> = []
 
-    enum Fold: String { case furniture, supplies, schedule, pieces }
+    enum Fold: String { case pieces }
 
     static let homeAnchor = "move.home"
     static let gettingThereAnchor = "move.gettingThere"
@@ -138,21 +138,6 @@ struct MoveView: View {
 
     private func folds(furniture: Furniture) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let plan, !plan.furniture.isEmpty {
-                FoldSection(title: "Furniture notes", isOpen: binding(.furniture), id: "pack.furniture") {
-                    FurnitureNotesList(notes: plan.furniture)
-                }
-            }
-            if let plan, !plan.supplies.isEmpty {
-                FoldSection(title: "Supplies", isOpen: binding(.supplies), id: "pack.supplies") {
-                    SuppliesList(lines: plan.supplies)
-                }
-            }
-            if let plan, !plan.schedule.isEmpty {
-                FoldSection(title: "Schedule", isOpen: binding(.schedule), id: "pack.schedule") {
-                    ScheduleList(steps: plan.schedule, boxes: plan.boxes) { openBox = $0 }
-                }
-            }
             if let current { pieces(current, furniture: furniture) }
         }
         .padding(.horizontal, Theme.gutter)

@@ -30,7 +30,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 
 - **Use a run from after #343** (merged Sat ~6:00 PM PT), so the shots show the 3-segment Sell & Buy (Listings · Shopping · Agents, #337), the Agents receipts (#316), the Review card deck (#311), the Shopping storefront (#312) and the museum Inventory with its shorter placards (#331, #343). Main runs often get cancelled when the next merge supersedes them, so the newest *green* run can be older than the newest commit. Check its date.
 - The shots show the **starting state** (Agents · 2, no purchases yet), so 4 to 6 match the captions as is.
-- Under XCUITest, the RealityKit `ARView` scenes that don't auto-turn (the scan finished page, the new home, its room shots, and Move's inline truck) come out **blank**. So images 2 and 7 are captured by hand, below. The Scan hero (1) renders fine.
+- Under XCUITest, the RealityKit `ARView` scenes that don't auto-turn (the scan finished page, the new home and Move's inline truck) come out **blank**. So images 2 and 7 are captured by hand, below. The Scan hero (1) renders fine.
 
 ## Capturing by hand (images 2, 7)
 **Decision (Aiden's agent):** capture on the **Offline demo**: Settings (the gear at top right) > Backend > Data source **"Offline demo (fixtures)"**. The banner reads "Offline demo: fixture data, nothing is synced". It's the only data source whose rows are known in advance, and `DemoNumbersTests` checks its figures. It has the voxel dollhouse and the new home too, so nothing here needs the **Demo** backend.
@@ -87,7 +87,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 - **Track:** Visa (fraud checks, trust and responsibility), Apify (deal search; fixture deals are labeled Sample).
 
 ### 7. Move: the fly-in
-- **Source:** by hand, best as a **GIF** (3 to 6 s). On a fresh fixture first do the video's taps so bought pieces fly in too: Sell & Buy > Agents > **Approve** the Aeron; Shopping > Desk chair > **Choose** the Target "Mesh task chair with arms, black", then **Pay $79.99 to target** in the confirm ("SIMULATED: no real card is charged."); back on Shopping, **Approve** the sofa ($429.99) on its **Needs you** card. Then Move tab (one page, no segments) > the **"Demo house · 2 bed, 1 bath"** card at the top > **Use this home**. Wait for "Arranging your home…" to clear and the fly-in to finish, then tap **Fly in** to replay.
+- **Source:** by hand, best as a **GIF** (3 to 6 s). On a fresh fixture first do the video's taps so bought pieces fly in too: Sell & Buy > Agents > **Approve** the Aeron; Shopping > Desk chair > **Choose** the Target "Mesh task chair with arms, black", then **Pay $79.99 to target** in the confirm ("SIMULATED: no real card is charged."); back on Shopping, **Approve** the sofa ($429.99) on its **Needs you** card. Then Move tab (one page, no segments) > the **"Demo house · 2 bed, 1 bath"** card at the top > **Use this home**. Wait for "Arranging your home…" to clear and the fly-in to finish, then tap **Rearrange** to replay.
 - **State:** "New home", "Demo house · 2 bed, 1 bath", a small **Demo** tag on the 3D (offline demo items), the voxel house with the back walls tall, and the kept pieces flying from the scanned room (drawn beside the house) to their new spots, plus the bought ones ("8" memory foam mattress, Full", "78" upholstered sofa, gray"). **Fly in** and **Save layout** under it.
 - **Caption:** "Everything you kept, plus what the buy agent bought, flies from its old spot into the new home's 3D layout (demo house shown)."
 - **Track:** Visa (bought items land in the new home), Best Planet-First Hack.
@@ -97,10 +97,6 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 - **State:** **"Agents kept you safe"** (Simulated tag): "1 scam deal blocked · fraud score 0.85", the approvals line ("6 approvals asked · 1 approved · 2 denied · 2 waiting · 1 expired" in CI's starting state; "6 approvals asked · 3 approved · 2 denied · 1 expired" after the scripted taps), "Anything over $100 needs your OK", "1 sentimental item left for you", "Spent $0.025 of $10.00 data budget ($0.015 simulated)" and the card budget line ("Spent $179.99 of $1,500.00 card budget (simulated)" at the start, $689.97 after). If a second image is allowed, CI `08b-review-impact` (the kg kept out of landfill strip on Review) is a good partner.
 - **Caption:** "Agents kept you safe: every guardrail that fired, from the blocked scam deal to spend against each budget; simulated money is tagged Simulated."
 - **Track:** Coinbase and Visa (real and simulated spend kept apart), Auth0 (approvals counted); with `08b-review-impact`, Best Planet-First Hack.
-
-### Room shots (extras)
-- **Source:** by hand, after the taps in image 7. Move, scroll to **Room shots** under Layout: one card per furnished room (rendered a few seconds after the fly-in). Tap a card, then **Share** > **Save Image** (or AirDrop it to a Mac). The full-screen viewer swipes between rooms; **Orbit** to turn the room, **Use this angle** retakes the photo from there at full-screen resolution, which is the one to upload.
-- The cards are ARView snapshots, so like image 7 they may be blank under XCUITest (`newhome.roomShot.<room>` identifiers exist for a future test, but capture these by hand).
 
 ## Upload tips
 - **GIFs:** `ffmpeg -i flyin.mov -vf "fps=12,scale=600:-1:flags=lanczos" -loop 0 flyin.gif`, or Gifski or Kap. Keep them 3 to 6 s and under a few MB.

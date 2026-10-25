@@ -76,7 +76,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Report if wrong:** the step, plus a screenshot or the error text.
 
 ### 9. Fly-in: from scanned spots, and smoothness
-- **Taps:** on the chosen home, watch the fly-in, then tap **Fly in** to replay it. Keep about 20 items (mark more as keep in Items → Review if needed).
+- **Taps:** on the chosen home, watch the fly-in, then tap **Rearrange** to replay it. Keep about 20 items (mark more as keep in Items → Review if needed).
 - **Expected:** pieces lift from where they stood in the scanned room drawn beside the house, arc over the walls and land. No stutter or long freeze with ~20 items. The tall/low walls follow the camera here too.
 - **Report if wrong:** the item count, where it stuttered (start, mid-arc, landing), and a screen recording.
 
@@ -86,14 +86,14 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Report if wrong:** a screen recording, plus where in the turn it hitched.
 
 ### 11. Getting there: truck and boxes
-- **Taps:** Move, scroll past the room shots to **Getting there**. Open a box, then tap **Print labels** → **4 × 6 in labels** or **Letter, 2 per page**.
+- **Taps:** Move, scroll to **Getting there**. Open a box, then tap **Print labels** → **4 × 6 in labels** or **Letter, 2 per page**.
 - **Expected:**
   - Box cards are plain kraft with a small room dot (Bedroom and Bedroom 2 differ) and the box number; the reason is inside the box ("Fragile: wrapped…").
   - Box detail shows a voxel model on each line.
   - The labels PDF opens in the share sheet, with the room band, a big number and a QR code.
   - Bought items appear under **Delivered to your new home**.
   - Hidden rooms stay out.
-  - Furniture notes, Supplies, Schedule and Pieces are folded at the bottom (closed); tapping a header opens it.
+  - Tapping the 3D truck opens it full screen. Pieces is folded at the bottom (closed); tapping it opens it.
 - **Report if wrong:** the box number, what's off (density, colors, a model that doesn't match), plus a screenshot or the PDF.
 
 ### 12. Agents kept you safe and the kg banner

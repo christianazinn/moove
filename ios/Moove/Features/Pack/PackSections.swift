@@ -52,8 +52,8 @@ enum PackSeal {
 
 // MARK: - Truck
 
-/// The loaded truck in 3D (no gestures, so the page scrolls), Load the truck and Full screen,
-/// then just the truck's size. Cost, crew and the size note are in VoiceOver and Full screen.
+/// The loaded truck in 3D (no gestures, so the page scrolls; tap it for the full-screen truck),
+/// Load the truck, then just the truck's size. Cost, crew and the size note are in VoiceOver.
 struct TruckCard: View {
     var plan: PackingPlan
     var load: TruckLoad?
@@ -80,17 +80,24 @@ struct TruckCard: View {
         }
     }
 
+    /// Tapping the truck opens it full screen (orbit it, tap pieces); no separate button.
     private func scene(_ load: TruckLoad) -> some View {
-        TruckSceneView(load: load, items: items, flyInToken: flyIn, selected: .constant(nil), interactive: false)
-            .frame(height: 240)
-            .overlay(alignment: .topLeading) {
-                if demoTag { MonoTag(text: "Demo").padding(12).accessibilityHidden(true) }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
-            .accessibilityElement()
-            .accessibilityLabel(TruckView.summary(load) + (demoTag ? ", demo items" : ""))
-            .accessibilityAddTraits(.isImage)
-            .accessibilityIdentifier("pack.truck3D")
+        NavigationLink { TruckView(plan: plan, items: items, load: load) } label: {
+            TruckSceneView(load: load, items: items, flyInToken: flyIn, selected: .constant(nil), interactive: false)
+                .allowsHitTesting(false)
+                .frame(height: 240)
+                .overlay(alignment: .topLeading) {
+                    if demoTag { MonoTag(text: "Demo").padding(12).accessibilityHidden(true) }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement()
+        .accessibilityLabel(TruckView.summary(load) + (demoTag ? ", demo items" : ""))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Opens the truck full screen: turn it and tap pieces to see what they are")
+        .accessibilityIdentifier("pack.truck3D")
     }
 
     private var buttons: some View {
@@ -99,11 +106,6 @@ struct TruckCard: View {
                 Label("Load the truck", systemImage: "shippingbox")
             }
             .buttonStyle(.pill(.primary, compact: true))
-            NavigationLink { TruckView(plan: plan, items: items, load: load) } label: {
-                Label("Full screen", systemImage: "arrow.up.left.and.arrow.down.right")
-            }
-            .buttonStyle(.pill(.outline, compact: true))
-            .accessibilityHint("Turn the truck and tap pieces to see what they are")
         }
     }
 
@@ -227,211 +229,6 @@ struct DeliveredSection: View {
                     .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", "))
                 .accessibilityIdentifier("pack.delivered.\(piece.id)")
             }
-        }
-    }
-}
-
-// MARK: - Furniture notes
-
-/// Take-apart notes per piece; each row opens to its steps. Folded on Move, so no header here.
-struct FurnitureNotesList: View {
-    var notes: [FurnitureNote]
-    @State private var expanded: Set<UInt64> = []
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(notes) { note in
-                VStack(alignment: .leading, spacing: 0) {
-                    row(note, open: expanded.contains(note.id))
-                    if expanded.contains(note.id) { steps(note) }
-                }
-            }
-        }
-    }
-
-    private func row(_ note: FurnitureNote, open: Bool) -> some View {
-        Button {
-            withAnimation(.easeOut(duration: 0.2)) {
-                if open { expanded.remove(note.id) } else { expanded.insert(note.id) }
-            }
-        } label: {
-            HStack(spacing: 12) {
-                Text(note.name).sansText(16).frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(Theme.muted)
-                    .rotationEffect(.degrees(open ? 180 : 0))
-                    .accessibilityHidden(true)
-            }
-            .padding(.vertical, 12)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel([note.name, note.reason, note.room].filter { !$0.isEmpty }.joined(separator: ", "))
-        .accessibilityValue(open ? "Expanded" : "Collapsed")
-        .accessibilityHint(open ? "Hides the steps" : "Shows the steps")
-    }
-
-    private func steps(_ note: FurnitureNote) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(note.steps.enumerated()), id: \.offset) { i, step in
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(i + 1 < 10 ? "0\(i + 1)" : "\(i + 1)")
-                        .monoText(13.5, weight: .bold)
-                        .foregroundStyle(Theme.accentStrong)
-                    Text(step).sansText(15).fixedSize(horizontal: false, vertical: true)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Step \(i + 1), \(step)")
-            }
-        }
-        .padding(.leading, 4)
-        .padding(.bottom, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .transition(.opacity)
-    }
-}
-
-// MARK: - Supplies
-
-/// Tape, boxes and the rest, checked off as you get them (`moove.pack.supplies`).
-struct SuppliesList: View {
-    var lines: [SupplyLine]
-    @AppStorage("moove.pack.supplies") private var suppliesRaw = ""
-
-    var body: some View {
-        let done = PackChecks.decode(suppliesRaw)
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(lines, id: \.name) { line in
-                row(line, have: done.contains(line.name), done: done)
-            }
-        }
-    }
-
-    private func row(_ line: SupplyLine, have: Bool, done: Set<String>) -> some View {
-        Button {
-            var next = done
-            if have { next.remove(line.name) } else { next.insert(line.name) }
-            suppliesRaw = PackChecks.encode(next)
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: have ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 20))
-                    .foregroundStyle(have ? Theme.accentStrong : Theme.muted)
-                    .frame(width: 24)
-                    .accessibilityHidden(true)
-                Text(line.name)
-                    .monoText(14.5, weight: .bold)
-                    .foregroundStyle(have ? Theme.muted : Theme.text)
-                    .strikethrough(have, color: Theme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text("× \(line.quantity)").rowValue()
-            }
-            .padding(.vertical, 12)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(line.name), \(line.quantity) needed")
-        .accessibilityValue(have ? "Got it" : "Still need")
-        .accessibilityAddTraits(have ? [.isButton, .isSelected] : .isButton)
-    }
-}
-
-// MARK: - Schedule
-
-/// The countdown to moving day; each step's boxes open their sheet, and a step's dot fills once
-/// all its boxes are sealed.
-struct ScheduleList: View {
-    var steps: [PackingStep]
-    var boxes: [MovingBox]
-    var onOpen: (MovingBox) -> Void
-    @AppStorage("moove.pack.checked") private var checkedRaw = ""
-
-    var body: some View {
-        let set = PackChecks.decode(checkedRaw)
-        let byId = Dictionary(boxes.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let ordered = steps.sorted { $0.daysBeforeMove > $1.daysBeforeMove }
-        VStack(alignment: .leading, spacing: 0) {
-            Color.clear.frame(height: 16)
-            ForEach(Array(ordered.enumerated()), id: \.element.id) { index, step in
-                StepRow(step: step, boxes: step.boxIds.compactMap { byId[$0] }, checked: set,
-                        last: index == ordered.count - 1, onOpen: onOpen)
-            }
-        }
-    }
-
-    private struct StepRow: View {
-        var step: PackingStep
-        var boxes: [MovingBox]
-        var checked: Set<String>
-        var last: Bool
-        var onOpen: (MovingBox) -> Void
-
-        var body: some View {
-            let allSealed = !boxes.isEmpty && boxes.allSatisfy { PackSeal.isSealed($0, in: checked) }
-            HStack(alignment: .top, spacing: 14) {
-                rail(allSealed)
-                VStack(alignment: .leading, spacing: 6) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(ScheduleList.when(step.daysBeforeMove)).monoText(13.5).foregroundStyle(Theme.muted)
-                        Text(step.title).blockTitle().fixedSize(horizontal: false, vertical: true)
-                    }
-                    .accessibilityElement(children: .combine)
-                    if !boxes.isEmpty { badges }
-                }
-                .padding(.bottom, 22)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-
-        /// Timeline rail and dot.
-        private func rail(_ allSealed: Bool) -> some View {
-            VStack(spacing: 0) {
-                Circle()
-                    .fill(allSealed ? Theme.accent : Theme.bg)
-                    .overlay(Circle().strokeBorder(allSealed ? Theme.accent : Theme.lineStrong, lineWidth: 1.5))
-                    .frame(width: 12, height: 12)
-                    .padding(.top, 4)
-                if !last {
-                    Rectangle().fill(Theme.line).frame(width: 1).frame(maxHeight: .infinity)
-                }
-            }
-            .frame(width: 12)
-            .accessibilityHidden(true)
-        }
-
-        private var badges: some View {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
-                    ForEach(boxes) { box in
-                        let sealed = PackSeal.isSealed(box, in: checked)
-                        Button { onOpen(box) } label: {
-                            BoxBadge(box: box, sealed: sealed)
-                                .frame(minWidth: 44, minHeight: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Box \(box.id), \(box.title)\(sealed ? ", sealed" : "")")
-                        .accessibilityHint("Opens the box's contents")
-                    }
-                }
-            }
-            .padding(.leading, -6)
-        }
-    }
-
-    static func when(_ days: Int) -> String {
-        switch days {
-        case ..<0: days == -1 ? "The day after" : "\(-days) days after"
-        case 0: "Moving day"
-        case 1: "The day before"
-        case 7: "A week before"
-        case 14: "Two weeks before"
-        default: "\(days) days before"
         }
     }
 }
