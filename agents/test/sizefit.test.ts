@@ -5,7 +5,7 @@ import type { Item, Scan, ScanPhoto } from "../src/module_bindings/types.js";
 
 // Size checks on agent renames and sweep finds (#267): pure functions, then the sweep and vision
 // agents against fake connections.
-const { kindOf, outOfRange, renameMisfit, scannedTwin } = await import("../src/sizefit.js");
+const { kindOf, outOfRange, renameMisfit, scannedTwin, boxText } = await import("../src/sizefit.js");
 const { vetSweep, sweep, isBuiltIn } = await import("../src/agents/sweep.js");
 const { visionAgent, setVisionDeps } = await import("../src/agents/vision.js");
 type SweepResult = import("../src/agents/sweep.js").SweepResult;
@@ -183,4 +183,19 @@ test("isBuiltIn: fixtures and window coverings, but not movable things that ment
   for (const name of ["floor lamp", "wall art", "wall clock", "window AC unit", "door mat", "floor mirror", "plant", "wall-mounted TV", "linen curtains"]) {
     assert.equal(isBuiltIn({ name, category: "decor" }), false, name);
   }
+});
+
+test("a scanned \"vacuum\" box can be reclassified as an e-scooter", () => {
+  // A real scan: an e-scooter came in as "vacuum" in a ~1.0×0.95×0.66 m box (either axis order).
+  for (const b of [box(1.0, 0.95, 0.66), box(1.0, 0.66, 0.95)]) {
+    const vacuum = { name: "vacuum", category: "vacuum", ...b };
+    for (const name of ["black Segway Ninebot e-scooter", "electric kick scooter", "Xiaomi escooter", "scooter"]) {
+      assert.equal(renameMisfit(vacuum, { name, category: "scooter" }), null, `${name} ${boxText(b)}`);
+    }
+  }
+  assert.equal(kindOf("black Segway Ninebot e-scooter"), "scooter");
+  assert.equal(kindOf("Xiaomi escooter"), "scooter");
+  // Still a size check: a scooter can't be 3 m tall.
+  const tall = { name: "vacuum", category: "vacuum", ...box(1.0, 0.95, 3.0) };
+  assert.match(renameMisfit(tall, { name: "e-scooter", category: "scooter" })!.message, /too big for a scooter/);
 });

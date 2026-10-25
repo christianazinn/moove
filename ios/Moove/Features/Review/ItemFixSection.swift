@@ -136,15 +136,20 @@ struct ItemFixSection: View {
     }
 }
 
-/// The same fixes as a menu, for long-pressing an Inventory row. "Not a real item" is a
-/// submenu whose one entry is the confirm.
+/// The same fixes as a menu, for long-pressing an Inventory row, plus "Not a <category>? Take a
+/// photo" (reclassify from a retake). "Not a real item" is a submenu whose one entry is the confirm.
 struct ItemFixMenu: View {
     @Environment(MooveStore.self) private var store
     let item: Item
     var onRename: () -> Void
+    /// "Not a vacuum? Take a photo": opens the camera for a reclassify retake (`ItemReclassify`).
+    var onReclassify: (() -> Void)? = nil
 
     var body: some View {
         Button("Rename", systemImage: "pencil", action: onRename)
+        if let onReclassify {
+            Button(ItemReclassify.menuTitle(for: item), systemImage: "camera.viewfinder", action: onReclassify)
+        }
         Menu {
             ForEach(ItemFix.QuickKind.allCases) { kind in
                 Button(kind.label) { Task { await store.setQuickKind(kind, for: item) } }
