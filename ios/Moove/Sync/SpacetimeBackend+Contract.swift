@@ -45,7 +45,10 @@ extension SpacetimeBackend {
             "SELECT scan.* FROM scan " + String(format: shared, "scan.room_id"),
             "SELECT * FROM item WHERE owner = \(id)",
             "SELECT item.* FROM item " + String(format: shared, "item.room_id"),
-            "SELECT comp.* FROM comp JOIN item ON comp.item_id = item.id WHERE item.owner = \(id)",
+            // All comps, not only those of items you own: a joined room's items (the seeded Demo Bedroom)
+            // belong to someone else, and comp -> item -> room_member would be a 3-table join, which
+            // subscriptions reject. comp is public and holds only scraped listing data (#347).
+            "SELECT * FROM comp",
             "SELECT * FROM new_home WHERE owner = \(id)",
             "SELECT * FROM layout WHERE owner = \(id)",
             // Own listings/approvals plus listing ones for items in joined rooms (#195, #200).
