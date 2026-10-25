@@ -149,7 +149,7 @@ test("vision keeps a scanned item's name and category when its answer can't fit 
   } as unknown as Conn;
   setVisionDeps({
     load: async u => ({ mediaType: "image/jpeg", data: u }),
-    call: async () => ({ name: "white throw pillow", category: "decor", material: "linen", brand: "", condition: "good", fragile: false, maybeSentimental: false, notes: "", identifyConfidence: "low", closeupHint: "" }),
+    call: async () => ({ name: "white throw pillow", category: "decor", material: "linen", brand: "", condition: "good", fragile: false, maybeSentimental: false, notes: "", identifyConfidence: "low", isItem: true, itemConfidence: "high" as const, closeupHint: "" }),
   });
   visionAgent.start(conn);
   await new Promise(r => setTimeout(r, 30));

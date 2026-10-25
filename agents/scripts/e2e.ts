@@ -647,9 +647,10 @@ await stage("vision: a photographed item gets identified (Claude, replayed)", as
 await stage("agent log: no unexpected errors", async () => {
   const evs = [...conn!.db.agentEvent.iter()].filter(e => me && e.owner.isEqual(me));
   // Expected noise: spend-cap refusals are designed behavior; transient retries recover.
-  // No APIFY_TOKEN in a test run, so items the sweep adds or renames have no cached comps: expected.
+  // No APIFY_TOKEN in a test run, so items the sweep or vision adds or renames have no cached comps (or only
+  // a similar item's, which the comp filter may reject): expected.
   // The guardrail stages' refusals are expected too (exactly the events they asserted).
-  const errs = evs.filter(e => e.kind === "error" && !expectedErrors.has(e.id) && !/retrying in|Spend cap|APIFY_TOKEN not set and no cached comps/.test(e.message));
+  const errs = evs.filter(e => e.kind === "error" && !expectedErrors.has(e.id) && !/retrying in|Spend cap|APIFY_TOKEN not set and no cached comps|No live comps, and the cached comps for/.test(e.message));
   if (errs.length) throw new Error(`${errs.length} error event(s): ${errs.slice(0, 3).map(e => `[${e.agent}] ${e.message.slice(0, 100)}`).join(" | ")}`);
   const agents = [...new Set(evs.map(e => e.agent))].sort();
   return { detail: `${evs.length} events from ${agents.join(", ")}` };
