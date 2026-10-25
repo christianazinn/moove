@@ -1,0 +1,14 @@
+{
+  "69354ed9edb02c58": {
+    "identifiedProduct": "Rectangular wooden table with brown top and orange legs, 120 x 75 x 60 cm, generic desk/dining style",
+    "itemForm": "full_product",
+    "specificity": 0.25,
+    "newRetailUsd": 150,
+    "p10": 25,
+    "p50": 60,
+    "p90": 130,
+    "item": "brown rectangular wood table with orange legs; category table; material wood; 1.20 x 0.75 x 0.60 m (W x H x D); condition good",
+    "model": "claude-sonnet-5-5",
+    "photo": "4cffe7a9d7b99ef1"
+  }
+}
