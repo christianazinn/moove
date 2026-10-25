@@ -287,6 +287,30 @@ final class MooveSmokeTests: XCTestCase {
         snap("02-add-item-added")
     }
 
+    func testInventoryFocusesOnPickedRooms() {
+        launch()
+        // A second room: the demo scan, whose photo sweep adds a potted monstera.
+        open(tab: "Scan")
+        let load = app.buttons["Load demo scan"]
+        XCTAssertTrue(scrollTo(load), "Load demo scan button")
+        load.tap()
+        let done = app.buttons["See inventory"]
+        XCTAssertTrue(done.waitForExistence(timeout: slow), "scan finished screen")
+        done.tap()
+        let plant = text(matching: "Potted monstera")
+        XCTAssertTrue(plant.waitForExistence(timeout: slow) || scrollTo(plant), "sweep item in Inventory")
+        app.swipeDown(); app.swipeDown(); app.swipeDown()
+        // Focus on the original Bedroom (room 1): the demo bedroom's plant drops out.
+        let bedroom = app.buttons["inventory.focus.1"]
+        XCTAssertTrue(bedroom.waitForExistence(timeout: slow) || scrollTo(bedroom, down: false), "Bedroom card")
+        bedroom.tap()
+        XCTAssertTrue(app.buttons["inventory.showAllRooms"].waitForExistence(timeout: slow), "focus is on")
+        XCTAssertTrue(plant.waitForNonExistence(timeout: slow), "other room's items are hidden")
+        snap("02-inventory-focus")
+        app.buttons["inventory.showAllRooms"].tap()
+        XCTAssertTrue(plant.waitForExistence(timeout: slow) || scrollTo(plant), "every room again")
+    }
+
     private func launch(guest: Bool = true, environment: [String: String] = [:]) {
         continueAfterFailure = false
         app = XCUIApplication()
