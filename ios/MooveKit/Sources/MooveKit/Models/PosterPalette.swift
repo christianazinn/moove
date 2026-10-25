@@ -68,10 +68,10 @@ public struct PosterPalette: Sendable, Equatable {
         ],
         paper: 0xF4F0D7,
         paperInk: 0x121F26,
-        wallLight: 0xE3E5D4,
-        wallDark: 0x121F26,
+        wallLight: 0xDCE6E1,
+        wallDark: 0x263C47,
         wallSpeckleLight: 0xD8DBC9,
-        wallSpeckleDark: 0x1A2A32,
+        wallSpeckleDark: 0x2E4652,
         tape: 0xE9E4C6,
         stampInk: [
             .needsOK: 0x8F5E0A,
