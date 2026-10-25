@@ -248,8 +248,7 @@ struct InventoryView: View {
         // "≈" marks an estimate from only one or two comparable listings
         let rough = item.saleValueCents != nil && Item.isRoughEstimate(compCount: compCounts[item.id] ?? 0)
         let room = store.snapshot.rooms.first { $0.id == item.roomId }
-        var catalog = MuseumLabel.catalogLine(item)
-        if let was = wasCategory(item) { catalog += " · was: \(was)" }
+        let catalog = MuseumLabel.catalogLine(item)
         let catalogued = store.snapshot.scanDate(ofRoom: item.roomId) ?? item.updatedAt
         return ExhibitInfo(
             item: item,
@@ -319,12 +318,6 @@ struct InventoryView: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
-    }
-
-    /// The scanner's own category when a later pass renamed the item ("was: storage").
-    private func wasCategory(_ item: Item) -> String? {
-        guard let scanned = item.scanObjectId.flatMap({ scannedCategories[item.roomId]?[$0] }) else { return nil }
-        return item.renamedFrom(scannedCategory: scanned)
     }
 
     // MARK: Hidden rooms

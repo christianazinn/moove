@@ -88,12 +88,12 @@ import Testing
     // MARK: Placard lines
 
     @Test func catalogLineReadsLikeAMuseumLabel() {
-        #expect(MuseumLabel.catalogLine(item("Bed", "bed", (1.4, 0.5, 1.95), material: "oak", brand: "IKEA")) == "Oak, IKEA · 140 × 195 cm")
+        #expect(MuseumLabel.catalogLine(item("Bed", "bed", (1.4, 0.5, 1.95), material: "oak", brand: "IKEA")) == "IKEA · 140 × 195 cm") // no material
         // Upright pieces show their face (W × H).
-        #expect(MuseumLabel.catalogLine(item("TV", "television", (0.73, 0.48, 0.18))) == "Television · 73 × 48 cm")
+        #expect(MuseumLabel.catalogLine(item("TV", "television", (0.73, 0.48, 0.18))) == "73 × 48 cm")
         // Estimated sizes say so; unmeasured ones show none.
-        #expect(MuseumLabel.catalogLine(item("Plant", "plant", (0.4, 0.9, 0.4), scanObjectId: "photo:3")) == "Plant · ≈40 × 90 cm")
-        #expect(MuseumLabel.catalogLine(item("Road bike", "bicycle", (1.7, 1.0, 0.5), scanObjectId: nil)) == "Bicycle · ≈170 × 100 cm")
+        #expect(MuseumLabel.catalogLine(item("Plant", "plant", (0.4, 0.9, 0.4), scanObjectId: "photo:3")) == "≈40 × 90 cm")
+        #expect(MuseumLabel.catalogLine(item("Road bike", "bicycle", (1.7, 1.0, 0.5), scanObjectId: nil)) == "≈170 × 100 cm")
         #expect(MuseumLabel.catalogLine(item("Lamp", "lamp", (0, 0, 0), scanObjectId: nil)) == "Lamp")
         #expect(MuseumLabel.catalogLine(item("Washer", "washerDryer", (0, 0, 0))) == "Washer dryer")
     }
