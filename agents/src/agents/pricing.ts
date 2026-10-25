@@ -215,12 +215,13 @@ async function price(conn: Conn, it: Item, retry: (it: Item, delayMs: number) =>
         },
       });
     }
-    if (comps.length) {
-      conn.reducers.addComps({
-        itemId: it.id,
-        comps: comps.slice(0, 20).map(c => ({ source: c.source, title: c.title, url: c.url, priceCents: BigInt(c.priceCents) })),
-      });
-    }
+    // Always written, even empty: add_comps replaces the item's comps, so a re-price that ends with
+    // none clears the old query's comps instead of leaving them behind the new estimate (the app
+    // builds its value ranges and "≈" counts from them).
+    conn.reducers.addComps({
+      itemId: it.id,
+      comps: comps.slice(0, 20).map(c => ({ source: c.source, title: c.title, url: c.url, priceCents: BigInt(c.priceCents) })),
+    });
     const { r: prior, photo: sawPhoto } = await priorP;
     if (prior.status === 'ok' || prior.status === 'cached') {
       logEvent(conn, {

@@ -260,7 +260,8 @@ private extension Item {
             fragile: r.fragile, maybeSentimental: r.maybeSentimental, updatedAt: r.updatedAt.date,
             attributes: Item.attributes(json: r.attributesJson), colors: ItemColors(json: r.colorsJson),
             detailsStatus: AgentStage(rawValue: r.detailsStatus), pricingStatus: AgentStage(rawValue: r.pricingStatus),
-            identifyConfidence: IdentifyConfidence(rawValue: r.identifyConfidence), closeupHint: optional(r.closeupHint)
+            identifyConfidence: IdentifyConfidence(rawValue: r.identifyConfidence), closeupHint: optional(r.closeupHint),
+            estLowCents: optional(r.estLowCents), estHighCents: optional(r.estHighCents)
         )
     }
 

@@ -106,10 +106,16 @@ extension Review {
         return groups
     }
 
-    /// Low and high comparable-listing prices, when there are at least two distinct ones.
+    /// The value range a card shows next to the item. It always brackets the estimate every other
+    /// screen shows: the pricing agent's own low–high when it sent one, else the comparable-listing
+    /// prices (at least two distinct) only if the estimate falls inside them. nil otherwise, and the
+    /// card shows the single estimate.
     public static func valueRange(_ item: Item, comps: [Comp]) -> ClosedRange<Int64>? {
+        if let range = item.estRange { return range }
+        guard !item.isBuiltInFixture else { return nil }
         let prices = comps.filter { $0.itemId == item.id }.map(\.priceCents)
         guard let low = prices.min(), let high = prices.max(), low < high else { return nil }
+        if let est = item.estValueCents, !(low...high).contains(est) { return nil }
         return low...high
     }
 
