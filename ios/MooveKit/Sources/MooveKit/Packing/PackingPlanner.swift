@@ -43,6 +43,12 @@ public enum PackingPlanner {
     public static let fragileMaxKg = 8.0
     static let keepWithYouRoom = "Keep with you"
     static let openFirstRoom = "Open first"
+    /// A box of small leftovers from several rooms (the box cap's last pass).
+    public static let miscRoom = "Misc"
+    /// About how many boxes Move shows for a typical move (Lisa, #335). Over it, `consolidate`
+    /// merges harder (any kinds the safety rules allow in one room, then small leftovers across
+    /// rooms into Misc boxes); weight and fragile limits still hold, so a big home can stay over.
+    public static let boxCap = 12
 
     /// - Parameters:
     ///   - items: the inventory. Only `.keep` items move, plus undecided
@@ -107,7 +113,7 @@ public enum PackingPlanner {
             let box = numbered[i].box
             let mapped = box.contents.contains { $0.itemId.map(rooms.isMapped) ?? false } || rooms.mappedRooms.contains(box.room)
             numbered[i].box.roomReason = box.keepWithYou ? Reasons.ridesWithYou
-                : box.openFirst ? Reasons.openFirstRoom : rooms.reason(box.room, mapped: mapped)
+                : box.openFirst ? Reasons.openFirstRoom : box.room == miscRoom ? Reasons.misc : rooms.reason(box.room, mapped: mapped)
         }
         let boxes = numbered.map(\.box)
         furniture.sort { a, b in
@@ -154,7 +160,8 @@ public enum PackingPlanner {
             return DeliveredItem(
                 id: piece.item.id, name: piece.item.name, title: title.isEmpty ? piece.item.name : title,
                 seller: piece.deal.map(seller) ?? "", room: room, reason: Reasons.bought,
-                roomReason: rooms.reason(room, mapped: rooms.isMapped(layout.id)), voxelSpec: VoxelItemSpec(layout)
+                roomReason: rooms.reason(room, mapped: rooms.isMapped(layout.id)), voxelSpec: VoxelItemSpec(layout),
+                priceCents: piece.deal?.priceCents
             )
         }
     }
@@ -399,7 +406,7 @@ public enum PackingPlanner {
     ///    (small → medium → large), since one bigger box beats two half-empty ones.
     /// 2. Any box still under `sparseFill` joins another box of its room with looser kind rules
     ///    (the safety rules still hold: no books with fragile things, kitchen only with kitchen).
-    static func consolidate(_ boxes: [DraftBox]) -> [DraftBox] {
+    static func consolidate(_ boxes: [DraftBox], cap: Int = boxCap) -> [DraftBox] {
         var out = boxes
         func capacityOrder(_ ids: [Int]) -> [Int] {
             ids.sorted { a, b in
@@ -447,7 +454,34 @@ public enum PackingPlanner {
                 }
             }
         }
+        // 3-4. Over the cap: merge harder (same room, then small leftovers across rooms).
+        if out.count > cap { mergeToCap(&out, cap: cap, acrossRooms: false) }
+        if out.count > cap { mergeToCap(&out, cap: cap, acrossRooms: true) }
         return out
+    }
+
+    /// While there are more than `cap` boxes, merges the pair that makes the smallest box: 3. any two
+    /// boxes of one room the safety rules allow together (towels may join the bathroom box), up a
+    /// size if needed; 4. (`acrossRooms`) a box under half full into one from another room, which
+    /// becomes a Misc box whose lines remember their own room.
+    static func mergeToCap(_ out: inout [DraftBox], cap: Int, acrossRooms: Bool) {
+        while out.count > cap {
+            var best: (h: Int, g: Int, box: DraftBox)?
+            let open = out.indices.filter { !out[$0].special }
+            for h in open {
+                for g in open where g != h {
+                    let sameRoom = out[h].room == out[g].room
+                    guard acrossRooms ? (!sameRoom && out[g].fill < 0.5) : sameRoom else { continue }
+                    guard let merged = out[h].combined(with: out[g], relaxed: true, cap: true, acrossRooms: acrossRooms) else { continue }
+                    if let b = best, b.box.size.usableLitres < merged.size.usableLitres - 1e-9
+                        || (abs(b.box.size.usableLitres - merged.size.usableLitres) < 1e-9 && b.box.litres <= merged.litres) { continue }
+                    best = (h, g, merged)
+                }
+            }
+            guard let best else { return }
+            out[best.h] = best.box
+            out.remove(at: best.g)
+        }
     }
 
     /// Orders boxes by schedule, then room and kind; numbers and titles them.
@@ -475,7 +509,7 @@ public enum PackingPlanner {
                 id: i + 1, size: d.size, room: d.room, title: title,
                 contents: d.lines.map { line in
                     BoxContent(name: line.name, quantity: line.quantity, itemId: line.itemId,
-                               reason: line.itemId == nil ? nil : Reasons.line(room: d.room, box: i + 1, why: line.why),
+                               reason: line.itemId == nil ? nil : Reasons.line(room: line.room ?? d.room, box: i + 1, why: line.why),
                                category: line.category)
                 },
                 weightKg: (d.kg * 10).rounded() / 10,
@@ -612,6 +646,8 @@ struct DraftLine: Sendable {
     var kg: Double
     var why: String
     var category: String
+    /// The room this line goes to when its box is a Misc box of several rooms' leftovers.
+    var room: String? = nil
 }
 
 struct DraftBox: Sendable {
@@ -665,10 +701,12 @@ struct DraftBox: Sendable {
     /// shouldn't or can't share. `relaxed` (the sparse-box pass) lets any kinds share except the
     /// safety rules: books never with fragile things, kitchen only with kitchen (or soft padding
     /// around fragile dishes), bathroom only with bathroom, a wardrobe box only takes soft things.
-    func combined(with other: DraftBox, relaxed: Bool) -> DraftBox? {
-        guard !special, !other.special, room == other.room else { return nil }
+    /// `cap` (over the box cap) also lets towels and bedding join a bathroom box; `acrossRooms`
+    /// merges boxes of different rooms into a Misc box.
+    func combined(with other: DraftBox, relaxed: Bool, cap: Bool = false, acrossRooms: Bool = false) -> DraftBox? {
+        guard !special, !other.special, room == other.room || acrossRooms else { return nil }
         let fragileResult = fragile || other.fragile
-        guard Self.kindsShare(self, other, fragileResult: fragileResult, relaxed: relaxed) else { return nil }
+        guard Self.kindsShare(self, other, fragileResult: fragileResult, relaxed: relaxed, cap: cap) else { return nil }
         if lightOnly && other.lines.contains(where: { $0.kg > 1.0 }) { return nil }
         if other.lightOnly && lines.contains(where: { $0.kg > 1.0 }) { return nil }
         guard let rankA = size.nestRank, let rankB = other.size.nestRank else { return nil }
@@ -683,13 +721,18 @@ struct DraftBox: Sendable {
         guard let target else { return nil }
 
         var out = self
+        if room != other.room {
+            for i in out.lines.indices where out.lines[i].room == nil { out.lines[i].room = room }
+            out.room = PackingPlanner.miscRoom
+        }
         out.size = target
         out.fragile = fragileResult
         out.lightOnly = lightOnly || other.lightOnly
         for kind in other.kinds where !out.kinds.contains(kind) { out.kinds.append(kind) }
         out.kinds.sort()
-        for line in other.lines {
-            if let i = out.lines.firstIndex(where: { $0.itemId == line.itemId && $0.name == line.name }) {
+        for var line in other.lines {
+            if other.room != out.room, line.room == nil { line.room = other.room }
+            if let i = out.lines.firstIndex(where: { $0.itemId == line.itemId && $0.name == line.name && $0.room == line.room }) {
                 out.lines[i].quantity += line.quantity
             } else {
                 out.lines.append(line)
@@ -711,7 +754,7 @@ struct DraftBox: Sendable {
         [.decor, .lamps], [.decor, .misc], [.lamps, .misc],
     ]
 
-    static func kindsShare(_ a: DraftBox, _ b: DraftBox, fragileResult: Bool, relaxed: Bool) -> Bool {
+    static func kindsShare(_ a: DraftBox, _ b: DraftBox, fragileResult: Bool, relaxed: Bool, cap: Bool = false) -> Bool {
         let ka = Set(a.kinds), kb = Set(b.kinds), all = ka.union(kb)
         // Never heavy books with fragile things.
         if fragileResult && all.contains(.books) { return false }
@@ -722,7 +765,7 @@ struct DraftBox: Sendable {
             let (kitchenSide, otherSide, kitchenFragile) = ka.contains(.kitchen) ? (ka, kb, a.fragile) : (kb, ka, b.fragile)
             return kitchenSide == [.kitchen] && kitchenFragile && otherSide.isSubset(of: paddingKinds)
         }
-        if all.contains(.bathroom) && all != [.bathroom] { return false }
+        if all.contains(.bathroom) && all != [.bathroom] && !(cap && all.subtracting([.bathroom]).isSubset(of: paddingKinds)) { return false }
         if relaxed { return true }
         for x in ka {
             for y in kb where x != y {
@@ -827,6 +870,7 @@ enum Reasons {
     static let floorLamp = "Too tall for a box: shade boxed, base wrapped"
     static let bought = "Bought: ships straight to the new place, nothing to pack"
     static let guessed = "Room not set yet: best guess from what it is"
+    static let misc = "Small leftovers from a few rooms: each line says where it goes"
 
     static func fromLayout(_ room: String) -> String { "Goes to \(room) (from your saved layout)" }
 

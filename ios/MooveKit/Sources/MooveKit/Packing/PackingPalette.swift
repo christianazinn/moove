@@ -8,13 +8,14 @@ import Foundation
 /// room names print and read on top of it.
 public enum PackingPalette {
     /// Room colors, most distinct first: sage, mustard, sky, coral, lavender, teal, sand, rose.
+    /// Muted ~40% toward gray (Lisa: "a bit less color overall"); still distinct, ink still 7:1+.
     public static let roomColors: [VoxelColor] = [
-        0x9CC08A, 0xE3B651, 0x8DB4DE, 0xE8957A, 0xBBA3DB, 0x7CC4B8, 0xC9B79A, 0xE59BB8,
+        0xA4B999, 0xD2B77A, 0x9AB1CA, 0xCF9E8D, 0xB7A8CA, 0x90BBB4, 0xC3B8A6, 0xD2A5B7,
     ]
-    /// The open-first tote: bright orange, unlike any room.
-    public static let openFirst: VoxelColor = 0xF2A65A
+    /// The open-first tote: muted orange, unlike any room.
+    public static let openFirst: VoxelColor = 0xD9AC7E
     /// The keep-with-you box: soft gold.
-    public static let keepWithYou: VoxelColor = 0xF0D264
+    public static let keepWithYou: VoxelColor = 0xE3D18F
     /// Ink for text on any of these colors.
     public static let ink: VoxelColor = 0x1E1B16
 
