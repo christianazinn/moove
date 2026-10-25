@@ -87,6 +87,31 @@ final class AutoPhotographer: @unchecked Sendable {
         return out
     }
 
+    /// Views of each object for `ObjectClassifier`, by object id: its auto photo's framing
+    /// (`photos(for:)`), plus tight crops (no margin) of its `count` best keyframes, with
+    /// looser gates when too few pass (`CropPicker.top`). On real scans, averaging the auto
+    /// photo with 3 extra views beat the auto photo alone. Call off the main thread.
+    func classifierCrops(for objects: [RoomGeometry.Object], count: Int = 3) -> [String: [CGImage]] {
+        queue.sync {}
+        let frames = lock.withLock { keyframes }
+        var images: [Int: CIImage] = [:]
+        var out: [String: [CGImage]] = [:]
+        for object in objects {
+            let auto = CropPicker.best(size: object.dimensions, transform: object.transform, in: frames)
+            let views = CropPicker.top(size: object.dimensions, transform: object.transform, in: frames, count: count)
+            let rects = auto.map { [($0, CropPicker.cropRect($0))] } ?? []
+            out[object.id] = (rects + views.map { ($0, CropPicker.cropRect($0, margin: 0)) }).compactMap { view, r in
+                guard let image = images[view.keyframeID] ?? CIImage(contentsOf: url(view.keyframeID)) else { return nil }
+                images[view.keyframeID] = image
+                let e = image.extent
+                let rect = CGRect(x: e.minX + CGFloat(r.x) * e.width, y: e.minY + CGFloat(1 - r.maxY) * e.height,
+                                  width: CGFloat(r.width) * e.width, height: CGFloat(r.height) * e.height).integral
+                return context.createCGImage(image, from: rect)
+            }
+        }
+        return out
+    }
+
     /// A few whole keyframes that together show the room (`WideFramePicker`), as JPEG,
     /// longest side ≤ `maxPhotoSide`, for the worker's photo sweep (#92). Call off the main thread.
     func roomPhotos(count: Int = 4) -> [Data] {

@@ -1,0 +1,540 @@
+{
+ "model": "PE-Core-S/16-384 (Meta FAIR, Apache-2.0), image tower in ObjectClassifier.mlpackage",
+ "about": "logits = logitScale * normalize(embedding) . W[class] + bias[class]; W is ObjectClassifierLabels.f16 (float16 little-endian, classes x dimension, row-major): PE-Core text embeddings of the prompts, fine-tuned as a text-anchored linear probe on public crops. category 'none' = not a movable object.",
+ "dimension": 512,
+ "logitScale": 100.0,
+ "templates": [
+  "a photo of a {}.",
+  "a photo of a {} in a room.",
+  "a cropped photo of a {}."
+ ],
+ "classes": [
+  {
+   "id": "backpack",
+   "category": "backpack",
+   "bias": 0.0,
+   "prompts": [
+    "backpack"
+   ]
+  },
+  {
+   "id": "bag",
+   "category": "bag",
+   "bias": 0.0,
+   "prompts": [
+    "duffel bag"
+   ]
+  },
+  {
+   "id": "bathtub",
+   "category": "bathtub",
+   "bias": 0.0,
+   "prompts": [
+    "bathtub"
+   ]
+  },
+  {
+   "id": "bed",
+   "category": "bed",
+   "bias": 0.0,
+   "prompts": [
+    "bed",
+    "bunk bed"
+   ]
+  },
+  {
+   "id": "bicycle",
+   "category": "bicycle",
+   "bias": 0.0,
+   "prompts": [
+    "bicycle"
+   ]
+  },
+  {
+   "id": "box",
+   "category": "box",
+   "bias": 0.0,
+   "prompts": [
+    "cardboard box",
+    "moving box"
+   ]
+  },
+  {
+   "id": "dolly_cart",
+   "category": "cart",
+   "bias": 0.0,
+   "prompts": [
+    "hand truck",
+    "furniture dolly",
+    "rolling cart"
+   ]
+  },
+  {
+   "id": "ceiling_fan",
+   "category": "fan",
+   "bias": 0.0,
+   "prompts": [
+    "ceiling fan"
+   ]
+  },
+  {
+   "id": "chair",
+   "category": "chair",
+   "bias": 0.0,
+   "prompts": [
+    "chair",
+    "armchair",
+    "folding chair"
+   ]
+  },
+  {
+   "id": "office_chair",
+   "category": "chair",
+   "bias": 0.0,
+   "prompts": [
+    "office chair"
+   ]
+  },
+  {
+   "id": "fan",
+   "category": "fan",
+   "bias": 0.0,
+   "prompts": [
+    "electric fan",
+    "standing fan"
+   ]
+  },
+  {
+   "id": "guitar",
+   "category": "guitar",
+   "bias": 0.0,
+   "prompts": [
+    "guitar"
+   ]
+  },
+  {
+   "id": "heater",
+   "category": "heater",
+   "bias": 0.0,
+   "prompts": [
+    "space heater",
+    "portable electric heater"
+   ]
+  },
+  {
+   "id": "ironing_board",
+   "category": "ironing board",
+   "bias": 0.0,
+   "prompts": [
+    "ironing board"
+   ]
+  },
+  {
+   "id": "ladder",
+   "category": "ladder",
+   "bias": 0.0,
+   "prompts": [
+    "ladder",
+    "step ladder"
+   ]
+  },
+  {
+   "id": "lamp",
+   "category": "lamp",
+   "bias": 0.0,
+   "prompts": [
+    "floor lamp",
+    "table lamp",
+    "desk lamp"
+   ]
+  },
+  {
+   "id": "laptop",
+   "category": "laptop",
+   "bias": 0.0,
+   "prompts": [
+    "laptop"
+   ]
+  },
+  {
+   "id": "microwave",
+   "category": "microwave",
+   "bias": 0.0,
+   "prompts": [
+    "microwave oven"
+   ]
+  },
+  {
+   "id": "mirror",
+   "category": "mirror",
+   "bias": 0.0,
+   "prompts": [
+    "mirror"
+   ]
+  },
+  {
+   "id": "monitor",
+   "category": "monitor",
+   "bias": 0.0,
+   "prompts": [
+    "computer monitor",
+    "computer monitor on a desk"
+   ]
+  },
+  {
+   "id": "ottoman",
+   "category": "ottoman",
+   "bias": 0.0,
+   "prompts": [
+    "ottoman",
+    "footstool"
+   ]
+  },
+  {
+   "id": "plant",
+   "category": "plant",
+   "bias": 0.0,
+   "prompts": [
+    "potted plant",
+    "houseplant"
+   ]
+  },
+  {
+   "id": "radiator",
+   "category": "radiator",
+   "bias": 1.0,
+   "prompts": [
+    "radiator"
+   ]
+  },
+  {
+   "id": "refrigerator",
+   "category": "refrigerator",
+   "bias": 0.0,
+   "prompts": [
+    "refrigerator",
+    "mini fridge"
+   ]
+  },
+  {
+   "id": "rug",
+   "category": "rug",
+   "bias": 0.0,
+   "prompts": [
+    "rug",
+    "carpet"
+   ]
+  },
+  {
+   "id": "scooter",
+   "category": "scooter",
+   "bias": 0.0,
+   "prompts": [
+    "kick scooter",
+    "electric scooter"
+   ]
+  },
+  {
+   "id": "shelf",
+   "category": "shelf",
+   "bias": 0.0,
+   "prompts": [
+    "wall shelf",
+    "floating shelf",
+    "shelving unit"
+   ]
+  },
+  {
+   "id": "shower_curtain",
+   "category": "shower curtain",
+   "bias": 1.0,
+   "prompts": [
+    "shower curtain"
+   ]
+  },
+  {
+   "id": "sink",
+   "category": "sink",
+   "bias": 0.0,
+   "prompts": [
+    "sink"
+   ]
+  },
+  {
+   "id": "sofa",
+   "category": "sofa",
+   "bias": 0.0,
+   "prompts": [
+    "sofa",
+    "couch"
+   ]
+  },
+  {
+   "id": "bookshelf",
+   "category": "storage",
+   "bias": 0.0,
+   "prompts": [
+    "bookshelf"
+   ]
+  },
+  {
+   "id": "cabinet",
+   "category": "storage",
+   "bias": 0.0,
+   "prompts": [
+    "cabinet"
+   ]
+  },
+  {
+   "id": "dresser",
+   "category": "storage",
+   "bias": 0.0,
+   "prompts": [
+    "dresser",
+    "chest of drawers"
+   ]
+  },
+  {
+   "id": "nightstand",
+   "category": "storage",
+   "bias": 0.0,
+   "prompts": [
+    "nightstand"
+   ]
+  },
+  {
+   "id": "stroller",
+   "category": "stroller",
+   "bias": 0.0,
+   "prompts": [
+    "baby stroller"
+   ]
+  },
+  {
+   "id": "suitcase",
+   "category": "suitcase",
+   "bias": 0.0,
+   "prompts": [
+    "suitcase"
+   ]
+  },
+  {
+   "id": "desk",
+   "category": "table",
+   "bias": 0.0,
+   "prompts": [
+    "desk"
+   ]
+  },
+  {
+   "id": "table",
+   "category": "table",
+   "bias": 0.0,
+   "prompts": [
+    "table",
+    "wooden table",
+    "dining table",
+    "coffee table"
+   ]
+  },
+  {
+   "id": "television",
+   "category": "television",
+   "bias": 0.0,
+   "prompts": [
+    "television",
+    "tv"
+   ]
+  },
+  {
+   "id": "toilet",
+   "category": "toilet",
+   "bias": 0.0,
+   "prompts": [
+    "toilet"
+   ]
+  },
+  {
+   "id": "towel_rack",
+   "category": "towel rack",
+   "bias": 1.0,
+   "prompts": [
+    "towel rack"
+   ]
+  },
+  {
+   "id": "trash_can",
+   "category": "trash can",
+   "bias": 0.0,
+   "prompts": [
+    "trash can"
+   ]
+  },
+  {
+   "id": "vacuum",
+   "category": "vacuum",
+   "bias": 0.0,
+   "prompts": [
+    "vacuum cleaner"
+   ]
+  },
+  {
+   "id": "washing_machine",
+   "category": "washerDryer",
+   "bias": 0.0,
+   "prompts": [
+    "washing machine"
+   ]
+  },
+  {
+   "id": "yoga_mat",
+   "category": "yoga mat",
+   "bias": 0.0,
+   "prompts": [
+    "yoga mat"
+   ]
+  },
+  {
+   "id": "art",
+   "category": "art",
+   "bias": 0.0,
+   "prompts": [
+    "framed picture",
+    "painting"
+   ]
+  },
+  {
+   "id": "bean_bag",
+   "category": "bean bag",
+   "bias": 0.0,
+   "prompts": [
+    "bean bag chair"
+   ]
+  },
+  {
+   "id": "clothes_rack",
+   "category": "clothes rack",
+   "bias": 0.0,
+   "prompts": [
+    "clothes rack"
+   ]
+  },
+  {
+   "id": "coat_rack",
+   "category": "coat rack",
+   "bias": 0.0,
+   "prompts": [
+    "coat rack"
+   ]
+  },
+  {
+   "id": "neg_wall",
+   "category": "none",
+   "bias": 1.0,
+   "prompts": [
+    "wall",
+    "blank wall"
+   ]
+  },
+  {
+   "id": "neg_door",
+   "category": "none",
+   "bias": 1.0,
+   "prompts": [
+    "door",
+    "doorway"
+   ]
+  },
+  {
+   "id": "neg_window",
+   "category": "none",
+   "bias": 1.0,
+   "prompts": [
+    "window"
+   ]
+  },
+  {
+   "id": "neg_floor",
+   "category": "none",
+   "bias": 1.0,
+   "prompts": [
+    "floor"
+   ]
+  },
+  {
+   "id": "neg_ceiling",
+   "category": "none",
+   "bias": 1.0,
+   "prompts": [
+    "ceiling"
+   ]
+  },
+  {
+   "id": "neg_corner",
+   "category": "none",
+   "bias": 1.0,
+   "prompts": [
+    "empty corner of a room"
+   ]
+  },
+  {
+   "id": "neg_clothes",
+   "category": "none",
+   "bias": 1.0,
+   "prompts": [
+    "pile of clothes"
+   ]
+  },
+  {
+   "id": "neg_curtain",
+   "category": "none",
+   "bias": 1.0,
+   "prompts": [
+    "curtain"
+   ]
+  },
+  {
+   "id": "neg_doorframe",
+   "category": "none",
+   "bias": 1.0,
+   "prompts": [
+    "door frame"
+   ]
+  },
+  {
+   "id": "neg_plastic",
+   "category": "none",
+   "bias": 1.0,
+   "prompts": [
+    "plastic sheeting",
+    "black plastic sheet on the floor"
+   ]
+  },
+  {
+   "id": "neg_panel",
+   "category": "none",
+   "bias": 1.0,
+   "prompts": [
+    "electrical panel",
+    "fuse box"
+   ]
+  },
+  {
+   "id": "neg_switch",
+   "category": "none",
+   "bias": 1.0,
+   "prompts": [
+    "light switch",
+    "power outlet"
+   ]
+  },
+  {
+   "id": "neg_pipe",
+   "category": "none",
+   "bias": 1.0,
+   "prompts": [
+    "pipe"
+   ]
+  }
+ ]
+}
