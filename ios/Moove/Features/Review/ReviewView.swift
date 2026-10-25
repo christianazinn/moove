@@ -47,7 +47,7 @@ struct ReviewView: View {
                                 .accessibilityIdentifier("review.caughtUp")
                         }
                     }
-                    .padding(.top, 36)
+                    .padding(.top, Theme.Space.section)
                     .padding(.bottom, 16)
                     ReviewBoardView(
                         piles: piles,
@@ -127,19 +127,16 @@ struct ReviewView: View {
         let unnamed = ItemLabels.needingNames(items)
         if !unnamed.isEmpty {
             ListHeader(title: "Needs a name", count: "\(unnamed.count)")
-                .padding(.top, 40)
+                .padding(.top, Theme.Space.section)
                 .accessibilityIdentifier("review.needsName")
-            ForEach(unnamed) { item in
+            CollapsedList(data: unnamed, id: "review.unnamed") { item in
                 NavigationLink(value: item.id) {
                     HStack(spacing: 12) {
                         ItemArt(item: item, size: 48)
-                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(item.name.isEmpty ? "Unidentified item" : item.name.capitalizedFirst)
-                                .monoText(14.5, weight: .bold).foregroundStyle(Theme.text).lineLimit(2)
-                            Text(ItemLabels.hint(for: item)).monoText(12, maxScale: 1.8).foregroundStyle(Theme.muted).lineLimit(2)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
+                        Text(item.name.isEmpty ? "Unidentified item" : item.name.capitalizedFirst)
+                            .monoText(14.5, weight: .bold).foregroundStyle(Theme.text).lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         Image(systemName: "pencil")
                             .font(.system(size: 15))
                             .foregroundStyle(Theme.muted)
@@ -151,7 +148,7 @@ struct ReviewView: View {
                 }
                 .buttonStyle(.plain)
                 .ruled()
-                .accessibilityHint("Opens it to rename it or pick what it is")
+                .accessibilityHint("\(ItemLabels.hint(for: item)). Opens it to rename it or pick what it is")
                 .accessibilityIdentifier("review.unnamed.\(item.id)")
             }
         }
@@ -167,15 +164,7 @@ private struct ReviewStep {
 
 private struct ReviewEmptyState: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Nothing to review").blockTitle()
-            Text("Scan a room first.").monoMeta()
-        }
-        .padding(.vertical, 28)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .ruled(.top)
-        .ruled()
-        .accessibilityElement(children: .combine)
+        EmptyState(title: "Nothing to review", detail: "Scan a room first.")
     }
 }
 

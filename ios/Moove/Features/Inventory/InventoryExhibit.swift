@@ -4,24 +4,7 @@ import MooveKit
 // The museum look for Inventory: items as framed exhibits (a voxel model under a soft
 // spotlight on a plinth) with a placard. Wording comes from MooveKit `MuseumLabel`.
 
-/// Serif at a design size, scaled for Dynamic Type (the placards' "printed" face).
-private struct SerifFont: ViewModifier {
-    var size: CGFloat
-    var weight: Font.Weight
-    var italic: Bool
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    func body(content: Content) -> some View {
-        let font = Font.system(size: size * min(dynamicTypeSize.textScale, 2), weight: weight, design: .serif)
-        content.font(italic ? font.italic() : font)
-    }
-}
-
 extension View {
-    func serifText(_ size: CGFloat, weight: Font.Weight = .regular, italic: Bool = false) -> some View {
-        modifier(SerifFont(size: size, weight: weight, italic: italic))
-    }
-
     /// Small caps catalog line ("OAK, IKEA · 140 × 195 CM").
     func catalogCaps() -> some View {
         monoText(10.5, weight: .medium, maxScale: 1.8).tracking(0.6).textCase(.uppercase).foregroundStyle(Theme.muted)
@@ -94,14 +77,14 @@ struct ExhibitPlinth: View {
         if item.origin == .photo, let url = item.photoUrls.first.flatMap(URL.init(string:)) {
             AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { Theme.surface2 }
                 .frame(width: size * 0.7, height: size * 0.7)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.tag))
                 .padding(5)
-                .background(Theme.bg, in: RoundedRectangle(cornerRadius: 6))
-                .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+                .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.Radius.tag + 2))
+                .mooveShadow(.paper)
                 .accessibilityHidden(true)
         } else {
             VoxelThumbnail(item, size: size, tile: false)
-                .shadow(color: .black.opacity(0.12), radius: 6, y: 4)
+                .mooveShadow(.lifted)
         }
     }
 }
@@ -114,17 +97,15 @@ struct ExhibitPlacard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(info.item.name)
-                .serifText(16, weight: .semibold)
+                .serifType(16, weight: .semibold)
                 .foregroundStyle(Theme.text)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(info.catalog)
-                .catalogCaps()
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            // Name, story, price: the catalog line, origin tag and the agents' note are read by
+            // VoiceOver only (Lisa: less on screen).
             Button(action: onEditStory) {
-                Text(info.story.map { "“\($0)”" } ?? info.autoStory)
-                    .serifText(13, italic: true)
+                Text(info.story.map { "“\($0)”" } ?? "Add a story")
+                    .serifType(13, italic: true)
                     .foregroundStyle(info.story == nil ? Theme.muted : Theme.text)
                     .multilineTextAlignment(.leading)
                     .lineLimit(3)
@@ -133,14 +114,12 @@ struct ExhibitPlacard: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(info.story.map { "Story: \($0)" } ?? info.autoStory)
+            .accessibilityLabel(info.story.map { "Story: \($0)" } ?? "\(info.autoStory). Add a story")
             .accessibilityHint(info.story == nil ? "Add your own story" : "Edit your story")
             .accessibilityIdentifier("inventory.story.\(info.item.id)")
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { price; tag }
-                VStack(alignment: .leading, spacing: 6) { price; tag }
-            }
-            .padding(.top, 2)
+            price
+                .padding(.top, 2)
+                .accessibilityLabel("\(info.price), \(info.catalog), \(info.tag.accessibilityLabel)")
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -150,9 +129,6 @@ struct ExhibitPlacard: View {
         Text(info.price).monoText(13, weight: .bold, maxScale: 1.8).foregroundStyle(info.priceTint).lineLimit(1)
     }
 
-    private var tag: some View {
-        MonoTag(text: info.tag.label).accessibilityLabel(info.tag.accessibilityLabel)
-    }
 }
 
 /// Edit the one-line story on a placard ("Grandma's, 1974"). Kept on this device only.
@@ -166,15 +142,15 @@ struct StoryEditor: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 14) {
-                Text(item.name).serifText(20, weight: .semibold).foregroundStyle(Theme.text)
+                Text(item.name).serifType(20, weight: .semibold).foregroundStyle(Theme.text)
                 TextField("Grandma's, 1974", text: $text)
-                    .serifText(17, italic: true)
+                    .serifType(17, italic: true)
                     .padding(12)
-                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusSmall))
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.chip))
                     .submitLabel(.done)
                     .onSubmit(save)
                     .accessibilityIdentifier("inventory.story.field")
-                Text("One line for the placard. A year in it becomes the “Acquired” date. Saved on this phone.")
+                Text("A year in it becomes the “Acquired” date. Saved on this phone.")
                     .monoMeta()
                     .fixedSize(horizontal: false, vertical: true)
                 if current != nil {
