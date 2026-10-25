@@ -21,6 +21,7 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
         case invalidUrl
         case tooManyPhotos
         case nameTooLong
+        case emptyName
     }
 
     private let lock = NSLock()
@@ -288,6 +289,19 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
     public func renameItem(itemId: UInt64, name: String) async throws {
         guard name.count <= Self.maxNameLength else { throw Failure.nameTooLong }
         try updateOwnedItem(itemId) { $0.name = name }
+    }
+
+    /// Same as the proposed `rename_room` (#370): the owner renames a room; the name is trimmed,
+    /// at most `maxNameLength`, never empty.
+    public func renameRoom(roomId: UInt64, name: String) async throws {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw Failure.emptyName }
+        guard trimmed.count <= Self.maxNameLength else { throw Failure.nameTooLong }
+        try mutateAuthed { s, me in
+            guard let i = s.rooms.firstIndex(where: { $0.id == roomId }) else { throw Failure.noSuchRoom }
+            guard s.rooms[i].owner == me else { throw Failure.unauthorized }
+            s.rooms[i].name = trimmed
+        }
     }
 
     public func deleteItem(itemId: UInt64) async throws {

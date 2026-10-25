@@ -145,6 +145,11 @@ public protocol SyncBackend: AnyObject, Sendable {
     func addItem(roomId: UInt64, name: String, category: String, widthM: Double, heightM: Double, depthM: Double, photoUrl: String?) async throws
     func setItemAttributes(itemId: UInt64, attributes: [String]) async throws
 
+    /// Renames one of the user's rooms (`rename_room`, proposed in #370). The live backend
+    /// throws until the module has the reducer; `MooveStore.renameRoom` then keeps the name
+    /// on this device (`RoomNames` overrides).
+    func renameRoom(roomId: UInt64, name: String) async throws
+
     /// Joins someone else's room by its join code (#10). Its scans and items then
     /// stream in like the user's own. Joining a room you already have is a no-op.
     func joinRoom(code: String) async throws
