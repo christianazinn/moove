@@ -12,3 +12,6 @@
 - Generic furniture never gets an ask.
 - A web product lookup to confirm models was not adopted, because it costs Apify budget.
 - The e2e vision replay was re-recorded (one Sonnet call). Any future change to the vision prompt or schema needs a re-record with `E2E_LLM=auto`.
+
+## Addendum: no Review list (Oct 24)
+Lisa: "can we remove the 'a photo would help' section for the review tab". Review no longer lists close-up asks (and MooveKit `Review.wantingCloseups` is gone). The ask on Item detail is unchanged.

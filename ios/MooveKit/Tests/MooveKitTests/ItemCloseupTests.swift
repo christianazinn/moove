@@ -38,13 +38,6 @@ import Testing
         #expect(item("TV", category: "tv", hint: "  The label on the back. ").closeupPhoto == "label on the back")
         #expect(item("TV", category: "tv", hint: "a model sticker").closeupPhoto == "model sticker")
     }
-
-    @Test func reviewListsMostValuableFirst() {
-        var a = item("Monitor", category: "electronics", value: 12_000); a.id = 1
-        var b = item("Laptop", category: "electronics", value: 65_000); b.id = 2
-        var c = item("Chair", category: "chair", value: 2_000); c.id = 3
-        #expect(Review.wantingCloseups([a, b, c]).map(\.id) == [2, 1])
-    }
 }
 
 /// Rio's hotel rooms (Oct 24): fixtures were priced and counted in sales, and some estimates

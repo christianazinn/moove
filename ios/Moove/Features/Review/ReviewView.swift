@@ -1,7 +1,7 @@
 import SwiftUI
 import MooveKit
 
-/// Items > Review. On top, flip cards for the whole move (`Review.flipDeck`): the items only you
+/// Items > Review. A strip with the kg kept out of landfill (`ReviewImpactBanner`), then flip cards for the whole move (`Review.flipDeck`): the items only you
 /// can decide first (possibly sentimental or undecided; Moove never decides those), then every
 /// item the agents sorted, with what Moove suggests, so you can confirm or change each. Swipe
 /// right to keep, left to sell (Donate and Trash are buttons, so a vertical scroll never decides).
@@ -26,14 +26,17 @@ struct ReviewView: View {
                 if items.isEmpty {
                     ReviewEmptyState().padding(.top, 28)
                 } else {
+                    // Kg kept out of landfill, live as you decide (moved here from the Summary tab).
+                    ReviewImpactBanner(items: items)
+                        .padding(.top, 4)
                     if !deck.isEmpty {
                         ReviewDeckView(cards: deck, comps: store.snapshot.comps, doneCount: history.count,
                                        canUndo: !history.isEmpty, onDecide: decide, onUndo: undo)
-                            .padding(.top, 24)
+                            .padding(.top, 20)
                     } else {
                         ReviewAllDecided(totals: Review.totals(items), canUndo: !history.isEmpty,
                                          onUndo: undo, onStartOver: startOver)
-                            .padding(.top, 24)
+                            .padding(.top, 20)
                     }
                     unnamed(items)
                     ListHeader(title: "Where it goes") {
@@ -50,7 +53,6 @@ struct ReviewView: View {
                         piles: piles,
                         onMove: move
                     )
-                    closeups(items)
                 }
             }
             .padding(.horizontal, Theme.gutter)
@@ -152,18 +154,6 @@ struct ReviewView: View {
                 .accessibilityHint("Opens it to rename it or pick what it is")
                 .accessibilityIdentifier("review.unnamed.\(item.id)")
             }
-        }
-    }
-
-    // MARK: Close-ups (#276)
-
-    @ViewBuilder
-    private func closeups(_ items: [Item]) -> some View {
-        let closeups = Review.wantingCloseups(items)
-        if !closeups.isEmpty {
-            ListHeader(title: "A photo would help", count: "\(closeups.count)")
-                .padding(.top, 40)
-            ForEach(closeups) { ReviewBoardRow(item: $0) }
         }
     }
 }

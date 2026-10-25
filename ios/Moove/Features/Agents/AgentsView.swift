@@ -2,7 +2,8 @@ import SwiftUI
 import MooveKit
 
 /// Sell & Buy > Agents: what the agents asked for and what they paid, on one screen.
-/// Approvals ("Needs your OK", then "Decided") on top, the spending receipts (#316) below.
+/// "Needs your OK" on top, then "Agents kept you safe" (the guardrails, #225), "Decided", and the
+/// spending receipts (#316) below.
 ///
 /// The old "approvals" and "spending" screen keys still land here (`TabGroup.segment(for:)`), and
 /// "spending" scrolls down to the receipts, so `tab = "spending"` keeps working.
@@ -12,6 +13,7 @@ struct AgentsView: View {
 
     static let approvalsAnchor = "agents.approvals"
     static let receiptsAnchor = "agents.receipts"
+    static let safetyAnchor = "agents.safety"
 
     var body: some View {
         let snapshot = store.snapshot
@@ -31,11 +33,14 @@ struct AgentsView: View {
                         )
                         .padding(.top, 32)
                     } else {
-                        // No stat strip on top: "Needs your OK" and "Decided" carry their counts, and the
-                        // receipts their totals tape.
-                        ApprovalsSection()
+                        // No stat strip and no Decided list (Lisa): "Needs your OK" on top,
+                        // then the guardrails card, then the receipts with their totals tape.
+                        ApprovalsSection(parts: [.open])
                             .padding(.top, Theme.Space.l)
                             .id(Self.approvalsAnchor)
+                        SafetyCard()
+                            .padding(.top, Theme.Space.section)
+                            .id(Self.safetyAnchor)
                         SpendingSection()
                             .padding(.top, Theme.Space.section)
                             .id(Self.receiptsAnchor)

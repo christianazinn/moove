@@ -10,7 +10,7 @@ struct RootView: View {
     @State private var lastScreen: [TabGroup: String] = [:]
 
     var body: some View {
-        // Five tabs that follow the move (#129). `tab` holds the screen key,
+        // Four tabs that follow the move (#129). `tab` holds the screen key,
         // so `tab = "inventory"` from any screen picks the tab and segment.
         TabView(selection: groupBinding) {
             ForEach(TabGroup.allCases, id: \.self) { group in

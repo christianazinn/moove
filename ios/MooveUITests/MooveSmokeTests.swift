@@ -19,9 +19,10 @@ final class MooveSmokeTests: XCTestCase {
         snap("01-login")
         guest.tap()
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: slow), "tab bar after guest login")
-        for tab in ["Scan", "Items", "Sell & Buy", "Move", "Summary"] {
+        for tab in ["Scan", "Items", "Sell & Buy", "Move"] {
             XCTAssertTrue(app.tabBars.buttons[tab].exists, "\(tab) tab")
         }
+        XCTAssertFalse(app.tabBars.buttons["Summary"].exists, "Summary tab removed (decision 0129 addendum)")
         // A fresh install opens on the Scan tab.
         XCTAssertTrue(app.navigationBars["Scan"].waitForExistence(timeout: slow), "starts on Scan")
         snap("01-tabs")
@@ -41,6 +42,11 @@ final class MooveSmokeTests: XCTestCase {
         let keepPile = byId("review.pile.keep")
         XCTAssertTrue(keepPile.exists, "Keep pile on the board")
         XCTAssertLessThan(deck.frame.minY, keepPile.frame.minY, "the cards lead")
+        // Over the cards: the kg kept out of landfill (moved here from the removed Summary tab).
+        let impact = byId("review.impact")
+        XCTAssertTrue(impact.exists, "kg kept out of landfill banner")
+        XCTAssertTrue(impact.label.contains("kilograms kept out of landfill, 4 items sold or donated"), impact.label)
+        XCTAssertLessThan(impact.frame.minY, deck.frame.minY, "the banner sits above the cards")
         for d in ["keep", "sell", "donate", "trash"] {
             XCTAssertTrue(byId("review.deck.\(d)").exists, "\(d) button under the card")
         }
