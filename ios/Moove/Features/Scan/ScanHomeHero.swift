@@ -180,7 +180,7 @@ struct ScanRoomCard: View {
                 }
             }
             .accessibilityHidden(true)
-            Text(room.name).font(.system(size: 17, weight: .medium)).foregroundStyle(Theme.text)
+            Text(room.name).sansText(17, weight: .semibold).foregroundStyle(Theme.text)
             Spacer(minLength: 8)
             Image(systemName: "chevron.right")
                 .font(.system(size: 12))

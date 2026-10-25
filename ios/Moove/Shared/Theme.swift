@@ -1,45 +1,101 @@
 import SwiftUI
 import UIKit
+import CoreText
 
 /// Quiet coastal look: cream paper, deep harbor ink, slate and sage accents (Lisa's palette:
-/// #121F26 · #4F7889 · #7FA8A3 · #D1D6C8 · #F4F0D7), one sans family (SF Pro) with tabular
-/// figures, thin rules instead of cards. Every color has a light and a dark value. Opt in per
+/// #121F26 · #4F7889 · #7FA8A3 · #D1D6C8 · #F4F0D7), Forum for titles, Ysabeau Infant for text
+/// (tabular figures in rows) and Cormorant Garamond Italic for ledes, thin rules instead of cards. Every color has a light and a dark value. Opt in per
 /// screen with `.mooveScreen()`.
 ///
 /// Text colors are picked for at least 4.5:1 contrast on `bg` and `surface`
 /// in both modes. `faint` and `accent` are for rules, dots and fills only.
 enum Theme {
     // Surfaces
-    static let bg = dynamic(0xF4F0D7, 0x121F26)
-    static let surface = dynamic(0xE9E8D2, 0x1A2A32)
-    static let surface2 = dynamic(0xDDE0CF, 0x22343D)
-    static let line = dynamic(0xD1D6C8, 0x2A3D46)
-    static let lineStrong = dynamic(0xB4BEB4, 0x3B525C)
+    static let bg = dynamic(0xF4F0D7, 0x263C47)
+    static let surface = dynamic(0xE5E9DF, 0x304A56)
+    static let surface2 = dynamic(0xD7E0DA, 0x3A5765)
+    static let line = dynamic(0xC9D6D1, 0x47636F)
+    static let lineStrong = dynamic(0xA9BDBA, 0x5A7884)
     // Ink
     static let text = dynamic(0x121F26, 0xF4F0D7)
-    static let muted = dynamic(0x45626E, 0xA9B8B4)
+    static let muted = dynamic(0x45626E, 0xC5D1CB)
     /// Decorative only (chevrons, separators in meta lines); too light for body text.
-    static let faint = dynamic(0x8FA3A3, 0x5F7A80)
+    static let faint = dynamic(0x8FAFAB, 0x7E9AA0)
     // Accents
     /// Sage for dots, bars and swatches.
-    static let accent = dynamic(0x7FA8A3, 0x7FA8A3)
+    static let accent = dynamic(0x7FA8A3, 0x8FB8B2)
     /// Slate that reads as text on `bg` / `surface`.
-    static let accentStrong = dynamic(0x3E6474, 0x9CC4BE)
-    static let accentSoft = dynamic(0xDCE4D8, 0x1F3A3E)
+    static let accentStrong = dynamic(0x3E6474, 0xB2D3CE)
+    static let accentSoft = dynamic(0xD5E4E1, 0x34555A)
     /// Fill for primary buttons; `accentInk` on top passes 4.5:1 in both modes.
-    static let accentFill = dynamic(0x46707F, 0x7FA8A3)
-    static let accentFillPressed = dynamic(0x3B6170, 0x6F9893)
-    static let accentInk = dynamic(0xF4F0D7, 0x121F26)
-    static let danger = dynamic(0xA24D35, 0xD27A5E)
-    static let dangerSoft = dynamic(0xEFDCCD, 0x3A2A26)
+    static let accentFill = dynamic(0x46707F, 0x8FB8B2)
+    static let accentFillPressed = dynamic(0x3B6170, 0x7FA8A3)
+    static let accentInk = dynamic(0xF4F0D7, 0x263C47)
+    static let danger = dynamic(0xA24D35, 0xF2A68D)
+    static let dangerSoft = dynamic(0xEFDCCD, 0x4A4044)
     /// Ochre for swatches; use `ochreInk` for ochre text.
     static let ochre = dynamic(0xB48A3E, 0xCFA45A)
-    static let ochreInk = dynamic(0x7E5C1C, 0xCFA45A)
-    static let slate = dynamic(0x4F7889, 0x8FB0BF)
+    static let ochreInk = dynamic(0x7E5C1C, 0xDDB574)
+    static let slate = dynamic(0x4F7889, 0x9FC0CF)
     static let stone = dynamic(0x8C9690, 0xA0AAA4)
     // Floor plans
-    static let planFloor = dynamic(0xEEEBD4, 0x1A2A32)
+    static let planFloor = dynamic(0xEEEBD4, 0x304A56)
     static let planWall = dynamic(0x121F26, 0xF4F0D7)
+
+    // Type: three complementary faces, all OFL, bundled in `Resources/Fonts` (Lisa's picks, 2026-10-25).
+    /// Titles and big figures: Forum, a flared classical display face.
+    static let displayFontName = "Forum"
+    /// Text, labels, buttons and tags: Ysabeau Infant, a calligraphic humanist sans with single-story a/g
+    /// (variable; the file's default instance is Bold).
+    static let textFontName = "YsabeauInfant-Bold"
+    /// Ledes and short asides: Cormorant Garamond Italic (variable; default instance Light Italic).
+    static let accentFontName = "CormorantGaramond-LightItalic"
+
+    /// Navigation and tab bar titles in the app's faces (Forum for large titles). Call once at launch.
+    @MainActor static func applyBarFonts() {
+        let nav = UINavigationBar.appearance()
+        nav.titleTextAttributes = [.font: textUIFont(size: 17, weight: .semibold)]
+        if let forum = UIFont(name: displayFontName, size: 34) { nav.largeTitleTextAttributes = [.font: forum] }
+        let item = UITabBarItem.appearance()
+        let tabFont = textUIFont(size: 10.5, weight: .semibold)
+        item.setTitleTextAttributes([.font: tabFont], for: .normal)
+        item.setTitleTextAttributes([.font: tabFont], for: .selected)
+    }
+
+    /// A variable font at a weight on its `wght` axis, optionally with tabular lining figures.
+    static func variableUIFont(_ name: String, size: CGFloat, weight: CGFloat, tabular: Bool = false, fallback: UIFont) -> UIFont {
+        guard UIFont(name: name, size: size) != nil else { return fallback }
+        let wght = 0x7767_6874 // 'wght'
+        var attributes: [UIFontDescriptor.AttributeName: Any] = [
+            .name: name,
+            UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): [wght: weight],
+        ]
+        var features: [[UIFontDescriptor.FeatureKey: Int]] = [
+            [.type: kNumberCaseType, .selector: kUpperCaseNumbersSelector],
+        ]
+        if tabular { features.append([.type: kNumberSpacingType, .selector: kMonospacedNumbersSelector]) }
+        attributes[.featureSettings] = features
+        return UIFont(descriptor: UIFontDescriptor(fontAttributes: attributes), size: size)
+    }
+
+    /// Ysabeau Infant at a SwiftUI weight, a touch heavier than nominal so small text holds up.
+    static func textUIFont(size: CGFloat, weight: Font.Weight, tabular: Bool = false) -> UIFont {
+        let value: CGFloat = switch weight {
+        case .ultraLight: 250
+        case .thin: 300
+        case .light: 380
+        case .medium: 590
+        case .semibold: 670
+        case .bold: 740
+        case .heavy: 820
+        case .black: 900
+        default: 490
+        }
+        // Ysabeau's letters are a little smaller than SF Pro's at the same point size; set it 6% up to read the same.
+        let size = size * 1.06
+        return variableUIFont(textFontName, size: size, weight: value, tabular: tabular,
+                              fallback: tabular ? .monospacedDigitSystemFont(ofSize: size, weight: .regular) : .systemFont(ofSize: size))
+    }
 
     static let radiusLarge: CGFloat = 20
     static let radiusMedium: CGFloat = 14
@@ -67,15 +123,15 @@ enum Theme {
 // MARK: Type
 
 extension Font {
-    /// The app's label face (SF Pro with tabular figures; it was monospace before the 2026-10-25 restyle).
+    /// The app's label face (Ysabeau Infant with tabular figures; it was monospace before the 2026-10-25 restyle).
     /// Fixed size; prefer `.monoText(...)`, which follows Dynamic Type.
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: Font.Weight.softened(weight)).monospacedDigit()
+        Font(Theme.textUIFont(size: size, weight: Font.Weight.softened(weight), tabular: true))
     }
 }
 
 extension Font.Weight {
-    /// Bold reads heavy in SF Pro at label sizes; the restyle sets it a step lighter.
+    /// Bold reads heavy at label sizes; the restyle sets it a step lighter.
     static func softened(_ weight: Font.Weight) -> Font.Weight { weight == .black ? .bold : (weight == .bold || weight == .heavy ? .semibold : weight) }
 }
 
@@ -100,6 +156,29 @@ extension DynamicTypeSize {
     }
 }
 
+/// Forum (bundled, `Resources/Fonts`) at a fixed design size that follows Dynamic Type.
+private struct ForumFont: ViewModifier {
+    var size: CGFloat
+    var maxScale: CGFloat
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    func body(content: Content) -> some View {
+        content.font(.custom(Theme.displayFontName, fixedSize: size * min(dynamicTypeSize.textScale, maxScale)))
+    }
+}
+
+/// Cormorant Garamond Italic (bundled) at a fixed design size that follows Dynamic Type.
+private struct AccentItalicFont: ViewModifier {
+    var size: CGFloat
+    var maxScale: CGFloat
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    func body(content: Content) -> some View {
+        let s = size * min(dynamicTypeSize.textScale, maxScale)
+        content.font(Font(Theme.variableUIFont(Theme.accentFontName, size: s, weight: 500, fallback: .systemFont(ofSize: s))))
+    }
+}
+
 /// A fixed design size that scales with the reader's Dynamic Type setting.
 private struct ScaledFont: ViewModifier {
     var size: CGFloat
@@ -111,46 +190,55 @@ private struct ScaledFont: ViewModifier {
 
     func body(content: Content) -> some View {
         let s = size * min(dynamicTypeSize.textScale, maxScale)
-        // One family: "mono" text is SF Pro with tabular figures, so numbers still line up.
-        let font = Font.system(size: s, weight: monospaced ? Font.Weight.softened(weight) : weight)
-        content.font(monospaced ? font.monospacedDigit() : font)
+        // "Mono" text is Ysabeau Infant with tabular lining figures, so numbers still line up.
+        content.font(Font(Theme.textUIFont(size: s, weight: monospaced ? Font.Weight.softened(weight) : weight, tabular: monospaced)))
     }
 }
 
 extension View {
-    /// The label face (SF Pro, tabular figures) at a design size, scaled for Dynamic Type.
+    /// The label face (Ysabeau Infant, tabular figures) at a design size, scaled for Dynamic Type.
     func monoText(_ size: CGFloat, weight: Font.Weight = .regular, maxScale: CGFloat = 2.2) -> some View {
         modifier(ScaledFont(size: size, weight: weight, monospaced: true, maxScale: maxScale))
     }
 
-    /// Sans (system) at a design size, scaled for Dynamic Type.
+    /// Ysabeau Infant at a design size, scaled for Dynamic Type.
     func sansText(_ size: CGFloat, weight: Font.Weight = .regular, maxScale: CGFloat = 2.2) -> some View {
         modifier(ScaledFont(size: size, weight: weight, monospaced: false, maxScale: maxScale))
     }
 
     /// Small monospace label above a heading or section ("06 — New home").
     func eyebrow() -> some View {
-        monoText(12, weight: .medium).tracking(0.8).textCase(.uppercase).foregroundStyle(Theme.muted)
+        monoText(12, weight: .medium).tracking(0.8).textCase(.uppercase).foregroundStyle(Theme.accentStrong)
     }
 
     /// Large monospace page heading ("Your current room").
     func pageTitle() -> some View {
-        sansText(30, weight: .semibold, maxScale: 1.6).tracking(-0.6).foregroundStyle(Theme.text)
+        forumText(36, maxScale: 1.6).foregroundStyle(Theme.text)
     }
 
     /// Short sans paragraph under a page heading.
     func lede() -> some View {
-        sansText(15.5).foregroundStyle(Theme.muted).lineSpacing(4)
+        accentItalic(19).foregroundStyle(Theme.muted).lineSpacing(2)
     }
 
     /// Bold monospace section heading ("Pieces").
     func listHeading() -> some View {
-        sansText(17, weight: .semibold).tracking(-0.2).foregroundStyle(Theme.text)
+        forumText(22).foregroundStyle(Theme.text)
     }
 
     /// Bold monospace title for a block or row.
     func blockTitle() -> some View {
         sansText(16, weight: .medium).foregroundStyle(Theme.text).lineSpacing(2)
+    }
+
+    /// Cormorant Garamond Italic, the accent face (ledes and short asides), scaled for Dynamic Type.
+    func accentItalic(_ size: CGFloat, maxScale: CGFloat = 2) -> some View {
+        modifier(AccentItalicFont(size: size, maxScale: maxScale))
+    }
+
+    /// Forum, the display face (titles and big figures), at a design size scaled for Dynamic Type.
+    func forumText(_ size: CGFloat, maxScale: CGFloat = 2) -> some View {
+        modifier(ForumFont(size: size, maxScale: maxScale))
     }
 
     /// Monospace secondary line ("4.5 × 4.0 m · 2 doors").
@@ -175,7 +263,7 @@ extension View {
 
     /// A 1 pt rule under (or over) the view, like a row in a ledger.
     func ruled(_ edge: VerticalEdge = .bottom) -> some View {
-        overlay(alignment: edge == .bottom ? .bottom : .top) { Rectangle().fill(Theme.line).frame(height: 0.75) }
+        overlay(alignment: edge == .bottom ? .bottom : .top) { Rectangle().fill(Theme.accent.opacity(0.45)).frame(height: 0.75) }
     }
 }
 
@@ -215,7 +303,7 @@ struct ListHeader<Trailing: View>: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title).listHeading().accessibilityAddTraits(.isHeader)
-            if let count { Text(count).monoText(13.5).foregroundStyle(Theme.muted) }
+            if let count { Text(count).monoText(13.5).foregroundStyle(Theme.accentStrong) }
             Spacer(minLength: 8)
             trailing
         }
@@ -264,7 +352,7 @@ struct LedgerRow<Leading: View, Trailing: View>: View {
                 if chevron {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(Theme.faint)
+                        .foregroundStyle(Theme.accent)
                         .accessibilityHidden(true)
                 }
             }
@@ -293,9 +381,9 @@ struct IconTile: View {
     var body: some View {
         Image(systemName: systemName)
             .font(.system(size: size * 0.32, weight: .light))
-            .foregroundStyle(Theme.muted)
+            .foregroundStyle(Theme.accentStrong)
             .frame(width: size, height: size)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
             .accessibilityHidden(true)
     }
 }
@@ -310,8 +398,7 @@ struct StatFigure: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label).monoText(13.5).foregroundStyle(Theme.muted)
             Text(value)
-                .monoText(24, weight: .bold, maxScale: 1.6)
-                .tracking(-0.2)
+                .forumText(30, maxScale: 1.6)
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
@@ -351,7 +438,7 @@ struct PillButtonStyle: ButtonStyle {
                     case .outline, .danger:
                         Capsule()
                             .fill(configuration.isPressed ? Theme.surface : .clear)
-                            .overlay(Capsule().strokeBorder(kind == .danger ? Theme.danger : Theme.text, lineWidth: 1))
+                            .overlay(Capsule().strokeBorder(kind == .danger ? Theme.danger : Theme.accentStrong, lineWidth: 1))
                     case .text:
                         EmptyView()
                     }
@@ -364,7 +451,7 @@ struct PillButtonStyle: ButtonStyle {
         private var foreground: Color {
             switch kind {
             case .primary: Theme.accentInk
-            case .outline: Theme.text
+            case .outline: Theme.accentStrong
             case .text: configuration.isPressed ? Theme.text : Theme.muted
             case .danger: Theme.danger
             }
@@ -380,7 +467,7 @@ extension ButtonStyle where Self == PillButtonStyle {
 /// A small monospace tag, e.g. "SIMULATED" or "DEMO HOUSE".
 struct MonoTag: View {
     var text: String
-    var tone: Color = Theme.muted
+    var tone: Color = Theme.accentStrong
 
     var body: some View {
         Text(text)
@@ -391,7 +478,7 @@ struct MonoTag: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .foregroundStyle(tone)
-            .background(Capsule().fill(tone.opacity(0.10)))
+            .background(Capsule().fill(tone.opacity(0.14)))
     }
 }
 
@@ -413,7 +500,7 @@ struct PillPicker<Value: Hashable>: View {
                     .foregroundStyle(selected ? Theme.text : Theme.muted)
                     .background {
                         if selected {
-                            Capsule().fill(Theme.bg).overlay(Capsule().strokeBorder(Theme.lineStrong, lineWidth: 1))
+                            Capsule().fill(Theme.bg).overlay(Capsule().strokeBorder(Theme.accent, lineWidth: 1))
                         }
                     }
                     .contentShape(Capsule())
@@ -422,7 +509,7 @@ struct PillPicker<Value: Hashable>: View {
             }
         }
         .padding(3)
-        .background(Capsule().fill(Theme.surface))
+        .background(Capsule().fill(Theme.accentSoft))
     }
 }
 
@@ -446,7 +533,7 @@ struct ChoiceChip: View {
             .padding(.horizontal, 14)
             .frame(minHeight: 36)
             .foregroundStyle(selected ? Theme.accentInk : Theme.text)
-            .background(Capsule().fill(selected ? Theme.accentFill : Theme.surface))
+            .background(Capsule().fill(selected ? Theme.accentFill : Theme.accentSoft))
             .padding(.vertical, 4)
             .contentShape(Rectangle())
         }
@@ -518,16 +605,16 @@ extension Theme {
     /// Text colors are at least 4.5:1 on `cream`.
     enum Paper {
         /// Cream paper a shade lighter than the page (deep slate in dark mode).
-        static let cream = Color(uiColor: Theme.dynamicUIColor(0xFAF7E6, 0x1C2C34))
+        static let cream = Color(uiColor: Theme.dynamicUIColor(0xFAF7E6, 0x2E4652))
         /// Printed ink and its quieter line, on `cream`.
         static let ink = Color(uiColor: Theme.dynamicUIColor(0x121F26, 0xF4F0D7))
-        static let inkMuted = Color(uiColor: Theme.dynamicUIColor(0x45626E, 0xAEB9B3))
+        static let inkMuted = Color(uiColor: Theme.dynamicUIColor(0x45626E, 0xC0CCC6))
         /// Rules, leaders and dashes printed on paper (decorative).
-        static let rule = Color(uiColor: Theme.dynamicUIColor(0xB4BEB4, 0x3B525C))
+        static let rule = Color(uiColor: Theme.dynamicUIColor(0xA9BDBA, 0x5A7884))
         /// Cardboard.
         static let kraft = Color(uiColor: Theme.dynamicUIColor(0xDDBC8E, 0x5A4632))
         /// Paper tape.
-        static let tape = Color(uiColor: Theme.dynamicUIColor(0xE6E2C6, 0x34474C))
+        static let tape = Color(uiColor: Theme.dynamicUIColor(0xE6E2C6, 0x4A6268))
     }
 }
 
@@ -537,7 +624,7 @@ extension View {
         shadow(color: Theme.color(0x121F26).opacity(level.opacity), radius: level.radius, y: level.y)
     }
 
-    /// Display face for section and display titles (SF Pro, tight tracking; it was a serif before the restyle) (Inventory's halls, Shopping's categories),
+    /// Display face (Forum) for section and display titles (Inventory's halls, Shopping's categories),
     /// scaled for Dynamic Type up to 2×.
     func displayTitle(_ size: CGFloat = 24, weight: Font.Weight = .semibold) -> some View {
         serifType(size, weight: weight).foregroundStyle(Theme.text)
@@ -557,8 +644,10 @@ private struct DisplaySerif: ViewModifier {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     func body(content: Content) -> some View {
-        let font = Font.system(size: size * min(dynamicTypeSize.textScale, 2), weight: weight == .bold ? .semibold : weight)
-        content.font(italic ? font.italic() : font).tracking(-0.3 * size / 24)
+        // Forum has one weight; a size step up stands in for bold.
+        let scaled = size * min(dynamicTypeSize.textScale, 2) * (weight == .regular ? 1 : 1.12)
+        let font = Font.custom(Theme.displayFontName, fixedSize: scaled)
+        content.font(italic ? font.italic() : font)
     }
 }
 

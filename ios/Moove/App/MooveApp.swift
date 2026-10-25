@@ -7,6 +7,7 @@ struct MooveApp: App {
     @State private var store = MooveStore()
 
     init() {
+        Theme.applyBarFonts()
         #if DEBUG
         // UI tests: start from a fresh install's state (signed out, Scan tab).
         // Values are written rather than removed so they also shadow a
