@@ -8,7 +8,8 @@ import MooveKit
 /// so any screen can still jump with `tab = "<screen>"` and lands on the right
 /// tab and segment. The old "approvals" and "spending" keys are aliases of
 /// "agents" (Sell & Buy went from four segments to three, decision 0129 addendum),
-/// and the old "summary" key lands on Review, where the kg kept from landfill now lives.
+/// the old "summary" key lands on Review, where the kg kept from landfill now lives, and the old
+/// "newhome" and "pack" keys land on the one Move page ("pack" scrolls to Getting there).
 enum TabGroup: String, CaseIterable {
     case scan, items, sellBuy, move
 
@@ -18,7 +19,7 @@ enum TabGroup: String, CaseIterable {
         case .scan: ["scan"]
         case .items: ["inventory", "review"]
         case .sellBuy: ["listings", "shopping", "agents"]
-        case .move: ["newhome", "pack"]
+        case .move: ["move"]
         }
     }
 
@@ -41,11 +42,12 @@ enum TabGroup: String, CaseIterable {
     }
 
     /// The segment a screen key shows: itself, "agents" for the merged approvals/spending keys,
-    /// or "review" for the removed Summary tab.
+    /// "review" for the removed Summary tab, or "move" for the merged New Home and Pack.
     static func segment(for screen: String) -> String {
         switch screen {
         case "approvals", "spending": "agents"
         case "summary": "review"
+        case "newhome", "pack": "move"
         default: screen
         }
     }
@@ -62,8 +64,7 @@ enum TabGroup: String, CaseIterable {
         case "listings": "Listings"
         case "shopping": "Shopping"
         case "agents": "Agents"
-        case "newhome": "New Home"
-        case "pack": "Pack"
+        case "move": "Move"
         default: screen.capitalized
         }
     }
@@ -103,8 +104,7 @@ struct TabGroupView: View {
         case "listings": ListingsView()
         case "shopping": ShoppingView()
         case "agents": AgentsView()
-        case "newhome": NewHomeView()
-        case "pack": PackView()
+        case "move": MoveView()
         default: ScanHomeView()
         }
     }

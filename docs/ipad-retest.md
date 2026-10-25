@@ -15,7 +15,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 
 ### 1. Hide old test rooms
 - **Taps:** Items → Inventory → in the **Rooms** chips at the top, tap each old room's **⋯** (or long-press its chip) → **Hide room**.
-- **Expected:** the room disappears from Inventory, its totals, Review, the Scan hero, New Home and Pack. **Show hidden rooms (N)** appears at the bottom, and **Unhide** brings a room back.
+- **Expected:** the room disappears from Inventory, its totals, Review, the Scan hero and Move (the new home, boxes and truck). **Show hidden rooms (N)** appears at the bottom, and **Unhide** brings a room back.
 - **Report if wrong:** which screen still shows the hidden room, plus a screenshot.
 
 ### 1b. Rename a room
@@ -70,8 +70,8 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Expected:** each piece sits on the real furniture, not forward of it toward where you stood. Pieces against a wall face into the room. The ottoman appears **once**.
 - **Report if wrong:** the piece, which way it faced or how far off it was, and whether it shows twice. Screenshot.
 
-### 8. Move → New Home: "Paste a Zillow link" and "Change home"
-- **Taps:** Move → **New Home**. On the picker, tap **Paste a Zillow link** (at the top), paste a Zillow URL, optionally add a floor-plan screenshot → **Build floor plan** → **Use this home**. Then tap **Change home** (top left) and pick **Use this home** on the demo house.
+### 8. Move: "Paste a Zillow link" and "Change home"
+- **Taps:** Move (one page, no New Home / Pack pills). On the picker at the top, tap **Paste a Zillow link**, paste a Zillow URL, optionally add a floor-plan screenshot → **Build floor plan** → **Use this home**. Then tap **Change home** (under the title) and pick **Use this home** on the demo house.
 - **Expected:** the button is easy to find on the picker, and again under the title once a home is chosen. The address comes from the link. With no worker, the plan is labeled estimated.
 - **Report if wrong:** the step, plus a screenshot or the error text.
 
@@ -85,14 +85,15 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Expected:** a smooth turn with no hitch when the walls switch between tall and low.
 - **Report if wrong:** a screen recording, plus where in the turn it hitched.
 
-### 11. Pack
-- **Taps:** Move → **Pack**. Open a box, then tap **Print labels** → **4 × 6 in labels** or **Letter, 2 per page**.
+### 11. Getting there: truck and boxes
+- **Taps:** Move, scroll past the room shots to **Getting there**. Open a box, then tap **Print labels** → **4 × 6 in labels** or **Letter, 2 per page**.
 - **Expected:**
   - Box cards are colored by room (Bedroom and Bedroom 2 differ), each with a reason ("Fragile: wrapped…").
   - Box detail shows a voxel model on each line.
   - The labels PDF opens in the share sheet, with the room band, a big number and a QR code.
   - Bought items appear under **Delivered to your new home**.
   - Hidden rooms stay out.
+  - Furniture notes, Supplies, Schedule and Pieces are folded at the bottom (closed); tapping a header opens it.
 - **Report if wrong:** the box number, what's off (density, colors, a model that doesn't match), plus a screenshot or the PDF.
 
 ### 12. Agents kept you safe and the kg banner
@@ -150,6 +151,6 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Report if wrong:** a screenshot of the button or sheet.
 
 ## If merged (check `gh pr list` before you start; skip any that are still open)
-- **#286, Pack truck in 3D:** Move → Pack → Truck and crew (the 3D truck is on the card) → **Load the truck**. **Expected:** furniture goes in first against the cab, then boxes, with nothing overlapping. Tapping a piece shows its load order. **Report:** the piece that clips or floats, plus a screenshot. (If the 3D says a 10 ft truck while the card says Cargo van, that's known.)
-- **#285, mover quotes:** Pack → Truck and crew → **Get mover quotes**. **Expected:** three cards, each tagged **Estimate**, plus "Estimates from published rates. Call to book." Offline, they're labeled "Estimated on this phone". **Report:** the card, plus a screenshot.
+- **#286, Pack truck in 3D:** Move → Getting there (the 3D truck is on the truck card) → **Load the truck**. **Expected:** furniture goes in first against the cab, then boxes, with nothing overlapping. Tapping a piece shows its load order. **Report:** the piece that clips or floats, plus a screenshot. (If the 3D says a 10 ft truck while the card says Cargo van, that's known.)
+- **#285, mover quotes:** Move → Getting there → truck card → **Get mover quotes**. **Expected:** three cards, each tagged **Estimate**, plus "Estimates from published rates. Call to book." Offline, they're labeled "Estimated on this phone". **Report:** the card, plus a screenshot.
 - **#274 (Rio), bunk beds:** a bed 1.2 m or taller is drawn as a bunk bed with a ladder. **Report:** a screenshot.
