@@ -32,7 +32,7 @@ struct FloorPlan3DView: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     /// Warm paper in light mode (Theme `surface`), deep walnut in dark mode (Theme `bg`).
-    static var sceneBackground: UIColor { Theme.dynamicUIColor(0xE9E8D2, 0x121F26) }
+    static var sceneBackground: UIColor { Theme.dynamicUIColor(0xE5E9DF, 0x263C47) }
 
     /// Resolved for SwiftUI's color scheme rather than the ARView's trait collection, which is
     /// unset before the view is in a window and can lag an in-app Appearance change.
