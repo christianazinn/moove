@@ -76,8 +76,8 @@ struct ListingsView: View {
         let columns = PosterWall.columns(regularWidth: sizeClass == .regular,
                                          accessibilitySize: dynamicTypeSize.isAccessibilitySize)
         let order = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, $0) })
-        // A poster with a reason under its price runs taller.
-        let dealt = PosterWall.deal(rows, columns: columns) { store.snapshot.problem(for: $0) == nil ? 1 : 1.3 }
+        // Every poster is the same height.
+        let dealt = PosterWall.deal(rows, columns: columns) { _ in 1 }
         return HStack(alignment: .top, spacing: 18) {
             ForEach(dealt.indices, id: \.self) { c in
                 VStack(spacing: 30) {
