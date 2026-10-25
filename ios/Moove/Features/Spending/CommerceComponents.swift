@@ -21,37 +21,30 @@ struct CommercePlaceholder<Action: View>: View {
         }
     }
 
-    /// Connecting or offline, in the same frame as `EmptyState`.
+    /// Connecting or offline, in the same frame as `EmptyState`: a title only (the reason and the
+    /// next step are in the VoiceOver label).
     private var status: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 10) {
             switch state {
             case .loading:
-                HStack(spacing: 10) {
-                    ProgressView().tint(Theme.muted)
-                    Text(state.title ?? "Connecting…").blockTitle()
-                }
-                Text("Waiting for the first rows from the backend.").monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
-            case .offline(let why):
-                Label {
-                    Text(state.title ?? "Offline").blockTitle()
-                } icon: {
-                    Image(systemName: "wifi.exclamationmark").foregroundStyle(Theme.danger)
-                }
-                Text(why).monoMeta().fixedSize(horizontal: false, vertical: true)
-                Text(CommerceScreenState.offlineNextStep)
-                    .sansText(14).foregroundStyle(Theme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 4)
+                ProgressView().tint(Theme.muted)
+                Text(state.title ?? "Connecting…").blockTitle()
+            case .offline:
+                Image(systemName: "wifi.exclamationmark").foregroundStyle(Theme.muted).accessibilityHidden(true)
+                Text(state.title ?? "Offline").blockTitle()
             case .empty, .content:
                 EmptyView()
             }
         }
         .padding(.vertical, 28)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .ruled(.top)
-        .ruled()
-        .accessibilityElement(children: .contain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(statusHint)
+    }
+
+    private var statusHint: String {
+        if case .offline(let why) = state { return "\(why). \(CommerceScreenState.offlineNextStep)" }
+        return ""
     }
 }
 

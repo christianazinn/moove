@@ -34,21 +34,13 @@ struct ScanFinishedResults: View {
                 ScanResultsView(room: room, items: items, comps: store.snapshot.comps, geometry: geometry, colors: shownColors, onSelect: onSelect)
             } else if room != nil {
                 // The room landed with no items (RoomPlan found no furniture, nothing added by photo).
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("No furniture in this scan").blockTitle()
-                    Text("The room is saved. Scan again or add items by photo.")
-                        .monoMeta()
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 28)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .ruled(.top)
-                .ruled()
-                .accessibilityElement(children: .combine)
+                Text("No furniture found").blockTitle()
+                    .padding(.vertical, 28)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 HStack(spacing: 10) {
                     ProgressView().tint(Theme.accentStrong)
-                    Text("Adding your items…").monoMeta()
+                    Text("Adding items…").monoMeta()
                 }
                 .frame(maxWidth: .infinity, minHeight: 120)
             }
@@ -67,7 +59,7 @@ struct ScanFinishedScreen: View {
     @Environment(MooveStore.self) private var store
     var roomName: String
     var colors: ScanColors? = nil
-    /// The recorded demo bedroom rather than a live scan: labeled as such.
+    /// The recorded demo bedroom rather than a live scan (no tag on screen: the hero already says "Demo bedroom").
     var isDemo = false
     /// Set when the room files or photos couldn't be uploaded.
     var uploadProblem: String? = nil
@@ -99,21 +91,16 @@ struct ScanFinishedScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    if isDemo { MonoTag(text: "Demo scan", tone: Theme.ochreInk) }
-                }
                 Text(itemCount == 0 ? "Room saved" : "\(itemCount) item\(itemCount == 1 ? "" : "s") added")
                     .pageTitle()
-                    .padding(.top, 8)
-                Text(lede)
-                    .lede()
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 10)
+                if let problem {
+                    Text(problem).monoMeta().padding(.top, Theme.Space.s)
+                }
                 if let skips {
                     SkippedObjectsNotice(skips: skips, rechecked: !localSkips.isEmpty).padding(.top, 16)
                 }
                 ScanFinishedResults(roomName: roomName, colors: colors)
-                    .padding(.top, 28)
+                    .padding(.top, Theme.Space.xl)
                 Button("See inventory", action: onDone)
                     .buttonStyle(.pill(.primary))
                     .frame(maxWidth: .infinity)
@@ -125,20 +112,10 @@ struct ScanFinishedScreen: View {
         .mooveScreen()
     }
 
-    private var lede: String {
-        if pendingPhotos > 0 {
-            let why = uploadProblem.map { " (\($0))" } ?? ""
-            return "\(pendingPhotos) photo\(pendingPhotos == 1 ? "" : "s") waiting to upload\(why). Moove keeps trying for 15 minutes and adds them to their items; the room is already saved."
-        }
-        if let uploadProblem {
-            return "Photos couldn't be uploaded (\(uploadProblem)). The room is saved; items get identified once they upload."
-        }
-        if isDemo {
-            return store.backendKind == .fixture
-                ? "Demo bedroom, not a live scan: items and prices are fixture data."
-                : "Demo bedroom, not a live scan. Agents are pricing it now."
-        }
-        return "Agents are identifying and pricing them now."
+    /// Only said when something is still off: photos waiting or failed (VoiceOver gets the why).
+    private var problem: String? {
+        if pendingPhotos > 0 { return "Photos still uploading" }
+        return uploadProblem == nil ? nil : "Photos didn't upload"
     }
 }
 
@@ -157,22 +134,14 @@ private struct SkippedObjectsNotice: View {
                 if skips.count > skips.entries.count {
                     Text("and \(skips.count - skips.entries.count) more").monoMeta()
                 }
-                Text(rechecked
-                     ? "Their photos showed a wall, door or fixture rather than something you'd move, or their sizes or labels were impossible (a scanning glitch). Everything else was added."
-                     : "Their sizes or labels were impossible (a scanning glitch). Everything else was added.")
-                    .monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 4)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 8)
         } label: {
             Label(skips.summary, systemImage: "exclamationmark.triangle")
                 .monoText(13.5)
-                .foregroundStyle(Theme.ochreInk)
+                .foregroundStyle(Theme.muted)
         }
-        .tint(Theme.ochreInk)
-        .padding(12)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        .tint(Theme.muted)
     }
 }

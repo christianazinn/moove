@@ -41,9 +41,6 @@ struct ScanHomeHero: View {
                 } else {
                     Theme.surface
                 }
-                if isDemo {
-                    MonoTag(text: "Demo", tone: Theme.ochreInk).padding(14)
-                }
             }
             .frame(height: sizeClass == .regular ? 440 : 300)
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
@@ -53,10 +50,7 @@ struct ScanHomeHero: View {
             .accessibilityLabel(room.map { "\($0.name), \(items.count) objects in 3D" } ?? "Demo bedroom in 3D")
             .accessibilityAddTraits(room == nil ? [] : .isButton)
 
-            HStack(spacing: 10) {
-                Circle().fill(Theme.accent).frame(width: 8, height: 8).accessibilityHidden(true)
-                Text(caption).monoText(13.5).foregroundStyle(Theme.text)
-            }
+            Text(caption).monoText(13.5).foregroundStyle(Theme.muted).accessibilityHidden(true)
         }
         .task(id: key) {
             guard key != shownKey else { return }
@@ -66,8 +60,7 @@ struct ScanHomeHero: View {
     }
 
     private var caption: String {
-        guard let room else { return "Demo bedroom" }
-        return "\(room.name) · \(items.count) object\(items.count == 1 ? "" : "s")"
+        room?.name ?? "Demo bedroom"
     }
 
     /// Wall and floor colors: only the demo room's are known here (a real scan's are in-session).
@@ -92,34 +85,35 @@ struct ScanHomeHero: View {
     }
 }
 
-/// A scanned room as a card: its three biggest pieces as voxel thumbnails, item count and value.
+/// A scanned room as a card: its biggest piece as a voxel thumbnail and the room's name (the count
+/// and value stay in the VoiceOver label).
 struct ScanRoomCard: View {
     var room: Room
     var items: [Item]
 
     var body: some View {
         HStack(spacing: 14) {
-            HStack(spacing: -18) {
-                ForEach(items.sorted { $0.volumeM3 > $1.volumeM3 }.prefix(3)) { item in
-                    VoxelThumbnail(item, size: 52)
+            Group {
+                if let biggest = items.max(by: { $0.volumeM3 < $1.volumeM3 }) {
+                    VoxelThumbnail(biggest, size: 44)
+                } else {
+                    IconTile(systemName: "cube.transparent", size: 44)
                 }
-                if items.isEmpty { IconTile(systemName: "cube.transparent") }
             }
             .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(room.name).font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.text)
-                Text(meta).monoMeta()
-            }
+            Text(room.name).font(.system(size: 17, weight: .medium)).foregroundStyle(Theme.text)
             Spacer(minLength: 8)
             Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.muted)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.faint)
                 .accessibilityHidden(true)
         }
-        .padding(14)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(Theme.surface.opacity(0.6), in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(room.name), \(meta)")
         .accessibilityAddTraits(.isButton)
     }
 

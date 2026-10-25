@@ -22,8 +22,8 @@ extension ApprovalStatus {
 
     var tint: Color {
         switch self {
-        case .pending: Theme.ochreInk
-        case .approved: Theme.accentStrong
+        case .pending: Theme.text
+        case .approved: Theme.text
         case .denied: Theme.danger
         case .expired: Theme.muted
         }

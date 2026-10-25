@@ -33,7 +33,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 - Under XCUITest, the RealityKit `ARView` scenes that don't auto-turn (the scan finished page, the new home, its room shots, and Move's inline truck) come out **blank**. So images 2 and 7 are captured by hand, below. The Scan hero (1) renders fine.
 
 ## Capturing by hand (images 2, 7)
-**Decision (Aiden's agent):** capture on the **Offline demo**: Settings (the gear at top right) > Backend > Data source **"Offline demo (fixtures)"**. The banner reads "Offline demo: fixture data, nothing is synced". It's the only data source whose rows are known in advance, and `DemoNumbersTests` checks its figures. It has the voxel dollhouse and the new home too, so nothing here needs the **Demo** backend.
+**Decision (Aiden's agent):** capture on the **Offline demo**: Settings (the gear at top right) > Backend > Data source **"Offline demo (fixtures)"**. The banner reads "Offline demo". It's the only data source whose rows are known in advance, and `DemoNumbersTests` checks its figures. It has the voxel dollhouse and the new home too, so nothing here needs the **Demo** backend.
 
 > **⚠️ Don't approve or deny the Demo chair.** On the Demo backend (`moove-demo`, join code `4RZ9G8`), the seeded "Herman Miller Office Chair…" ($325) approval is **single-use** and meant for the judges. Capture everything on the Offline demo. If it does get used, ask Christian to run `npm run seed:demo -- --maincloud --reset-commerce` (#246).
 
@@ -49,14 +49,14 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 ### 1. Scan home: the turning voxel dollhouse
 - **Source:** CI `01-scan`. For a GIF, record 3 to 4 s of the hero turning.
 - **Screen:** Scan tab (first tab). No taps.
-- **State:** "Scan", "Scan a room.", the hero with the **DEMO** tag and "Bedroom · 12 objects", the back walls full height and the front walls low as it turns, then **Scan a room** and **Load demo scan** below. The tab bar shows all five tabs, with the Sell & Buy badge at 2.
+- **State:** "Scan", the hero with "Bedroom" under it (no Demo tag, no count), the back walls full height and the front walls low as it turns, then **Scan a room** and **Load demo scan** below. The tab bar shows all five tabs, with the Sell & Buy badge at 2.
 - **Caption:** "Scan a room with LiDAR and Moove rebuilds it as a voxel dollhouse, every piece where it stood (our recorded demo bedroom)."
 - **Track:** Spacetime (the scan imports through `import_scan_v2`), Best Planet-First Hack (the story starts here).
 - **Live swap:** a real LiDAR scan's finished page on the Demo backend (same layout, no Demo tag) is better if one is ready. Change the caption to "a real scan".
 
 ### 2. Scan finished: the room as a dollhouse
 - **Source:** by hand. Scan tab > **Load demo scan**.
-- **State:** the **Demo scan** tag, "12 items added", "Demo bedroom, not a live scan: items and prices are fixture data.", then the dollhouse: real walls with windows and a door, **back walls full height, near walls cut at 1.1 m**, items in their scanned spots and colors. Below it, "13 objects · 4.0 × 3.5 m", "1 placed by estimate", and the inventory starting with "Full size metal bed frame". Drag to turn it so two tall back walls frame the room before taking the shot.
+- **State:** "12 items added", then the dollhouse: real walls with windows and a door, **back walls full height, near walls cut at 1.1 m**, items in their scanned spots and colors. Below it (no caption), the inventory, one line per item (name and value), starting with "Full size metal bed frame". Drag to turn it so two tall back walls frame the room before taking the shot.
 - **Caption:** "The finished scan: real walls, doors and windows, tall at the back and cut low at the front, each piece colored from the scan's own frames (demo scan shown)."
 - **Track:** Spacetime, Anthropic (the photo sweep runs next and names what the scanner couldn't).
 - Loading the demo scan adds a second room, so **relaunch** before images 7 and 8.
@@ -69,14 +69,14 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 
 ### 4. Sell & Buy > Agents (receipts): the agent pays over x402
 - **Source:** CI `03-spending`.
-- **State:** the Agents screen scrolled down to its paper receipts in Courier (a sideways carousel, paged to receipt 2 of 3), scrolled to the Pricing agent receipt ("MOOVE · AGENT SPENDING", "PRICING AGENT", "3 lookups"): the line "Premium comps for "Herman Miller Aeron"", `x402`, "$0.01", **"PAID ON BASE SEPOLIA"**, **"TX 0xc794…136c"**, and below it lines with the filled **SIMULATED** mark and no link. CI also saves `03a-spending-top` (scrolled to the totals tape "TOTALS · YOUR AGENTS": **SPENT $0.01**, **SIMULATED $180.005**, **REFUSED 1**).
+- **State:** the Agents screen scrolled down to its paper receipts in Courier (a sideways carousel, paged to receipt 2 of 3), scrolled to the Pricing agent receipt ("PRICING AGENT"): the line "Premium comps for "Herman Miller Aeron"", `x402`, "$0.01", **"TX 0xc794…136c"**, and below it lines with the filled **SIMULATED** mark and no link. CI also saves `03a-spending-top` (scrolled to the totals tape "TOTALS · YOUR AGENTS": **SPENT $0.01**, **SIMULATED $180.005**).
 - **Caption:** "The pricing agent pays for its own comps, $0.01 USDC per lookup over x402: the Base Sepolia line is a real transaction, and every SIMULATED line is simulated."
 - **Track:** Coinbase x402 (the headline image), Apify (the comps come from Apify's eBay sold and Marketplace actors), Spacetime (each payment is a `payment` row).
 - Capture this on the Offline demo, whose rows are known in advance. (The hosted worker has CDP keys since Sat ~12:40 PM, but a joined phone's Agents receipts show only its own payments.)
 
 ### 5. Sell & Buy > Agents (top): a $410 listing waits for you
 - **Source:** CI `05-approvals`.
-- **State:** the Agents screen's top: **"Needs your OK · 2"**: the Sell request "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition", **$410**, with the Sell tag and SIMULATED pill; the Buy request for the "78" upholstered sofa, gray", $429.99 "from wayfair", with its own **SIMULATED** pill; and "Also sent to your phone via Auth0 Guardian when set up. Approving here works too." Further down, Decided (last 3, "Show all 4") includes the $699 KIVIK sofa with an **EXPIRED** pill ("No answer in 12 h. The agent asked again.").
+- **State:** the Agents screen's top: **"Needs your OK"**: the Sell request "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition", **$410**, with the SIMULATED pill; the Buy request for the "78" upholstered sofa, gray", $429.99 "from wayfair", with its own **SIMULATED** pill; and "Also sent to your phone via Auth0 Guardian when set up. Approving here works too." Further down, Decided (last 3, "Show all 4") includes the $699 KIVIK sofa with an **EXPIRED** pill ("No answer in 12 h. The agent asked again.").
 - **Caption:** "Claude writes the listing, and anything over your $100 limit waits for your OK, by Auth0 push or in the app (the eBay post is simulated)."
 - **Track:** Auth0 (approval over the limit; the in-app inbox is shown, the push isn't verified on a real tenant), Anthropic (the Claude-written listing).
 

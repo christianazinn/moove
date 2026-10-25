@@ -13,7 +13,7 @@ struct ListingDetailView: View {
         if let listing = store.snapshot.listings.first(where: { $0.id == listingId }) {
             content(listing, item: store.items.first { $0.id == listing.itemId })
         } else {
-            EmptyState(title: "Listing removed", detail: "This listing is no longer synced.")
+            EmptyState(title: "Listing removed", detail: "")
                 .padding(.horizontal, Theme.gutter)
                 .padding(.top, 32)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -24,116 +24,28 @@ struct ListingDetailView: View {
     private func content(_ listing: Listing, item: Item?) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                if listing.simulated {
-                    notice("Simulated post. Not live on eBay, and no buyer can see it.", systemImage: "info.circle", tint: Theme.ochre)
-                        .padding(.bottom, 20)
-                }
                 // The poster, up close (iOS 18 zooms into this page from the poster on the wall).
                 ListingPosterHero(listing: listing, item: item,
                                   style: PosterWall.style(forListingId: listing.id, straight: true))
                     .padding(.top, 10)
-                    .padding(.bottom, 24)
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(listing.title)
-                        .monoText(20, weight: .bold, maxScale: 1.6)
-                        .foregroundStyle(Theme.text)
+                    .padding(.bottom, Theme.Space.xl)
+                header(listing)
+                if let problem = failureText(listing) {
+                    Text(problem)
+                        .monoMeta()
                         .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityAddTraits(.isHeader)
-                    Text(listing.formattedPrice)
-                        .monoText(32, weight: .bold, maxScale: 1.6)
-                        .tracking(-0.3)
-                        .foregroundStyle(Theme.text)
-                        .amountText()
-                    AdaptiveLine(spacing: 10) {
-                        ListingStatusChip(status: listing.status, simulated: listing.simulated)
-                        if listing.simulated { SimulatedTag() }
-                        // A simulated listing's item number is made up, so only real posts show one.
-                        if let number = listing.displayExternalId {
-                            Text("eBay #\(number)").monoMeta()
-                        }
-                    }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(listing.accessibilitySummary + (listing.displayExternalId.map { ", eBay item \($0)" } ?? ""))
-                .accessibilityAddTraits(.isHeader)
-                switch listing.status {
-                case .awaitingApproval where store.snapshot.isShared(listing):
-                    // Shared-room item someone else owns (#195): any room member may decide it (#200).
-                    notice("Over \(store.snapshot.ownerName(listing.owner))'s approval limit. Anyone in the room can approve it, here or in Agents, to post it.",
-                           systemImage: "hourglass", tint: Theme.ochre)
-                        .padding(.top, 20)
-                case .awaitingApproval:
-                    notice("Over your approval limit. Approve it here or in Agents, or on your phone if Auth0 Guardian is set up, to post it.",
-                           systemImage: "hand.raised", tint: Theme.ochre)
-                        .padding(.top, 20)
-                default:
-                    EmptyView()
+                        .padding(.top, Theme.Space.m)
                 }
                 if let approval = pendingApproval(for: listing) {
-                    decideButtons(approval).padding(.top, 14)
+                    decideButtons(approval).padding(.top, Theme.Space.l)
                 }
-                switch listing.status {
-                case .awaitingApproval:
-                    EmptyView()
-                case .rejected:
-                    notice(store.snapshot.problem(for: listing).map { "\($0). Nothing was posted to eBay." } ?? "Not posted: the request was denied or the price changed.",
-                           systemImage: "xmark.circle", tint: Theme.danger)
-                        .padding(.top, 20)
-                case .failed:
-                    notice("Couldn't post this listing. \(store.snapshot.problem(for: listing) ?? "The listing agent hit an error"). You can still copy the text and post it yourself.",
-                           systemImage: "exclamationmark.triangle", tint: Theme.danger)
-                        .padding(.top, 20)
-                case .draft:
-                    notice("The listing agent is still drafting this. It posts once it's ready, or asks you first if it's over your limit.",
-                           systemImage: "pencil.line", tint: Theme.muted)
-                        .padding(.top, 20)
-                case .posting:
-                    notice(listing.simulated ? "The listing agent is posting this now. It's a simulated post, so nothing goes to eBay." : "The listing agent is posting this to eBay now.",
-                           systemImage: "arrow.up.circle", tint: Theme.muted)
-                        .padding(.top, 20)
-                case .posted, .sold:
-                    EmptyView()
-                }
-                VStack(alignment: .leading, spacing: 10) {
-                    if let url = listing.viewURL(uploadBase: store.uploadBaseURL) {
-                        Button { openURL(url) } label: {
-                            Label(listing.simulated ? "View simulated listing page" : "View on eBay", systemImage: "safari")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.pill(.primary))
-                    }
-                    HStack(spacing: 10) {
-                        Button {
-                            UIPasteboard.general.string = listing.copyText
-                            copied = true
-                        } label: {
-                            Label(copied ? "Copied" : "Copy text", systemImage: copied ? "checkmark" : "doc.on.doc")
-                                .frame(maxWidth: .infinity)
-                        }
-                        ShareLink(item: listing.copyText) {
-                            Label("Cross-post", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
-                        }
-                    }
-                    .buttonStyle(.pill(.outline))
-                    .accessibilityHint("Copies the title, price and description")
-                    Text("Copy the text to post on FB Marketplace or Craigslist.").monoMeta()
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.top, 28)
-
-                ListHeader(title: "About this item").padding(.top, 40)
+                actions(listing).padding(.top, 28)
                 Text(listing.description)
                     .sansText(15.5)
                     .lineSpacing(3)
                     .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 14)
-                if let item {
-                    ListHeader(title: "Details").padding(.top, 40)
-                    detail("Category", item.category)
-                    if let brand = item.brand { detail("Brand", brand) }
-                    if let value = item.estValueCents { detail("Moove estimate", value.usd) }
-                }
+                    .padding(.top, Theme.Space.section)
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.top, 16)
@@ -143,6 +55,74 @@ struct ListingDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .mooveScreen()
         .sensoryFeedback(.success, trigger: listing.status) { _, new in new == .posted || new == .sold }
+    }
+
+    /// Title, price, one status and the SIMULATED tag. The eBay item number and the approval
+    /// limit are in the VoiceOver label only.
+    private func header(_ listing: Listing) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(listing.title)
+                .monoText(20, weight: .bold, maxScale: 1.6)
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(listing.formattedPrice)
+                .monoText(32, weight: .bold, maxScale: 1.6)
+                .tracking(-0.3)
+                .foregroundStyle(Theme.text)
+                .amountText()
+            AdaptiveLine(spacing: 10) {
+                ListingStatusChip(status: listing.status, simulated: listing.simulated)
+                if listing.simulated { SimulatedTag() }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(headerLabel(listing))
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private func headerLabel(_ listing: Listing) -> String {
+        var label = listing.accessibilitySummary + (listing.displayExternalId.map { ", eBay item \($0)" } ?? "")
+        if listing.simulated { label += ". Simulated post, not live on eBay" }
+        if listing.status == .awaitingApproval {
+            let whose = store.snapshot.isShared(listing) ? "\(store.snapshot.ownerName(listing.owner))'s" : "your"
+            label += ". Over \(whose) approval limit"
+        }
+        return label
+    }
+
+    /// Only for a post that didn't happen: the agent's reason, short.
+    private func failureText(_ listing: Listing) -> String? {
+        switch listing.status {
+        case .rejected: store.snapshot.problem(for: listing) ?? "Not posted"
+        case .failed: store.snapshot.problem(for: listing) ?? "Couldn't post"
+        default: nil
+        }
+    }
+
+    private func actions(_ listing: Listing) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let url = listing.viewURL(uploadBase: store.uploadBaseURL) {
+                Button { openURL(url) } label: {
+                    Label(listing.simulated ? "View simulated listing page" : "View on eBay", systemImage: "safari")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.pill(.primary))
+            }
+            HStack(spacing: 10) {
+                Button {
+                    UIPasteboard.general.string = listing.copyText
+                    copied = true
+                } label: {
+                    Label(copied ? "Copied" : "Copy text", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        .frame(maxWidth: .infinity)
+                }
+                ShareLink(item: listing.copyText) {
+                    Label("Cross-post", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
+                }
+            }
+            .buttonStyle(.pill(.outline))
+            .accessibilityHint("Copies the title, price and description, to post on FB Marketplace or Craigslist")
+        }
     }
 
     private func pendingApproval(for listing: Listing) -> Approval? {
@@ -177,38 +157,6 @@ struct ListingDetailView: View {
             _ = await store.decide(approval, approve: approve)
             deciding = false
         }
-    }
-
-    /// Demo/attention notice: mono text on the raised surface with a colored left edge.
-    private func notice(_ text: String, systemImage: String, tint: Color) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: systemImage)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.muted)
-                .accessibilityHidden(true)
-            Text(text)
-                .monoText(13)
-                .foregroundStyle(Theme.text)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.surface, in: UnevenRoundedRectangle(bottomTrailingRadius: Theme.Radius.chip, topTrailingRadius: Theme.Radius.chip))
-        .overlay(alignment: .leading) { Rectangle().fill(tint).frame(width: 3) }
-        .accessibilityElement(children: .combine)
-    }
-
-    private func detail(_ label: String, _ value: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(label).monoText(13.5).foregroundStyle(Theme.muted)
-            Spacer(minLength: 12)
-            Text(value).rowValue()
-        }
-        .padding(.vertical, 12)
-        .frame(minHeight: 44)
-        .ruled()
-        .accessibilityElement(children: .combine)
     }
 }
 

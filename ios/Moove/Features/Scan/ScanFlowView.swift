@@ -63,29 +63,24 @@ struct ScanFlowView: View {
             if let geometry = session.geometry {
                 RoomVisualizationView(geometry: geometry)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("\(geometry.objects.count) items, \(geometry.walls.count) walls, \(geometry.openings.count) doors & windows")
-                                .monoMeta()
-                                .fixedSize(horizontal: false, vertical: true)
-                            Button {
-                                session.phase = .photos
-                            } label: {
-                                Text("Looks right: check photos").frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.pill(.primary))
+                        Button {
+                            session.phase = .photos
+                        } label: {
+                            Text("Looks right").frame(maxWidth: .infinity)
                         }
+                        .buttonStyle(.pill(.primary))
+                        .accessibilityLabel("Looks right: \(geometry.objects.count) items, \(geometry.walls.count) walls. Check photos")
                         .padding(.horizontal, Theme.gutter)
                         .padding(.vertical, 16)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Theme.bg)
-                        .ruled(.top)
                     }
             }
         case .photos:
             photoChecklist
         case .uploading(let done, let total):
             VStack(alignment: .leading, spacing: 16) {
-                Text("Uploading \(done) of \(total)…").blockTitle()
+                Text("Uploading…").blockTitle()
                 ProgressView(value: Double(done), total: Double(max(total, 1)))
                     .tint(Theme.accentFill)
                     .accessibilityLabel("Uploading \(done) of \(total)")
@@ -129,26 +124,14 @@ struct ScanFlowView: View {
     private var photoChecklist: some View {
         List {
             Section {
-                PageHeader(
-                    title: "Photograph each item.",
-                    lede: "Tap an item to retake or add its photo."
-                )
-                .padding(.top, 16)
-                .padding(.bottom, 28)
-                .chromeRow()
                 ScanRoomNameField(session: session)
+                    .padding(.top, Theme.Space.l)
                     .chromeRow()
                 if session.objects.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("RoomPlan didn't recognize any furniture", systemImage: "exclamationmark.magnifyingglass")
-                            .blockTitle()
-                        Text("Add missed items by photo below, or scan again more slowly.")
-                            .sansText(14.5)
-                            .foregroundStyle(Theme.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.top, 28)
-                    .chromeRow()
+                    Text("No furniture found")
+                        .blockTitle()
+                        .padding(.top, 28)
+                        .chromeRow()
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     Button {
@@ -163,14 +146,11 @@ struct ScanFlowView: View {
             }
             .listSectionSeparator(.hidden)
             Section {
-                ListHeader(title: "Photographed", count: "\(session.photos.count) of \(session.objects.count)")
-                    .padding(.top, 40)
-                    .chromeRow()
+                Color.clear.frame(height: Theme.Space.xl).chromeRow()
                 if session.autoPhotosPending {
-                    Label("Picking the best scan frame for each item…", systemImage: "photo.stack")
-                        .monoMeta()
+                    LoadingLine(text: "Picking photos…")
                         .padding(.vertical, 8)
-                        .ledgerListRow()
+                        .chromeRow()
                 }
                 ForEach(session.objects) { object in
                     let done = session.photos[object.id] != nil
@@ -179,20 +159,9 @@ struct ScanFlowView: View {
                         Button { photographing = object } label: {
                             HStack(spacing: 16) {
                                 photoThumb(object)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(title(object)).blockTitle()
-                                    Text(dims(object)).monoMeta()
-                                    if object.label != nil {
-                                        Text("Named by you").monoMeta()
-                                    } else if unnamed, !object.manual {
-                                        // Unrecognized, or a size its label can't have (#182).
-                                        Text("Moove names it from its photo").monoMeta()
-                                    }
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                if session.autoPhotos.contains(object.id) {
-                                    Text("Auto").monoMeta()
-                                }
+                                // One line: the name. Size, "named by you" and "auto" are in the VoiceOver label.
+                                Text(title(object)).blockTitle()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .padding(.vertical, 12)
                             .frame(minHeight: 44)
@@ -213,7 +182,7 @@ struct ScanFlowView: View {
                         Button { photographing = object } label: {
                             Image(systemName: done ? "checkmark.circle.fill" : "camera")
                                 .font(.system(size: 17, weight: done ? .regular : .light))
-                                .foregroundStyle(done ? Theme.accentStrong : Theme.text)
+                                .foregroundStyle(done ? Theme.accentStrong : Theme.muted)
                                 .frame(width: 44, height: 44)
                                 .contentShape(Rectangle())
                         }
@@ -255,7 +224,6 @@ struct ScanFlowView: View {
             .padding(.horizontal, Theme.gutter)
             .padding(.vertical, 12)
             .background(Theme.bg)
-            .ruled(.top)
         }
     }
 
@@ -275,8 +243,7 @@ struct ScanFlowView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(shown, id: \.name) { c in
-                            Label(c.n > 1 ? "\(c.name.capitalized) ×\(c.n)" : c.name.capitalized,
-                                  systemImage: ItemThumbnail.icon(for: c.name))
+                            Text(c.n > 1 ? "\(c.name.capitalized) ×\(c.n)" : c.name.capitalized)
                                 .font(.caption)
                                 .lineLimit(1)
                                 .fixedSize()
@@ -305,7 +272,7 @@ struct ScanFlowView: View {
         }
     }
 
-    static let maxFoundChips = 8
+    static let maxFoundChips = 4
 
     /// Kinds with their counts, newest kind first (the detector reports in the order it confirms).
     static func foundCounts(_ found: [String]) -> [(name: String, n: Int)] {
@@ -348,19 +315,14 @@ struct ScanFlowView: View {
         let f = { (v: Double) in v.formatted(.number.precision(.fractionLength(1))) }
         let name = o.manual ? "\(title(o)), added by photo" : "\(title(o)), \(f(o.widthM)) by \(f(o.depthM)) by \(f(o.heightM)) meters"
         let state = !done ? "no photo yet" : session.autoPhotos.contains(o.id) ? "photographed automatically from the scan" : "photographed"
-        return "\(name), \(state)"
+        let named = o.label != nil ? ", named by you" : o.category == ObjectSanity.relabelCategory && !o.manual ? ", Moove names it from its photo" : ""
+        return "\(name)\(named), \(state)"
     }
 
     private func title(_ o: ScanSession.DetectedObject) -> String {
         if let named = o.label?.title { return named }
         if o.manual { return "New item" }
         return o.category == ObjectSanity.relabelCategory ? "Unidentified item" : o.category.capitalized
-    }
-
-    private func dims(_ o: ScanSession.DetectedObject) -> String {
-        if o.manual { return "Added by photo" }
-        let f = { (v: Double) in v.formatted(.number.precision(.fractionLength(1))) }
-        return "\(f(o.widthM)) × \(f(o.depthM)) × \(f(o.heightM)) m"
     }
 }
 
