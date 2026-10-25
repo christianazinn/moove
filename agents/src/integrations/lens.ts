@@ -4,6 +4,7 @@
 // Results are cached in fixtures/lens/<hash>.json and replayed for free. Every title is
 // third-party data: it reaches Claude only through untrusted.ts.
 import { createHash } from 'node:crypto';
+import { apifyFetch } from './apify-runs.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { isIP } from 'node:net';
 import path from 'node:path';
@@ -89,12 +90,12 @@ export async function lensSearch(
   const url = new URL(`https://api.apify.com/v2/acts/${LENS_ACTOR}/run-sync-get-dataset-items`);
   url.searchParams.set('maxTotalChargeUsd', String(maxUsd));
   url.searchParams.set('timeout', '90');
-  const res = await (opts.fetch ?? fetch)(url, {
+  const res = await apifyFetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
     body: JSON.stringify({ imageUrl: photoUrl, searchType: 'visual_matches', maxResults: max, countryCode: 'US' }),
     signal: AbortSignal.timeout(110_000),
-  });
+  }, opts.fetch ?? fetch);
   if (!res.ok) {
     const err = `apify ${LENS_ACTOR}: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`;
     if (isApifyOutOfCredit(err)) {

@@ -57,7 +57,7 @@ const RETRY_BASE_MS = Number(process.env.PRICING_RETRY_BASE_MS ?? 30_000);
 
 /** Errors worth retrying later: rate/concurrency limits, upstream 5xx, network trouble. */
 export function isTransientPricingError(err: unknown): boolean {
-  return /concurrent-runs-limit|rate.?limit|too many requests|HTTP (?:429|5\d\d)\b|fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|socket hang up|timed? ?out|aborted/i.test(String(err));
+  return /concurrent-runs-limit|actor-memory-limit|memory limit of \d+MB|rate.?limit|too many requests|HTTP (?:429|5\d\d)\b|fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|socket hang up|timed? ?out|aborted/i.test(String(err));
 }
 
 // Price after vision has had its chance: details done/failed, or no photos to look at.

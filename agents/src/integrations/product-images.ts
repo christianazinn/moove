@@ -7,6 +7,7 @@
 // Everything here is third-party data: titles go to Claude only through untrusted.ts, and image
 // URLs are fetched only by loadWebImage (https, public addresses, no redirects, image bytes only).
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { apifyFetch } from './apify-runs.js';
 import path from 'node:path';
 import { config } from '../config.js';
 import { sniffType } from '../imagemeta.js';
@@ -93,13 +94,13 @@ export async function searchProductImages(
   url.searchParams.set('maxItems', String(max));
   url.searchParams.set('maxTotalChargeUsd', String(maxUsd));
   url.searchParams.set('timeout', '90');
-  const res = await (opts.fetch ?? fetch)(url, {
+  const res = await apifyFetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
     // A product shot on a plain background is what single-image 3D wants.
     body: JSON.stringify({ queries: [`${query} product photo`], maxResultsPerQuery: max }),
     signal: AbortSignal.timeout(110_000),
-  });
+  }, opts.fetch ?? fetch);
   if (!res.ok) throw new Error(`apify ${IMAGE_SEARCH_ACTOR}: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
   const rows = (await res.json()) as unknown[];
   const images = normalizeImageRows(Array.isArray(rows) ? rows : [], max);

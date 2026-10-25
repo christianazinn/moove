@@ -21,6 +21,7 @@
 // sanitized by toCandidate(), and is never put into an LLM prompt as instructions.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { apifyFetch } from './apify-runs.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
@@ -316,12 +317,12 @@ export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
     url.searchParams.set('maxItems', String(perSource));
     url.searchParams.set('maxTotalChargeUsd', String(runChargeUsd(source)));
     url.searchParams.set('timeout', '120');
-    const res = await doFetch(url, {
+    const res = await apifyFetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${opts.token}` },
       body: JSON.stringify(spec.input(q, perSource, city)),
       signal: AbortSignal.timeout(150_000),
-    });
+    }, doFetch);
     if (!res.ok) throw new Error(`apify ${spec.actor}: HTTP ${res.status} ${sanitizeText(await res.text(), 200)}`);
     return normalizeRows(source, await res.json(), opts.home).slice(0, perSource);
   }

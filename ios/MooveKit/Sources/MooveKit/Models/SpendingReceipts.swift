@@ -182,12 +182,16 @@ public struct SpendingReceipts: Sendable, Equatable {
         switch entry {
         case .payment(let p):
             let real = p.explorerURL != nil && p.status == .settled
+            var reason = failureReason(p)
+            // The comps paywall answers 502 when the Apify search behind it failed (often the free
+            // plan's run or memory limit): the lookup failed, not the payment, and nothing was charged.
+            let lookupFailed = p.status == .failed && p.rail == .x402 && (reason?.contains("HTTP 502") ?? false)
+            if lookupFailed { reason = "The listing search behind this payment failed, so it was never charged." }
             let note: String? = switch p.status {
-            case .failed: "FAILED · NO MONEY MOVED"
+            case .failed: lookupFailed ? "NOT CHARGED · LOOKUP FAILED" : "FAILED · NO MONEY MOVED"
             case .pending: "PENDING"
             case .settled: real ? "PAID ON BASE SEPOLIA" : nil
             }
-            let reason = failureReason(p)
             var line = ReceiptLine(
                 id: entry.id, rowId: p.id, kind: .payment(p.status), createdAt: p.createdAt,
                 description: p.purpose, railTag: p.rail == .visa ? "VISA" : "x402",
