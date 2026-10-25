@@ -224,7 +224,8 @@ import Testing
             var embedding: [Float]
         }
         let head = try #require(ObjectClassifierHead.bundled)
-        #expect(head.policy == .shipped)  // the bundled json has no policy block yet
+        // The bundled policy changes thresholds only: the scores (T = 1, no bias) are today's.
+        #expect(head.policy.temperature == 1 && head.policy.categoryBias.isEmpty)
         let url = try #require(Bundle.module.url(forResource: "recheck-cases", withExtension: "json", subdirectory: "Fixtures"))
         let cases = try JSONDecoder().decode([Case].self, from: Data(contentsOf: url))
         let explicit = Policy(detector: .init(mass: .top, reject: 0.6), roomPlan: .init(mass: .sum, reject: 0.7))
@@ -246,5 +247,41 @@ import Testing
         #expect(!RoomNames.words(of: o).contains("recheck"))
         let item = Item(id: 1, owner: "me", roomId: 1, name: "Chair", category: "chair", widthM: 0.5, heightM: 0.9, depthM: 0.5, attributes: ["ChairType.dining", ObjectRecheck.suspectAttribute, "UserRotate.90"])
         #expect(item.modelAttributes == ["ChairType.dining"])
+    }
+
+    // MARK: The bundled (fitted) policy
+
+    @Test func bundledPolicyIsFittedAndSane() throws {
+        let p = try #require(ObjectClassifierHead.bundled).policy
+        #expect(p != .shipped)
+        let d = try #require(p.detector.doubt), r = try #require(p.roomPlan.doubt)
+        #expect(d < p.detector.reject && r < p.roomPlan.reject)
+        #expect(p.roomPlan.reject >= ObjectRecheck.roomPlanRejectThreshold)  // never looser than shipped for RoomPlan's own
+    }
+
+    /// On the 12 iPad benchmark cases the fitted policy never rejects a real object, and every
+    /// non-item the shipped rule rejected is still rejected or at least doubted (sent to vision).
+    @Test func bundledPolicyOnTheBenchmarkCases() throws {
+        struct Case: Decodable {
+            var photo, truth, detector, action: String
+            var dimensions: [Double]
+            var embedding: [Float]
+        }
+        let head = try #require(ObjectClassifierHead.bundled)
+        let url = try #require(Bundle.module.url(forResource: "recheck-cases", withExtension: "json", subdirectory: "Fixtures"))
+        let cases = try JSONDecoder().decode([Case].self, from: Data(contentsOf: url))
+        let notItem: Set<String> = ["none", "radiator", "shower curtain", "towel rack"]
+        for c in cases {
+            let s = head.scores([c.embedding])
+            let v = ObjectRecheck.check(detectorCategory: c.detector, scores: s, width: c.dimensions[0], height: c.dimensions[1],
+                                        depth: c.dimensions[2], policy: head.policy)
+            if !notItem.contains(c.truth), case .reject = v { Issue.record("\(c.photo): real \(c.truth) rejected") }
+            if c.action == "reject" {
+                switch v {
+                case .reject, .doubt: break
+                default: Issue.record("\(c.photo): shipped rejected it, the fitted policy neither rejects nor doubts")
+                }
+            }
+        }
     }
 }

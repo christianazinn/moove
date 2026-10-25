@@ -8,6 +8,39 @@
   "a photo of a {} in a room.",
   "a cropped photo of a {}."
  ],
+ "policy": {
+  "version": 1,
+  "temperature": 1.0,
+  "categoryBias": {},
+  "recheck": {
+   "detector": {
+    "mass": "nonePlusMaxFixture",
+    "reject": 0.74,
+    "doubt": 0.3
+   },
+   "roomPlan": {
+    "mass": "sum",
+    "reject": 0.78,
+    "doubt": 0.3
+   },
+   "relabelMargin": 0.3,
+   "relabelMarginByDetector": {},
+   "unknownCategoryThreshold": 0.5
+  },
+  "fit": {
+   "script": "recog/impl/R9-policy/fit.py",
+   "backbone": "pecore",
+   "date": "2026-10-24",
+   "dataset": "CA-1M (31 captures) + iPad ipad-pipeline",
+   "nReal": 558,
+   "nNone": 409,
+   "epsReject": 0.02,
+   "delta": 0.1,
+   "biasLambda": null,
+   "thrownAwayBound": "P(real object hard-rejected) <= 0.02 at confidence 0.9 (LTT, binomial)",
+   "note": "Thresholds only (T=1, no category bias). Calibration data includes CA-1M (CC BY-NC-ND): confirm before release."
+  }
+ },
  "classes": [
   {
    "id": "backpack",
