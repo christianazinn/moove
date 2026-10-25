@@ -30,34 +30,35 @@ final class MooveSmokeTests: XCTestCase {
     func testReviewDeckSwipeToKeepAndUndo() {
         launch()
         open(tab: "Items", segment: "Review")
-        // The seeded Bedroom's one sentimental item (#243) is the only card in the deck.
+        // The flip cards hold the whole move (12 demo items); the seeded Bedroom's one
+        // sentimental item (#243) needs you, so it's on top.
         let deck = byId("review.deck")
-        XCTAssertTrue(deck.waitForExistence(timeout: slow), "Needs you deck")
-        XCTAssertTrue(text(matching: "Needs you").exists, "deck header")
-        XCTAssertTrue(byId("review.deck.progress").label.contains("1 of 1"), byId("review.deck.progress").label)
+        XCTAssertTrue(deck.waitForExistence(timeout: slow), "flip cards")
+        XCTAssertTrue(byId("review.deck.progress").label.contains("1 of 12"), byId("review.deck.progress").label)
         let card = byId("review.card.18")
-        XCTAssertTrue(card.exists, "guitar card")
-        XCTAssertTrue(card.label.hasPrefix("Yamaha acoustic guitar"), card.label)
+        XCTAssertTrue(card.exists, "guitar card on top")
+        XCTAssertTrue(card.label.hasPrefix("Yamaha acoustic guitar, needs you"), card.label)
         let keepPile = byId("review.pile.keep")
         XCTAssertTrue(keepPile.exists, "Keep pile on the board")
-        XCTAssertLessThan(deck.frame.minY, keepPile.frame.minY, "the deck leads when something needs you")
+        XCTAssertLessThan(deck.frame.minY, keepPile.frame.minY, "the cards lead")
         for d in ["keep", "sell", "donate", "trash"] {
             XCTAssertTrue(byId("review.deck.\(d)").exists, "\(d) button under the card")
         }
         snap("02-review")
 
-        // Swipe right = Keep.
+        // Tap flips the card (the details side); swiping still works.
+        card.tap()
+        // Swipe right = Keep: the next card comes up.
         card.swipeRight()
-        let done = byId("review.allDecided")
-        XCTAssertTrue(done.waitForExistence(timeout: slow), "All decided once the deck is empty")
-        XCTAssertFalse(card.exists, "card gone")
+        XCTAssertTrue(byId("review.deck.progress").waitForLabel(containing: "2 of 12", timeout: slow), byId("review.deck.progress").label)
+        XCTAssertFalse(byId("review.card.18").exists, "guitar card gone")
         snap("02-swiped")
 
         // Undo puts it back on top; the Keep button decides it again.
         byId("review.undo").firstMatch.tap()
         XCTAssertTrue(byId("review.card.18").waitForExistence(timeout: slow), "Undo brings the card back")
         byId("review.deck.keep").tap()
-        XCTAssertTrue(done.waitForExistence(timeout: slow), "All decided again")
+        XCTAssertTrue(byId("review.deck.progress").waitForLabel(containing: "2 of 12", timeout: slow), "kept again")
 
         // On the board: under Keep, marked as the user's call.
         let keep = byId("review.pile.keep")
@@ -386,5 +387,13 @@ final class MooveSmokeTests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+}
+
+private extension XCUIElement {
+    /// Waits until the element's label contains `text` (e.g. the deck's "2 of 12").
+    func waitForLabel(containing text: String, timeout: TimeInterval) -> Bool {
+        let predicate = NSPredicate(format: "label CONTAINS %@", text)
+        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: self)], timeout: timeout) == .completed
     }
 }
