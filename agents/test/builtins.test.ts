@@ -26,11 +26,31 @@ test("things that only mention a fixture are items", () => {
     ["toilet paper, 12 rolls", "decor"],
     ["bath mat", "decor"],
     ["oil-filled radiator heater", "appliance"],
-    ["chrome wall-mounted bathroom towel rack shelf", "storage"],
     ["cream fabric shower curtain with rod", "decor"],
     ["toilet brush and holder", "decor"],
     ["shower curtain with bathtub print", "decor"],
     ["black mesh office chair", "chair"],
     ["queen bed", "bed"],
+  ]) assert.equal(isBuiltInFixture({ name, category }), false, name);
+});
+
+test("doors, ceiling fans and wall-mounted hotel fixtures stay with the building (Rio, Oct 24)", () => {
+  for (const [name, category] of [
+    ["white paneled interior door with brass knob", "storage"],
+    ["brown wood-blade ceiling fan with frosted glass light kit", "fan"],
+    ["chrome wall-mounted bathroom towel rack shelf", "storage"],
+    ["white wall-mounted hair dryer", "appliance"],
+    ["white plantation window shutters", "decor"],
+    ["vertical blinds", "decor"],
+    ["recessed light", "lamp"],
+  ]) assert.equal(isBuiltInFixture({ name, category }), true, name);
+  for (const [name, category] of [
+    ["door mat", "decor"],
+    ["window fan", "fan"],
+    ["window AC unit", "appliance"],
+    ["over-the-door hooks", "storage"],
+    ["wall-mounted flat screen TV", "tv"],
+    ["freestanding chrome towel rack", "storage"],
+    ["box fan", "fan"],
   ]) assert.equal(isBuiltInFixture({ name, category }), false, name);
 });
