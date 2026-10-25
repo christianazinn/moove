@@ -175,6 +175,7 @@ struct DealRow: View {
     var ribbon: StorefrontRibbon? = nil
     @State private var working = false
     @State private var failed = false
+    @State private var confirmPay = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
@@ -295,7 +296,7 @@ struct DealRow: View {
                         .accessibilityIdentifier("deal.blocked.\(deal.id)")
                 } else {
                     // Disabled while a hold or a purchase approval is pending: that one finishes (or is denied) first.
-                    Button { choose() } label: {
+                    Button { if paysOnChoose { confirmPay = true } else { choose() } } label: {
                         if working { ProgressView() } else { Text("Choose") }
                     }
                     .buttonStyle(.pill(.primary, compact: true))
@@ -303,6 +304,12 @@ struct DealRow: View {
                     .accessibilityLabel("Choose this deal, \(deal.formattedPrice) from \(deal.source)")
                     .accessibilityHint(locked ? "Locked while a hold or an approval is pending for this item" : "")
                     .accessibilityIdentifier("deal.choose.\(deal.id)")
+                    .confirmationDialog("Buy this for \(deal.formattedPrice)?", isPresented: $confirmPay, titleVisibility: .visible) {
+                        Button("Pay \(deal.formattedPrice) to \(deal.source)") { choose() }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("The agent pays \(deal.source) \(deal.formattedPrice) now, under your approval limit. \(railNote)")
+                    }
                 }
             }
         }
@@ -314,6 +321,24 @@ struct DealRow: View {
             .foregroundStyle(deal.isChoosable ? Theme.text : Theme.muted)
             .strikethrough(!deal.isChoosable)
             .amountText()
+    }
+
+    /// Choose pays right away (no approval) for a card-checkout deal at or under the owner's
+    /// threshold; the same rule as the buy agent (FixtureBackend.runBuyAgent). Over-limit deals
+    /// get a purchase approval and marketplace deals a drafted message, so they need no confirm.
+    private var paysOnChoose: Bool {
+        guard deal.supportsCardCheckout else { return false }
+        let threshold = store.snapshot.users.first { $0.identity == store.snapshot.me }?.approvalThresholdCents ?? 10_000
+        return threshold >= 0 && deal.priceCents <= threshold
+    }
+
+    /// Never implies real money: names the rail the worker announced, or stays neutral.
+    private var railNote: String {
+        switch store.snapshot.serviceConfig.visaCheckout {
+        case .simulated: "SIMULATED: no real card is charged."
+        case .sandbox: "VISA SANDBOX: test card, no real money."
+        case .sandboxFallback, nil: "Paid with Visa (sandbox or simulated, the payment row will say which)."
+        }
     }
 
     private func choose() {
