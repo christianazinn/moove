@@ -9,6 +9,9 @@ struct AuthGate: View {
     @Environment(MooveStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
     @State private var network = NetworkWatcher()
+    /// The app's own reconnect loop (the SDK's auto-reconnect is off).
+    @State private var reconnectTask: Task<Void, Never>?
+    @State private var reconnectAttempt = 0
 
     var body: some View {
         Group {
@@ -24,17 +27,22 @@ struct AuthGate: View {
         .task(id: auth.state) { await sessionChanged() }
         // Register once the connection is up: after sign-in, and again after a
         // banner retry, since a write before that would only fail.
-        // iOS kills the socket when the iPad locks or the app goes to the background, and the
-        // SDK burns its retries while it can't reach the network, then gives up ("Offline").
-        // Coming back (or the network returning) reconnects without a tap.
+        // iOS kills the socket when the iPad locks or the app goes to the background. Coming back
+        // (or the network returning) reconnects at once; while the app is open a dropped
+        // connection retries after 1, 2, 4, 8, then every 15 s.
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { reconnectIfNeeded() }
+            if phase == .active { reconnect(now: true) } else { reconnectTask?.cancel() }
         }
         .onChange(of: network.isOnline) { _, online in
-            if online { reconnectIfNeeded() }
+            if online { reconnect(now: true) }
         }
         .onChange(of: store.status) { _, status in
-            if status == .connected { Task { await registerUser() } }
+            if status == .connected {
+                reconnectAttempt = 0
+                Task { await registerUser() }
+            } else if status.needsReconnect {
+                reconnect(now: false)
+            }
             // The SDK retries with the token it started with; an expired ID token is
             // rejected every time, so start over with a renewed one.
             if case .reconnecting = status, case .signedIn = auth.state, auth.connectedTokenExpired {
@@ -43,12 +51,27 @@ struct AuthGate: View {
         }
     }
 
-    private func reconnectIfNeeded() {
-        guard store.backendKind == .spacetime, store.status.needsReconnect else { return }
+    /// Reconnects a dropped live connection with a fresh one (renewed Auth0 token, or the guest
+    /// token): `now` when the app becomes active or the network returns, else after the backoff.
+    private func reconnect(now: Bool) {
+        guard store.backendKind == .spacetime, store.status.needsReconnect, scenePhase == .active else { return }
         switch auth.state {
-        case .signedIn: Task { await store.connect(token: await auth.spacetimeToken()) }
-        case .guest: Task { await store.connect(token: nil) }
-        case .checking, .signedOut: break
+        case .signedIn, .guest: break
+        case .checking, .signedOut: return
+        }
+        if now { reconnectAttempt = 0 } else if reconnectTask != nil { return }
+        reconnectTask?.cancel()
+        reconnectAttempt += 1
+        let delay = now ? 0 : SyncStatus.reconnectDelay(attempt: reconnectAttempt)
+        reconnectTask = Task {
+            if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+            guard !Task.isCancelled, store.status.needsReconnect else { reconnectTask = nil; return }
+            reconnectTask = nil
+            switch auth.state {
+            case .signedIn: await store.connect(token: await auth.spacetimeToken())
+            case .guest: await store.connect(token: nil)
+            case .checking, .signedOut: break
+            }
         }
     }
 
