@@ -2,7 +2,7 @@ import SwiftUI
 import MooveKit
 
 // "Moving from": which scanned rooms move. One set of picks (MooveStore `movingRoomPicks`,
-// UserDefaults `moove.newHome.rooms`) drives both New Home and Pack, so the layout, the boxes,
+// UserDefaults `moove.newHome.rooms`) drives all of Move (one row on the page), so the layout, the boxes,
 // the furniture notes and the truck all agree on what's moving.
 
 /// The "Moving from" summary: the room picks and how many kept items they bring.
@@ -93,7 +93,7 @@ struct MovingRoomsSheet: View {
 }
 
 /// "Moving from 2 rooms · 14 items ›" (opens the picker), or the empty state when no room is
-/// picked. `idPrefix`: "newHome" or "pack", for the accessibility identifiers.
+/// picked. `idPrefix` names the accessibility identifiers (Move uses "pack").
 struct MovingFromRow: View {
     var movingFrom: MovingFrom
     var idPrefix: String
