@@ -22,8 +22,8 @@ final class DevpostShotsTests: XCTestCase {
         open(tab: "Items", segment: "Inventory")
         shot("02-items")
 
-        // 4. Items > Review (before 3b, which opens an item from here): the Needs you deck
-        // (the guitar) over the Where it goes board.
+        // 4. Items > Review (before 3b, which opens an item from here): the flip cards (the
+        // guitar, which needs you, on top; "1 of 12") over the Where it goes board.
         open(tab: "Items", segment: "Review")
         _ = byId("review.deck").waitForExistence(timeout: slow)
         shot("04-review")

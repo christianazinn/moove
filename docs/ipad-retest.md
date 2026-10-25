@@ -115,12 +115,13 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Expected:** the item's detail says "Moove isn't sure which model this is…", and **Add another photo** re-identifies it.
 - **Report if wrong:** the item, plus a screenshot.
 
-### 15. Review: deck and board (Lisa's redesign)
-- **Taps:** Items → Review. If any item needs you (undecided or sentimental), drag its card right, left, up and down slowly without letting go, then swipe it for real; tap **Undo**; then decide it with a button under the card. Below, look at **Where it goes**, tap a label, then drag a row onto one of the small labels at the top of its list.
+### 15. Review: flip cards and board (Lisa's redesign)
+- **Taps:** Items → Review. The flip cards are always on top: tap the top card to flip it, tap again to flip back. Drag it right and left slowly without letting go, then swipe it for real; tap **Undo**; then decide it with a button under the card. Go through to the end and tap **Start over**. Below, look at **Where it goes**, tap a tile, then drag a row onto one of the small labels at the top of its list.
 - **Expected:**
-  - The card tilts and glows in the direction's color with a KEEP / SELL / DONATE / TRASH stamp; letting go early springs it back. A real swipe flies it off with a tap of haptics, and "2 of 3" counts up. With Reduce Motion on (Settings → Accessibility → Motion) there's no tilt.
-  - The card shows the item's voxel model (never blank); if its photo loads, a small snapshot sits in the card's corner.
-  - **Where it goes** is four box labels (Keep / Sell / Donate / Trash), taped on and a little tilted, with a big count, the total ("$500 expected", "4 kg kept from landfill") and the items fanned; no item lists. On iPad they're four across.
+  - The stack holds every item ("1 of 12"): the ones that need you first, with a **Needs you** badge (a heart when possibly sentimental), then everything the agents sorted, each saying "Moove says: Sell · worth $30, costs ~$24 to move". Items you already decided are skipped until **Start over**.
+  - The front is the item's photo, big; if no photo loads, its voxel model. Tapping turns the card in 3D to the back: voxel model, size, value range, condition, the agent's reason and the sentimental note. With Reduce Motion on (Settings → Accessibility → Motion) it crossfades and nothing tilts.
+  - The card tilts and glows in the direction's color with a KEEP / SELL stamp on either side; letting go early springs it back. A real swipe flies it off with a tap of haptics, and "2 of 12" counts up. At the end, **All done** shows the totals with **Start over**.
+  - **Where it goes** is four tiles (Keep / Sell / Donate / Trash) in the app's style: mono caps label, serif count, a colored strip on the left edge, no tilt, the total ("$500 expected", "4 kg kept from landfill") and the items fanned; no item lists. On iPad they're four across.
   - Tapping a label opens its list: each item, the agent's reason and a ⇄ change menu. On iPad, dropping a row on one of the small labels at the top moves it there.
   - With a saved New Home layout, Keep's rows are grouped by the room they go to ("→ Bedroom").
   - When nothing needs you, the board is at the top with "Nothing needs you".
