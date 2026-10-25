@@ -13,7 +13,9 @@ import Foundation
 ///   fragility. Each room also gets typical everyday contents (`itemId == nil`,
 ///   `BoxContent.estimated`): an estimate for the truck, not something scanned.
 ///   Typical books are counted once per scanned room (living room, office, then bedroom, where the estimate has books), so a
-///   one-room scan doesn't get a bedroom's and a living room's worth of books.
+///   one-room scan doesn't get a bedroom's and a living room's worth of books, and typical lines count once per
+///   room kind (a second bedroom gets about a third). Boxes, suitcases, bags, bins, fans and rugs the scan finds
+///   ride as they are (`asIsCategories`), as furniture notes.
 /// - Then boxes are filled properly (`consolidate`): within a destination room,
 ///   boxes merge when the combined volume fits one box (moving up a size, small →
 ///   medium → large, rather than adding a box) under its weight limit, and the
@@ -96,13 +98,7 @@ public enum PackingPlanner {
         // Books are counted once per scanned room, not once per destination room (see `typicalBookRooms`).
         let destinations = Set(furniture.map(\.room) + units.map(\.room)).subtracting([keepWithYouRoom]).sorted()
         let bookRooms = typicalBookRooms(destinations, units: units, scannedRooms: Set(moving.map(\.roomId)).count)
-        for room in destinations {
-            let scannedKinds = Set(units.filter { $0.room == room && $0.itemId != nil }.map(\.kind))
-            for line in PackingTemplates.typical(for: roomKind(named: room))
-            where !scannedKinds.contains(line.kind) && (line.kind != .books || bookRooms.contains(room)) {
-                units.append(PackUnit(typical: line, room: room))
-            }
-        }
+        units += typicalUnits(destinations, units: units, bookRooms: bookRooms)
         units += PackingTemplates.openFirst.map { PackUnit(typical: $0, room: openFirstRoom) }
         keepUnits += PackingTemplates.keepWithYou.map { PackUnit(typical: $0, room: keepWithYouRoom) }
         // The keep-with-you box is one group: fragile if anything in it is.
@@ -132,9 +128,48 @@ public enum PackingPlanner {
         )
     }
 
+    /// Typical everyday contents per destination room, skipping kinds the scan already has there.
+    /// They count once per room *kind*: a home's clothes, books and bedding don't triple because it
+    /// has three bedrooms (or one bedroom scanned three times as "Bedroom", "Bedroom 2", "Bedroom 3").
+    /// The first room of a kind gets a kind's full lines; any other room of that kind, or one whose
+    /// sibling's scan already found that kind, gets about a third (`extraRoomShare`), and lines that
+    /// round to nothing are left out.
+    static func typicalUnits(_ destinations: [String], units: [PackUnit], bookRooms: Set<String>) -> [PackUnit] {
+        var out: [PackUnit] = []
+        var scanned: [String: Set<PackKind>] = [:]
+        for u in units where u.itemId != nil { scanned[u.room, default: []].insert(u.kind) }
+        var counted: [RoomKind: Set<PackKind>] = [:]
+        for room in destinations {
+            let kind = roomKind(named: room) ?? .other
+            counted[kind, default: []].formUnion(scanned[room] ?? [])
+        }
+        for room in destinations {
+            let kind = roomKind(named: room) ?? .other
+            let here = scanned[room] ?? []
+            var full: Set<PackKind> = []
+            for line in PackingTemplates.typical(for: kind)
+            where !here.contains(line.kind) && (line.kind != .books || bookRooms.contains(room)) {
+                var unit = PackUnit(typical: line, room: room)
+                if counted[kind, default: []].contains(line.kind) {
+                    unit.quantity = Int((Double(line.quantity) * extraRoomShare).rounded())
+                    if unit.quantity == 0 { continue }
+                } else {
+                    full.insert(line.kind)
+                }
+                out.append(unit)
+            }
+            counted[kind, default: []].formUnion(full)
+        }
+        return out
+    }
+
+    /// Share of a room kind's typical lines that a second (third, ...) room of that kind gets.
+    static let extraRoomShare = 1.0 / 3.0
+
     /// Destination rooms that get typical books. A household's books are estimated once per scanned
     /// room, so a one-room scan headed for a bedroom and a living room doesn't get both rooms' books.
-    /// Scanned books use up a set first; the rest go to the living room, else the office, else a bedroom.
+    /// Scanned books use up a set first; the rest go to the living room, else the office, else a bedroom,
+    /// at most one room per room kind (three bedroom scans are one household's books, not three).
     static func typicalBookRooms(_ destinations: [String], units: [PackUnit], scannedRooms: Int) -> Set<String> {
         let scanned = Set(units.filter { $0.kind == .books && $0.itemId != nil }.map(\.room))
         let sets = max(0, max(1, scannedRooms) - scanned.count)
@@ -149,7 +184,12 @@ public enum PackingPlanner {
         let wanting = destinations.filter { room in
             !scanned.contains(room) && PackingTemplates.typical(for: roomKind(named: room)).contains { $0.kind == .books }
         }
-        return Set(wanting.sorted { (rank($0), $0) < (rank($1), $1) }.prefix(sets))
+        var kinds: Set<RoomKind> = Set(scanned.map { roomKind(named: $0) ?? .other })
+        var picked: [String] = []
+        for room in wanting.sorted(by: { (rank($0), $0) < (rank($1), $1) }) where picked.count < sets {
+            if kinds.insert(roomKind(named: room) ?? .other).inserted { picked.append(room) }
+        }
+        return Set(picked)
     }
 
     /// Bought pieces, with their destination room (the saved layout's, else a guess) and seller.
@@ -206,6 +246,7 @@ public enum PackingPlanner {
     static func handling(of item: Item, room: String) -> Handling {
         if isLargeFurniture(item) { return .furniture(furnitureSteps(item)) }
         let kind = PackKind(category: item.category)
+        if !item.maybeSentimental, ridesAsIs(item) { return .furniture(asIsSteps(item)) }
         let dims = [item.widthM, item.heightM, item.depthM].sorted(by: >)
         if item.maybeSentimental {
             var unit = PackUnit(item: item, kind: .keepWithYou, room: keepWithYouRoom, density: kind.density)
@@ -254,6 +295,38 @@ public enum PackingPlanner {
             unit.quantity = line.quantity * sets
             unit.why = "too much for one box, split up"
             return unit
+        }
+    }
+
+    /// Things the scan finds that ride on the truck as they are, never in a moving box: a box or a
+    /// suitcase already is one, a bag gets filled with soft things, and fans, bins, rugs and bikes
+    /// only need a wrap or a strap. Boxing each of these was most of a real three-bedroom scan's
+    /// 47 boxes (Lisa's iPad).
+    static let asIsCategories: Set<String> = [
+        "box", "boxes", "moving box", "bin", "storage bin", "basket", "laundry basket", "crate",
+        "suitcase", "luggage", "backpack", "bag", "duffel", "trash can", "fan", "heater", "vacuum",
+        "ottoman", "bean bag", "bicycle", "bike", "scooter", "stroller", "cart", "ladder", "ironing board",
+        "clothes rack", "coat rack", "yoga mat", "rug",
+    ]
+
+    static func ridesAsIs(_ item: Item) -> Bool { asIsCategories.contains(item.category.lowercased()) }
+
+    static func asIsSteps(_ item: Item) -> [String] {
+        switch item.category.lowercased() {
+        case "box", "boxes", "moving box", "bin", "storage bin", "crate":
+            return ["Already a box: tape it shut and write its room on two sides", "Stack it with the other boxes, heavy ones low"]
+        case "basket", "laundry basket":
+            return ["Fill it with soft things and stretch-wrap the top", "It rides as is, on top of the boxes"]
+        case "suitcase", "luggage", "backpack", "bag", "duffel":
+            return ["Fill it with clothes or towels and zip it shut", "It rides as is: no box needed"]
+        case "trash can":
+            return ["Empty and wash it; nest small soft things inside", "It rides as is on the truck"]
+        case "fan", "heater", "vacuum":
+            return ["Unplug it and tape the cord to it", "Wrap it in a moving blanket; it rides as is"]
+        case "rug", "yoga mat":
+            return ["Roll it up and tie it with string or stretch wrap", "Lay it along the truck wall"]
+        default:
+            return ["Wrap it in a moving blanket or strap it in", "It rides as is on the truck"]
         }
     }
 
@@ -396,6 +469,9 @@ public enum PackingPlanner {
         return group
     }
 
+    /// Over the cap, a box under this share of its usable volume may join another room's box (Misc).
+    static let miscFill = 0.6
+
     /// Boxes under this share of their usable volume get one last try at joining another box.
     static let sparseFill = 0.4
 
@@ -409,7 +485,8 @@ public enum PackingPlanner {
     ///    (the safety rules still hold: no books with fragile things, kitchen only with kitchen).
     /// 3. Fuller boxes: any two boxes of one room that the safety rules allow together and one box
     ///    holds share it (the smallest such box first), so big boxes fill before another is added.
-    /// 4-5. Only over `cap`: towels join the bathroom box, then small leftovers share a Misc box.
+    /// 4-6. Only over `cap`: towels join the bathroom box, then boxes of rooms of one kind ("Bedroom",
+    ///    "Bedroom 2") share, then small leftovers of any rooms share a Misc box.
     static func consolidate(_ boxes: [DraftBox], cap: Int = boxCap) -> [DraftBox] {
         var out = boxes
         func capacityOrder(_ ids: [Int]) -> [Int] {
@@ -463,6 +540,7 @@ public enum PackingPlanner {
         mergeToCap(&out, cap: 0, acrossRooms: false, overCap: false)
         // 4-5. Over the cap: merge harder (towels join the bathroom box, then small leftovers across rooms).
         if out.count > cap { mergeToCap(&out, cap: cap, acrossRooms: false) }
+        if out.count > cap { mergeToCap(&out, cap: cap, acrossRooms: true, sameRoomKind: true) }
         if out.count > cap { mergeToCap(&out, cap: cap, acrossRooms: true) }
         return out
     }
@@ -472,14 +550,20 @@ public enum PackingPlanner {
     /// size if needed; 4. (`acrossRooms`) a box under half full into one from another room, which
     /// becomes a Misc box whose lines remember their own room.
     /// `overCap` false (the always-on fill pass) keeps the usual kind rules: no towels in the bathroom box.
-    static func mergeToCap(_ out: inout [DraftBox], cap: Int, acrossRooms: Bool, overCap: Bool = true) {
+    /// `sameRoomKind` (with `acrossRooms`): only rooms of one kind ("Bedroom" and "Bedroom 2"), at any fill.
+    static func mergeToCap(_ out: inout [DraftBox], cap: Int, acrossRooms: Bool, sameRoomKind: Bool = false, overCap: Bool = true) {
         while out.count > cap {
             var best: (h: Int, g: Int, box: DraftBox)?
             let open = out.indices.filter { !out[$0].special }
             for h in open {
                 for g in open where g != h {
                     let sameRoom = out[h].room == out[g].room
-                    guard acrossRooms ? (!sameRoom && out[g].fill < 0.5) : sameRoom else { continue }
+                    if acrossRooms {
+                        guard !sameRoom else { continue }
+                        if sameRoomKind {
+                            guard let a = roomKind(named: out[h].room), a == roomKind(named: out[g].room) else { continue }
+                        } else if out[g].fill >= miscFill { continue }
+                    } else if !sameRoom { continue }
                     guard let merged = out[h].combined(with: out[g], relaxed: true, cap: overCap, acrossRooms: acrossRooms) else { continue }
                     if let b = best, b.box.size.usableLitres < merged.size.usableLitres - 1e-9
                         || (abs(b.box.size.usableLitres - merged.size.usableLitres) < 1e-9 && b.box.litres <= merged.litres) { continue }
@@ -919,6 +1003,13 @@ enum Reasons {
     /// Why a piece isn't boxed, with the one step that matters most.
     static func furniture(_ item: Item) -> String {
         let c = item.category.lowercased(), n = item.name.lowercased()
+        if PackingPlanner.ridesAsIs(item) {
+            switch c {
+            case "box", "boxes", "moving box", "bin", "storage bin", "crate": return "Already a box: tape it, label it"
+            case "suitcase", "luggage", "backpack", "bag", "duffel", "basket", "laundry basket": return "Rides as is: fill it with soft things"
+            default: return "Rides as is on the truck, no box needed"
+            }
+        }
         let lead = "Too big for a box: "
         if c == "mattress" || n.contains("mattress") { return lead + "bag it, carry it on its side" }
         if c == "bed" { return lead + "take it apart, bag the bolts" }

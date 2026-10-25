@@ -63,7 +63,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 
 ### 3. Items > Review: keep, sell, donate, trash
 - **Source:** CI `04-review`.
-- **State:** the kg-kept-from-landfill strip on top, then the flip-card stack ("1 of 12") with the **Yamaha acoustic guitar** on top, badged **Needs you** (possibly sentimental). The card front is the item's voxel model (every item image is a voxel model now). Swipe right keeps, left sells, up donates, down trashes, with Undo. Then the top of the **Where it goes** board with a tile per pile. If there's time, tap the card once before the shot to show its back (value, condition, Moove's reason).
+- **State:** the kg-kept-from-landfill strip on top, then the flip-card stack ("1 of 12") with the **Yamaha acoustic guitar** on top, badged **Needs you** (possibly sentimental). The card front is the item's voxel model (every item image is a voxel model now). Swipe right keeps, left sells, up donates, down trashes, with Undo. Then the top of the **Where it goes** board with a tile per pile.
 - **Caption:** "Moove suggests keep, sell, donate or trash with a reason for each, and leaves possibly sentimental items like the guitar to you (fixture data)."
 - **Track:** Anthropic (knowing where the model shouldn't decide), Best Planet-First Hack (donate and resell over trash).
 
