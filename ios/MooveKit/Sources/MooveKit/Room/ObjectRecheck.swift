@@ -19,6 +19,8 @@ import Foundation
 ///   and the classifier gives that under 0.5 (mops, brooms, dollies and tripods get called
 ///   vacuum; real vacuums score 0.57-0.99);
 /// - else keep.
+/// The head's image-prototype `clutter` class (mops, brooms, tripods...) is set aside for all of
+/// that; on its own it rejects sure clutter and sends likely clutter to vision as `other`.
 /// Thresholds were tuned on the public benchmark split (the detector's own picks on
 /// 912 public crops); see the PR for the iPad numbers. They come from the head's fitted
 /// `policy` (`ObjectClassifierLabels.json`, `Policy`) when it has one, else these
@@ -184,6 +186,32 @@ public enum ObjectRecheck {
     /// object becomes `other` for vision to name, unless a relabel applies.
     public static let confirmBelow: [String: Double] = ["vacuum": 0.5]
 
+    /// Thin floor clutter (mop, broom, dustpan, squeegee, plunger, tripod / light stand), from the
+    /// head's image-prototype rows (R5-2). Not a Moove category: `check` sets it aside (the other
+    /// scores renormalized without it, so every other rule sees the shipped probabilities) and
+    /// only uses it to reject sure clutter or hand an unsure one to vision as `other`. RoomPlan
+    /// objects ignore it.
+    public static let clutter = "clutter"
+    /// Clutter reject: p(clutter) at least this...
+    public static let clutterReject = 0.8
+    /// ...p(vacuum) under this, with and without the clutter rows (a real vacuum stays a vacuum)...
+    public static let clutterVacuumMax = 0.1
+    /// ...and the detector's category under this.
+    public static let clutterRejectGuard = 0.3
+    /// Clutter on top with at least this, and the detector's category under `clutterDeferGuard`: `other`.
+    public static let clutterDefer = 0.5
+    public static let clutterDeferGuard = 0.5
+
+    /// `scores` without `clutter`, renormalized (unchanged when there's none).
+    static func withoutClutter(_ scores: [String: Double]) -> [String: Double] {
+        guard let pc = scores[clutter] else { return scores }
+        var s = scores
+        s[clutter] = nil
+        let rest = 1 - pc
+        guard rest > 1e-9 else { return s }
+        return s.mapValues { $0 / rest }
+    }
+
     static func group(_ category: String) -> String { sameAs[category] ?? category }
 
     /// RoomPlan's own objects were right 27 of 28 times on the iPad scans, where the classifier
@@ -198,6 +226,7 @@ public enum ObjectRecheck {
     /// in the policy's doubt band, else `.keep`. Never relabels.
     public static func checkRoomPlan(category: String, scores: [String: Double], policy: Policy = .shipped) -> Verdict {
         guard !roomPlanUnchecked.contains(category) else { return .keep }
+        let scores = withoutClutter(scores)
         let bars = policy.roomPlan
         let p = nonItemMass(scores, bars.mass)?.mass ?? 0
         if p >= bars.reject {
@@ -260,7 +289,7 @@ public enum ObjectRecheck {
         let base = check(detectorCategory: det, scores: pooledScores, width: width, height: height, depth: depth, policy: policy)
         if case .reject = base { return base }
         guard history.views >= hp.minViews, history.consensus < hp.consensusBelow else { return base }
-        let nonItem = pooledScores.filter { $0.key == notAnObject || fixtures.contains($0.key) }.values.reduce(0, +)
+        let nonItem = withoutClutter(pooledScores).filter { $0.key == notAnObject || fixtures.contains($0.key) }.values.reduce(0, +)
         guard nonItem >= hp.nonItemReject else { return base }
         let labels = history.labels.keys.sorted().joined(separator: "/")
         return .reject(reason: "detector unsure (\(labels), \(Int((history.consensus * 100).rounded()))% agree), "
@@ -270,7 +299,7 @@ public enum ObjectRecheck {
     /// The classifier's object categories reweighted by the detector's label mass (see `check(..., history:)`).
     static func pooled(_ scores: [String: Double], with history: SightingMerger.LabelHistory, beta: Double, alpha: Double) -> [String: Double] {
         guard beta > 0 else { return scores }
-        let objects = scores.keys.filter { $0 != notAnObject && !fixtures.contains($0) }
+        let objects = scores.keys.filter { $0 != notAnObject && !fixtures.contains($0) && $0 != clutter }
         var members: [String: [String]] = [:]
         for c in objects { members[group(c), default: []].append(c) }
         var mass = Dictionary(uniqueKeysWithValues: objects.map { ($0, 0.0) })
@@ -296,9 +325,26 @@ public enum ObjectRecheck {
     /// `policy`: thresholds (`ObjectClassifierHead.policy`); `.doubt` only when it has a doubt bar.
     public static func check(detectorCategory det: String, scores: [String: Double], width: Double, height: Double, depth: Double,
                              policy: Policy = .shipped) -> Verdict {
+        let all = scores
+        let scores = withoutClutter(all)
         let bars = policy.detector
         let nonItem = nonItemMass(scores, bars.mass)
-        let verdict = decide(detectorCategory: det, scores: scores, width: width, height: height, depth: depth, policy: policy, nonItem: nonItem)
+        var verdict = decide(detectorCategory: det, scores: scores, width: width, height: height, depth: depth, policy: policy, nonItem: nonItem)
+        if let pc = all[clutter] {
+            func percent(_ p: Double) -> String { "\(Int((p * 100).rounded()))%" }
+            var allGroups: [String: Double] = [:], groups: [String: Double] = [:]
+            for (c, p) in all { allGroups[group(c), default: 0] += p }
+            for (c, p) in scores { groups[group(c), default: 0] += p }
+            let pSaid = groups[group(det)] ?? 0
+            if pc >= clutterReject, (allGroups["vacuum"] ?? 0) < clutterVacuumMax, (scores["vacuum"] ?? 0) < clutterVacuumMax,
+               pSaid < clutterRejectGuard {
+                return .reject(reason: "clutter (\(percent(pc)), a mop, broom or stand), detector said \(det)")
+            }
+            let top = allGroups.max { $0.value != $1.value ? $0.value < $1.value : $0.key > $1.key }?.key
+            if case .reject = verdict {} else if top == clutter, pc >= clutterDefer, pSaid < clutterDeferGuard {
+                verdict = .unknown(reason: "looks like clutter (\(percent(pc))), detector said \(det)")
+            }
+        }
         guard let doubt = bars.doubt, let m = nonItem?.mass, m >= doubt else { return verdict }
         let why = "maybe not an item (\(Int((m * 100).rounded()))% \(describe(bars.mass))), detector said \(det)"
         switch verdict {

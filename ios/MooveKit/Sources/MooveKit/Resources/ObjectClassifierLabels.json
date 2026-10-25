@@ -1,6 +1,6 @@
 {
  "model": "PE-Core-S/16-384 (Meta FAIR, Apache-2.0), image tower in ObjectClassifier.mlpackage",
- "about": "logits = logitScale * normalize(embedding) . W[class] + bias[class]; W is ObjectClassifierLabels.f16 (float16 little-endian, classes x dimension, row-major): PE-Core text embeddings of the prompts, fine-tuned as a text-anchored linear probe on public crops. category 'none' = not a movable object.",
+ "about": "logits = logitScale * normalize(embedding) . W[class] + bias[class]; W is ObjectClassifierLabels.f16 (float16 little-endian, classes x dimension, row-major): PE-Core text embeddings of the prompts, fine-tuned as a text-anchored linear probe on public crops. category 'none' = not a movable object. R5-2: rows with proto=true are image prototypes (mean PE-Core image embedding of ship-able Wikimedia Commons photos, CC0/PD/CC BY), bias = -logitScale*0.45; category 'clutter' = thin floor clutter (mop, broom, dustpan, squeegee, plunger, tripod/light stand): reject only when p(clutter) >= 0.8 and p(vacuum) < 0.1, else unknown; ignored for RoomPlan objects.",
  "dimension": 512,
  "logitScale": 100.0,
  "templates": [
@@ -568,6 +568,42 @@
    "prompts": [
     "pipe"
    ]
+  },
+  {
+   "id": "clutter_mop",
+   "category": "clutter",
+   "bias": -45.0,
+   "proto": true
+  },
+  {
+   "id": "clutter_broom",
+   "category": "clutter",
+   "bias": -45.0,
+   "proto": true
+  },
+  {
+   "id": "clutter_squeegee",
+   "category": "clutter",
+   "bias": -45.0,
+   "proto": true
+  },
+  {
+   "id": "clutter_plunger",
+   "category": "clutter",
+   "bias": -45.0,
+   "proto": true
+  },
+  {
+   "id": "clutter_tripod",
+   "category": "clutter",
+   "bias": -45.0,
+   "proto": true
+  },
+  {
+   "id": "proto_handtruck",
+   "category": "cart",
+   "bias": -45.0,
+   "proto": true
   }
  ]
 }

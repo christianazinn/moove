@@ -16,17 +16,17 @@ import Testing
 
     @Test func bundledHeadLoads() throws {
         let head = try #require(ObjectClassifierHead.bundled)
-        #expect(head.classes.count == 62)
+        #expect(head.classes.count == 68)  // 62 text rows + 6 image prototypes (5 clutter, 1 hand truck)
         #expect(head.dimension == 512)
         #expect(head.logitScale == 100)
-        for c in ["none", "scooter", "vacuum", "box", "radiator", "shower curtain", "towel rack", "storage"] {
+        for c in ["none", "scooter", "vacuum", "box", "radiator", "shower curtain", "towel rack", "storage", "clutter"] {
             #expect(head.categories.contains(c))
         }
         // Rows are unit vectors, so a class's own row scores highest for itself.
         let row = Array(head.weights[0..<512])
         #expect(abs(row.reduce(0) { $0 + $1 * $1 } - 1) < 0.01)
         let p = head.classProbabilities(row)
-        #expect(p.count == 62)
+        #expect(p.count == 68)
         #expect(abs(p.reduce(0, +) - 1) < 1e-4)
         #expect(head.classProbabilities([1, 2, 3]).isEmpty)
     }
