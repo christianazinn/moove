@@ -136,29 +136,28 @@ public enum InventoryBinder {
         }
     }
 
-    /// Items packed onto shelves: small things on the upper planks, larger ones on lower,
-    /// wider planks, and big furniture on the floor row at the bottom. Within a band items
+    /// Items packed onto shelves, smallest at the top: small and medium things first, then
+    /// larger pieces, which can share a plank with them when the widths fit, and big
+    /// furniture (beds, sofas, bookcases) on the floor row at the bottom. Within a size items
     /// keep their order (most valuable first) and go on the first plank with room
     /// (`capacity` width units, at most `maxPerShelf` items); anything wider than a plank
-    /// gets one to itself.
+    /// gets one to itself. A plank's tier is its largest item's (how tall the row stands).
     public static func shelves(_ items: [Item], capacity: Int, maxPerShelf: Int) -> [Shelf] {
         let cap = max(1, capacity), most = max(1, maxPerShelf)
-        let sized = items.map { (item: $0, size: ShelfSize.of($0)) }
+        let sized = items.enumerated()
+            .map { (offset: $0.offset, item: $0.element, size: ShelfSize.of($0.element)) }
+            .sorted { a, b in a.size != b.size ? a.size < b.size : a.offset < b.offset }
         var out: [Shelf] = []
-        for tier in [ShelfTier.upper, .lower, .floor] {
-            // Upper band: the smallest things on the top planks.
-            let band = sized.enumerated()
-                .filter { $0.element.size.tier == tier }
-                .sorted { a, b in a.element.size != b.element.size ? a.element.size < b.element.size : a.offset < b.offset }
-                .map(\.element)
+        for onFloor in [false, true] {
             var planks: [Shelf] = []
-            for entry in band {
+            for entry in sized where (entry.size == .floor) == onFloor {
                 let units = min(entry.size.units, cap)
                 if let i = planks.firstIndex(where: { $0.units + units <= cap && $0.items.count < most }) {
                     planks[i].items.append(entry.item)
                     planks[i].units += units
+                    planks[i].tier = max(planks[i].tier, entry.size.tier)
                 } else {
-                    planks.append(Shelf(tier: tier, items: [entry.item], units: units))
+                    planks.append(Shelf(tier: entry.size.tier, items: [entry.item], units: units))
                 }
             }
             out += planks

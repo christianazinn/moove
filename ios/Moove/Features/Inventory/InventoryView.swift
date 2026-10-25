@@ -367,7 +367,8 @@ struct InventoryView: View {
         .padding(.leading, 18)
         .padding(.trailing, 12)
         .padding(.vertical, 18)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // Pages share a height, like a binder's, so turning one doesn't make the screen jump.
+        .frame(maxWidth: .infinity, minHeight: dynamicTypeSize.isAccessibilitySize ? nil : 560, alignment: .topLeading)
         .background(pageBackground)
         // The open tab's color runs along the page edge it's attached to.
         .overlay(alignment: sizeClass == .regular ? .trailing : .top) { tabEdge(tab) }

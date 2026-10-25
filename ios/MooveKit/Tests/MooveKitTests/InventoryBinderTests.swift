@@ -31,12 +31,26 @@ import Testing
             item(4, "Nightstand", "table", (0.45, 0.55, 0.4), value: 4000),
         ]
         let shelves = InventoryBinder.shelves(items, capacity: 6, maxPerShelf: 3)
-        #expect(shelves.map(\.tier) == [.upper, .lower, .floor])
-        // Upper plank: the smallest first.
-        #expect(shelves[0].items.map(\.name) == ["Kettle", "Nightstand"])
-        #expect(shelves[0].units == 3)
-        #expect(shelves[1].items.map(\.name) == ["Desk"])
-        #expect(shelves[2].items.map(\.name) == ["Bed"])
+        // Kettle (1) + nightstand (2) + desk (3) share a plank, smallest first; the bed is on the floor.
+        #expect(shelves.map(\.tier) == [.lower, .floor])
+        #expect(shelves[0].items.map(\.name) == ["Kettle", "Nightstand", "Desk"])
+        #expect(shelves[0].units == 6)
+        #expect(shelves[1].items.map(\.name) == ["Bed"])
+        // On their own, small things stand on an upper plank.
+        #expect(InventoryBinder.shelves([items[1]], capacity: 6, maxPerShelf: 3).map(\.tier) == [.upper])
+    }
+
+    @Test func workDeskPacksTwoPerPlank() {
+        // The demo's Work & study page: a monitor and three large pieces fill two planks, not three.
+        let items = [
+            item(1, "Office chair", "chair", (0.65, 1.1, 0.65), value: 42000),
+            item(2, "Dell 27 inch monitor", "monitor", (0.6, 0.45, 0.2), value: 10000),
+            item(3, "IKEA Micke desk", "table", (1.05, 0.75, 0.5), value: 6000),
+            item(4, "Mesh office chair", "chair", (0.6, 1.0, 0.6), value: 3000),
+        ]
+        let shelves = InventoryBinder.shelves(items, capacity: 6, maxPerShelf: 3)
+        #expect(shelves.map { $0.items.map(\.id) } == [[2, 1], [3, 4]])
+        #expect(shelves.allSatisfy { $0.items.count >= 2 })
     }
 
     @Test func planksWrapByWidthAndCount() {
@@ -83,7 +97,8 @@ import Testing
             let placed = shelves.flatMap(\.items).map(\.id)
             #expect(placed.sorted() == entry.items.map(\.id).sorted())
             #expect(shelves.allSatisfy { $0.units <= 6 && $0.items.count <= 3 })
-            #expect(shelves.map(\.tier) == shelves.map(\.tier).sorted())
+            // The floor row is always at the bottom.
+            #expect(shelves.map { $0.tier == .floor } == shelves.map { $0.tier == .floor }.sorted { !$0 && $1 })
         }
     }
 

@@ -202,8 +202,10 @@ struct ShelfItemColumn: View {
     var body: some View {
         let standing = ShelfMetrics.spriteHeight(tier)
         let wood = tier == .floor ? FloorBoards.height : ShelfPlank.height
+        // On a shared plank each piece keeps its own size (a monitor next to a desk stays smaller).
+        let own = min(standing, ShelfMetrics.spriteHeight(ShelfSize.of(item).tier))
         VStack(spacing: 0) {
-            ShelfSprite(item: item, size: standing)
+            ShelfSprite(item: item, size: own)
                 .frame(height: standing, alignment: .bottom)
             Color.clear.frame(height: wood - 3)
             // The string and the tag.
