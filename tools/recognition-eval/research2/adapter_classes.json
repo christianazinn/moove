@@ -1,0 +1,356 @@
+{
+ "classes": [
+  "backpack",
+  "bag",
+  "bathtub",
+  "bed",
+  "bicycle",
+  "box",
+  "dolly_cart",
+  "ceiling_fan",
+  "chair",
+  "office_chair",
+  "fan",
+  "guitar",
+  "heater",
+  "ironing_board",
+  "ladder",
+  "lamp",
+  "laptop",
+  "microwave",
+  "mirror",
+  "monitor",
+  "ottoman",
+  "plant",
+  "radiator",
+  "refrigerator",
+  "rug",
+  "scooter",
+  "shelf",
+  "shower_curtain",
+  "sink",
+  "sofa",
+  "bookshelf",
+  "cabinet",
+  "dresser",
+  "nightstand",
+  "stroller",
+  "suitcase",
+  "desk",
+  "table",
+  "television",
+  "toilet",
+  "towel_rack",
+  "trash_can",
+  "vacuum",
+  "washing_machine",
+  "yoga_mat",
+  "art",
+  "bean_bag",
+  "clothes_rack",
+  "coat_rack",
+  "neg_wall",
+  "neg_door",
+  "neg_window",
+  "neg_floor",
+  "neg_ceiling",
+  "neg_corner",
+  "neg_clothes",
+  "neg_curtain",
+  "neg_doorframe",
+  "neg_plastic",
+  "neg_panel",
+  "neg_switch",
+  "neg_pipe"
+ ],
+ "labels": [
+  "backpack",
+  "bag",
+  "bathtub",
+  "bed",
+  "bicycle",
+  "box",
+  "cart",
+  "ceiling fan",
+  "chair",
+  "chair",
+  "fan",
+  "guitar",
+  "heater",
+  "ironing board",
+  "ladder",
+  "lamp",
+  "laptop",
+  "microwave",
+  "mirror",
+  "monitor",
+  "ottoman",
+  "plant",
+  "radiator",
+  "refrigerator",
+  "rug",
+  "scooter",
+  "shelf",
+  "shower curtain",
+  "sink",
+  "sofa",
+  "storage",
+  "storage",
+  "storage",
+  "storage",
+  "stroller",
+  "suitcase",
+  "table",
+  "table",
+  "television",
+  "toilet",
+  "towel rack",
+  "trash can",
+  "vacuum",
+  "washerDryer",
+  "yoga mat",
+  "art",
+  "bean bag",
+  "clothes rack",
+  "coat rack",
+  "none",
+  "none",
+  "none",
+  "none",
+  "none",
+  "none",
+  "none",
+  "none",
+  "none",
+  "none",
+  "none",
+  "none",
+  "none"
+ ],
+ "logit_scale": 100.0,
+ "usage": "logits = 100 * normalize(image_embedding) @ W.T ; label = labels[argmax]; label 'none' or radiator/shower curtain/towel rack => not a movable object",
+ "prompts": {
+  "backpack": [
+   "backpack"
+  ],
+  "bag": [
+   "duffel bag"
+  ],
+  "bathtub": [
+   "bathtub"
+  ],
+  "bed": [
+   "bed",
+   "bunk bed"
+  ],
+  "bicycle": [
+   "bicycle"
+  ],
+  "box": [
+   "cardboard box",
+   "moving box"
+  ],
+  "dolly_cart": [
+   "hand truck",
+   "furniture dolly",
+   "rolling cart"
+  ],
+  "ceiling_fan": [
+   "ceiling fan"
+  ],
+  "chair": [
+   "chair",
+   "armchair",
+   "folding chair"
+  ],
+  "office_chair": [
+   "office chair"
+  ],
+  "fan": [
+   "electric fan",
+   "standing fan"
+  ],
+  "guitar": [
+   "guitar"
+  ],
+  "heater": [
+   "space heater",
+   "portable electric heater"
+  ],
+  "ironing_board": [
+   "ironing board"
+  ],
+  "ladder": [
+   "ladder",
+   "step ladder"
+  ],
+  "lamp": [
+   "floor lamp",
+   "table lamp",
+   "desk lamp"
+  ],
+  "laptop": [
+   "laptop"
+  ],
+  "microwave": [
+   "microwave oven"
+  ],
+  "mirror": [
+   "mirror"
+  ],
+  "monitor": [
+   "computer monitor",
+   "computer monitor on a desk"
+  ],
+  "ottoman": [
+   "ottoman",
+   "footstool"
+  ],
+  "plant": [
+   "potted plant",
+   "houseplant"
+  ],
+  "radiator": [
+   "radiator"
+  ],
+  "refrigerator": [
+   "refrigerator",
+   "mini fridge"
+  ],
+  "rug": [
+   "rug",
+   "carpet"
+  ],
+  "scooter": [
+   "kick scooter",
+   "electric scooter"
+  ],
+  "shelf": [
+   "wall shelf",
+   "floating shelf",
+   "shelving unit"
+  ],
+  "shower_curtain": [
+   "shower curtain"
+  ],
+  "sink": [
+   "sink"
+  ],
+  "sofa": [
+   "sofa",
+   "couch"
+  ],
+  "bookshelf": [
+   "bookshelf"
+  ],
+  "cabinet": [
+   "cabinet"
+  ],
+  "dresser": [
+   "dresser",
+   "chest of drawers"
+  ],
+  "nightstand": [
+   "nightstand"
+  ],
+  "stroller": [
+   "baby stroller"
+  ],
+  "suitcase": [
+   "suitcase"
+  ],
+  "desk": [
+   "desk"
+  ],
+  "table": [
+   "table",
+   "wooden table",
+   "dining table",
+   "coffee table"
+  ],
+  "television": [
+   "television",
+   "tv"
+  ],
+  "toilet": [
+   "toilet"
+  ],
+  "towel_rack": [
+   "towel rack"
+  ],
+  "trash_can": [
+   "trash can"
+  ],
+  "vacuum": [
+   "vacuum cleaner"
+  ],
+  "washing_machine": [
+   "washing machine"
+  ],
+  "yoga_mat": [
+   "yoga mat"
+  ],
+  "art": [
+   "framed picture",
+   "painting"
+  ],
+  "bean_bag": [
+   "bean bag chair"
+  ],
+  "clothes_rack": [
+   "clothes rack"
+  ],
+  "coat_rack": [
+   "coat rack"
+  ],
+  "neg_wall": [
+   "wall",
+   "blank wall"
+  ],
+  "neg_door": [
+   "door",
+   "doorway"
+  ],
+  "neg_window": [
+   "window"
+  ],
+  "neg_floor": [
+   "floor"
+  ],
+  "neg_ceiling": [
+   "ceiling"
+  ],
+  "neg_corner": [
+   "empty corner of a room"
+  ],
+  "neg_clothes": [
+   "pile of clothes"
+  ],
+  "neg_curtain": [
+   "curtain"
+  ],
+  "neg_doorframe": [
+   "door frame"
+  ],
+  "neg_plastic": [
+   "plastic sheeting",
+   "black plastic sheet on the floor"
+  ],
+  "neg_panel": [
+   "electrical panel",
+   "fuse box"
+  ],
+  "neg_switch": [
+   "light switch",
+   "power outlet"
+  ],
+  "neg_pipe": [
+   "pipe"
+  ]
+ },
+ "templates": [
+  "a photo of a {}.",
+  "a photo of a {} in a room.",
+  "a cropped photo of a {}."
+ ]
+}
