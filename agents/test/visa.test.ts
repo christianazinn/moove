@@ -335,7 +335,7 @@ test("authorize.net decline (responseCode 2) is a decline with the error text, b
   assert.match(r.reason!, /2: This transaction has been declined\./);
   assert.equal(payments[0].status, "failed");
   assert.equal(sim.calls.authorize, 0, "a decline never falls back");
-  assert.equal(co.remaining("buy"), 50_000n);
+  assert.equal(co.remaining("buy", "user-1"), 50_000n);
 });
 
 test("authorize.net held for review (responseCode 4) is not a usable hold", async () => {
@@ -420,7 +420,7 @@ test("simulated purchase records pending -> settled, labeled simulated everywher
     assert.equal(e.data.rail, "visa");
   }
   assert.deepEqual(events.map((e) => e.kind), ["tool_call", "payment", "tool_call", "payment"]);
-  assert.equal(co.remaining("buy"), 50_000n - 12_345n);
+  assert.equal(co.remaining("buy", "user-1"), 50_000n - 12_345n);
 });
 
 test("simulated ids are unique across backend instances (worker restarts)", async () => {
@@ -468,7 +468,7 @@ test("above the threshold with no approval: needs_approval and nothing is author
   assert.equal(s.calls.authorize, 0);
   assert.equal(payments.length, 0);
   assert.deepEqual(events.map((e) => e.kind), ["approval"]);
-  assert.equal(co.remaining("buy"), 50_000n);
+  assert.equal(co.remaining("buy", "user-1"), 50_000n);
 });
 
 test("simulated checkout labels the pending and refusal steps too; the sandbox does not", async () => {
@@ -524,7 +524,7 @@ test("an approval denied while the hold is in flight voids it and never captures
   assert.equal(s.calls.void, 1);
   assert.equal(payments[0].status, "failed");
   assert.equal(events.at(-1)!.data.voided, true);
-  assert.equal(co.remaining("buy"), 50_000n);
+  assert.equal(co.remaining("buy", "user-1"), 50_000n);
 });
 
 test("stillValid returning a reason voids the hold", async () => {
@@ -548,7 +548,7 @@ test("calling capture() directly still enforces the approval gate", async () => 
   assert.equal(s.calls.capture, 0);
   assert.equal(s.calls.void, 1);
   assert.equal(payments[0].status, "failed");
-  assert.equal(co.remaining("buy"), 50_000n);
+  assert.equal(co.remaining("buy", "user-1"), 50_000n);
 });
 
 test("a hold can be closed only once: no double release, no release after capture", async () => {
@@ -561,13 +561,13 @@ test("a hold can be closed only once: no double release, no release after captur
   await co.void(c, h1, "first");
   await assert.rejects(co.void(c, h1, "second"), /already captured or voided/);
   await assert.rejects(co.capture(c, h1), /already captured or voided/);
-  assert.equal(co.remaining("buy"), 50_000n);
+  assert.equal(co.remaining("buy", "user-1"), 50_000n);
 
   const h2 = await co.authorize(c);
   await co.capture(c, h2);
   await assert.rejects(co.void(c, h2, "late"), /already captured or voided/);
   await assert.rejects(co.capture(c, h2), /already captured or voided/);
-  assert.equal(co.remaining("buy"), 49_000n);
+  assert.equal(co.remaining("buy", "user-1"), 49_000n);
   assert.equal(s.calls.capture, 1);
   assert.equal(s.calls.void, 1);
 
@@ -592,7 +592,7 @@ test("a capture decline voids the hold and releases budget", async () => {
   assert.equal(r.status, "declined");
   assert.deepEqual(server.seen.map((s) => s.kind), ["authorize", "capture", "reverse"]);
   assert.equal(payments[0].status, "failed");
-  assert.equal(co.remaining("buy"), 50_000n);
+  assert.equal(co.remaining("buy", "user-1"), 50_000n);
 });
 
 // ---------- ledger ----------
@@ -620,11 +620,11 @@ test("budget is released after a void or a decline so a later purchase fits", as
   const { sink } = memorySink();
   const co = new VisaCheckout({ sink, backend: createSimulatedBackend({ declineOverCents: 9_000n }), ledger: ledger(10_000n, 10_000n) });
   assert.equal((await co.purchase(ctx({ amountCents: 9_500n }))).status, "declined");
-  assert.equal(co.remaining("buy"), 10_000n);
+  assert.equal(co.remaining("buy", "user-1"), 10_000n);
   assert.equal((await co.purchase(ctx({ amountCents: 9_000n, stillValid: () => "nope" }))).status, "voided");
-  assert.equal(co.remaining("buy"), 10_000n);
+  assert.equal(co.remaining("buy", "user-1"), 10_000n);
   assert.equal((await co.purchase(ctx({ amountCents: 9_000n }))).status, "captured");
-  assert.equal(co.remaining("buy"), 1_000n);
+  assert.equal(co.remaining("buy", "user-1"), 1_000n);
 });
 
 test("concurrent purchases cannot overspend the cap", async () => {
@@ -632,7 +632,25 @@ test("concurrent purchases cannot overspend the cap", async () => {
   const co = new VisaCheckout({ sink, backend: createSimulatedBackend({ delayMs: 5 }), ledger: ledger(10_000n, 10_000n) });
   const rs = await Promise.all([1, 2, 3, 4].map(() => co.purchase(ctx({ amountCents: 4_000n }))));
   assert.equal(rs.filter((r) => r.status === "captured").length, 2);
-  assert.equal(co.remaining("buy"), 2_000n);
+  assert.equal(co.remaining("buy", "user-1"), 2_000n);
+});
+
+test("the card budget is per user: one user using theirs up doesn't refuse another", async () => {
+  const { sink } = memorySink();
+  const co = new VisaCheckout({ sink, backend: createSimulatedBackend(), ledger: ledger(20_000n, 15_000n) });
+  const alice = { toHexString: () => "c200aa" };
+  const bob = { toHexString: () => "c200bb" };
+  co.seedSpent("buy", bob, 1_000n);
+  assert.equal((await co.purchase(ctx({ owner: alice, amountCents: 15_000n }))).status, "captured");
+  assert.match(co.spendBlocker("buy", alice, 6_000n)!, /would exceed the buy card budget \(\$50\.00 of \$200\.00 left\)/);
+  assert.equal((await co.purchase(ctx({ owner: alice, amountCents: 6_000n }))).status, "refused");
+  // Bob has his own $200, minus what was seeded for him; the per-purchase max still applies to him.
+  assert.equal(co.remaining("buy", bob), 19_000n);
+  assert.equal(co.spendBlocker("buy", bob, 15_000n), undefined);
+  assert.match(co.spendBlocker("buy", bob, 15_001n)!, /per-purchase max/);
+  assert.equal((await co.purchase(ctx({ owner: bob, amountCents: 15_000n }))).status, "captured");
+  assert.equal(co.remaining("buy", alice), 5_000n);
+  assert.equal(co.remaining("buy", bob), 4_000n);
 });
 
 // ---------- fallback ----------
@@ -695,7 +713,7 @@ test("a decline does not fall back", async () => {
   assert.equal(r.simulated, false);
   assert.match(r.reason!, /PROCESSOR_DECLINED/);
   assert.equal(sim.calls.authorize, 0);
-  assert.equal(co.remaining("buy"), 50_000n);
+  assert.equal(co.remaining("buy", "user-1"), 50_000n);
 });
 
 test("a 401 without a fallback is a declined purchase with budget released", async () => {
@@ -705,7 +723,7 @@ test("a 401 without a fallback is a declined purchase with budget released", asy
   const r = await co.purchase(ctx());
   assert.equal(r.status, "declined");
   assert.equal(payments.length, 0);
-  assert.equal(co.remaining("buy"), 50_000n);
+  assert.equal(co.remaining("buy", "user-1"), 50_000n);
 });
 
 // ---------- env wiring ----------
@@ -790,9 +808,9 @@ test("explicit authorizenet: a network failure is retryable and does not fall ba
 
 test("createVisaCheckout budgets: defaults, and an explicit 0 cap means no spending", async () => {
   const { sink } = memorySink();
-  assert.equal(createVisaCheckout(sink, {}).remaining("buy"), 150_000n);
+  assert.equal(createVisaCheckout(sink, {}).remaining("buy", "user-1"), 150_000n);
   const zero = createVisaCheckout(sink, { VISA_SPEND_CAP_USD: "0", VISA_SIM_DELAY_MS: "0" });
-  assert.equal(zero.remaining("buy"), 0n);
+  assert.equal(zero.remaining("buy", "user-1"), 0n);
   assert.equal((await zero.purchase(ctx({ amountCents: 100n }))).status, "refused");
 });
 
@@ -842,7 +860,7 @@ test("a capture that fails in transit stays pending, keeps the budget and is not
   assert.equal(r.status, "unknown");
   assert.equal(s.calls.void, 0);
   assert.equal(payments[0].status, "pending");
-  assert.equal(l.spentBy("buy"), 12_345n);
+  assert.equal(l.spentBy("buy", "user-1"), 12_345n);
 });
 
 test("a reversal that fails keeps the hold counted against the budget", async () => {
@@ -853,14 +871,14 @@ test("a reversal that fails keeps the hold counted against the budget", async ()
   const visa = new VisaCheckout({ sink, backend, ledger: l });
   const r = await visa.purchase(ctx({ stillValid: () => "user picked another deal" }));
   assert.equal(r.status, "voided");
-  assert.equal(l.spentBy("buy"), 12_345n);
+  assert.equal(l.spentBy("buy", "user-1"), 12_345n);
 });
 
 test("seeded spend from earlier runs counts toward the cap", async () => {
   const { sink } = memorySink();
   const s = spy(createSimulatedBackend());
   const visa = new VisaCheckout({ sink, backend: s.backend, ledger: ledger(20_000n) });
-  visa.seedSpent("buy", 10_000n);
+  visa.seedSpent("buy", "user-1", 10_000n);
   const r = await visa.purchase(ctx());
   assert.equal(r.status, "refused");
   assert.equal(s.calls.authorize, 0);
@@ -879,7 +897,7 @@ test("explicit VISA_PROVIDER=acceptance: a 401 from bad keys is a failed checkou
   assert.equal(payments.length, 0);
   assert.ok(events.some((e) => e.kind === "error" && /401/.test(e.message)));
   assert.ok(!events.some((e) => /\[SIMULATED\]/.test(e.message)));
-  assert.equal(visa.remaining("buy"), 150_000n);
+  assert.equal(visa.remaining("buy", "user-1"), 150_000n);
 });
 
 test("explicit VISA_PROVIDER=acceptance with missing keys fails every checkout loudly", async () => {
@@ -900,7 +918,7 @@ test("explicit provider: a 502 is retryable and does not fall back unless VISA_F
   assert.equal(r.status, "declined");
   assert.equal(r.retryable, true);
   assert.equal(payments.length, 0);
-  assert.equal(strict.remaining("buy"), 150_000n);
+  assert.equal(strict.remaining("buy", "user-1"), 150_000n);
 
   const lenient = createVisaCheckout(sink, { ...ENV_KEYS, VISA_PROVIDER: "acceptance", VISA_FALLBACK_SIMULATED: "1", VISA_SIM_DELAY_MS: "0" }, server.fetch);
   const r2 = await lenient.purchase(ctx());
