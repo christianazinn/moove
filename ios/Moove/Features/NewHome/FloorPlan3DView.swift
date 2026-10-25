@@ -21,6 +21,8 @@ struct FloorPlan3DView: UIViewRepresentable {
     var floorColor: VoxelColor? = nil
     /// Turn slowly around the home (Scan home hero). Off with Reduce Motion.
     var autoOrbit = false
+    /// How pieces first appear: the fly-in (default), or `.dropIn` (Scan hero: built from above).
+    var entrance: FurnitureLayer.Entrance = .flyIn
     /// False: no gestures, so a scroll view around it still scrolls (taps pass through).
     var interactive = true
     /// Called once per fly-in after its finale: one slow turn around the furnished home that
@@ -54,7 +56,7 @@ struct FloorPlan3DView: UIViewRepresentable {
     private func update(_ coordinator: Coordinator, animated: Bool) {
         coordinator.onFinale = onFlyInFinale
         coordinator.show(plan, focusRoom: focusRoom, animated: animated, wallColor: wallColor, floorColor: floorColor)
-        coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken, starts: flyInStarts)
+        coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken, starts: flyInStarts, entrance: entrance)
         coordinator.setAutoOrbit(autoOrbit)
     }
 
@@ -93,6 +95,7 @@ struct FloorPlan3DView: UIViewRepresentable {
             anchor.addChild(camera)
             anchor.addChild(scene.root)
             anchor.addChild(furniture.root)
+            furniture.shell = scene
 
             // Warm key light from front-right and above, casting soft shadows into the rooms.
             sun.light.color = Theme.uiColor(0xFFE4C2)
@@ -136,13 +139,14 @@ struct FloorPlan3DView: UIViewRepresentable {
             frame(on: focusRoom.flatMap(plan.room(named:))?.bounds ?? plan.bounds, animated: animated && !planChanged)
         }
 
-        func showFurniture(_ placements: [Placement], items: [LayoutItem], plan: FloorPlan, flyInToken: Int, starts: FlyInStarts? = nil) {
+        func showFurniture(_ placements: [Placement], items: [LayoutItem], plan: FloorPlan, flyInToken: Int, starts: FlyInStarts? = nil,
+                           entrance: FurnitureLayer.Entrance = .flyIn) {
             guard placements != shownPlacements || flyInToken != shownFlyIn else { return }
             // Hold the fly-in until there's something to fly.
             let flyIn = flyInToken != shownFlyIn && !placements.isEmpty
             shownPlacements = placements
             if !placements.isEmpty { shownFlyIn = flyInToken }
-            let duration = furniture.show(placements, items: items, plan: plan, flyIn: flyIn, starts: starts)
+            let duration = furniture.show(placements, items: items, plan: plan, flyIn: flyIn, starts: starts, entrance: entrance)
             // Flying from the old room: pull back so it's in view too, then settle on the house.
             reframe?.cancel()
             finale?.cancel()
@@ -167,13 +171,21 @@ struct FloorPlan3DView: UIViewRepresentable {
             orbitLoop?.cancel()
             orbitLoop = nil
             guard on else { return }
+            // Stepped on every rendered frame by its real duration (a 33 ms timer judders
+            // against 60/120 Hz displays). The task only holds the subscription until cancelled.
             orbitLoop = Task { [weak self] in
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(33))
-                    guard let self, !Task.isCancelled else { return }
-                    self.yaw += 2 * .pi / (60 * 30)
-                    self.updateCamera()
+                let tick = self?.view?.scene.subscribe(to: SceneEvents.Update.self) { [weak self] event in
+                    let dt = Float(min(event.deltaTime, 0.1))
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        self.yaw += 2 * .pi / 60 * dt
+                        self.updateCamera()
+                    }
                 }
+                while !Task.isCancelled, self != nil {
+                    try? await Task.sleep(for: .seconds(1))
+                }
+                tick?.cancel()
             }
         }
 

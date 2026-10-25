@@ -53,5 +53,6 @@ struct MooveApp: App {
             .environment(store)
             .overlay { LaunchSplash() }
             .followsAppAppearance()
+            .task { ScanHeroPreload.start(store) }
     }
 }
