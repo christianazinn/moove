@@ -27,22 +27,17 @@ struct AgentsView: View {
                         CommercePlaceholder(
                             state: state,
                             emptyTitle: "Nothing from your agents yet",
-                            emptyDetail: "Agents ask here before they list or buy anything over your approval limit ($100 by default), and every payment they make prints a receipt here. Sort an item to Sell, or choose a deal in Shopping."
+                            emptyDetail: "Approvals over your limit and every payment's receipt land here. Sort an item to Sell, or choose a deal in Shopping."
                         )
                         .padding(.top, 32)
                     } else {
-                        StatStrip(figures: [
-                            .init(label: "Waiting", value: "\(pending)", tint: pending > 0 ? Theme.ochreInk : Theme.text,
-                                  spoken: "\(pending) waiting on you"),
-                            .init(label: "Decided", value: "\(decided)", spoken: "\(decided) decided"),
-                            .init(label: "Payments", value: "\(payments)", spoken: "\(payments) payments"),
-                        ])
-                        .padding(.top, 8)
+                        // No stat strip on top: "Needs your OK" and "Decided" carry their counts, and the
+                        // receipts their totals tape.
                         ApprovalsSection()
-                            .padding(.top, 32)
+                            .padding(.top, Theme.Space.l)
                             .id(Self.approvalsAnchor)
                         SpendingSection()
-                            .padding(.top, 44)
+                            .padding(.top, Theme.Space.section)
                             .id(Self.receiptsAnchor)
                     }
                 }

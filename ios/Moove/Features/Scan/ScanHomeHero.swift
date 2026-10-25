@@ -46,7 +46,7 @@ struct ScanHomeHero: View {
                 }
             }
             .frame(height: sizeClass == .regular ? 440 : 300)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
             // Over the 3D view, so the tap reaches SwiftUI (the view itself takes no gestures).
             .overlay { Color.clear.contentShape(Rectangle()).onTapGesture { if let room { onOpen(room) } } }
             .accessibilityElement()
@@ -117,7 +117,7 @@ struct ScanRoomCard: View {
                 .accessibilityHidden(true)
         }
         .padding(14)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
@@ -133,7 +133,7 @@ struct ScanRoomCard: View {
 /// Three steps, each with a small voxel piece.
 struct ScanHowItWorks: View {
     private var steps: [(VoxelItemSpec, String, String)] {[
-        (VoxelItemSpec(category: "chair", name: "Armchair", widthM: 0.8, depthM: 0.8, heightM: 0.9), "Scan", "Walk the room. Every piece is found and measured."),
+        (VoxelItemSpec(category: "chair", name: "Armchair", widthM: 0.8, depthM: 0.8, heightM: 0.9), "Scan", "Walk the room slowly. Every piece is found and measured."),
         (VoxelItemSpec(category: "storage", name: "Moving box", widthM: 0.5, depthM: 0.4, heightM: 0.4), "Sort", "Agents price it and suggest keep, sell, donate or trash."),
         (VoxelItemSpec(category: "bed", name: "Bed", widthM: 1.5, depthM: 2.0, heightM: 0.6), "Move", "What you keep flies into your new home."),
     ]}
@@ -146,7 +146,7 @@ struct ScanHowItWorks: View {
                     VoxelThumbnail(spec: step.0, size: 48)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(index + 1). \(step.1)").font(.system(size: 15.5, weight: .semibold)).foregroundStyle(Theme.text)
+                        Text("\(index + 1). \(step.1)").sansText(15.5, weight: .semibold).foregroundStyle(Theme.text)
                         Text(step.2).monoMeta().fixedSize(horizontal: false, vertical: true)
                     }
                 }

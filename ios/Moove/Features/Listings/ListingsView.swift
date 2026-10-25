@@ -34,7 +34,7 @@ struct ListingsView: View {
                     CommercePlaceholder(
                         state: state,
                         emptyTitle: "No listings yet",
-                        emptyDetail: "Sort an item to Sell in Review. Once it's priced, the listing agent drafts an eBay listing and it shows up here."
+                        emptyDetail: "Sort an item to Sell in Review. Once it's priced, its eBay listing shows up here."
                     )
                     .padding(.top, 32)
                 } else {
@@ -44,14 +44,14 @@ struct ListingsView: View {
                     let rows = listings.filter { group.statuses.contains($0.status) }
                     if !rows.isEmpty {
                         ListHeader(title: group.title, count: "\(rows.count)")
-                            .padding(.top, 40)
+                            .padding(.top, Theme.Space.section)
                         // Own stack per group, so a listing that changes group (awaiting approval ->
                         // posted) can't collide with its old poster in the LazyVStack (same bug as Approvals).
                         wall(rows).padding(.top, 22)
                     }
                 }
                 if listings.contains(where: \.simulated) {
-                    Text("SIMULATED listings were never sent to eBay. The demo's eBay poster is simulated unless sandbox keys are set.")
+                    Text("SIMULATED listings were never sent to eBay.")
                         .monoMeta()
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 28)

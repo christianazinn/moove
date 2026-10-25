@@ -135,7 +135,7 @@ struct ListingPoster: View {
                     .background(PosterInk.paper)
             } else if let item {
                 VoxelThumbnail(item, size: artHeight, tile: false)
-                    .shadow(color: .black.opacity(0.18), radius: 4, y: 3)
+                    .mooveShadow(.lifted)
             } else {
                 Image(systemName: "tag")
                     .font(.system(size: artHeight * 0.36, weight: .light))
@@ -405,7 +405,7 @@ struct FlyerTotals: View {
         }
         .background(PosterInk.paper)
         .compositingGroup()
-        .shadow(color: .black.opacity(0.14), radius: 3, y: 2)
+        .mooveShadow(.paper)
         .overlay(alignment: .topLeading) { tape(-32).offset(x: -10, y: -6) }
         .overlay(alignment: .topTrailing) { tape(32).offset(x: 10, y: -6) }
         .rotationEffect(.degrees(ax ? 0 : tilt))
@@ -443,7 +443,7 @@ struct ListingPosterHero: View {
             ZStack {
                 if let item {
                     VoxelThumbnail(item, size: min(artSize, 300), tile: false)
-                        .shadow(color: .black.opacity(0.2), radius: 6, y: 4)
+                        .mooveShadow(.lifted)
                         .saturation(stamp.isSketch ? 0 : 1)
                         .opacity(stamp.isSketch ? 0.55 : 1)
                 } else {
@@ -465,7 +465,7 @@ struct ListingPosterHero: View {
         .overlay { if stamp.isCrossedOut { CrossOut().stroke(PosterInk.stamp(.denied).opacity(0.6), lineWidth: 3) } }
         .clipShape(PosterSheetShape(torn: stamp.isTorn))
         .compositingGroup()
-        .shadow(color: .black.opacity(0.16), radius: 5, y: 3)
+        .mooveShadow(.paper)
         .overlay(alignment: .top) {
             Rectangle().fill(PosterInk.tape.opacity(0.82)).frame(width: 70, height: 20).rotationEffect(.degrees(-3)).offset(y: -9)
         }

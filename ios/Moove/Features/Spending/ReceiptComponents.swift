@@ -9,16 +9,11 @@ import MooveKit
 /// Receipt paper and ink. Light: cream paper a shade lighter than the page. Dark: a warm gray
 /// a shade lighter than the page. Text colors are at least 4.5:1 on `paper` in both modes.
 enum ReceiptPalette {
-    static let paper = dynamic(0xFBF8F1, 0x2C2722)
-    static let ink = dynamic(0x24201A, 0xEDE5D7)
-    static let muted = dynamic(0x5F574B, 0xB3AA99)
+    static let paper = Theme.Paper.cream
+    static let ink = Theme.Paper.ink
+    static let muted = Theme.Paper.inkMuted
     /// Rules, leaders and the barcode (decorative).
-    static let rule = dynamic(0xB9AE9B, 0x5E5447)
-    static let shadow = Color.black.opacity(0.14)
-
-    private static func dynamic(_ light: UInt32, _ dark: UInt32) -> Color {
-        Color(uiColor: Theme.dynamicUIColor(light, dark))
-    }
+    static let rule = Theme.Paper.rule
 }
 
 // MARK: Type
@@ -89,7 +84,7 @@ extension View {
             .background(
                 ReceiptPaper()
                     .fill(ReceiptPalette.paper)
-                    .shadow(color: ReceiptPalette.shadow, radius: 5, x: 0, y: 3)
+                    .mooveShadow(.paper)
             )
     }
 }
