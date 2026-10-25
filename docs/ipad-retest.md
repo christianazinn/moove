@@ -72,7 +72,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 
 ### 8. Move: "Paste a Zillow link" and "Change home"
 - **Taps:** Move (one page, no New Home / Pack pills). On the picker at the top, tap **Paste a Zillow link**, paste a Zillow URL, optionally add a floor-plan screenshot → **Build floor plan** → **Use this home**. Then tap **Change home** (under the title) and pick **Use this home** on the demo house.
-- **Expected:** the button is easy to find on the picker, and again under the title once a home is chosen. The address comes from the link. With no worker, the plan is labeled estimated.
+- **Expected:** the button is easy to find on the picker, and behind **Change home** once a home is chosen. The address comes from the link. With no worker, the plan is labeled estimated.
 - **Report if wrong:** the step, plus a screenshot or the error text.
 
 ### 9. Fly-in: from scanned spots, and smoothness
@@ -88,7 +88,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 ### 11. Getting there: truck and boxes
 - **Taps:** Move, scroll past the room shots to **Getting there**. Open a box, then tap **Print labels** → **4 × 6 in labels** or **Letter, 2 per page**.
 - **Expected:**
-  - Box cards are colored by room (Bedroom and Bedroom 2 differ), each with a reason ("Fragile: wrapped…").
+  - Box cards are plain kraft with a small room dot (Bedroom and Bedroom 2 differ) and the box number; the reason is inside the box ("Fragile: wrapped…").
   - Box detail shows a voxel model on each line.
   - The labels PDF opens in the share sheet, with the room band, a big number and a QR code.
   - Bought items appear under **Delivered to your new home**.

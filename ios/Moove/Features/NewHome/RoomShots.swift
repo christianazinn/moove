@@ -66,7 +66,7 @@ struct RoomShotsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ListHeader(title: "Room shots", count: "\(rooms.count)")
+            MoveHeading(title: "Room shots")
                 .padding(.horizontal, Theme.gutter)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
@@ -124,10 +124,7 @@ struct RoomShotsSection: View {
                 }
                 .frame(width: size.width, height: size.height)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(room.name).blockTitle().lineLimit(1)
-                    Text(pieces).monoMeta()
-                }
+                Text(room.name).blockTitle().lineLimit(1)
             }
             .frame(width: size.width, alignment: .leading)
             .contentShape(Rectangle())

@@ -2,14 +2,12 @@ import SwiftUI
 import MooveKit
 
 /// The placed pieces of the shown layout, in plan room order, then the ones that didn't fit.
-/// Folded at the bottom of Move; tapping a placed piece shows its room in 3D (`onShowRoom`).
+/// Folded at the bottom of Move: each piece's name and where it goes.
 struct PiecesList: View {
     var plan: FloorPlan
     var furniture: Furniture
     /// The layout on the stage (nil while it's arranging).
     var layout: LayoutOption?
-    @Binding var focusRoom: String?
-    var onShowRoom: (String) -> Void
 
     struct Row: Identifiable {
         var item: LayoutItem
@@ -45,42 +43,33 @@ struct PiecesList: View {
         let rows = Self.rows(plan: plan, furniture: furniture, layout: layout)
         VStack(alignment: .leading, spacing: 0) {
             if rows.isEmpty {
-                EmptyState(title: furniture.items.isEmpty ? "Nothing to place yet" : "Arranging…",
-                           detail: "Kept items land here.", ruledTop: false)
+                Text(furniture.items.isEmpty ? "Nothing yet" : "Arranging…").monoMeta().padding(.vertical, 12)
             }
             ForEach(rows) { row in
-                if let room = row.room {
-                    placedRow(row, room: room)
-                } else {
-                    unplacedRow(row)
-                }
+                PieceLine(name: row.item.name, place: row.room ?? (row.stored ? "Storage" : "Didn't fit"))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(spoken(row))
             }
         }
     }
 
-    private func placedRow(_ row: Row, room: String) -> some View {
-        Button { onShowRoom(room) } label: {
-            LedgerRow(title: row.item.name, meta: [Self.size(row.item), row.onBed.map { "on the \($0)" }, room].compactMap { $0 }.joined(separator: " · "), chevron: true) {
-                VoxelThumbnail(row.item)
-            } trailing: {
-                if focusRoom == room { MonoTag(text: "In view", tone: Theme.accentStrong) }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(row.item.name), \(Spoken.size(row.item.widthM, row.item.depthM)), \(room)\(focusRoom == room ? ", in view" : "")")
-        .accessibilityHint("Shows \(room) in 3D")
+    private func spoken(_ row: Row) -> String {
+        guard let room = row.room else { return "\(row.item.name), \(row.stored ? "extra bed, to storage" : "didn't fit")" }
+        return "\(row.item.name)\(row.onBed.map { ", on the \($0)" } ?? ""), \(room)"
     }
+}
 
-    private func unplacedRow(_ row: Row) -> some View {
-        LedgerRow(title: row.item.name, meta: Self.size(row.item), value: row.stored ? "Storage" : "Didn't fit",
-                  valueTint: row.stored ? Theme.muted : Theme.danger) {
-            VoxelThumbnail(row.item)
+/// "Desk ........ Office": a name and where it goes, nothing else.
+private struct PieceLine: View {
+    var name: String
+    var place: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(name).sansText(16).frame(maxWidth: .infinity, alignment: .leading)
+            Text(place).monoText(13.5).foregroundStyle(Theme.muted)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(row.item.name), \(Spoken.size(row.item.widthM, row.item.depthM)), \(row.stored ? "extra bed, to storage" : "didn't fit")")
-    }
-
-    static func size(_ item: LayoutItem) -> String {
-        String(format: "%.1f × %.1f m", item.widthM, item.depthM)
+        .padding(.vertical, 12)
+        .frame(minHeight: 44)
     }
 }

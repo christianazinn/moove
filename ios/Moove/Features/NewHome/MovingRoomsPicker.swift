@@ -92,33 +92,29 @@ struct MovingRoomsSheet: View {
     }
 }
 
-/// "Moving from 2 rooms · 14 items ›" (opens the picker), or the empty state when no room is
-/// picked. `idPrefix` names the accessibility identifiers (Move uses "pack").
+/// A compact chip: the moving rooms' names ("Bedroom, Office"), or "Choose rooms" when none is
+/// picked. Opens the picker. `idPrefix` names the accessibility identifiers (Move uses "pack").
 struct MovingFromRow: View {
     var movingFrom: MovingFrom
     var idPrefix: String
     var onChoose: () -> Void
 
+    private var names: String {
+        movingFrom.choices.filter(\.included).map(\.room.name).joined(separator: ", ")
+    }
+
     var body: some View {
         if movingFrom.noneSelected {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("No rooms selected").blockTitle()
-                Text("Pick the scanned rooms whose kept items are moving.").monoMeta()
-                Button("Choose rooms", action: onChoose)
-                    .buttonStyle(.pill(.primary, compact: true))
-                    .accessibilityIdentifier("\(idPrefix).chooseRooms")
-            }
-            .padding(.vertical, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .ruled()
+            Button("Choose rooms", action: onChoose)
+                .buttonStyle(.pill(.primary, compact: true))
+                .accessibilityHint("Pick the scanned rooms whose kept items are moving")
+                .accessibilityIdentifier("\(idPrefix).chooseRooms")
         } else {
             Button(action: onChoose) {
-                LedgerRow(title: MovingRooms.summary(movingFrom.choices, items: movingFrom.itemCount),
-                          meta: movingFrom.choices.filter(\.included).map(\.room.name).joined(separator: " · "), chevron: true) {
-                    IconTile(systemName: "shippingbox")
-                }
+                Label(names, systemImage: "shippingbox").lineLimit(1)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pill(.outline, compact: true))
+            .accessibilityLabel(MovingRooms.summary(movingFrom.choices, items: movingFrom.itemCount) + ": " + names)
             .accessibilityHint("Choose which scanned rooms are moving")
             .accessibilityIdentifier("\(idPrefix).movingFrom")
         }
