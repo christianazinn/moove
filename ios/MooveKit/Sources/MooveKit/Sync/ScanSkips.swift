@@ -40,6 +40,21 @@ public struct ScanSkips: Equatable, Sendable {
         message = event.message
     }
 
+    /// Objects the app itself left out before the import (`ObjectRecheck` rejects).
+    public init(local entries: [Entry]) {
+        count = entries.count
+        self.entries = entries
+        message = "Skipped \(entries.count) scanned object(s) on the device"
+    }
+
+    /// The module's skips plus the app's own (`local`), as one notice; nil when there are none.
+    public static func combined(_ module: ScanSkips?, local: [Entry]) -> ScanSkips? {
+        guard var out = module else { return local.isEmpty ? nil : ScanSkips(local: local) }
+        out.count += local.count
+        out.entries = local + out.entries
+        return out
+    }
+
     /// "2 objects looked wrong and were skipped".
     public var summary: String {
         "\(count) object\(count == 1 ? "" : "s") looked wrong and \(count == 1 ? "was" : "were") skipped"

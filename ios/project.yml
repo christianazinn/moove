@@ -45,6 +45,9 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: $(MOOVE_BUNDLE_ID)
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Models are loaded by URL (ExtraObjectDetector, ObjectClassifier); no generated classes,
+        # whose names would clash with ObjectClassifier.swift.
+        COREML_CODEGEN_LANGUAGE: None
     info:
       path: Moove/Resources/Info.plist
       properties:
