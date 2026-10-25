@@ -457,7 +457,7 @@ const cardRemainingCents = () => {
 };
 async function expectBlocked(dealId: bigint, why: RegExp): Promise<string> {
   const ev = await until(`buy agent refusing deal ${dealId}`, () =>
-    [...conn!.db.agentEvent.iter()].find(e => e.agent === "buy" && e.refTable === "deal" && e.refId === dealId && e.kind === "error" && e.message.startsWith("Not buying")), 30_000);
+    [...conn!.db.agentEvent.iter()].find(e => e.agent === "buy" && e.refTable === "deal" && e.refId === dealId && e.kind === "error" && /^(\[[A-Z ]+\] )?Not buying/.test(e.message)), 30_000);
   if (!why.test(ev.message)) throw new Error(`refused for the wrong reason: ${ev.message}`);
   const ap = [...conn!.db.approval.iter()].find(a => a.kind === "purchase" && a.refId === dealId);
   if (ap) throw new Error(`a purchase approval (${ap.status}) was requested for the refused deal`);
@@ -477,7 +477,7 @@ const capItem = await stage(`visa guardrail: over the $${VISA_CAP_USD} buy card 
   await conn!.reducers.chooseDeal({ shoppingItemId: deal.shoppingItemId, dealId: deal.id });
   const msg = await expectBlocked(deal.id, /would exceed the buy card budget/);
   if (cardRemainingCents() !== left) throw new Error(`card budget moved from ${left} to ${cardRemainingCents()} cents`);
-  return { detail: `$${Number(left) / 100} left: ${msg.replace(/^Not buying /, "")}`, value: deal.shoppingItemId };
+  return { detail: `$${Number(left) / 100} left: ${msg.replace(/^(\[[A-Z ]+\] )?Not buying /, "")}`, value: deal.shoppingItemId };
 });
 
 await stage(`visa guardrail: fraud-flagged card deal (>= ${FRAUD_BLOCK}) -> refused, no approval/charge`, async () => {
@@ -503,7 +503,7 @@ await stage(`visa guardrail: fraud-flagged card deal (>= ${FRAUD_BLOCK}) -> refu
   if (deal.fraudScore < FRAUD_BLOCK) throw new Error(`fraud screen scored the planted scam ${deal.fraudScore.toFixed(2)} (${deal.fraudReasons.join("; ")}), want >= ${FRAUD_BLOCK}`);
   await conn!.reducers.chooseDeal({ shoppingItemId: item.id, dealId: deal.id });
   const msg = await expectBlocked(deal.id, /fraud screen scored it/);
-  return { detail: msg.replace(/^Not buying /, "").slice(0, 160) };
+  return { detail: msg.replace(/^(\[[A-Z ]+\] )?Not buying /, "").slice(0, 160) };
 });
 
 await stage("spending log: payment rows complete + simulated, [SIMULATED] events", async () => {
