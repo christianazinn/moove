@@ -12,7 +12,7 @@ enum NewHomeChoice {
         var plan: FloorPlan
     }
 
-    /// Review's Keep pile from the rooms picked in "Moving from" (by default the newest scan of
+    /// Review's Keep pile from the selected rooms ("Rooms in this move"; by default the newest scan of
     /// each room name, so re-scans don't bring a second bed) plus bought ones (#15); the demo's if
     /// there's nothing yet. The same set as the truck and boxes (`MooveStore.moveItems`).
     static func furniture(_ move: MoveItems) -> Furniture {

@@ -1,25 +1,11 @@
 import Foundation
 
-// Inventory display helpers (#267): where an item came from, which scan a room
-// section is, and rooms the user hid on this device. UI only; no contract change.
-
-/// Room ids hidden on this device (Inventory > room header > Hide room), stored in
-/// UserDefaults as strings because UserDefaults has no UInt64.
-public enum HiddenRooms {
-    public static let defaultsKey = "moove.hiddenRooms"
-
-    public static func decode(_ stored: [String]?) -> Set<UInt64> {
-        Set((stored ?? []).compactMap(UInt64.init))
-    }
-
-    public static func encode(_ ids: Set<UInt64>) -> [String] {
-        ids.sorted().map(String.init)
-    }
-}
+// Inventory display helpers (#267): where an item came from and which scan a room
+// section is. UI only; no contract change.
 
 extension SyncSnapshot {
-    /// The snapshot without the hidden rooms and their items, so every screen that
-    /// totals or lays out the inventory agrees on what's visible.
+    /// The snapshot without these rooms and their items (the rooms left out of
+    /// `RoomSelection`), so every screen that totals or lays out the inventory agrees.
     public func hidingRooms(_ hidden: Set<UInt64>) -> SyncSnapshot {
         guard !hidden.isEmpty else { return self }
         var copy = self

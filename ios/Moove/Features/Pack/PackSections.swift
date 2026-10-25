@@ -5,8 +5,8 @@ import MooveKit
 // loaded truck in 3D), every box drawn as a kraft moving box in its room's color grouped by
 // destination room with printable labels, things bought for the new home (delivered there, not
 // packed), and, folded, furniture take-apart notes, supplies and a short schedule. `MoveView`
-// stacks these and re-plans whenever `PackInputs` change: the kept items (hidden rooms excluded),
-// the "Moving from" room picks, the purchases or the saved new-home layout.
+// stacks these and re-plans whenever `PackInputs` change: the kept items from the selected rooms
+// ("Rooms in this move"), the purchases or the saved new-home layout.
 
 /// What the packing plan is made from.
 struct PackInputs: Equatable {
@@ -15,12 +15,10 @@ struct PackInputs: Equatable {
     var bought: [BoughtPiece]
     /// Nothing kept yet: the plan uses demo items.
     var demo: Bool
-    /// The "Moving from" rooms (empty for the demo items).
-    var choices: [MovingRooms.Choice] = []
 
     /// Move's one item set (`MooveStore.moveItems`, MooveKit `MoveItems`): Review's Keep pile plus
-    /// the sentimental things still waiting on you, from the rooms that are moving (hidden rooms
-    /// and older re-scans stay out), plus what was bought (shown as "Delivered"), with destination
+    /// the sentimental things still waiting on you, from the selected rooms (by default older
+    /// re-scans stay out), plus what was bought (shown as "Delivered"), with destination
     /// rooms from the newest saved layout of the user's new home. The demo's set until there's
     /// anything of the user's, the same one the layout uses.
     @MainActor static func current(_ store: MooveStore, move: MoveItems) -> PackInputs {
@@ -32,7 +30,7 @@ struct PackInputs: Equatable {
            let layout = snap.layouts(for: home.id).max(by: { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }) {
             for p in layout.placements { rooms[p.itemId] = p.room }
         }
-        return PackInputs(items: items, rooms: rooms, bought: move.bought, demo: demo, choices: demo ? [] : store.movingChoices)
+        return PackInputs(items: items, rooms: rooms, bought: move.bought, demo: demo)
     }
 
     var itemsById: [UInt64: Item] { Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }

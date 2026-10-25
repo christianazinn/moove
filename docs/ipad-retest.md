@@ -7,25 +7,25 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 ## Setup (5 min)
 1. On Rio's Mac: `cd <moove repo> && git checkout main && git pull`, then `cd ios && xcodegen`.
 2. Open `Moove.xcodeproj` and pick the iPad Pro. Run **Product → Clean Build Folder**, then **Run**.
-3. If the app still looks old (no **Hide room** in the room ⋯ menu, no origin chips), delete Moove from the iPad and Run again. **Do this before the fresh scan.** Deleting the app also deletes the scans saved on the iPad, and the dollhouse then falls back to the uploaded copy.
+3. If the app still looks old (no **Rooms** button at the top of Inventory, no origin chips), delete Moove from the iPad and Run again. **Do this before the fresh scan.** Deleting the app also deletes the scans saved on the iPad, and the dollhouse then falls back to the uploaded copy.
 4. Settings (gear, top right) → Backend → Data source **SpacetimeDB (live)** → Database **Live (moove)** for the scan checks.
 5. **Worker restart (Christian's).** The #270 sweep and vision size checks (a tall lamp can't be renamed "pillow") only run once Christian's worker is pulled and restarted (`git pull && npm ci`, then `run-worker.sh`). Ask him on #2 before check 6. Until then, check 6's names may still be wrong. The voxel drawing (#273) is on the iPad and works either way.
 
 ## Checks, in app order
 
-### 1. Hide old test rooms
-- **Taps:** Items → Inventory → in the **Rooms** chips at the top, tap each old room's **⋯** (or long-press its chip) → **Hide room**.
-- **Expected:** the room disappears from Inventory, its totals, Review, the Scan hero and Move (the new home, boxes and truck). **Show hidden rooms (N)** appears at the bottom, and **Unhide** brings a room back.
-- **Report if wrong:** which screen still shows the hidden room, plus a screenshot.
+### 1. Uncheck old test rooms
+- **Taps:** Items → Inventory → **Rooms** at the top → uncheck each old room → **Done**. (Older scans of a room name start unchecked.)
+- **Expected:** the room disappears from Inventory, its totals, Review, the Scan hero and Move (the new home, boxes and truck). Move's **Rooms** button shows the same checklist; checking a room brings it back everywhere.
+- **Report if wrong:** which screen still shows the unchecked room, plus a screenshot.
 
 ### 1b. Rename a room
 - **Taps:** Items → Inventory → a room chip's **⋯** → **Rename room** → type "Sam's room" → **Save**.
-- **Expected:** the chip, New Home's **Moving from** list, Pack's room rows and Review show "Sam's room" right away, and still do after quitting and reopening the app. (Until the module has `rename_room`, #370, the name is kept on this iPad only.)
+- **Expected:** the Rooms checklist, Pack's room rows and Review show "Sam's room" right away, and still do after quitting and reopening the app. (Until the module has `rename_room`, #370, the name is kept on this iPad only.)
 - **Report if wrong:** which screen shows the old name.
 
 ### 2. Fresh scan
-- **Taps:** Scan → **Scan a room** → sweep the room slowly → **Done** → **Looks right** → check the **Room** field at the top (change it with a chip or by typing) → **Add N items**.
-- **Expected:** the Room field is prefilled from what was found (bed → "Bedroom", sofa/TV → "Living room", stove/fridge → "Kitchen", desk + monitor → "Office", nothing telling → "Room"), and says "Bedroom 2" if you already have a Bedroom ("Already taken" with a **Use "Bedroom 2"** button when you type a taken name; keeping it is fine for a re-scan). "Scan · Done" and "N items added". The new room has that name in Inventory, New Home's **Moving from** and Pack. The "Also found: …" chip lists detector finds. If something was impossible, "N objects looked wrong and were skipped" appears.
+- **Taps:** Scan → **Scan a room** → sweep the room slowly → **Done** → **Looks right: check photos** → check the **Room** field at the top (change it with a chip or by typing) → **Add N items**.
+- **Expected:** the Room field is prefilled from what was found (bed → "Bedroom", sofa/TV → "Living room", stove/fridge → "Kitchen", desk + monitor → "Office", nothing telling → "Room"), and says "Bedroom 2" if you already have a Bedroom (a hint offers the number when you type a taken name; keeping it is fine for a re-scan). "Scan · Done" and "N items added". The new room has that name in the Rooms checklist and Pack. The "Also found: …" chip lists detector finds. If something was impossible, "N objects looked wrong and were skipped" appears.
 - **Report if wrong:** the step where it stuck, plus the on-screen message.
 
 ### 3. Scan finished dollhouse
@@ -45,7 +45,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 ### 5. Inventory: the binder (a page per function, items on shelves)
 - **Taps:** Items → Inventory. Tap each colored index tab, then swipe the page left and right; tap an item on a shelf, then in its placard tap the story line and type "Grandma's, 1974", **Save**; long-press another item. Then rotate the iPad, try dark mode, the largest text size, and Reduce Motion.
 - **Expected:**
-  - A **Rooms** strip on top: one chip per room, newest scan first, with item count, scan time ("Today 15:42"), a **Demo** tag for **Load demo scan** rooms and "Shared by …" for joined ones, plus Share / **3D** / **⋯** (Add item here, Rename room, Hide room). Tapping a chip still narrows the binder to that room.
+  - A **Rooms** button on top ("Rooms Bedroom, Office ›"): a checklist of room names, newest scan first, with Select all / None; each row's **⋯** (or long-press) has Share, **View room in 3D**, Add item here and Rename room. Unchecked rooms leave the binder.
   - A binder: one page per function (Sleep, Work & study, …, biggest first, "Everything else" last). iPad: colored index tabs down the page's right edge; iPhone: folder tabs across the top that scroll sideways. Each tab says the name and count, and keeps its color (Sleep is always slate). The page heading is the name (serif) and "4 pieces · est. $610"; holes along the left edge.
   - Each page is a wall of chunky wooden shelves (5 cm blocks, grain, brackets): smallest things on the top planks, larger pieces sharing planks with them when they fit (each at its own size), beds/sofas/bookcases/floor lamps on the floor row. iPad fits about 6 per plank, iPhone 2–3; a plank rarely holds just one thing. Each item stands on the wood as its voxel model with a small hanging tag (name, price; a gold bookmark on possibly sentimental ones).
   - Swiping turns the page with a slide; with Reduce Motion it crossfades. An office chair is on Work & study, a nightstand on Sleep.
@@ -89,7 +89,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
   - Box detail shows a voxel model on each line.
   - The labels PDF opens in the share sheet, with the room band, a big number and a QR code.
   - Bought items appear under **Delivered to your new home**.
-  - Hidden rooms stay out.
+  - Unchecked rooms stay out.
   - Tapping the 3D truck opens it full screen. Pieces is folded at the bottom (closed); tapping it opens it.
 - **Report if wrong:** the box number, what's off (density, colors, a model that doesn't match), plus a screenshot or the PDF.
 

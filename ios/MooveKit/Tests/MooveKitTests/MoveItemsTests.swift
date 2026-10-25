@@ -11,7 +11,7 @@ import Testing
     }
 
     @Test func demoMoveSetIsReviewsKeepPile() {
-        let move = MoveItems.of(demo.withoutBuiltIns(), overrides: [:], demo: demo)
+        let move = MoveItems.of(demo.withoutBuiltIns(), demo: demo)
         #expect(!move.isDemo) // the demo snapshot has kept items of its own
         #expect(Set(move.kept.map(\.id)) == keepPile(demo.withoutBuiltIns().items))
         #expect(!move.kept.isEmpty)
@@ -21,7 +21,7 @@ import Testing
     }
 
     @Test func layoutTruckAndBoxesCarryTheSameItems() {
-        let move = MoveItems.of(demo.withoutBuiltIns(), overrides: [:], demo: demo)
+        let move = MoveItems.of(demo.withoutBuiltIns(), demo: demo)
         let plan = PackingPlanner.plan(items: move.packed, bought: move.bought)
         let planned = Set(plan.boxes.flatMap(\.contents).compactMap(\.itemId)).union(plan.furniture.map(\.id))
         #expect(planned == Set(move.packed.map(\.id)))
@@ -35,19 +35,19 @@ import Testing
 
     @Test func emptyInventoryFallsBackToTheDemoSet() {
         let empty = SyncSnapshot(me: "me")
-        let move = MoveItems.of(empty, overrides: [:], demo: demo)
+        let move = MoveItems.of(empty, demo: demo)
         #expect(move.isDemo)
         #expect(Set(move.kept.map(\.id)) == keepPile(demo.items))
     }
 
     @Test func roomsLeftBehindStayOut() {
-        let move = MoveItems.of(demo.withoutBuiltIns(), overrides: [1: false], demo: demo)
+        let move = MoveItems.of(demo.withoutBuiltIns().selectingRooms([1: false]), demo: demo)
         #expect(move.kept.isEmpty)
         #expect(move.withYou.isEmpty)
     }
 
     @Test func soldAndUndecidedPlainItemsNeverMove() {
-        let move = MoveItems.of(demo.withoutBuiltIns(), overrides: [:], demo: demo)
+        let move = MoveItems.of(demo.withoutBuiltIns(), demo: demo)
         let ids = Set(move.packed.map(\.id))
         for id: UInt64 in [11, 17, 19, 20] { #expect(!ids.contains(id)) }
     }

@@ -59,7 +59,7 @@ final class MooveStore {
     // MARK: Per-database device state
 
     /// Room and item ids restart at 1 in every database (and the offline demo's Bedroom is
-    /// room 1), so hidden rooms, "Moving from" picks and kept names are saved per backend and
+    /// room 1), so the room selection and kept names are saved per backend and
     /// database. The Live `moove` database keeps the original keys.
     func scoped(_ key: String) -> String {
         Self.scopedKey(key, kind: backendKind, database: databaseName)
@@ -72,11 +72,16 @@ final class MooveStore {
         }
     }
 
+    /// `scoped` as a plain function, for MooveKit's `RoomSelection.load` / `save`.
+    private var keyScope: @Sendable (String) -> String {
+        let kind = backendKind, database = databaseName
+        return { Self.scopedKey($0, kind: kind, database: database) }
+    }
+
     /// Reloads the per-database state for the current backend and database.
     private func loadDeviceState() {
         let d = UserDefaults.standard
-        hiddenRoomIds = HiddenRooms.decode(d.stringArray(forKey: scoped(HiddenRooms.defaultsKey)))
-        movingRoomPicks = MovingRooms.decode(d.stringArray(forKey: scoped(MovingRooms.defaultsKey)))
+        roomPicks = RoomSelection.load(from: d, scope: keyScope)
         keptNames = ItemLabels.decode(d.dictionary(forKey: scoped(ItemLabels.keptNamesDefaultsKey)))
     }
 
@@ -97,59 +102,51 @@ final class MooveStore {
     var items: [Item] { snapshot.items }
     var me: User? { snapshot.users.first { $0.identity == snapshot.me } }
 
-    // MARK: Hidden rooms (#267)
+    // MARK: Rooms in this move
 
-    /// Rooms hidden on this device (Inventory > room header > Hide room), e.g. old
-    /// test scans. Local only: nothing is deleted from the database.
-    private(set) var hiddenRoomIds: Set<UInt64> = []
+    /// The user's changes to which rooms count (MooveKit `RoomSelection`; default: the newest
+    /// scan of each room name), saved on this device only. The one room choice: Inventory,
+    /// Review, Scan home and Move read it through `visible*`; Listings, Shopping and Agents
+    /// read `snapshot` and keep every room's money. It replaced Hide room, Inventory's focus
+    /// and "Moving from" (their saved values are folded in once by `RoomSelection.load`).
+    private(set) var roomPicks: [UInt64: Bool] = [:]
 
-    func setRoom(_ roomId: UInt64, hidden: Bool) {
-        if hidden { hiddenRoomIds.insert(roomId) } else { hiddenRoomIds.remove(roomId) }
-        UserDefaults.standard.set(HiddenRooms.encode(hiddenRoomIds), forKey: scoped(HiddenRooms.defaultsKey))
+    func setRoomPicks(_ picks: [UInt64: Bool]) {
+        roomPicks = RoomSelection.pruned(picks, rooms: snapshot.rooms)
+        RoomSelection.save(roomPicks, to: .standard, scope: keyScope)
     }
 
-    /// The snapshot without hidden rooms and their items. Inventory, Review, Scan home,
-    /// New Home, Pack and Review read this so they agree on what's there.
+    /// Every room, newest scan first, with whether it's in.
+    var roomChoices: [RoomSelection.Choice] { RoomSelection.choices(snapshot, overrides: roomPicks) }
+
+    func toggleRoom(_ roomId: UInt64) {
+        setRoomPicks(RoomSelection.toggle(roomId, in: roomChoices, overrides: roomPicks))
+    }
+
+    func selectAllRooms(_ selected: Bool) {
+        setRoomPicks(RoomSelection.setAll(selected, in: roomChoices))
+    }
+
+    private var unselectedRoomIds: Set<UInt64> { RoomSelection.unselected(roomChoices) }
+
+    /// The snapshot with only the selected rooms and their items. Inventory, Review, Scan home
+    /// and Move read this so they agree on what's there.
     /// Built-in fixtures (a toilet, a radiator) are left out too: they stay with the building.
-    var visibleSnapshot: SyncSnapshot { snapshot.hidingRooms(hiddenRoomIds).withoutBuiltIns() }
-    var visibleItems: [Item] { snapshot.items.filter { !hiddenRoomIds.contains($0.roomId) && !$0.isBuiltInFixture } }
-    var visibleRooms: [Room] { hiddenRoomIds.isEmpty ? snapshot.rooms : snapshot.rooms.filter { !hiddenRoomIds.contains($0.id) } }
-    /// Hidden rooms that still exist, for Inventory's "Show hidden rooms (N)".
-    var hiddenRooms: [Room] { snapshot.rooms.filter { hiddenRoomIds.contains($0.id) } }
-
-    // MARK: Moving rooms (which old rooms move; New Home and Pack)
-
-    /// The user's "Moving from" picks (MooveKit `MovingRooms`), saved on this device only.
-    private(set) var movingRoomPicks: [UInt64: Bool] = [:]
-
-    func setMovingRoomPicks(_ picks: [UInt64: Bool]) {
-        movingRoomPicks = MovingRooms.pruned(picks, rooms: snapshot.rooms)
-        UserDefaults.standard.set(MovingRooms.encode(movingRoomPicks), forKey: scoped(MovingRooms.defaultsKey))
+    var visibleSnapshot: SyncSnapshot { snapshot.hidingRooms(unselectedRoomIds).withoutBuiltIns() }
+    var visibleItems: [Item] {
+        let out = unselectedRoomIds
+        return snapshot.items.filter { !out.contains($0.roomId) && !$0.isBuiltInFixture }
     }
-
-    /// Review's Keep pile in visible rooms (before the room picks).
-    var keptItems: [Item] { MoveItems.keep(visibleItems) }
-
-    /// Every visible scanned room, newest first, with whether its kept items move.
-    var movingChoices: [MovingRooms.Choice] {
-        MovingRooms.choices(visibleSnapshot, keptItems: keptItems, overrides: movingRoomPicks)
+    var visibleRooms: [Room] {
+        let out = unselectedRoomIds
+        return out.isEmpty ? snapshot.rooms : snapshot.rooms.filter { !out.contains($0.id) }
     }
-
-    /// What's actually moving: kept items from the picked rooms (by default the newest scan of
-    /// each room name), re-scan duplicates dropped. New Home lays these out; Pack packs them.
-    var movingItems: [Item] { MovingRooms.items(keptItems, choices: movingChoices) }
 
     /// Everything Move shows (layout, fly-in, truck, boxes, delivered): Review's Keep pile and the
-    /// sentimental items still waiting on you, from the picked rooms, plus what was bought; the
+    /// sentimental items still waiting on you, from the selected rooms, plus what was bought; the
     /// demo's set when there's nothing yet (MooveKit `MoveItems`).
     var moveItems: MoveItems {
-        MoveItems.of(visibleSnapshot, overrides: movingRoomPicks, demo: DemoFixtures.demo(owner: "demo"))
-    }
-
-    /// The picked rooms' items that pass `include` (Pack also packs undecided sentimental ones),
-    /// with the same room picks and re-scan dedupe as `movingItems`.
-    func movingItems(where include: (Item) -> Bool) -> [Item] {
-        MovingRooms.items(visibleItems.filter(include), choices: movingChoices)
+        MoveItems.of(visibleSnapshot, demo: DemoFixtures.demo(owner: "demo"))
     }
 
     // MARK: Connection
