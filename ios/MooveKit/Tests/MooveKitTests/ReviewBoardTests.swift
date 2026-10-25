@@ -46,6 +46,32 @@ import Testing
         #expect(Review.suggestion(item(3, .sell, source: .user)) == nil)
     }
 
+    @Test func flipDeckIsTheWholeMoveNeedsYouFirst() {
+        let all = [
+            item(1, value: 5_000, .sell),
+            item(2, value: 90_000, .keep),
+            item(3, value: 1_000, sentimental: true),
+            item(4, value: 20_000, .donate, source: .user),
+            item(5),
+        ]
+        #expect(Review.flipDeck(all).map(\.id) == [3, 5, 2, 1])
+        #expect(Review.flipDeck(all, includeYours: true).map(\.id) == [3, 5, 2, 1, 4])
+    }
+
+    @Test func demoFlipDeckStartsWithTheGuitar() {
+        let deck = Review.flipDeck(items)
+        #expect(deck.first?.id == 18)
+        #expect(deck.count == items.count)
+    }
+
+    @Test func verdictLine() {
+        // 0.5 × 1 × 0.5 m = 0.25 m³ × $60 = $15 to move.
+        #expect(Review.verdict(item(1, value: 3_000, .sell)) == "Sell · worth $30, costs ~$15 to move")
+        #expect(Review.verdict(item(2, .keep)) == "Keep")
+        #expect(Review.verdict(item(3)) == nil)
+        #expect(Review.verdict(item(4, value: 3_000, .sell, source: .user)) == nil)
+    }
+
     // MARK: Piles
 
     @Test func pilesAreFourInOrderWithoutDeckItems() {

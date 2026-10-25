@@ -1,15 +1,18 @@
 import SwiftUI
+import UIKit
 import MooveKit
 
-/// "Needs you": the items only a person can decide (undecided, or possibly sentimental), as a
-/// stack of cards. Swipe right = Keep, left = Sell, up = Donate, down = Trash (`ReviewSwipe`),
-/// or use the buttons under the card. The parent owns the decisions and the undo stack.
+/// The flip cards at the top of Review: the whole move as a stack (`Review.flipDeck`), the items
+/// that need you first. The front is the item's photo; tap to flip to the voxel model and the
+/// details. Swipe right = Keep, left = Sell (`ReviewSwipe`), on either side, or use the buttons
+/// (Donate and Trash are buttons only, so a vertical scroll never decides). The parent owns the
+/// decisions and the undo stack.
 struct ReviewDeckView: View {
-    /// Cards still to decide, top first (`Review.deck`).
+    /// Cards still to go, top first.
     let cards: [Item]
     let comps: [Comp]
-    /// Decided on this visit, for "2 of 5".
-    let decidedCount: Int
+    /// Cards done on this pass, for "4 of 12".
+    let doneCount: Int
     let canUndo: Bool
     let onDecide: (Item, Disposition) -> Void
     let onUndo: () -> Void
@@ -17,10 +20,13 @@ struct ReviewDeckView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var drag: CGSize = .zero
+    @State private var flipped = false
     /// Set while the top card flies off, so a second swipe can't hit it.
     @State private var leaving: Disposition?
 
     static let threshold: Double = 110
+
+    private var cardHeight: CGFloat { dynamicTypeSize.isAccessibilitySize ? 600 : 470 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,8 +34,9 @@ struct ReviewDeckView: View {
             if let top = cards.first {
                 ZStack {
                     // Up to two cards peek out behind the top one, fanned a little.
-                    ForEach(Array(cards.dropFirst().prefix(2).enumerated().reversed()), id: \.element.id) { index, item in
-                        ReviewCardBack(item: item)
+                    ForEach(Array(cards.dropFirst().prefix(2).enumerated().reversed()), id: \.element.id) { index, _ in
+                        ReviewCardPaper()
+                            .frame(height: cardHeight)
                             .scaleEffect(1 - 0.05 * CGFloat(index + 1))
                             .offset(y: 12 * CGFloat(index + 1))
                             .rotationEffect(.degrees(reduceMotion ? 0 : (index == 0 ? 2.5 : -2.5)))
@@ -39,10 +46,11 @@ struct ReviewDeckView: View {
                         .id(top.id)
                         .transition(.identity)
                 }
-                .padding(.top, 20)
-                .padding(.bottom, 24 + 12 * CGFloat(min(cards.count - 1, 2)))
+                .padding(.top, 18)
+                .padding(.bottom, 22 + 12 * CGFloat(min(cards.count - 1, 2)))
                 .frame(maxWidth: 440)
                 .frame(maxWidth: .infinity)
+                .onChange(of: top.id) { flipped = false }
                 actions(top)
             }
         }
@@ -53,14 +61,14 @@ struct ReviewDeckView: View {
     // MARK: Header
 
     private var header: some View {
-        let total = cards.count + decidedCount
+        let total = cards.count + doneCount
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("Needs you").listHeading().accessibilityAddTraits(.isHeader)
-                Text("\(min(decidedCount + 1, total)) of \(total)")
+                Text("Flip through").listHeading().accessibilityAddTraits(.isHeader)
+                Text("\(min(doneCount + 1, total)) of \(total)")
                     .monoText(13.5)
                     .foregroundStyle(Theme.muted)
-                    .accessibilityLabel("Card \(min(decidedCount + 1, total)) of \(total)")
+                    .accessibilityLabel("Card \(min(doneCount + 1, total)) of \(total)")
                     .accessibilityIdentifier("review.deck.progress")
                 Spacer(minLength: 8)
                 if canUndo { UndoButton(action: onUndo) }
@@ -69,7 +77,7 @@ struct ReviewDeckView: View {
                 Capsule().fill(Theme.surface2)
                     .overlay(alignment: .leading) {
                         Capsule().fill(Theme.accent)
-                            .frame(width: total == 0 ? 0 : geo.size.width * CGFloat(decidedCount) / CGFloat(total))
+                            .frame(width: total == 0 ? 0 : geo.size.width * CGFloat(doneCount) / CGFloat(total))
                     }
             }
             .frame(height: 4)
@@ -83,23 +91,29 @@ struct ReviewDeckView: View {
         let pointing = ReviewSwipe.pointing(dx: drag.width, dy: drag.height)
         let progress = ReviewSwipe.progress(dx: drag.width, dy: drag.height, threshold: Self.threshold)
         let armed = progress >= 1 ? pointing : nil
-        return ReviewCardFace(item: item, range: Review.valueRange(item, comps: comps))
+        let range = Review.valueRange(item, comps: comps)
+        return ReviewFlipCard(flipped: flipped, reduceMotion: reduceMotion,
+                              front: ReviewCardFront(item: item, range: range),
+                              back: ReviewCardBack(item: item, range: range))
+            .frame(height: cardHeight)
             .overlay {
                 if let pointing {
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
                         .strokeBorder(ReviewPalette.glow(pointing), lineWidth: 3 + 3 * progress)
                         .opacity(progress)
                         .shadow(color: ReviewPalette.glow(pointing).opacity(0.6 * progress), radius: 14)
                         .allowsHitTesting(false)
                     SwipeStamp(disposition: pointing)
                         .opacity(progress)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: stampAlignment(pointing))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: pointing == .keep ? .topLeading : .topTrailing)
                         .padding(22)
                         .allowsHitTesting(false)
                 }
             }
             .offset(drag)
             .rotationEffect(.degrees(reduceMotion ? 0 : Double(drag.width) / 18), anchor: .bottom)
+            .contentShape(Rectangle())
+            .onTapGesture { flip() }
             .gesture(
                 DragGesture(minimumDistance: 8)
                     .onChanged { value in
@@ -120,9 +134,10 @@ struct ReviewDeckView: View {
             )
             .sensoryFeedback(.selection, trigger: armed)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Self.spoken(item))
+            .accessibilityLabel(Self.spoken(item, range: range))
             .accessibilityIdentifier("review.card.\(item.id)")
-            .accessibilityHint("Swipe right to keep, left to sell. Donate and Trash are buttons below.")
+            .accessibilityHint("Swipe right to keep, left to sell. Double-tap to flip.")
+            .accessibilityAction { flip() }
             .accessibilityActions {
                 ForEach(Disposition.choices, id: \.self) { d in
                     Button(d.label) { fly(item, d) }
@@ -130,9 +145,11 @@ struct ReviewDeckView: View {
             }
             .overlay(alignment: .topTrailing) {
                 NavigationLink(value: item.id) {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 20))
-                        .foregroundStyle(Theme.muted)
+                    Image(systemName: "info")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.text)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Theme.bg.opacity(0.88)))
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
@@ -143,33 +160,32 @@ struct ReviewDeckView: View {
             }
     }
 
-    /// "Yamaha acoustic guitar, $109, possibly sentimental, Moove says keep. <reason>"
-    private static func spoken(_ item: Item) -> String {
-        var parts = [item.name, item.priceText]
-        if item.maybeSentimental { parts.append("possibly sentimental") }
-        if let s = Review.suggestion(item) { parts.append("Moove says \(s.label.lowercased())") }
-        if let reason = item.dispositionReason, item.dispositionSource == .auto { parts.append(reason) }
-        return parts.joined(separator: ", ")
+    private func flip() {
+        guard leaving == nil else { return }
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.5, dampingFraction: 0.8)) { flipped.toggle() }
     }
 
-    private func stampAlignment(_ d: Disposition) -> Alignment {
-        switch d {
-        case .keep: .topLeading
-        case .sell: .topTrailing
-        case .donate: .bottom
-        default: .top
-        }
+    /// "Yamaha acoustic guitar, needs you, possibly sentimental, $109. Moove says keep. <reason>"
+    private static func spoken(_ item: Item, range: ClosedRange<Int64>?) -> String {
+        var parts = [item.name]
+        if ReviewSection.of(item) == .needsYou { parts.append("needs you") }
+        if item.maybeSentimental { parts.append("possibly sentimental") }
+        parts.append(range.map { "\($0.lowerBound.usd) to \($0.upperBound.usd)" } ?? item.priceText)
+        if let verdict = Review.verdict(item) { parts.append("Moove says \(verdict)") }
+        if item.dispositionSource == .user { parts.append("you chose \(item.disposition.label.lowercased())") }
+        if let reason = item.dispositionReason, item.dispositionSource == .auto { parts.append(reason) }
+        return parts.joined(separator: ", ")
     }
 
     /// Throws the card off in its direction, then hands the decision to the parent.
     private func fly(_ item: Item, _ d: Disposition) {
         guard leaving == nil else { return }
         leaving = d
-        let far = Self.offscreen(d, from: drag)
         if reduceMotion {
             finish(item, d)
             return
         }
+        let far = Self.offscreen(d, from: drag)
         withAnimation(.easeIn(duration: 0.22)) { drag = far } completion: { finish(item, d) }
     }
 
@@ -186,7 +202,10 @@ struct ReviewDeckView: View {
         onDecide(item, d)
         var t = Transaction()
         t.disablesAnimations = true
-        withTransaction(t) { drag = .zero }
+        withTransaction(t) {
+            drag = .zero
+            flipped = false
+        }
         leaving = nil
     }
 
@@ -231,107 +250,197 @@ struct ReviewDeckView: View {
     }
 }
 
-/// The face of a deck card: the item big, its name, size and value, and what Moove thinks.
-private struct ReviewCardFace: View {
+/// Turns between `front` and `back` around the vertical axis. The angle is animated frame by
+/// frame (`Animatable`), so the back takes over exactly at 90°. Under Reduce Motion it crossfades.
+private struct ReviewFlipCard<Front: View, Back: View>: View, Animatable {
+    var angle: Double
+    let reduceMotion: Bool
+    let front: Front
+    let back: Back
+
+    init(flipped: Bool, reduceMotion: Bool, front: Front, back: Back) {
+        angle = flipped ? 180 : 0
+        self.reduceMotion = reduceMotion
+        self.front = front
+        self.back = back
+    }
+
+    var animatableData: Double {
+        get { angle }
+        set { angle = newValue }
+    }
+
+    var body: some View {
+        if reduceMotion {
+            ZStack {
+                front.opacity(1 - angle / 180)
+                back.opacity(angle / 180)
+            }
+        } else {
+            ZStack {
+                front.opacity(angle < 90 ? 1 : 0)
+                back.opacity(angle < 90 ? 0 : 1)
+                    .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+            }
+            .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
+        }
+    }
+}
+
+/// Front: the item's photo, big. While it loads the paper shows; if none loads, the voxel model.
+private struct ReviewCardFront: View {
+    let item: Item
+    let range: ClosedRange<Int64>?
+    @State private var photo: UIImage?
+    @State private var tried = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack {
+                Theme.surface2
+                if let photo {
+                    Image(uiImage: photo).resizable().scaledToFill().transition(.opacity)
+                } else if tried {
+                    ItemArt(item: item, size: 230, photo: .none).transition(.opacity)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .overlay(alignment: .topLeading) { ReviewCardBadge(item: item).padding(12) }
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(item.name.capitalizedFirst)
+                        .reviewSerif(22, weight: .semibold)
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(ReviewCardBack.value(item, range))
+                        .monoText(14, weight: .bold)
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                }
+                ReviewVerdict(item: item)
+            }
+            .padding(16)
+        }
+        .background(ReviewCardPaper())
+        .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .task(id: item.photoUrls) {
+            let loaded = item.photoUrls.isEmpty ? nil : await ItemPhotoLoader.load(item.photoUrls)
+            withAnimation(.easeOut(duration: 0.2)) {
+                photo = loaded
+                tried = true
+            }
+        }
+    }
+}
+
+/// Back: the voxel model and the facts behind the call.
+private struct ReviewCardBack: View {
     let item: Item
     let range: ClosedRange<Int64>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // The voxel model is the card's picture (the same piece that flies into the new
-            // home, and never blank); the photo, once it loads, is a snapshot pinned in the corner.
-            ItemArt(item: item, size: 190, photo: .none)
+        VStack(alignment: .leading, spacing: 12) {
+            ItemArt(item: item, size: 150, photo: .none)
                 .frame(maxWidth: .infinity)
-                .frame(height: 210)
-                .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
-                .overlay(alignment: .bottomTrailing) {
-                    ItemPhoto(urls: item.photoUrls) { image in
-                        image.resizable().scaledToFill()
-                            .frame(width: 76, height: 76)
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                            .padding(5)
-                            .background(Theme.bg, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                            .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
-                            .rotationEffect(.degrees(4))
-                            .padding(12)
-                    }
-                }
-                .overlay(alignment: .topLeading) {
-                    if item.maybeSentimental {
-                        Label("Sentimental", systemImage: "heart.fill")
-                            .labelStyle(.titleAndIcon)
-                            .monoText(11, weight: .bold, maxScale: 1.6)
-                            .textCase(.uppercase)
-                            .foregroundStyle(Theme.danger)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Capsule().fill(Theme.dangerSoft))
-                            .padding(10)
-                    }
-                }
-            VStack(alignment: .leading, spacing: 6) {
-                Text(item.name)
-                    .monoText(20, weight: .bold, maxScale: 1.6)
-                    .foregroundStyle(Theme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 8) {
-                    Text(valueText).monoText(15, weight: .bold).foregroundStyle(Theme.text)
-                    Text("·").monoText(13).foregroundStyle(Theme.faint).accessibilityHidden(true)
-                    Text(sizeText).monoMeta().lineLimit(1).minimumScaleFactor(0.8)
-                }
-            }
-            if let suggestion = Review.suggestion(item) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "sparkles").font(.system(size: 12)).foregroundStyle(suggestion.tint).accessibilityHidden(true)
-                    Text("Moove says \(suggestion.label.lowercased())").monoText(13, weight: .bold).foregroundStyle(suggestion.tint)
-                }
+                .frame(height: 170)
+                .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+                .overlay(alignment: .topLeading) { ReviewCardBadge(item: item).padding(10) }
+            Text(item.name.capitalizedFirst)
+                .reviewSerif(20, weight: .semibold)
+                .foregroundStyle(Theme.text)
+                .lineLimit(2)
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+                fact("Size", Self.size(item))
+                fact("Value", Self.value(item, range))
+                if let condition = item.condition { fact("Condition", "\(condition) / 5") }
             }
             if let reason = item.dispositionReason, item.dispositionSource == .auto {
                 Text(reason.capitalizedFirst)
                     .sansText(14.5)
                     .foregroundStyle(Theme.muted)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if item.maybeSentimental {
+                Label("Possibly sentimental. Moove leaves it to you.", systemImage: "heart.fill")
+                    .sansText(14)
+                    .foregroundStyle(Theme.danger)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+            ReviewVerdict(item: item)
         }
         .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ReviewCardBackground())
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(ReviewCardPaper())
     }
 
-    private var valueText: String {
+    private func fact(_ label: String, _ value: String) -> some View {
+        GridRow {
+            Text(label.uppercased()).monoText(11, weight: .semibold, maxScale: 1.6).tracking(0.6).foregroundStyle(Theme.faint)
+            Text(value).monoText(13.5).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.8)
+        }
+    }
+
+    static func value(_ item: Item, _ range: ClosedRange<Int64>?) -> String {
         if let range { return "\(range.lowerBound.usd)–\(range.upperBound.usd)" }
         return item.priceText
     }
 
-    private var sizeText: String {
+    static func size(_ item: Item) -> String {
         func cm(_ m: Double) -> String { "\(Int((m * 100).rounded()))" }
         return "\(cm(item.widthM))×\(cm(item.depthM))×\(cm(item.heightM)) cm"
     }
 }
 
-/// A card further down the stack: just the paper, with a hint of the item.
-private struct ReviewCardBack: View {
+/// "Moove says: Sell · worth $30, costs ~$24 to move", or "You chose Keep" once it's yours.
+private struct ReviewVerdict: View {
     let item: Item
 
     var body: some View {
-        ReviewCardBackground()
-            .overlay(alignment: .top) {
-                ItemArt(item: item, size: 120, photo: .none).opacity(0.35).padding(.top, 40)
+        if let verdict = Review.verdict(item) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "sparkles").font(.system(size: 11)).accessibilityHidden(true)
+                Text("Moove says: \(verdict)").monoText(12.5, weight: .semibold).lineLimit(2)
             }
+            .foregroundStyle(item.disposition.tint)
+        } else if item.dispositionSource == .user, item.disposition != .undecided {
+            Text("You chose \(item.disposition.label)").monoText(12.5, weight: .semibold).foregroundStyle(Theme.muted)
+        }
     }
 }
 
-private struct ReviewCardBackground: View {
+/// "Needs you" on the cards only a person can decide (a heart when possibly sentimental).
+private struct ReviewCardBadge: View {
+    let item: Item
+
     var body: some View {
-        RoundedRectangle(cornerRadius: 28, style: .continuous)
+        if ReviewSection.of(item) == .needsYou {
+            Label("Needs you", systemImage: item.maybeSentimental ? "heart.fill" : "hand.raised.fill")
+                .labelStyle(.titleAndIcon)
+                .monoText(11, weight: .bold, maxScale: 1.6)
+                .textCase(.uppercase)
+                .foregroundStyle(Theme.danger)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(Theme.dangerSoft))
+        }
+    }
+}
+
+/// The card stock every deck card is printed on.
+private struct ReviewCardPaper: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
             .fill(Theme.bg)
-            .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
             .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
     }
 }
 
-/// "KEEP" / "SELL" / … stamped on the card while it's dragged that way.
+/// "KEEP" / "SELL" stamped on the card while it's dragged that way.
 private struct SwipeStamp: View {
     let disposition: Disposition
 
@@ -361,33 +470,41 @@ struct UndoButton: View {
     }
 }
 
-/// "All decided": shown once the deck is empty on this visit, with what it added up to.
+/// The end card once every card is through: what the move adds up to, and Start over.
 struct ReviewAllDecided: View {
     let totals: ReviewTotals
     let canUndo: Bool
     let onUndo: () -> Void
+    let onStartOver: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var bounce = 0
 
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 44))
+                .font(.system(size: 40))
                 .foregroundStyle(Theme.accentStrong)
                 .symbolEffect(.bounce, value: bounce)
                 .accessibilityHidden(true)
-            Text("All decided.").monoText(22, weight: .bold, maxScale: 1.6).foregroundStyle(Theme.text)
+            Text("All done").reviewSerif(26, weight: .semibold).foregroundStyle(Theme.text)
             HStack(spacing: 0) {
                 figure("\(totals.itemsToMove)", "moving")
                 figure(totals.expectedSaleCents.usd, "to sell")
                 figure("\(Int(totals.divertedKg.rounded())) kg", "saved")
             }
-            if canUndo { UndoButton(action: onUndo) }
+            HStack(spacing: 10) {
+                if canUndo { UndoButton(action: onUndo) }
+                Button(action: onStartOver) {
+                    Label("Start over", systemImage: "arrow.counterclockwise")
+                }
+                .buttonStyle(.pill(.outline, compact: true))
+                .accessibilityIdentifier("review.startOver")
+            }
         }
         .padding(.vertical, 24)
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
-        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
         .onAppear { if !reduceMotion { bounce += 1 } }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("review.allDecided")
@@ -395,10 +512,27 @@ struct ReviewAllDecided: View {
 
     private func figure(_ value: String, _ label: String) -> some View {
         VStack(spacing: 4) {
-            Text(value).monoText(20, weight: .bold, maxScale: 1.5).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.6)
-            Text(label).monoText(12.5, maxScale: 1.5).foregroundStyle(Theme.muted)
+            Text(value).reviewSerif(20, weight: .semibold).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.6)
+            Text(label.uppercased()).monoText(11, maxScale: 1.5).tracking(0.6).foregroundStyle(Theme.muted)
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
+    }
+}
+
+extension View {
+    /// Serif display type for Review's titles and figures, scaled for Dynamic Type (capped at 2×).
+    func reviewSerif(_ size: CGFloat, weight: Font.Weight = .regular) -> some View {
+        modifier(ReviewSerif(size: size, weight: weight))
+    }
+}
+
+private struct ReviewSerif: ViewModifier {
+    let size: CGFloat
+    let weight: Font.Weight
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    func body(content: Content) -> some View {
+        content.font(.system(size: size * min(dynamicTypeSize.textScale, 2), weight: weight, design: .serif))
     }
 }
