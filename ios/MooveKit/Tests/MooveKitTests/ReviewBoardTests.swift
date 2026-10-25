@@ -146,8 +146,8 @@ import Testing
     @Test func swipeDirections() {
         #expect(ReviewSwipe.pointing(dx: 120, dy: 10) == .keep)
         #expect(ReviewSwipe.pointing(dx: -120, dy: 30) == .sell)
-        #expect(ReviewSwipe.pointing(dx: 20, dy: -150) == nil) // vertical = scrolling, never donate
-        #expect(ReviewSwipe.pointing(dx: -20, dy: 150) == nil) // never trash by swipe
+        #expect(ReviewSwipe.pointing(dx: 20, dy: -150) == .donate)
+        #expect(ReviewSwipe.pointing(dx: -20, dy: 150) == .trash)
         #expect(ReviewSwipe.pointing(dx: 0, dy: 0) == nil)
         #expect(ReviewSwipe.pointing(dx: 100, dy: 120) == .keep) // mostly sideways once vertical is discounted
     }
@@ -155,10 +155,11 @@ import Testing
     @Test func swipeCommitsPastTheThresholdOrOnAFlick() {
         #expect(ReviewSwipe.commit(dx: 60, dy: 0, threshold: 110) == nil)
         #expect(ReviewSwipe.commit(dx: 115, dy: 0, threshold: 110) == .keep)
-        // Vertical drags are scrolling: they never decide (Donate/Trash are buttons).
-        #expect(ReviewSwipe.commit(dx: 0, dy: -110, threshold: 110) == nil)
-        #expect(ReviewSwipe.commit(dx: 0, dy: -150, threshold: 110) == nil)
-        #expect(ReviewSwipe.commit(dx: 5, dy: 160, threshold: 110) == nil)
+        // Up donates, down trashes.
+        #expect(ReviewSwipe.commit(dx: 0, dy: -60, threshold: 110) == nil)
+        #expect(ReviewSwipe.commit(dx: 0, dy: -150, threshold: 110) == .donate)
+        #expect(ReviewSwipe.commit(dx: 5, dy: 160, threshold: 110) == .trash)
+        #expect(ReviewSwipe.commit(dx: 0, dy: 40, predictedDx: 0, predictedDy: 400, threshold: 110) == .trash)
         // A quick flick left: short drag, far predicted end.
         #expect(ReviewSwipe.commit(dx: -40, dy: 5, predictedDx: -400, predictedDy: 10, threshold: 110) == .sell)
         // A flick that reverses direction doesn't count.
