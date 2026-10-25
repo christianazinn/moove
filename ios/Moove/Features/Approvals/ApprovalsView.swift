@@ -7,10 +7,14 @@ import MooveKit
 /// rejects once it sees the decision.
 ///
 /// "Needs your OK" lists pending requests (or one "Nothing waiting" line); "Decided" shows the
-/// last few decisions with "Show all" for the rest.
+/// last few decisions with "Show all" for the rest. `parts` lets Agents show the two halves
+/// separately (the safety card sits between them).
 struct ApprovalsSection: View {
+    enum Part: Hashable { case open, decided }
+
     @Environment(MooveStore.self) private var store
     @State private var showAllDecided = false
+    var parts: Set<Part> = [.open, .decided]
 
     /// Decided rows shown before "Show all".
     static let decidedPreview = 3
@@ -20,64 +24,81 @@ struct ApprovalsSection: View {
         let decided = store.snapshot.decidedApprovals
         let shared = store.snapshot.sharedPendingApprovals
         VStack(alignment: .leading, spacing: 0) {
-            if pending.isEmpty && shared.isEmpty {
-                ListHeader(title: "Needs your OK", count: "0")
-                Label("Nothing waiting", systemImage: "checkmark.circle")
-                    .monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.vertical, 14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .ruled()
-                    .accessibilityIdentifier("approvals.nothingWaiting")
-            }
-            if !pending.isEmpty {
-                ListHeader(title: "Needs your OK", count: "\(pending.count)")
-                // Each list in its own VStack: an approval's id is in `pending`, then in `decided`, and
-                // sharing one LazyVStack's id space left the stale pending card showing under History.
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(pending) { approval in
-                        PendingApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
-                                           deal: store.snapshot.deal(for: approval), item: item(for: approval))
-                    }
-                }
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: "iphone.radiowaves.left.and.right")
-                        .font(.system(size: 12))
-                        .accessibilityHidden(true)
-                    Text("Also sent to your phone (Auth0 Guardian).")
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .monoMeta()
-                .padding(.top, 12)
-            }
-            if !shared.isEmpty {
-                // Shared rooms (#195, #200): any room member may decide a listing approval.
-                ListHeader(title: "Shared rooms", count: "\(shared.count)").padding(.top, pending.isEmpty ? 0 : Theme.Space.section)
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(shared) { approval in
-                        PendingApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
-                                           item: item(for: approval),
-                                           sharedOwner: store.snapshot.ownerName(approval.owner))
-                    }
-                }
-            }
-            if !decided.isEmpty {
-                let shown = showAllDecided ? decided : Array(decided.prefix(Self.decidedPreview))
-                ListHeader(title: "Decided", count: "\(decided.count)").padding(.top, Theme.Space.section)
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(shown) { approval in
-                        DecidedApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
-                                           deal: store.snapshot.deal(for: approval), item: item(for: approval))
-                    }
-                }
-                if decided.count > Self.decidedPreview {
-                    ShowAllButton(count: decided.count, expanded: $showAllDecided, id: "approvals.decided")
-                }
-            }
+            if parts.contains(.open) { open(pending: pending, shared: shared) }
+            if parts.contains(.decided) { decidedList(decided) }
         }
         .animation(.default, value: pending)
         .animation(.default, value: decided)
         .animation(.default, value: shared)
+    }
+
+    @ViewBuilder
+    private func open(pending: [Approval], shared: [Approval]) -> some View {
+        if pending.isEmpty && shared.isEmpty {
+            ListHeader(title: "Needs your OK", count: "0")
+            Label("Nothing waiting",
+                  systemImage: "checkmark.circle")
+                .monoMeta()
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .ruled()
+                .accessibilityIdentifier("approvals.nothingWaiting")
+        }
+        if !pending.isEmpty {
+            ListHeader(title: "Needs your OK", count: "\(pending.count)")
+            // Each list in its own VStack: an approval's id is in `pending`, then in `decided`, and
+            // sharing one LazyVStack's id space left the stale pending card showing under History.
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(pending) { approval in
+                    PendingApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
+                                       deal: store.snapshot.deal(for: approval), item: item(for: approval))
+                }
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "iphone.radiowaves.left.and.right")
+                    .font(.system(size: 12))
+                    .accessibilityHidden(true)
+                Text("Also sent to your phone (Auth0 Guardian).")
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .monoMeta()
+            .padding(.top, 12)
+        }
+        if !shared.isEmpty {
+            // Shared rooms (#195, #200): any room member may decide a listing approval.
+            ListHeader(title: "Shared rooms", count: "\(shared.count)").padding(.top, pending.isEmpty ? 0 : 40)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(shared) { approval in
+                    PendingApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
+                                       item: item(for: approval),
+                                       sharedOwner: store.snapshot.ownerName(approval.owner))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func decidedList(_ decided: [Approval]) -> some View {
+        if !decided.isEmpty {
+            let shown = showAllDecided ? decided : Array(decided.prefix(Self.decidedPreview))
+            ListHeader(title: "Decided", count: "\(decided.count)").padding(.top, parts.contains(.open) ? 40 : 0)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(shown) { approval in
+                    DecidedApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
+                                       deal: store.snapshot.deal(for: approval), item: item(for: approval))
+                }
+            }
+            if decided.count > Self.decidedPreview {
+                Button(showAllDecided ? "Show fewer" : "Show all \(decided.count)") {
+                    withAnimation { showAllDecided.toggle() }
+                }
+                .monoText(13.5, weight: .bold)
+                .foregroundStyle(Theme.accentStrong)
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("approvals.decided.showAll")
+            }
+        }
     }
 
     private func item(for approval: Approval) -> Item? {

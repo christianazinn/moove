@@ -35,10 +35,3 @@ extension Item {
         ])
     }
 }
-
-extension Review {
-    /// Items where one more photo would identify the exact product, most valuable first.
-    public static func wantingCloseups(_ items: [Item]) -> [Item] {
-        items.filter { $0.closeupRequest != nil }.sorted { ($0.estValueCents ?? 0) > ($1.estValueCents ?? 0) }
-    }
-}

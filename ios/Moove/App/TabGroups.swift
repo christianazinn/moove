@@ -1,15 +1,16 @@
 import SwiftUI
 import MooveKit
 
-/// The five tabs (decision on #129). Each tab groups existing screens behind a
-/// segmented picker; the screens themselves stay in their feature folders.
+/// The four tabs (decision on #129; Summary was removed in an addendum). Each tab groups
+/// existing screens behind a segmented picker; the screens stay in their feature folders.
 ///
 /// `@AppStorage("moove.tab")` stores the *screen* key ("inventory", "agents"...),
 /// so any screen can still jump with `tab = "<screen>"` and lands on the right
 /// tab and segment. The old "approvals" and "spending" keys are aliases of
-/// "agents" (Sell & Buy went from four segments to three, decision 0129 addendum).
+/// "agents" (Sell & Buy went from four segments to three, decision 0129 addendum),
+/// and the old "summary" key lands on Review, where the kg kept from landfill now lives.
 enum TabGroup: String, CaseIterable {
-    case scan, items, sellBuy, move, summary
+    case scan, items, sellBuy, move
 
     /// Screen keys in picker order. The first one is the default segment.
     var screens: [String] {
@@ -18,7 +19,6 @@ enum TabGroup: String, CaseIterable {
         case .items: ["inventory", "review"]
         case .sellBuy: ["listings", "shopping", "agents"]
         case .move: ["newhome", "pack"]
-        case .summary: ["summary"]
         }
     }
 
@@ -28,7 +28,6 @@ enum TabGroup: String, CaseIterable {
         case .items: "Items"
         case .sellBuy: "Sell & Buy"
         case .move: "Move"
-        case .summary: "Summary"
         }
     }
 
@@ -38,14 +37,15 @@ enum TabGroup: String, CaseIterable {
         case .items: "shippingbox"
         case .sellBuy: "tag"
         case .move: "house"
-        case .summary: "chart.bar.doc.horizontal"
         }
     }
 
-    /// The segment a screen key shows: itself, or "agents" for the merged approvals/spending keys.
+    /// The segment a screen key shows: itself, "agents" for the merged approvals/spending keys,
+    /// or "review" for the removed Summary tab.
     static func segment(for screen: String) -> String {
         switch screen {
         case "approvals", "spending": "agents"
+        case "summary": "review"
         default: screen
         }
     }
@@ -105,7 +105,6 @@ struct TabGroupView: View {
         case "agents": AgentsView()
         case "newhome": NewHomeView()
         case "pack": PackView()
-        case "summary": SummaryView()
         default: ScanHomeView()
         }
     }
