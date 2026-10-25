@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { apifyFetch } from './apify-runs.js';
 import path from 'node:path';
 import { config } from '../config.js';
 
@@ -104,7 +105,7 @@ async function runActor(src: Source, q: string): Promise<Comp[]> {
   url.searchParams.set('maxItems', String(src.maxItems));
   url.searchParams.set('maxTotalChargeUsd', String(config.apify.maxUsdPerRun));
   url.searchParams.set('timeout', '120');
-  const res = await fetch(url, {
+  const res = await apifyFetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${config.apify.token}` },
     body: JSON.stringify(src.input(q)),

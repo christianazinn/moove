@@ -153,3 +153,26 @@ import Testing
         #expect(r.isEmpty && r.unattachedBudgets.isEmpty)
     }
 }
+
+/// Rio's receipts (Oct 24): 39 comps purchases "failed" with HTTP 502 because the Apify search
+/// behind the paywall failed. They read as failed payments; they're failed lookups, never charged.
+@Suite struct LookupFailedReceiptTests {
+    func payment(_ status: PaymentStatus, rail: PaymentRail = .x402) -> Payment {
+        Payment(id: 1, owner: "me", agent: "pricing", rail: rail, purpose: "comps for 'vacuum'", payee: "0xabc",
+                amountUsdMicros: 10_000, status: status, simulated: false)
+    }
+
+    @Test func a502LookupIsNotCharged() {
+        let line = SpendingReceipts.line(.payment(payment(.failed)), failureReason: { _ in "x402 payment for comps for 'vacuum' failed (HTTP 502)" })
+        #expect(line.note == "NOT CHARGED · LOOKUP FAILED")
+        #expect(line.detail == "The listing search behind this payment failed, so it was never charged.")
+        #expect(line.struck)
+    }
+
+    @Test func otherFailuresKeepTheirNote() {
+        let other = SpendingReceipts.line(.payment(payment(.failed)), failureReason: { _ in "payment rejected (HTTP 402)" })
+        #expect(other.note == "FAILED · NO MONEY MOVED")
+        let visa = SpendingReceipts.line(.payment(payment(.failed, rail: .visa)), failureReason: { _ in "HTTP 502" })
+        #expect(visa.note == "FAILED · NO MONEY MOVED")
+    }
+}

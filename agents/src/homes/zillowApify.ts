@@ -15,6 +15,7 @@
 // Runs are cached (trimmed: facts, floor-plan and listing photo URLs + captions, no agent or
 // description text) in .cache/zillow/<zpid>.json, so the same link never pays twice; a cached hit is
 // labeled a replay. The photo classification's outcome is written into the same entry.
+import { apifyFetch } from '../integrations/apify-runs.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
@@ -176,12 +177,12 @@ async function runActor(url: string, token: string, fetchImpl: typeof fetch): Pr
   api.searchParams.set('maxTotalChargeUsd', String(config.apify.maxUsdPerRun));
   api.searchParams.set('timeout', '120');
   const rental = /\/(b|apartments)\//.test(url);
-  const res = await fetchImpl(api, {
+  const res = await apifyFetch(api, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
     body: JSON.stringify({ startUrls: [{ url }], propertyStatus: rental ? 'FOR_RENT' : 'FOR_SALE' }),
     signal: AbortSignal.timeout(150_000),
-  });
+  }, fetchImpl);
   if (!res.ok) throw new Error(`apify ${config.apify.zillowActor}: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
   const rows = (await res.json()) as unknown;
   const row = Array.isArray(rows) ? rows.find(r => r && typeof r === 'object' && !(r as any).error) : undefined;
