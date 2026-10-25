@@ -350,13 +350,16 @@ final class MooveSmokeTests: XCTestCase {
         XCTAssertFalse(app.buttons["Pack"].exists, "no Pack segment")
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Demo house'")).firstMatch.waitForExistence(timeout: slow),
                       "new home picker on top")
+        XCTAssertFalse(app.buttons["Enter room sizes"].exists, "no room-sizes editor")
         XCTAssertTrue(scrollTo(byId("pack.printLabels")), "boxes on the same page")
-        let supplies = byId("pack.supplies.fold")
-        XCTAssertTrue(scrollTo(supplies), "supplies folded at the bottom")
-        supplies.tap()
-        let tape = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Packing tape'")).firstMatch
-        XCTAssertTrue(tape.waitForExistence(timeout: slow), "supplies open")
+        XCTAssertFalse(byId("pack.supplies.fold").exists, "no supplies section")
+        XCTAssertFalse(app.buttons["Full screen"].exists, "the truck itself opens full screen")
         snap("07-move-one-page")
+        // Tapping the truck opens it full screen.
+        let truck = byId("pack.truck3D")
+        XCTAssertTrue(scrollTo(truck, down: false), "inline truck")
+        truck.tap()
+        XCTAssertTrue(app.navigationBars.buttons.firstMatch.waitForExistence(timeout: slow), "truck full screen")
     }
 
     private func launch(guest: Bool = true, environment: [String: String] = [:]) {
