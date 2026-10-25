@@ -36,6 +36,33 @@ extension Review {
         }
     }
 
+    /// Review's flip-card stack: the whole move, one card per item. Items that need you come
+    /// first (`deck`), then everything the agents decided, most valuable first, so you can confirm
+    /// or change each. Items you already decided are left out (they're on the board, and a flip
+    /// through shouldn't re-ask what you just answered) unless `includeYours` ("Start over").
+    public static func flipDeck(_ items: [Item], includeYours: Bool = false) -> [Item] {
+        let needsYou = deck(items)
+        let byValue: (Item, Item) -> Bool = { a, b in
+            if (a.saleValueCents ?? 0) != (b.saleValueCents ?? 0) { return (a.saleValueCents ?? 0) > (b.saleValueCents ?? 0) }
+            return a.id < b.id
+        }
+        let rest = items.filter { ReviewSection.of($0) != .needsYou }
+        let agents = rest.filter { $0.dispositionSource != .user }.sorted(by: byValue)
+        let yours = includeYours ? rest.filter { $0.dispositionSource == .user }.sorted(by: byValue) : []
+        return needsYou + agents + yours
+    }
+
+    /// The card's one line of advice: "Sell · worth $30, costs ~$24 to move" (the worker's sort
+    /// math, `MuseumLabel.moveCostCents`). Just "Keep" when there's no price, nil when the agent
+    /// hasn't decided (or you have).
+    public static func verdict(_ item: Item) -> String? {
+        guard let d = suggestion(item) else { return nil }
+        let name = d.rawValue.capitalized
+        guard let value = item.saleValueCents, value > 0 else { return name }
+        let cost = MuseumLabel.moveCostCents(item)
+        return "\(name) · worth \(MuseumLabel.dollars(value)), costs ~\(MuseumLabel.dollars(cost)) to move"
+    }
+
     /// The four piles (empty ones included), without the deck's items.
     public static func piles(_ items: [Item]) -> [ReviewPile] {
         let decided = items.filter { ReviewSection.of($0) != .needsYou }

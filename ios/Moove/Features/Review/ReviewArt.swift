@@ -2,10 +2,10 @@ import SwiftUI
 import UIKit
 import MooveKit
 
-/// An item's picture on Review: always its voxel model, so a card or row is never blank. The
-/// photo goes on top only once it has actually loaded (`.replace`), or as a small snapshot in
-/// the corner (`.inset`, done by the caller with `ItemPhoto`). A dead tunnel URL, a fixture URL
-/// or a missing file just leaves the model showing.
+/// An item's picture on Review rows: always its voxel model, so a row is never blank. The photo
+/// goes on top only once it has actually loaded (`.replace`). A dead tunnel URL, a fixture URL or
+/// a missing file just leaves the model showing. (The flip cards load the photo themselves, big,
+/// with `ItemPhotoLoader`.)
 struct ItemArt: View {
     enum Photo { case none, replace }
 
