@@ -27,22 +27,26 @@ struct InventoryView: View {
     @State private var editingStory: Item?
     /// The user's own placard stories (item id → line), on this device only.
     @AppStorage(ItemStories.defaultsKey) private var storiesJSON = ""
+    /// Rooms Inventory is narrowed to (tap a room card); empty shows every room.
+    @AppStorage(InventoryFocus.defaultsKey) private var focusJSON = ""
 
     var body: some View {
         let rooms = store.snapshot.roomsNewestFirst(store.visibleRooms)
         let stories = ItemStories.decode(storiesJSON)
+        let focus = InventoryFocus.active(InventoryFocus.decode(focusJSON), rooms: rooms)
+        let shown = InventoryFocus.items(store.visibleItems, focus: focus)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if store.visibleItems.isEmpty {
                     emptyState.padding(.top, 32)
                 } else {
-                    totals.padding(.top, 24)
+                    totals(shown).padding(.top, 24)
                 }
                 if !rooms.isEmpty {
-                    roomsStrip(rooms).padding(.top, 24)
+                    roomsStrip(rooms, focus: focus).padding(.top, 24)
                 }
                 sweepNotes(rooms)
-                ForEach(FunctionHall.halls(store.visibleItems), id: \.hall) { entry in
+                ForEach(FunctionHall.halls(shown), id: \.hall) { entry in
                     hallSection(entry.hall, entry.items, stories: stories)
                 }
                 hiddenRoomsFooter.padding(.top, 40)
@@ -108,22 +112,53 @@ struct InventoryView: View {
     // MARK: Rooms strip
 
     /// One chip per visible room, newest scan first, carrying the room's actions.
-    private func roomsStrip(_ rooms: [Room]) -> some View {
+    private func roomsStrip(_ rooms: [Room], focus: Set<UInt64>) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Rooms").eyebrow().accessibilityAddTraits(.isHeader)
+            HStack(alignment: .firstTextBaseline) {
+                Text(focus.isEmpty ? "Rooms · tap to focus" : "Showing \(focus.count) of \(rooms.count) rooms")
+                    .eyebrow()
+                    .accessibilityAddTraits(.isHeader)
+                Spacer()
+                if !focus.isEmpty {
+                    Button("Show all rooms") { focusJSON = "" }
+                        .monoText(13, weight: .bold, maxScale: 1.4)
+                        .foregroundStyle(Theme.accentInk)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("inventory.showAllRooms")
+                }
+            }
             // Wraps rather than scrolls sideways, so every room's actions stay on screen.
             ChipFlow(spacing: 10) {
-                ForEach(rooms) { roomChip($0) }
+                ForEach(rooms) { roomChip($0, focus: focus) }
             }
         }
     }
 
-    private func roomChip(_ room: Room) -> some View {
+    private func roomChip(_ room: Room, focus: Set<UInt64>) -> some View {
         let shared = !isMine(room)
         let count = store.visibleItems.filter { $0.roomId == room.id }.count
+        let focused = focus.contains(room.id)
         return VStack(alignment: .leading, spacing: 6) {
-            Text(room.name).blockTitle().lineLimit(2)
-            roomMeta(room, shared: shared, count: count)
+            // Tapping the name narrows Inventory to this room (and any others picked)
+            Button {
+                focusJSON = InventoryFocus.encode(InventoryFocus.toggling(room.id, in: focus))
+            } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Text(room.name).blockTitle().lineLimit(2)
+                        if focused {
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accentStrong).accessibilityHidden(true)
+                        }
+                    }
+                    roomMeta(room, shared: shared, count: count)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(room.name), \(count) items")
+            .accessibilityValue(focused ? "Shown" : focus.isEmpty ? "" : "Not shown")
+            .accessibilityHint(focused ? "Stops focusing on this room" : "Shows only the rooms you pick")
+            .accessibilityIdentifier("inventory.focus.\(room.id)")
             HStack(spacing: 6) {
                 if !shared {
                     Button { sharing = room } label: {
@@ -154,6 +189,9 @@ struct InventoryView: View {
         .padding(12)
         .frame(minWidth: 180, alignment: .leading)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous)
+            .strokeBorder(focused ? Theme.accentStrong : .clear, lineWidth: 2))
+        .opacity(focus.isEmpty || focused ? 1 : 0.55)
         .contextMenu { hideButton(room) }
         .accessibilityElement(children: .contain)
         .accessibilityAction(named: "Hide room") { store.setRoom(room.id, hidden: true) }
@@ -369,10 +407,10 @@ struct InventoryView: View {
     }
 
     /// Item count, room count and estimated value between rules, split by hairlines.
-    private var totals: some View {
-        let priced = store.visibleItems.compactMap(\.saleValueCents)
+    private func totals(_ shown: [Item]) -> some View {
+        let priced = shown.compactMap(\.saleValueCents)
         return HStack(spacing: 0) {
-            StatFigure(label: "Items", value: "\(store.visibleItems.count)")
+            StatFigure(label: "Items", value: "\(shown.count)")
                 .padding(.vertical, 18).padding(.trailing, 14)
             Rectangle().fill(Theme.line).frame(width: 1)
             StatFigure(label: "Rooms", value: "\(store.visibleRooms.count)")
