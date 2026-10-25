@@ -104,7 +104,7 @@ struct ReviewDeckView: View {
             .frame(height: cardHeight)
             .overlay {
                 if let pointing {
-                    RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
+                    RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
                         .strokeBorder(ReviewPalette.glow(pointing), lineWidth: 3 + 3 * progress)
                         .opacity(progress)
                         .shadow(color: ReviewPalette.glow(pointing).opacity(0.6 * progress), radius: 14)
@@ -257,10 +257,11 @@ struct ReviewDeckView: View {
             VStack(spacing: 6) {
                 Image(systemName: ReviewPalette.arrow(d))
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(suggested ? Theme.accentInk : d.tint)
+                    // Neutral circles; only the suggested one takes the accent (Lisa: less color).
+                    .foregroundStyle(suggested ? Theme.accentInk : Theme.text)
                     .frame(width: 56, height: 56)
-                    .background(Circle().fill(suggested ? ReviewPalette.solid(d) : Theme.surface))
-                    .overlay(Circle().strokeBorder(ReviewPalette.solid(d).opacity(0.5), lineWidth: 1))
+                    .background(Circle().fill(suggested ? Theme.accentFill : Theme.surface))
+                    .overlay(Circle().strokeBorder(Theme.line, lineWidth: 1))
                 Text(d.label).monoText(12.5, weight: .bold, maxScale: 1.6).foregroundStyle(Theme.text).lineLimit(1)
             }
             .frame(minWidth: 64, minHeight: 44)
@@ -283,10 +284,15 @@ private struct ReviewFlipCard<Front: View, Back: View>: View {
     let back: Back
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
         ZStack {
             front.opacity(flipped ? 0 : 1)
             back.opacity(flipped ? 1 : 0)
         }
+        // Clip both sides to the card before turning it, so a photo can never draw outside the
+        // card mid-flip; the shadow goes on a shape behind, outside the clip.
+        .clipShape(shape)
+        .background(shape.fill(Theme.bg).mooveShadow(.lifted))
         .rotation3DEffect(.degrees(turn), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
     }
 }
@@ -300,21 +306,23 @@ private struct ReviewCardFront: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ZStack {
-                Theme.surface2
-                if let photo {
-                    Image(uiImage: photo).resizable().scaledToFill().transition(.opacity)
-                } else if tried {
-                    ItemArt(item: item, size: 230, photo: .none).transition(.opacity)
+            // The art area takes the space it's given; the photo fills it as an overlay, so a
+            // scaled-to-fill photo can't push the card wider or taller than the deck's frame.
+            Theme.surface2
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay {
+                    if let photo {
+                        Image(uiImage: photo).resizable().scaledToFill().transition(.opacity)
+                    } else if tried {
+                        ItemArt(item: item, size: 230, photo: .none).transition(.opacity)
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
+                .clipped()
             .overlay(alignment: .topLeading) { ReviewCardBadge(item: item).padding(12) }
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(item.name.capitalizedFirst)
-                        .reviewSerif(22, weight: .semibold)
+                        .serifType(22, weight: .semibold)
                         .foregroundStyle(Theme.text)
                         .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -323,12 +331,11 @@ private struct ReviewCardFront: View {
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
                 }
-                ReviewVerdict(item: item)
             }
             .padding(16)
         }
         .background(ReviewCardPaper())
-        .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .task(id: item.photoUrls) {
             let loaded = item.photoUrls.isEmpty ? nil : await ItemPhotoLoader.load(item.photoUrls)
             withAnimation(.easeOut(duration: 0.2)) {
@@ -349,43 +356,41 @@ private struct ReviewCardBack: View {
             ItemArt(item: item, size: 150, photo: .none)
                 .frame(maxWidth: .infinity)
                 .frame(height: 170)
-                .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+                .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
                 .overlay(alignment: .topLeading) { ReviewCardBadge(item: item).padding(10) }
             Text(item.name.capitalizedFirst)
-                .reviewSerif(20, weight: .semibold)
+                .serifType(20, weight: .semibold)
                 .foregroundStyle(Theme.text)
                 .lineLimit(2)
-            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
-                fact("Size", Self.size(item))
-                fact("Value", Self.value(item, range))
-                if let condition = item.condition { fact("Condition", "\(condition) / 5") }
-            }
-            if let reason = item.dispositionReason, item.dispositionSource == .auto {
-                Text(reason.capitalizedFirst)
-                    .sansText(14.5)
-                    .foregroundStyle(Theme.muted)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if item.maybeSentimental {
-                Label("Possibly sentimental. Moove leaves it to you.", systemImage: "heart.fill")
-                    .sansText(14)
-                    .foregroundStyle(Theme.danger)
-                    .lineLimit(2)
-            }
+            // One line of why (Lisa: less on the card); size, value and condition are read by VoiceOver.
+            Text(Self.reason(item))
+                .sansText(14.5)
+                .foregroundStyle(Theme.muted)
+                .lineLimit(1)
             Spacer(minLength: 0)
-            ReviewVerdict(item: item)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Self.spoken(item, range))
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(ReviewCardPaper())
     }
 
-    private func fact(_ label: String, _ value: String) -> some View {
-        GridRow {
-            Text(label.uppercased()).monoText(11, weight: .semibold, maxScale: 1.6).tracking(0.6).foregroundStyle(Theme.faint)
-            Text(value).monoText(13.5).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.8)
-        }
+    /// "Possibly sentimental", else the agents' reason, else what Moove suggests or you chose.
+    static func reason(_ item: Item) -> String {
+        if item.maybeSentimental { return "Possibly sentimental" }
+        if let reason = item.dispositionReason, item.dispositionSource == .auto { return reason.capitalizedFirst }
+        if let verdict = Review.verdict(item) { return "Moove says: \(verdict)" }
+        if item.dispositionSource == .user, item.disposition != .undecided { return "You chose \(item.disposition.label)" }
+        return ""
+    }
+
+    static func spoken(_ item: Item, _ range: ClosedRange<Int64>?) -> String {
+        var parts = [item.name.capitalizedFirst, "size \(size(item))", "value \(value(item, range))"]
+        if let condition = item.condition { parts.append("condition \(condition) of 5") }
+        let why = reason(item)
+        if !why.isEmpty { parts.append(why) }
+        return parts.joined(separator: ", ")
     }
 
     static func value(_ item: Item, _ range: ClosedRange<Int64>?) -> String {
@@ -400,22 +405,6 @@ private struct ReviewCardBack: View {
 }
 
 /// "Moove says: Sell · worth $30, costs ~$24 to move", or "You chose Keep" once it's yours.
-private struct ReviewVerdict: View {
-    let item: Item
-
-    var body: some View {
-        if let verdict = Review.verdict(item) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Image(systemName: "sparkles").font(.system(size: 11)).accessibilityHidden(true)
-                Text("Moove says: \(verdict)").monoText(12.5, weight: .semibold).lineLimit(2)
-            }
-            .foregroundStyle(item.disposition.tint)
-        } else if item.dispositionSource == .user, item.disposition != .undecided {
-            Text("You chose \(item.disposition.label)").monoText(12.5, weight: .semibold).foregroundStyle(Theme.muted)
-        }
-    }
-}
-
 /// "Needs you" on the cards only a person can decide (a heart when possibly sentimental).
 private struct ReviewCardBadge: View {
     let item: Item
@@ -437,10 +426,10 @@ private struct ReviewCardBadge: View {
 /// The card stock every deck card is printed on.
 private struct ReviewCardPaper: View {
     var body: some View {
-        RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
+        RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
             .fill(Theme.bg)
-            .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
-            .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
+            .mooveShadow(.lifted)
     }
 }
 
@@ -490,7 +479,7 @@ struct ReviewAllDecided: View {
                 .foregroundStyle(Theme.accentStrong)
                 .symbolEffect(.bounce, value: bounce)
                 .accessibilityHidden(true)
-            Text("All done").reviewSerif(26, weight: .semibold).foregroundStyle(Theme.text)
+            Text("All done").serifType(26, weight: .semibold).foregroundStyle(Theme.text)
             HStack(spacing: 0) {
                 figure("\(totals.itemsToMove)", "moving")
                 figure(totals.expectedSaleCents.usd, "to sell")
@@ -508,7 +497,7 @@ struct ReviewAllDecided: View {
         .padding(.vertical, 24)
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
-        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .onAppear { if !reduceMotion { bounce += 1 } }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("review.allDecided")
@@ -516,27 +505,10 @@ struct ReviewAllDecided: View {
 
     private func figure(_ value: String, _ label: String) -> some View {
         VStack(spacing: 4) {
-            Text(value).reviewSerif(20, weight: .semibold).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).serifType(20, weight: .semibold).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.6)
             Text(label.uppercased()).monoText(11, maxScale: 1.5).tracking(0.6).foregroundStyle(Theme.muted)
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
-    }
-}
-
-extension View {
-    /// Serif display type for Review's titles and figures, scaled for Dynamic Type (capped at 2×).
-    func reviewSerif(_ size: CGFloat, weight: Font.Weight = .regular) -> some View {
-        modifier(ReviewSerif(size: size, weight: weight))
-    }
-}
-
-private struct ReviewSerif: ViewModifier {
-    let size: CGFloat
-    let weight: Font.Weight
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    func body(content: Content) -> some View {
-        content.font(.system(size: size * min(dynamicTypeSize.textScale, 2), weight: weight, design: .serif))
     }
 }

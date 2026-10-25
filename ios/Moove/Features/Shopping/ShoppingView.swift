@@ -99,8 +99,8 @@ struct ShoppingView: View {
         }
 
         if !approvals.isEmpty {
-            ListHeader(title: "Needs you", count: "\(approvals.count)")
-                .padding(.top, 32)
+            ListHeader(title: "To approve", count: "\(approvals.count)")
+                .padding(.top, Theme.Space.section)
                 .padding(.horizontal, Theme.gutter)
             ForEach(approvals) { approval in
                 PurchaseApprovalCard(approval: approval)
@@ -111,7 +111,7 @@ struct ShoppingView: View {
 
         ForEach(front.sections) { section in
             StorefrontSectionHeader(section: section)
-                .padding(.top, 36)
+                .padding(.top, Theme.Space.section)
                 .padding(.bottom, 14)
                 .padding(.horizontal, Theme.gutter)
                 .id("shopping.section.\(section.hall.rawValue)")
@@ -123,7 +123,7 @@ struct ShoppingView: View {
         }
 
         if let blocked = front.blocked {
-            StorefrontShelfView(shelf: blocked).padding(.top, 40)
+            StorefrontShelfView(shelf: blocked).padding(.top, Theme.Space.section)
         }
     }
 
@@ -257,7 +257,7 @@ struct PurchaseApprovalCard: View {
             if let level = deal?.fraudLevel, let score = deal?.fraudScore {
                 FraudChip(level: level, score: score)
             }
-            Text("Over your approval limit. The agent pays with Visa only after you approve.")
+            Text("Paid with Visa only after you approve.")
                 .sansText(14)
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
