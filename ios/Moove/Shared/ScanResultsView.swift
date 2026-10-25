@@ -159,8 +159,12 @@ struct EstimatedRoom {
         let layoutItems = layoutItems ?? items.map(LayoutItem.init)
         // Unmatched furniture (the photo sweep's finds): estimated spots that avoid the scanned pieces.
         let matched = Set(result.placements.map(\.itemId))
+        // Common sense first: an ottoman the scan missed tucks under the desk, a wall TV hangs over it.
+        let anchored = ScanFill.anchored(layoutItems.filter { !matched.contains($0.id) }, around: result.placements,
+                                         items: layoutItems, room: name)
+        let anchoredIds = Set(anchored.map(\.itemId))
         let unmatchedFurniture = layoutItems.filter {
-            !matched.contains($0.id) && PropPlacer.role(of: VoxelItemSpec($0)) == .furniture
+            !matched.contains($0.id) && !anchoredIds.contains($0.id) && PropPlacer.role(of: VoxelItemSpec($0)) == .furniture
         }
         var placements = result.placements
         if !unmatchedFurniture.isEmpty {
@@ -168,6 +172,7 @@ struct EstimatedRoom {
                 .solve(unmatchedFurniture, style: .byFunction, around: result.placements, fixedItems: layoutItems)
                 .placements
         }
+        placements += anchored
         // Small things and wall pieces RoomPlan didn't locate go on the scanned furniture and
         // walls so the room looks lived-in. Scanned ones (`matched`) keep their scanned spot:
         // a scanned lamp only goes up onto furniture whose top is where it was seen.

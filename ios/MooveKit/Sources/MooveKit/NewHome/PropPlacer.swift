@@ -180,7 +180,7 @@ public struct PropPlacer: Sendable {
             let p = out[i]
             guard let m = model(p.itemId, wall: true), let room = plan.room(named: p.room) ?? plan.room(at: PlanPoint(p.x, p.y)) else { continue }
             if let done = hang(p, grid: m.grid, in: room, solids: solids[room.name] ?? [], hung: hung[room.name] ?? [],
-                               keepSpot: scanned.contains(p.itemId)) {
+                               keepSpot: scanned.contains(p.itemId), tall: specs[p.itemId].map { VoxelModels.kind($0) == .tv } ?? false) {
                 out[i] = done.placement
                 hung[room.name, default: []].append((done.rect, done.bottom, done.top))
                 unplacedMissing.remove(p.itemId)
@@ -358,7 +358,7 @@ public struct PropPlacer: Sendable {
     /// windows, furniture below and other hung items; slides along the wall when blocked.
     /// Too tall to hang under the visible wall: leans on the floor against it.
     func hang(_ p: Placement, grid: VoxelGrid, in room: FloorPlanRoom, solids: [(rect: OrientedRect, bottom: Double, top: Double)],
-              hung: [(rect: OrientedRect, bottom: Double, top: Double)], keepSpot: Bool = false) -> Hung? {
+              hung: [(rect: OrientedRect, bottom: Double, top: Double)], keepSpot: Bool = false, tall: Bool = false) -> Hung? {
         let V = Self.V
         let w = Double(grid.nx) * V, d = Double(grid.nz) * V, h = Double(grid.ny) * V
         let ccw = room.signedArea >= 0 ? room.polygon : room.polygon.reversed()
@@ -373,9 +373,12 @@ public struct PropPlacer: Sendable {
         edges.sort { (e1: (PlanPoint, PlanPoint), e2: (PlanPoint, PlanPoint)) -> Bool in
             Self.distance(center, e1.0, e1.1) < Self.distance(center, e2.0, e2.1)
         }
-        let lean = wallTopM - h < Self.minHangBottomM
+        // A TV hangs where TVs really go, over the desk or dresser, so it may rise above the
+        // cut-away (to 30 cm under the ceiling); art stays under it.
+        let topM = tall ? max(wallTopM, plan.wallHeightM - 0.3) : wallTopM
+        let lean = topM - h < Self.minHangBottomM
         let wanted = p.elevationM ?? (hangCenterM - h / 2)
-        let bottom0 = lean ? 0 : min(max(wanted, Self.minHangBottomM), wallTopM - h)
+        let bottom0 = lean ? 0 : min(max(wanted, Self.minHangBottomM), topM - h)
         // A scanned piece: its own (nearest) wall, at its spot along it.
         if keepSpot { edges = Array(edges.prefix(1)) }
         for (a, b) in edges {
@@ -406,7 +409,7 @@ public struct PropPlacer: Sendable {
                     if lean { ok = false; break }
                     if s.top > bottom - 0.03 && s.bottom < bottom + h { bottom = s.top + 0.05 }
                 }
-                guard ok, bottom + h <= wallTopM + 1e-9 || lean else { continue }
+                guard ok, bottom + h <= topM + 1e-9 || lean else { continue }
                 if !keepSpot, hung.contains(where: { $0.rect.overlaps(rect.inflated(by: 0.04)) && $0.bottom < bottom + h && bottom < $0.top }) { continue }
                 var q = p
                 q.x = c.x; q.y = c.y

@@ -190,7 +190,9 @@ import Testing
         for p in hung {
             let g = VoxelModels.build(VoxelModels.wallVariant(Self.specs[p.itemId]!))
             let bottom = try! #require(p.elevationM)
-            #expect(bottom >= 0.1 && bottom + Double(g.ny) * Self.V <= 1.1 + 1e-9, "\(p.itemId) under the cut walls")
+            // Art under the cut walls; a TV may hang higher, as over a desk (30 cm under the ceiling).
+            let top = VoxelModels.kind(Self.specs[p.itemId]!) == .tv ? Self.plan.wallHeightM - 0.3 : 1.1
+            #expect(bottom >= 0.1 && bottom + Double(g.ny) * Self.V <= top + 1e-9, "\(p.itemId) under \(top) m")
             // Back against the nearest wall's inner face, front toward the room.
             let edgeDistance = room.edges.map { PropPlacer.distance(PlanPoint(p.x, p.y), $0.0, $0.1) }.min()!
             #expect(abs(edgeDistance - (Self.V + 0.005 + Double(g.nz) * Self.V / 2)) < 1e-6)
