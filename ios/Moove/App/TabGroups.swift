@@ -85,11 +85,9 @@ struct TabGroupView: View {
                     }
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity)
-                    .background(group.palette.wash)
+                    .background(Theme.bg)
                 }
             }
-            // Each tab's color identity (Theme.Palette, decision 0050 addendum).
-            .environment(\.tabPalette, group.palette)
     }
 
     /// The selected pill; "approvals"/"spending" select Agents (it scrolls to the section itself).

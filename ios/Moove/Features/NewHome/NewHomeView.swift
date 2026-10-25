@@ -267,7 +267,7 @@ struct NewHomeDetail: View {
                 .padding(.bottom, 40)
             }
         }
-        .background(Theme.Tab.wash)
+        .background(Theme.bg)
         .onChange(of: plan) { focusRoom = nil }
         // Re-runs (and cancels the previous run) whenever the plan or the items change.
         .task(id: SolveKey(plan: plan, items: furniture.items)) {

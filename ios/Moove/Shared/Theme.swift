@@ -155,10 +155,14 @@ extension View {
         monoText(14).foregroundStyle(Theme.text).lineLimit(1)
     }
 
-    /// Cream background (washed with the tab's color), the tab's accent as tint, warm ink.
-    /// Lists and forms drop their gray background.
+    /// Cream background, sage tint, warm ink. Lists and forms drop their gray background.
     func mooveScreen() -> some View {
-        modifier(MooveScreen())
+        self
+            .foregroundStyle(Theme.text)
+            .tint(Theme.accentStrong)
+            .scrollContentBackground(.hidden)
+            .background(Theme.bg.ignoresSafeArea())
+            .toolbarBackground(Theme.bg, for: .navigationBar)
     }
 
     /// A 1 pt rule under (or over) the view, like a row in a ledger.
@@ -175,16 +179,9 @@ extension View {
 struct PageHeader: View {
     var title: String
     var lede: String?
-    @Environment(\.tabPalette) private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // The tab's color as a short eyebrow mark (decorative).
-            Capsule()
-                .fill(palette.accent)
-                .frame(width: 28, height: 4)
-                .padding(.bottom, 12)
-                .accessibilityHidden(true)
             Text(title)
                 .pageTitle()
                 .fixedSize(horizontal: false, vertical: true)
@@ -316,7 +313,7 @@ struct StatFigure: View {
     }
 }
 
-/// Pill-shaped button: the tab's accent fill (sage outside the tabs), ink outline, or bare text. Always at least 44 pt tall to tap.
+/// Pill-shaped button: sage fill, ink outline, or bare text. Always at least 44 pt tall to tap.
 struct PillButtonStyle: ButtonStyle {
     enum Kind { case primary, outline, text, danger }
     var kind: Kind = .primary
@@ -331,7 +328,6 @@ struct PillButtonStyle: ButtonStyle {
         let compact: Bool
         let configuration: Configuration
         @Environment(\.isEnabled) private var isEnabled
-        @Environment(\.tabPalette) private var palette
 
         var body: some View {
             configuration.label
@@ -343,7 +339,7 @@ struct PillButtonStyle: ButtonStyle {
                 .background {
                     switch kind {
                     case .primary:
-                        Capsule().fill(configuration.isPressed ? palette.fillPressed : palette.fill)
+                        Capsule().fill(configuration.isPressed ? Theme.accentFillPressed : Theme.accentFill)
                     case .outline, .danger:
                         Capsule()
                             .fill(configuration.isPressed ? Theme.surface : .clear)
@@ -359,7 +355,7 @@ struct PillButtonStyle: ButtonStyle {
 
         private var foreground: Color {
             switch kind {
-            case .primary: palette.ink
+            case .primary: Theme.accentInk
             case .outline: Theme.text
             case .text: configuration.isPressed ? Theme.text : Theme.muted
             case .danger: Theme.danger
@@ -391,12 +387,11 @@ struct MonoTag: View {
     }
 }
 
-/// Segmented set of mono choices on a quiet track; the selected one is filled with the tab's accent.
+/// Segmented set of mono choices on a quiet track; the selected one sits raised on the page color.
 struct PillPicker<Value: Hashable>: View {
     var options: [Value]
     @Binding var selection: Value
     var label: (Value) -> String
-    @Environment(\.tabPalette) private var palette
 
     var body: some View {
         HStack(spacing: 2) {
@@ -407,9 +402,11 @@ struct PillPicker<Value: Hashable>: View {
                     .lineLimit(1)
                     .padding(.horizontal, 14)
                     .frame(minHeight: 38)
-                    .foregroundStyle(selected ? palette.ink : Theme.muted)
+                    .foregroundStyle(selected ? Theme.text : Theme.muted)
                     .background {
-                        if selected { Capsule().fill(palette.fill) }
+                        if selected {
+                            Capsule().fill(Theme.bg).overlay(Capsule().strokeBorder(Theme.lineStrong, lineWidth: 1))
+                        }
                     }
                     .contentShape(Capsule())
                     .buttonStyle(.plain)
@@ -427,7 +424,6 @@ struct ChoiceChip: View {
     var meta: String?
     var selected: Bool
     var action: () -> Void
-    @Environment(\.tabPalette) private var palette
 
     var body: some View {
         Button(action: action) {
@@ -435,123 +431,18 @@ struct ChoiceChip: View {
                 Text(title).monoText(13, weight: selected ? .bold : .regular, maxScale: 1.5)
                 if let meta {
                     Text(meta).monoText(12, maxScale: 1.5)
-                        .foregroundStyle(selected ? palette.ink.opacity(0.85) : Theme.muted)
+                        .foregroundStyle(selected ? Theme.accentInk.opacity(0.85) : Theme.muted)
                 }
             }
             .lineLimit(1)
             .padding(.horizontal, 14)
             .frame(minHeight: 36)
-            .foregroundStyle(selected ? palette.ink : Theme.text)
-            .background(Capsule().fill(selected ? palette.fill : Theme.surface))
+            .foregroundStyle(selected ? Theme.accentInk : Theme.text)
+            .background(Capsule().fill(selected ? Theme.accentFill : Theme.surface))
             .padding(.vertical, 4)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-}
-
-// MARK: Tab palettes (decision 0050 addendum)
-
-extension Theme {
-    /// One tab's color identity: a page wash, an accent for marks and fills, and a text-safe
-    /// accent. `TabGroupView` puts its tab's palette in the environment (`\.tabPalette`);
-    /// `.mooveScreen()`, `PageHeader`, `PillPicker`, `ChoiceChip` and `.pill(.primary)` read it.
-    /// Outside the tabs (Settings, sign-in) it is `standard`: today's cream and sage.
-    ///
-    /// Contrast (WCAG): `text`/`muted` on `wash` ≥ 5.1:1, `accentStrong` on `wash` and
-    /// `surface` ≥ 4.7:1, `ink` on `fill` / `fillPressed` ≥ 5.1:1, in both modes.
-    /// Danger colors and `MonoTag` (SIMULATED) don't change per tab.
-    struct Palette: Equatable, Sendable {
-        /// Page background: `bg` with ~6% of the tab hue (light), deep tinted walnut (dark).
-        var wash: Color
-        /// Decorative: dots, bars, the page header's mark.
-        var accent: Color
-        /// Reads as text on `wash` and `surface`; also the tab bar and control tint.
-        var accentStrong: Color
-        /// Primary buttons and selected pills.
-        var fill: Color
-        var fillPressed: Color
-        /// Text on `fill`.
-        var ink: Color
-
-        static let standard = Palette(wash: Theme.bg, accent: Theme.accent, accentStrong: Theme.accentStrong,
-                                      fill: Theme.accentFill, fillPressed: Theme.accentFillPressed, ink: Theme.accentInk)
-
-        /// Scan: sage.
-        static let sage = make(wash: (0xEDE9DF, 0x26241D), accent: (0x8B9A7B, 0x9AAA89), strong: (0x55644A, 0xB2C1A0),
-                               fill: (0x55644A, 0x9AAA89), pressed: (0x48553F, 0x8B997B))
-        /// Items: ochre / mustard.
-        static let ochre = make(wash: (0xEFE8DB, 0x2A231A), accent: (0xB48A3E, 0xCFA45A), strong: (0x7D5B1C, 0xD9B36E),
-                                fill: (0x7D5B1C, 0xCFA45A), pressed: (0x6A4D18, 0xBA9451))
-        /// Sell & Buy: terracotta (more orange than `danger`).
-        static let terracotta = make(wash: (0xF0E6DB, 0x2B211A), accent: (0xC4683F, 0xDA845C), strong: (0x93461F, 0xE59A76),
-                                     fill: (0x93461F, 0xDA845C), pressed: (0x7D3C1A, 0xC47753))
-        /// Move: dusty teal.
-        static let teal = make(wash: (0xEBE9E1, 0x242421), accent: (0x6F9AA0, 0x82AEB4), strong: (0x3D6A71, 0x9CC3C8),
-                               fill: (0x3D6A71, 0x82AEB4), pressed: (0x345A60, 0x759DA2))
-        /// Summary: plum.
-        static let plum = make(wash: (0xEEE7E0, 0x282220), accent: (0x9A7B95, 0xB496AE), strong: (0x6B4B66, 0xC8AEC2),
-                               fill: (0x6B4B66, 0xB496AE), pressed: (0x5B4057, 0xA2879D))
-
-        /// (light, dark) pairs; `ink` is white on the light fill and walnut on the dark one.
-        private static func make(wash: (UInt32, UInt32), accent: (UInt32, UInt32), strong: (UInt32, UInt32),
-                                 fill: (UInt32, UInt32), pressed: (UInt32, UInt32)) -> Palette {
-            func c(_ p: (UInt32, UInt32)) -> Color { Color(uiColor: Theme.dynamicUIColor(p.0, p.1)) }
-            return Palette(wash: c(wash), accent: c(accent), accentStrong: c(strong), fill: c(fill), fillPressed: c(pressed),
-                           ink: Theme.accentInk)
-        }
-    }
-
-    /// Shape styles that resolve to the current tab's palette, for views that don't read the
-    /// environment themselves: `.background(Theme.Tab.wash)` instead of `.background(Theme.bg)`
-    /// for a page or sticky bar that should match the tab's wash.
-    enum Tab {
-        static let wash = TabTone(role: .wash)
-        static let accent = TabTone(role: .accent)
-        static let accentStrong = TabTone(role: .accentStrong)
-        static let fill = TabTone(role: .fill)
-    }
-}
-
-/// A `ShapeStyle` that picks one color from the environment's tab palette.
-struct TabTone: ShapeStyle {
-    enum Role: Sendable { case wash, accent, accentStrong, fill }
-    var role: Role
-
-    func resolve(in environment: EnvironmentValues) -> Color {
-        let p = environment.tabPalette
-        switch role {
-        case .wash: return p.wash
-        case .accent: return p.accent
-        case .accentStrong: return p.accentStrong
-        case .fill: return p.fill
-        }
-    }
-}
-
-private struct TabPaletteKey: EnvironmentKey {
-    static let defaultValue = Theme.Palette.standard
-}
-
-extension EnvironmentValues {
-    /// The selected tab's palette; set by `TabGroupView`, `standard` elsewhere.
-    var tabPalette: Theme.Palette {
-        get { self[TabPaletteKey.self] }
-        set { self[TabPaletteKey.self] = newValue }
-    }
-}
-
-/// `.mooveScreen()`: the page wash, tint and nav bar from the tab's palette.
-private struct MooveScreen: ViewModifier {
-    @Environment(\.tabPalette) private var palette
-
-    func body(content: Content) -> some View {
-        content
-            .foregroundStyle(Theme.text)
-            .tint(palette.accentStrong)
-            .scrollContentBackground(.hidden)
-            .background(palette.wash.ignoresSafeArea())
-            .toolbarBackground(palette.wash, for: .navigationBar)
     }
 }
