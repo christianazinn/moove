@@ -158,7 +158,9 @@ final class MooveSmokeTests: XCTestCase {
         snap("03-scan-finished")
         done.tap()
         XCTAssertTrue(app.navigationBars["Inventory"].waitForExistence(timeout: slow), "jumped to Inventory")
-        XCTAssertTrue(scrollTo(text(matching: "Demo bedroom")), "new room in Inventory")
+        // The Rooms chips are one button each: "<room>, demo scan, <n> items, scanned …".
+        let room = app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] %@", "Demo bedroom,")).firstMatch
+        XCTAssertTrue(scrollTo(room, down: false), "new room in Inventory")
         snap("03-inventory")
         // Offline photo sweep (#181): the room photos "find" a plant RoomPlan missed. It stands
         // on the binder's Light & decor page.
