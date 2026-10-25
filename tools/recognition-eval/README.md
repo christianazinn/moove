@@ -34,7 +34,8 @@ The models download through open_clip / Hugging Face:
 | `research2/` | Prompts, few-shot probe, merges and size priors | `final_results.md` (best recipe), `fewshot*.py`, `loro.py` (leave-one-room-out), `adapter_classes.json` (the 62 shipped classes) |
 | `research3/` | Multi-keyframe voting (projects scanned 3D boxes into saved keyframes) | `mv_common.py` (projection + occlusion), `mv_eval.py`, `mv_honest.py` (held-out-scan selection), `mv_results.md` |
 | `research4/` | Recheck policy for RoomPlan objects (reject-only, 0.7) | `rp_policy.py`, `rp_policy_results.md` |
-| `research5/` | Detector label → category fixes and per-label thresholds (not applied yet) | `final_out.md` (before/after), `proposal.py`, `sim.py` (keyframe tracking sim), `frames_det.swift` |
+| `research5/` | Detector label → category fixes and per-label thresholds, measured without the recheck (superseded, see research6) | `final_out.md` (before/after), `proposal.py`, `sim.py` (keyframe tracking sim), `frames_det.swift` |
+| `research6/` | research5's mapping fixes on top of the shipped recheck: no gain, drops lose 4 real objects | `mapping_with_recheck.py` (imports the scratch `fuse.py` path; edit `sys.path`), `mapping_with_recheck.md` |
 
 ## Rerun the main tables
 

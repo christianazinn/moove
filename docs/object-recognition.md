@@ -115,11 +115,12 @@ Report every one of these, so models can be compared:
 
 ## Next steps, roughly by value per effort
 
-1. **Apply the detector mapping fixes** (`research5`, a ready diff in `research5/final_out.md` and below). Mapping alone takes recorded detector objects from **29 to 47 of 84** right. Per-label thresholds cut public wrong picks by 23%. The changes:
-   - `storage bin` → box
-   - ignore `space heater`, `air purifier`, `room divider`, `workbench`, `humidifier`, `crib`, `sewing machine`, `electronic keyboard`, `water dispenser`, `plant stand`, `guitar amplifier` and generic `vacuum cleaner`
-   - raise the bars for upright/stick vacuums (0.75 / 0.65), chair 0.6, refrigerator 0.6, mini fridge 0.75 and rug 0.7
-   - Caveat: crib/workbench/bench recall can't be measured, because the bench has no real ones.
+1. **Don't apply research5's detector mapping fixes on their own.** Before #381 they took recorded detector objects from 29 to 47 of 84. On top of the shipped recheck (`research6/mapping_with_recheck.md`) they add nothing on iPad scans (79.5% with merges either way):
+   - the remaps (`storage bin`/`dollhouse` → box) are already done by the recheck
+   - the label drops delete 4 real objects (clothes racks read as crib / sewing machine / room divider, a TV read as air purifier) that the recheck would keep or fix
+   - the per-label floors change nothing measurable
+
+   Better targets: things the recheck can't fix, i.e. objects the detector never finds and thin vertical clutter (mop, broom, tripod, dolly) that it calls "vacuum" and the classifier keeps.
 2. **Measure on the device.** Time the recheck on an A12Z iPad and a recent iPhone (4 crops per object). Rerun the fused-pipeline numbers on new scans with the full-res keyframes, which research3 couldn't use.
 3. **YOLOE-26L.** +2.6 LVIS AP and +6 AP on rare classes at the same size and licence.
    - **Export:** `nms=True`, detection-only (commands in `research` notes: `YOLOE("yoloe-26l.yaml").load("yoloe-26l-seg.pt")`, then `load_prompt_embeddings`, then `export(format="coreml", nms=True, agnostic_nms=True)`).
