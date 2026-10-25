@@ -327,6 +327,22 @@ final class MooveSmokeTests: XCTestCase {
         XCTAssertTrue(plant.waitForExistence(timeout: slow) || scrollTo(plant), "every room again")
     }
 
+    func testMoveIsOnePage() {
+        launch()
+        open(tab: "Move")
+        // No New Home / Pack pills: the picker, the truck and the boxes share one page.
+        XCTAssertFalse(app.buttons["Pack"].exists, "no Pack segment")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Demo house'")).firstMatch.waitForExistence(timeout: slow),
+                      "new home picker on top")
+        XCTAssertTrue(scrollTo(byId("pack.printLabels")), "boxes on the same page")
+        let supplies = byId("pack.supplies.fold")
+        XCTAssertTrue(scrollTo(supplies), "supplies folded at the bottom")
+        supplies.tap()
+        let tape = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Packing tape'")).firstMatch
+        XCTAssertTrue(tape.waitForExistence(timeout: slow), "supplies open")
+        snap("07-move-one-page")
+    }
+
     private func launch(guest: Bool = true, environment: [String: String] = [:]) {
         continueAfterFailure = false
         app = XCUIApplication()
