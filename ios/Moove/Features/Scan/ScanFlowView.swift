@@ -136,15 +136,8 @@ struct ScanFlowView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 28)
                 .chromeRow()
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Room name").eyebrow()
-                    TextField("Room name", text: $session.roomName)
-                        .monoText(16, weight: .bold)
-                        .foregroundStyle(Theme.text)
-                        .frame(minHeight: 44)
-                        .ruled()
-                }
-                .chromeRow()
+                ScanRoomNameField(session: session)
+                    .chromeRow()
                 if session.objects.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("RoomPlan didn't recognize any furniture", systemImage: "exclamationmark.magnifyingglass")

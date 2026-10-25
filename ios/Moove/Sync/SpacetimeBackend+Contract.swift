@@ -1,6 +1,7 @@
 import Foundation
 import MooveKit
 import SpacetimeDB
+import BSATN
 import MooveBindings
 
 // Contract-specific glue for the module in spacetime/src/index.ts (see
@@ -161,6 +162,13 @@ extension SpacetimeBackend {
     // Fix-it: correct a misread scan item (existing reducers).
     func renameItem(itemId: UInt64, name: String) async throws {
         try await call(MooveBindings.RenameItemReducer(itemid: itemId, nameArg: name))
+    }
+
+    /// `rename_room(roomId, name)` (#370). Not in the generated bindings until the module ships
+    /// it, so this calls it by name (`RenameRoomCall`); until then the server rejects it and
+    /// `MooveStore.renameRoom` keeps the name on this device.
+    func renameRoom(roomId: UInt64, name: String) async throws {
+        try await call(RenameRoomCall(roomid: roomId, nameArg: name))
     }
 
     func deleteItem(itemId: UInt64) async throws {
@@ -339,5 +347,19 @@ private extension Deal {
                   priceCents: r.priceCents, url: optional(r.url), sellerInfo: r.sellerInfo,
                   fraudScore: optional(r.fraudScore), aiTextScore: optional(r.aiTextScore),
                   fraudReasons: r.fraudReasons, createdAt: r.createdAt.date)
+    }
+}
+
+/// Hand-written call for the proposed `rename_room(roomId: u64, name: string)` reducer (#370),
+/// encoded like the generated `RenameItemReducer`. Replace it with the generated
+/// `MooveBindings.RenameRoomReducer` once the bindings are regenerated.
+struct RenameRoomCall: Reducer {
+    let name = "rename_room"
+    let roomid: UInt64
+    let nameArg: String
+
+    func encodeArguments(writer: BSATNWriter) throws {
+        writer.write(roomid)
+        try writer.write(nameArg)
     }
 }

@@ -21,6 +21,8 @@ struct InventoryView: View {
     @State private var deleting: Item?
     /// Add item (by hand) sheet, opened on this room.
     @State private var addingTo: Room?
+    /// Rename room alert (room chip ⋯), open on this room.
+    @State private var renamingRoom: Room?
     /// Item detail, pushed by tapping an exhibit.
     @State private var opened: UInt64?
     /// Placard story being edited.
@@ -72,6 +74,7 @@ struct InventoryView: View {
         }
         .sheet(item: $addingTo) { room in AddItemView(rooms: rooms, roomId: room.id) }
         .sheet(item: $sharing) { ShareRoomView(room: $0) }
+        .roomRenameAlert($renamingRoom)
         .sheet(isPresented: $showJoin) { JoinRoomView() }
         .sheet(item: $editingStory) { item in
             StoryEditor(item: item, current: stories[item.id]) { text in
@@ -175,6 +178,10 @@ struct InventoryView: View {
                 .accessibilityLabel("View room in 3D")
                 Menu {
                     Button("Add item here", systemImage: "plus") { addingTo = room }
+                    if !shared {
+                        Button("Rename room", systemImage: "pencil") { renamingRoom = room }
+                            .accessibilityIdentifier("inventory.renameRoom.\(room.id)")
+                    }
                     hideButton(room)
                 } label: {
                     Image(systemName: "ellipsis")
@@ -195,6 +202,7 @@ struct InventoryView: View {
         .contextMenu { hideButton(room) }
         .accessibilityElement(children: .contain)
         .accessibilityAction(named: "Hide room") { store.setRoom(room.id, hidden: true) }
+        .accessibilityAction(named: "Rename room") { if !shared { renamingRoom = room } }
     }
 
     /// Room photo sweep (#92): the worker is naming "other" boxes and adding missed items.
