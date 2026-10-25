@@ -283,10 +283,15 @@ private struct ReviewFlipCard<Front: View, Back: View>: View {
     let back: Back
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
         ZStack {
             front.opacity(flipped ? 0 : 1)
             back.opacity(flipped ? 1 : 0)
         }
+        // Clip both sides to the card before turning it, so a photo can never draw outside the
+        // card mid-flip; the shadow goes on a shape behind, outside the clip.
+        .clipShape(shape)
+        .background(shape.fill(Theme.bg).mooveShadow(.lifted))
         .rotation3DEffect(.degrees(turn), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
     }
 }
@@ -300,16 +305,18 @@ private struct ReviewCardFront: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ZStack {
-                Theme.surface2
-                if let photo {
-                    Image(uiImage: photo).resizable().scaledToFill().transition(.opacity)
-                } else if tried {
-                    ItemArt(item: item, size: 230, photo: .none).transition(.opacity)
+            // The art area takes the space it's given; the photo fills it as an overlay, so a
+            // scaled-to-fill photo can't push the card wider or taller than the deck's frame.
+            Theme.surface2
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay {
+                    if let photo {
+                        Image(uiImage: photo).resizable().scaledToFill().transition(.opacity)
+                    } else if tried {
+                        ItemArt(item: item, size: 230, photo: .none).transition(.opacity)
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
+                .clipped()
             .overlay(alignment: .topLeading) { ReviewCardBadge(item: item).padding(12) }
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
