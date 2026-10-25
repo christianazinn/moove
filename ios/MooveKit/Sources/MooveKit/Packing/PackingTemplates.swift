@@ -115,8 +115,8 @@ enum PackKind: Int, CaseIterable, Comparable, Sendable {
         case "shoes": self = .shoes
         case "linens", "linen", "bedding": self = .bedding
         case "kitchenware", "kitchen", "dishes": self = .kitchen
-        case "electronics", "electronic", "computer": self = .electronics
-        case "decor", "art", "photos", "plant": self = .decor
+        case "electronics", "electronic", "computer", "laptop", "monitor": self = .electronics
+        case "decor", "art", "photos", "plant", "mirror": self = .decor
         case "lamp", "lighting": self = .lamps
         case "toiletries", "bathroom": self = .bathroom
         case "office", "stationery": self = .desk
