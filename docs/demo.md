@@ -3,11 +3,16 @@
 The judging demo is live, 2 minutes, on a phone. This page covers the seeded backup room, the script, and what to do when something breaks.
 
 ## Before the demo (5 minutes)
-1. `cd agents && npm run status`: both backends **UP**, with uploads healthy and recent agent events. See `docs/backends.md` if not.
-2. Phones: **Settings → Backend → Demo** (maincloud `moove-demo`, a clean database for judges), then Items → **Join a room → `4RZ9G8`** to get the seeded Bedroom (9 priced and sorted items, the guitar flagged sentimental). The app reads the worker's upload URL from `service_config`, so there's nothing to configure.
-3. Budget: live Claude calls stop at `CLAUDE_MAX_USD_PER_DAY` (default $3) and live comps runs at `APIFY_MAX_USD_PER_DAY` (default $5), shared by both workers. Check `.cache/claude-spend.json` / `.cache/apify-spend.json` in `agents/` on Christian's laptop, and raise the caps in `.env.local` if a rehearsal used them up (the workers restart on save).
-4. Rehearse on **Demo**, not Live. Live `moove` holds earlier test scans, junk included.
-5. Hide old test rooms on each phone: **Items → Inventory → Rooms strip at the top → the room's ⋯ (or long-press its chip) → Hide room**. It's local to the phone; **Show hidden rooms** at the bottom brings them back.
+1. `cd agents && npm run status`, then `npm run smoke -- moove-demo 4RZ9G8`. **Expected:** both backends **UP** with uploads healthy, and 6 PASS lines (join, 10/10 priced and sorted, upload round trip, room/user private). See `docs/backends.md` if not.
+2. **Re-arm the commerce beat** the morning of judging, so the Herman Miller chair's $325 listing is fresh and pending (approvals expire after 12 h and are asked again at most twice): `SPACETIME_URI=wss://maincloud.spacetimedb.com SPACETIME_DB_NAME=moove-demo npm run seed:demo -- --maincloud --reset-commerce --wait`. It costs one Claude call, and the join code stays the same. Do it again after any rehearsal that approves the chair.
+3. **Money rails:**
+   - **x402 is real** (Base Sepolia). Check the wallet with `npm run x402:wallet`. Each lookup is $0.01, and `-- --faucet` tops it up for free.
+   - **Visa is the Authorize.net sandbox**: the test card, no real money, approvals say VISA SANDBOX. Each user has their own card budget (`VISA_SPEND_CAP_USD`).
+   - **eBay is simulated.**
+4. Phones: **Settings → Backend → Demo** (maincloud `moove-demo`, a clean database for judges), then Items → **Join a room → `4RZ9G8`** to get the seeded Bedroom (10 priced and sorted items, the guitar flagged sentimental, the chair to approve). The app reads the worker's upload URL from `service_config`, so there's nothing to configure. A joined phone sees the room's x402 payments under Spending → **Shared room**.
+5. Budget: live Claude calls stop at `CLAUDE_MAX_USD_PER_DAY` (default $3) and live comps runs at `APIFY_MAX_USD_PER_DAY` (default $5), shared by both workers. Check `.cache/claude-spend.json` / `.cache/apify-spend.json` in `agents/` on Christian's laptop, and raise the caps in `.env.local` if a rehearsal used them up (the workers restart on save).
+6. Rehearse on **Demo**, not Live. Live `moove` holds earlier test scans, junk included.
+7. Hide old test rooms on each phone: **Items → Inventory → Rooms strip at the top → the room's ⋯ (or long-press its chip) → Hide room**. It's local to the phone; **Show hidden rooms** at the bottom brings them back.
 
 ## The seeded room (safety net)
 `npm run seed:demo` (in `agents/`) creates a college-student bedroom through the same app reducers iOS calls (`register_user`, `import_scan`, `set_sentimental`). It connects as a **normal user**, not the worker. The room is "Bedroom", home `old`, with 9 RoomPlan-style objects (`agents/scripts/demo-room.ts`):
@@ -78,7 +83,8 @@ Everything simulated says so, in the data (`simulated: true`) and in the UI.
 | The live scan | Join the seeded Bedroom with its code, tap **Load demo scan** on the Scan tab, or use the offline demo. |
 | The scan misread something (a table drawn as a cabinet, a lamp called "pillow", a piece facing the wall, a ghost item) | Items > Review, open the item, **Fix it**: type a name (**Coffee table** re-routes the 3D model), tap a **What is it?** chip (Table, Lamp, ...), **Turn around** / **90°**, or **Not a real item** then **Remove**. Or long-press its exhibit in Inventory for the same menu. Every 3D view updates live; works offline too. |
 | Listing import | With no worker reachable it builds an estimate from beds, baths and square feet (labeled Estimated). Or skip it and use the demo house. |
-| Apify (slow, down, out of credit) | Comps replay from `agents/fixtures/comps/` and are labeled `[REPLAYED]`. Seeded items always replay. |
-| x402 / CDP | Without CDP keys, or with `X402_SIMULATE=1`, payments are recorded `simulated: true` and badged in the spending log. If a paid call fails, pricing falls back to Apify directly. `PRICING_PAY_X402=0` skips paying. |
+| Apify (slow, down, out of credit) | Comps replay from `agents/fixtures/comps/` and are labeled `[REPLAYED]`. Seeded items always replay. Out of credit (as since Sat noon): new items borrow the real cached comps of the most similar item, labeled `[REPLAYED, similar item "…"]`, and no x402 payment is made for them (#303, #338). |
+| x402 / CDP | Real since Sat ~12:40 PM (CDP keys on the worker). If the wallet runs dry, `npm run x402:wallet -- --faucet`. Without CDP keys, or with `X402_SIMULATE=1`, payments are recorded `simulated: true` and badged in the spending log. If a paid call fails, pricing falls back to Apify directly. `PRICING_PAY_X402=0` skips paying. |
 | eBay sandbox | Without every `EBAY_*` key, listings are simulated (`simulated: true`) and written to `uploads/listing-<id>.html`. |
+| Visa sandbox | If Authorize.net's sandbox is down, the purchase fails with an error event and the deal stays chooseable. Show the fraud block and the approval card instead, or set `VISA_PROVIDER=simulated` in `.env.local` (labeled SIMULATED, and the workers restart). |
 | Auth0 push | The approval stays `pending` in the in-app inbox (Sell & Buy > Agents). Approve it there. |
