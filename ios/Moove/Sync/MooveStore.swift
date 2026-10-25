@@ -85,7 +85,7 @@ final class MooveStore {
     }
 
     /// The snapshot without hidden rooms and their items. Inventory, Review, Scan home,
-    /// New Home, Pack and Summary read this so they agree on what's there.
+    /// New Home, Pack and Review read this so they agree on what's there.
     /// Built-in fixtures (a toilet, a radiator) are left out too: they stay with the building.
     var visibleSnapshot: SyncSnapshot { snapshot.hidingRooms(hiddenRoomIds).withoutBuiltIns() }
     var visibleItems: [Item] { snapshot.items.filter { !hiddenRoomIds.contains($0.roomId) && !$0.isBuiltInFixture } }

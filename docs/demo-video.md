@@ -69,7 +69,7 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 - **ON SCREEN:** Back on Shopping, the **Needs you · 1** card under the hero: "78" upholstered sofa, gray", "$429.99 from wayfair", "Over your approval limit. The agent pays with Visa only after you approve." Tap **Approve**.
 - **STATE:** Offline demo (same take).
 - **TRACK:** Visa (approval before checkout). Auth0.
-- **FALLBACK:** Cut this shot if over time (it buys 8 s); shots 9–11 still work (only the Summary figures change).
+- **FALLBACK:** Cut this shot if over time (it buys 8 s); shots 9–11 still work (only the Agents figures change).
 
 ### 9. 1:36–1:48 Everything flies into the new home
 - **VO:** "Paste the new place's listing link, and Moove builds the floor plan. Everything you kept flies from where it stood into the new home, with what the agent bought."
@@ -85,9 +85,9 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 - **TRACK:** None directly (product depth). The truck and crew figures are estimates and the card says so. On the offline demo the card says "Fits a cargo van by volume; packs best in a 10 ft truck." and the 3D truck is the 10 ft one, so say "truck", not a size. The inline truck is an ARView: record it on a device or Simulator, not from CI.
 - **FALLBACK:** Cut this shot and give shot 11 its six seconds back.
 
-### 11. 1:54–2:00 Summary: agents kept you safe
-- **VO:** "The summary shows every guardrail that fired, real and simulated. Moove runs your move, and you stay in control."
-- **ON SCREEN:** **Summary** tab, "Your move, handled.", Money with its **Simulated** tag, then scroll to **Agents kept you safe**: "1 scam deal blocked · fraud score 0.85", the approvals line, "1 sentimental item left for you", spend against the data and card budgets with Sim tags.
+### 11. 1:54–2:00 Agents: agents kept you safe
+- **VO:** "Moove shows every guardrail that fired, real and simulated. Moove runs your move, and you stay in control."
+- **ON SCREEN:** Sell & Buy > **Agents**, scrolled to **Agents kept you safe** (between "Needs your OK" and "Decided"; the tab is Simulated-tagged): "1 scam deal blocked · fraud score 0.85", the approvals line, "1 sentimental item left for you", spend against the data and card budgets with Sim tags.
 - **STATE:** Offline demo (same take, after shots 6–10).
 - **TRACK:** All of them in one card. Visa trust, Coinbase spend caps, Auth0 approvals.
 - **FALLBACK:** If a figure looks off, hold on Agents kept you safe only (the VO names no numbers).
@@ -95,7 +95,7 @@ Switching data source mid-take is untested, so record the Demo shots and the Off
 ## Before recording
 - [ ] **Devices:** a LiDAR iPad Pro or iPhone for shot 1, a second phone for shot 4, both on the latest `main` build, charged.
 - [ ] **Backend:** `cd agents && npm run status` shows `moove-demo` UP (worker online, uploads healthy). Check the Claude/Apify daily caps aren't used up (`docs/demo.md`, "Before the demo").
-- [ ] **Hide old test rooms** on every device, on Demo and Live: Items > Inventory > the room's card in the Rooms strip > **⋯** > **Hide room**. It's local to the device and deletes nothing; **Show hidden rooms (N)** at the bottom brings them back. Hidden rooms also stay out of the Scan hero, New Home, Pack and Summary.
+- [ ] **Hide old test rooms** on every device, on Demo and Live: Items > Inventory > the room's card in the Rooms strip > **⋯** > **Hide room**. It's local to the device and deletes nothing; **Show hidden rooms (N)** at the bottom brings them back. Hidden rooms also stay out of the Scan hero, Review's kg-kept banner, New Home and Pack.
 - [ ] **Seeded room:** both devices on Demo and joined to `4RZ9G8`, the Bedroom visible with prices. For the Demo approval fallback in shot 6, ask Christian to run `--reset-commerce`.
 - [ ] **Do Not Disturb** on every device and the laptop (no Guardian, Slack or message banners).
 - [ ] **Screen recording** in Control Center on each device; laptop browser tab with the Basescan proof tx loaded.

@@ -54,7 +54,7 @@ final class CommerceUITests: XCTestCase {
         shot("2-listings")
         assertNoLiveOnEbay()
 
-        // Agents, approvals: 2 pending; approving the Aeron listing moves it to Decided.
+        // Agents, approvals: 2 pending; approving the Aeron listing clears it (no Decided list: the receipts record it).
         agentsTab.tap()
         XCTAssertTrue(app.navigationBars["Agents"].waitForExistence(timeout: 10))
         XCTAssertTrue(byId("approval.pending.300").waitForExistence(timeout: 10), "no pending Aeron approval")
@@ -66,9 +66,6 @@ final class CommerceUITests: XCTestCase {
         let approve = byId("approval.approve.300")
         XCTAssertTrue(scrollTo(approve), "no Approve button on the Aeron approval")
         approve.tap()
-        let decided = byId("approval.decided.300")
-        XCTAssertTrue(scrollTo(decided), "approved Aeron listing never showed up in Decided")
-        XCTAssertTrue(decided.label.contains("approved"), decided.label)
         XCTAssertTrue(waitGone(byId("approval.pending.300")), "Aeron approval still pending")
         shot("3-approvals-history")
 
