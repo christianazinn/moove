@@ -24,6 +24,22 @@ export type PhotoSource = { kind: 'local'; file: string; ext: string } | { kind:
 
 export class PhotoUrlError extends Error {}
 
+// The app marks a photo the user retook because the item was misidentified with this query
+// (`.../files/<name>.jpg?reclassify=1`), so vision trusts that photo over the scan's category. No
+// contract change: it's still an http(s) URL `add_item_photo` accepts, and the upload server and
+// the loader below ignore it.
+export const RECLASSIFY_QUERY = '?reclassify=1';
+
+/** True for a photo URL the app marked as a reclassification (see RECLASSIFY_QUERY). */
+export function isReclassifyPhoto(raw: string | undefined): boolean {
+  if (!raw) return false;
+  try {
+    return new URL(raw).searchParams.get('reclassify') === '1';
+  } catch {
+    return false;
+  }
+}
+
 export const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
 
 // Names the upload server hands out: <uuid>.<ext>. Nothing else (no dots, slashes or escapes) is read.
@@ -104,7 +120,7 @@ export function resolvePhotoSource(raw: string, policy: PhotoPolicy): PhotoSourc
     u.origin === base.origin && u.pathname.startsWith(ownPrefix) ? ownPrefix : isQuickTunnelUpload(u) ? '/files/' : undefined;
   if (prefix) {
     const name = u.pathname.slice(prefix.length);
-    if (u.search || u.hash || u.username || u.password || !UPLOAD_NAME.test(name)) {
+    if ((u.search && u.search !== RECLASSIFY_QUERY) || u.hash || u.username || u.password || !UPLOAD_NAME.test(name)) {
       throw new PhotoUrlError('not a file name the upload server issues');
     }
     const dir = path.resolve(policy.uploadDir);

@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   assertPublicHost,
   isBlockedAddress,
+  isReclassifyPhoto,
   loadPhoto,
   parseAllowedHosts,
   PhotoUrlError,
@@ -166,6 +167,21 @@ test("uploads stored under an earlier quick-tunnel URL are still read from disk"
   assert.throws(() => resolvePhotoSource("https://old-tunnel-name.trycloudflare.com/a.jpg", p), /ALLOWED_PHOTO_HOSTS/);
   assert.throws(() => resolvePhotoSource(`https://trycloudflare.com.evil.example/files/${NAME}`, p), /ALLOWED_PHOTO_HOSTS/);
   assert.throws(() => resolvePhotoSource(`https://evil.example.net/files/${NAME}`, p), /ALLOWED_PHOTO_HOSTS/);
+});
+
+test("a reclassify-marked upload URL is still read from disk; other queries are not", async () => {
+  const marked = `https://moove-tunnel.example.com/files/${NAME}?reclassify=1`;
+  assert.deepEqual(resolvePhotoSource(marked, policy), { kind: "local", file: path.join(uploadDir, NAME), ext: "jpg" });
+  const img = await loadPhoto(marked, policy, { fetch: noFetch });
+  assert.equal(Buffer.from(img.data, "base64").toString(), "jpeg-bytes");
+  assert.equal(resolvePhotoSource(`https://old-tunnel-name.trycloudflare.com/files/${NAME}?reclassify=1`, policy).kind, "local");
+  for (const url of [`${marked}&x=1`, `https://moove-tunnel.example.com/files/${NAME}?reclassify=2`, `${marked}#x`]) {
+    assert.throws(() => resolvePhotoSource(url, policy), PhotoUrlError, url);
+  }
+  assert.equal(isReclassifyPhoto(marked), true);
+  assert.equal(isReclassifyPhoto(`https://moove-tunnel.example.com/files/${NAME}`), false);
+  assert.equal(isReclassifyPhoto("not a url"), false);
+  assert.equal(isReclassifyPhoto(undefined), false);
 });
 
 test("the simulated auto-approver is gone (#42): without Auth0 there is no gateway", () => {
