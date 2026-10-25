@@ -101,12 +101,10 @@ struct ExhibitPlacard: View {
                 .foregroundStyle(Theme.text)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(info.catalog)
-                .catalogCaps()
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            // Name, story, price: the catalog line, origin tag and the agents' note are read by
+            // VoiceOver only (Lisa: less on screen).
             Button(action: onEditStory) {
-                Text(info.story.map { "“\($0)”" } ?? info.autoStory)
+                Text(info.story.map { "“\($0)”" } ?? "Add a story")
                     .serifType(13, italic: true)
                     .foregroundStyle(info.story == nil ? Theme.muted : Theme.text)
                     .multilineTextAlignment(.leading)
@@ -116,14 +114,12 @@ struct ExhibitPlacard: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(info.story.map { "Story: \($0)" } ?? info.autoStory)
+            .accessibilityLabel(info.story.map { "Story: \($0)" } ?? "\(info.autoStory). Add a story")
             .accessibilityHint(info.story == nil ? "Add your own story" : "Edit your story")
             .accessibilityIdentifier("inventory.story.\(info.item.id)")
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) { price; tag }
-                VStack(alignment: .leading, spacing: 6) { price; tag }
-            }
-            .padding(.top, 2)
+            price
+                .padding(.top, 2)
+                .accessibilityLabel("\(info.price), \(info.catalog), \(info.tag.accessibilityLabel)")
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -133,9 +129,6 @@ struct ExhibitPlacard: View {
         Text(info.price).monoText(13, weight: .bold, maxScale: 1.8).foregroundStyle(info.priceTint).lineLimit(1)
     }
 
-    private var tag: some View {
-        MonoTag(text: info.tag.label).accessibilityLabel(info.tag.accessibilityLabel)
-    }
 }
 
 /// Edit the one-line story on a placard ("Grandma's, 1974"). Kept on this device only.

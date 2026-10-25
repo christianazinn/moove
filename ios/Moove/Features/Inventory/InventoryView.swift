@@ -11,6 +11,8 @@ struct InventoryView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sharing: Room?
+    /// Room opened in 3D from the room actions menu.
+    @State private var room3D: Room?
     @State private var showJoin = false
     @State private var showHidden = false
     /// Room id → (scan object id → the scanner's category), from each room's scan geometry,
@@ -76,6 +78,7 @@ struct InventoryView: View {
         .navigationTitle("Inventory")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: Room.self) { RoomDetailView(room: $0) }
+        .navigationDestination(item: $room3D) { RoomDetailView(room: $0) }
         .navigationDestination(item: $opened) { ItemDetailView(itemId: $0) }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -155,93 +158,83 @@ struct InventoryView: View {
 
     // MARK: Rooms strip
 
-    /// One chip per visible room, newest scan first, carrying the room's actions.
+    /// One chip per visible room, newest scan first: just its name (tap to focus). Every room
+    /// action (Share, 3D, Add item, Rename, Hide) is in one ⋯ menu by the heading, for the focused
+    /// rooms (or all of them), and in each chip's long-press menu.
     private func roomsStrip(_ rooms: [Room], focus: Set<UInt64>) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(focus.isEmpty ? "Rooms · tap to focus" : "Showing \(focus.count) of \(rooms.count) rooms")
+            HStack(alignment: .center) {
+                Text("Rooms")
                     .eyebrow()
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
                 if !focus.isEmpty {
                     Button("Show all rooms") { focusJSON = "" }
                         .monoText(13, weight: .bold, maxScale: 1.4)
-                        .foregroundStyle(Theme.accentInk)
+                        .foregroundStyle(Theme.accentStrong)
                         .frame(minHeight: 44)
                         .accessibilityIdentifier("inventory.showAllRooms")
                 }
+                Menu {
+                    ForEach(focus.isEmpty ? rooms : rooms.filter { focus.contains($0.id) }) { room in
+                        Section(room.name) { roomActions(room) }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 18))
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .foregroundStyle(Theme.muted)
+                .accessibilityLabel("Room actions")
+                .accessibilityIdentifier("inventory.roomActions")
             }
-            // Wraps rather than scrolls sideways, so every room's actions stay on screen.
-            ChipFlow(spacing: 10) {
+            ChipFlow(spacing: 8) {
                 ForEach(rooms) { roomChip($0, focus: focus) }
             }
         }
     }
 
+    /// Share, 3D, Add item here, Rename and Hide for one room.
+    @ViewBuilder
+    private func roomActions(_ room: Room) -> some View {
+        let shared = !isMine(room)
+        if !shared {
+            Button("Share \(room.name)", systemImage: "person.badge.plus") { sharing = room }
+        }
+        Button("View room in 3D", systemImage: "cube.transparent") { room3D = room }
+        Button("Add item here", systemImage: "plus") { addingTo = room }
+        if !shared {
+            Button("Rename room", systemImage: "pencil") { renamingRoom = room }
+                .accessibilityIdentifier("inventory.renameRoom.\(room.id)")
+        }
+        hideButton(room)
+    }
+
+    /// A room's name on a quiet capsule; sage when focused.
     private func roomChip(_ room: Room, focus: Set<UInt64>) -> some View {
         let shared = !isMine(room)
         let count = store.visibleItems.filter { $0.roomId == room.id }.count
         let focused = focus.contains(room.id)
-        return VStack(alignment: .leading, spacing: 6) {
-            // Tapping the name narrows Inventory to this room (and any others picked)
-            Button {
-                focusJSON = InventoryFocus.encode(InventoryFocus.toggling(room.id, in: focus))
-            } label: {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 6) {
-                        Text(room.name).blockTitle().lineLimit(2)
-                        if focused {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accentStrong).accessibilityHidden(true)
-                        }
-                    }
-                    roomMeta(room, shared: shared, count: count)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(room.name), \(count) items")
-            .accessibilityValue(focused ? "Shown" : focus.isEmpty ? "" : "Not shown")
-            .accessibilityHint(focused ? "Stops focusing on this room" : "Shows only the rooms you pick")
-            .accessibilityIdentifier("inventory.focus.\(room.id)")
-            HStack(spacing: 6) {
-                if !shared {
-                    Button { sharing = room } label: {
-                        Image(systemName: "person.badge.plus")
-                    }
-                    .buttonStyle(.pill(.outline, compact: true))
-                    .accessibilityLabel("Share \(room.name)")
-                }
-                NavigationLink(value: room) {
-                    Label("3D", systemImage: "cube.transparent")
-                        .labelStyle(.titleAndIcon)
-                }
-                .buttonStyle(.pill(.outline, compact: true))
-                .accessibilityLabel("View room in 3D")
-                Menu {
-                    Button("Add item here", systemImage: "plus") { addingTo = room }
-                    if !shared {
-                        Button("Rename room", systemImage: "pencil") { renamingRoom = room }
-                            .accessibilityIdentifier("inventory.renameRoom.\(room.id)")
-                    }
-                    hideButton(room)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .frame(minWidth: 36, minHeight: 36)
-                        .contentShape(Rectangle())
-                }
-                .foregroundStyle(Theme.muted)
-                .accessibilityLabel("More for \(room.name)")
-            }
-            .fixedSize()
+        return Button {
+            focusJSON = InventoryFocus.encode(InventoryFocus.toggling(room.id, in: focus))
+        } label: {
+            Text(room.name)
+                .monoText(13.5, weight: focused ? .bold : .regular, maxScale: 1.6)
+                .lineLimit(1)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 40)
+                .foregroundStyle(focused ? Theme.accentInk : Theme.text)
+                .background(Capsule().fill(focused ? Theme.accentFill : Theme.surface))
+                .contentShape(Capsule())
         }
-        .padding(12)
-        .frame(minWidth: 180, alignment: .leading)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-            .strokeBorder(focused ? Theme.accentStrong : .clear, lineWidth: 2))
-        .opacity(focus.isEmpty || focused ? 1 : 0.55)
-        .contextMenu { hideButton(room) }
-        .accessibilityElement(children: .contain)
+        .buttonStyle(.plain)
+        .contextMenu { roomActions(room) }
+        // VoiceOver keeps what the chip used to print: demo, item count, scan date, who shared it.
+        .accessibilityLabel(roomSpoken(room, shared: shared, count: count))
+        .accessibilityValue(focused ? "Shown" : focus.isEmpty ? "" : "Not shown")
+        .accessibilityHint(focused ? "Stops focusing on this room" : "Shows only the rooms you pick")
+        .accessibilityIdentifier("inventory.focus.\(room.id)")
         .accessibilityAction(named: "Hide room") { store.setRoom(room.id, hidden: true) }
         .accessibilityAction(named: "Rename room") { if !shared { renamingRoom = room } }
     }
@@ -384,7 +377,7 @@ struct InventoryView: View {
 
     @ViewBuilder
     private func tabEdge(_ tab: BinderTab) -> some View {
-        let tint = BinderColors.tint(tab.tint)
+        let tint = Theme.accentFill
         if sizeClass == .regular {
             Rectangle().fill(tint).frame(width: 4).padding(.vertical, 6)
         } else {
@@ -393,15 +386,14 @@ struct InventoryView: View {
     }
 
     private func pageHeader(_ hall: FunctionHall, _ items: [Item]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(hall.name)
-                .displayTitle(26)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(FunctionHall.subtitle(items)).monoMeta()
-        }
-        .padding(.horizontal, 8)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
+        Text(hall.name)
+            .displayTitle(26)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(hall.name), \(FunctionHall.subtitle(items))")
+            .accessibilityAddTraits(.isHeader)
         .accessibilityIdentifier("inventory.hall.\(hall.rawValue)")
     }
 
@@ -557,27 +549,14 @@ struct InventoryView: View {
         Button("Hide room", systemImage: "eye.slash") { store.setRoom(room.id, hidden: true) }
     }
 
-    /// "Demo · Today 10:42 · 12 items · Shared by Sam": which scan this room is.
-    private func roomMeta(_ room: Room, shared: Bool, count: Int) -> some View {
-        let demo = store.snapshot.isDemoRoom(room.id)
-        let date = store.snapshot.scanDate(ofRoom: room.id).map { ScanDateLabel.text($0) }
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                if demo {
-                    MonoTag(text: "Demo", tone: Theme.ochreInk)
-                        .accessibilityLabel("Demo scan")
-                }
-                Text(count == 1 ? "1 item" : "\(count) items").monoText(12, maxScale: 1.8).foregroundStyle(Theme.muted)
-            }
-            if let date {
-                Text(date).monoText(12, maxScale: 1.8).foregroundStyle(Theme.muted).accessibilityLabel("Scanned \(date)")
-            }
-            if shared {
-                Label("Shared by \(ownerName(of: room))", systemImage: "person.2")
-                    .monoText(12, maxScale: 1.8).foregroundStyle(Theme.muted)
-            }
-        }
-        .fixedSize(horizontal: false, vertical: true)
+    /// "Bedroom, demo scan, 12 items, scanned Today 10:42, shared by Sam".
+    private func roomSpoken(_ room: Room, shared: Bool, count: Int) -> String {
+        var parts = [room.name]
+        if store.snapshot.isDemoRoom(room.id) { parts.append("demo scan") }
+        parts.append(count == 1 ? "1 item" : "\(count) items")
+        if let date = store.snapshot.scanDate(ofRoom: room.id).map({ ScanDateLabel.text($0) }) { parts.append("scanned \(date)") }
+        if shared { parts.append("shared by \(ownerName(of: room))") }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: Hidden rooms
@@ -652,19 +631,14 @@ struct InventoryView: View {
     }
 
     /// Item count, room count and estimated value between rules, split by hairlines.
+    /// The one number that matters here: what it's all worth.
     private func totals(_ shown: [Item]) -> some View {
         let priced = shown.compactMap(\.saleValueCents)
-        return HStack(spacing: 0) {
-            // No "Rooms" figure: the Rooms chips right below show them.
-            StatFigure(label: "Items", value: "\(shown.count)")
-                .padding(.vertical, 18).padding(.trailing, 14)
-            Rectangle().fill(Theme.line).frame(width: 1)
-            StatFigure(label: "Est. value", value: priced.reduce(0, +).usd, tint: Theme.accentStrong)
-                .padding(.vertical, 18).padding(.leading, 14)
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .ruled(.top)
-        .ruled()
+        return StatFigure(label: "Est. value", value: priced.reduce(0, +).usd, tint: Theme.accentStrong)
+            .padding(.vertical, 18)
+            .ruled(.top)
+            .ruled()
+            .accessibilityLabel("Estimated value \(priced.reduce(0, +).usd), \(shown.count) items")
     }
 }
 

@@ -75,18 +75,16 @@ struct BinderTabButton: View {
     var action: () -> Void
 
     var body: some View {
-        let tint = BinderColors.tint(tab.tint)
+        // Neutral paper tabs; only the open one takes the accent (Lisa: less color).
         Button(action: action) {
-            HStack(spacing: 6) {
-                Text(tab.hall.name).sansText(13, weight: .semibold, maxScale: 1.6).lineLimit(1)
-                Text("\(tab.count)").monoText(12, weight: .bold, maxScale: 1.6).opacity(0.8)
-            }
-            .foregroundStyle(selected ? BinderColors.tabInk : Theme.text)
+            // Name only; the count is in the VoiceOver label.
+            Text(tab.hall.name).sansText(13, weight: .semibold, maxScale: 1.6).lineLimit(1)
+            .foregroundStyle(selected ? Theme.accentInk : Theme.text)
             .padding(.horizontal, edge == .top ? 16 : 12)
             .padding(.vertical, edge == .top ? 9 : 12)
             .frame(minHeight: 44)
             .frame(maxWidth: edge == .trailing ? .infinity : nil, alignment: .leading)
-            .background(BinderTabShape(edge: edge).fill(selected ? tint : tint.opacity(0.2)))
+            .background(BinderTabShape(edge: edge).fill(selected ? Theme.accentFill : Theme.surface))
             .contentShape(BinderTabShape(edge: edge))
         }
         .buttonStyle(.plain)

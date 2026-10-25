@@ -173,6 +173,10 @@ final class MooveSmokeTests: XCTestCase {
     func testRoomIn3DAndPlan() {
         launch()
         open(tab: "Items", segment: "Inventory")
+        // Room actions live in the Rooms ⋯ menu (room chips show only the name).
+        let actions = app.buttons["inventory.roomActions"].firstMatch
+        XCTAssertTrue(actions.waitForExistence(timeout: slow) || scrollTo(actions), "room actions menu")
+        actions.tap()
         let view3D = app.buttons["View room in 3D"].firstMatch
         XCTAssertTrue(view3D.waitForExistence(timeout: slow))
         view3D.tap()
@@ -211,6 +215,9 @@ final class MooveSmokeTests: XCTestCase {
     func testShareAndJoinRoom() {
         launch()
         open(tab: "Items", segment: "Inventory")
+        let actions = app.buttons["inventory.roomActions"].firstMatch
+        XCTAssertTrue(actions.waitForExistence(timeout: slow) || scrollTo(actions), "room actions menu")
+        actions.tap()
         let share = app.buttons["Share Bedroom"].firstMatch
         XCTAssertTrue(share.waitForExistence(timeout: slow))
         share.tap()
@@ -222,8 +229,10 @@ final class MooveSmokeTests: XCTestCase {
         app.buttons["Done"].firstMatch.tap()
 
         join("DEMO42")
-        XCTAssertTrue(scrollTo(text(containing: "Shared by Sam")), "roommate's room appears")
-        XCTAssertTrue(text(matching: "Living room").exists)
+        // The chip shows only the room's name; who shared it is in its VoiceOver label.
+        let shared = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "shared by Sam")).firstMatch
+        XCTAssertTrue(scrollTo(shared, down: false) || shared.exists, "roommate's room appears")
+        XCTAssertTrue(shared.label.hasPrefix("Living room"))
         snap("05-joined")
 
         join("WRONG9", expectDismiss: false)
