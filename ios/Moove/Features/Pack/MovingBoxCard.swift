@@ -27,8 +27,8 @@ enum BoxPalette {
     static let sealTapeEdge = dynamic(0xC9B38A, 0x6F5C42)
 
     static let paper = dynamic(0xFBF7EF, 0xEDE4D2)
-    static let paperInk = Theme.color(0x1E1B16)
-    static let paperMuted = Theme.color(0x5E564A)
+    static let paperInk = Theme.color(0x121F26)
+    static let paperMuted = Theme.color(0x45626E)
 
     /// A stable tape color per destination room, from MooveKit's shared `PackingPalette` (the printed
     /// labels and the 3D truck use the same one). Fixed, not adaptive, and light enough that

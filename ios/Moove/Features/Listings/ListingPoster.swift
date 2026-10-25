@@ -72,7 +72,7 @@ struct ListingPoster: View {
         .overlay { if stamp.isSketch { Rectangle().strokeBorder(ink.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])) } }
         .clipShape(PosterSheetShape(torn: stamp.isTorn))
         .compositingGroup()
-        .shadow(color: .black.opacity(stamp.isSketch ? 0.06 : 0.16), radius: 3, x: 0, y: 2)
+        .shadow(color: .black.opacity(stamp.isSketch ? 0.04 : 0.08), radius: 3, x: 0, y: 2)
         .overlay(alignment: .top) { fastener.offset(y: -7) }
     }
 
