@@ -1,58 +1,47 @@
 import SwiftUI
 import MooveKit
 
-/// Live spending log (#7), printed as paper receipts: every payment the agents make (x402 USDC on
-/// Base Sepolia, or Visa), one receipt per agent run, newest receipt first, with each agent's budget
-/// and any spend it was refused. Driven entirely by `payment` and `agent_event` rows in the
-/// snapshot, so new lines print in as the worker writes them. Grouping: MooveKit `SpendingReceipts`.
-struct SpendingView: View {
+/// Live spending log (#7), printed as paper receipts, under the approvals on Sell & Buy > Agents:
+/// every payment the agents make (x402 USDC on Base Sepolia, or Visa), one receipt per agent run,
+/// newest receipt first, with each agent's budget and any spend it was refused. Driven entirely by
+/// `payment` and `agent_event` rows in the snapshot, so new lines print in as the worker writes
+/// them. Grouping: MooveKit `SpendingReceipts`.
+struct SpendingSection: View {
     @Environment(MooveStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let split = store.snapshot.spendingSplit()
         let log = split.yours, room = split.room
-        let state = store.commerceState(hasRows: !split.isEmpty)
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                if state != .content {
-                    CommercePlaceholder(
-                        state: state,
-                        emptyTitle: "No payments yet",
-                        emptyDetail: "Agents pay when they price an item (comps over x402) or buy something on your Shopping list (Visa). Sort an item to Sell, or choose a deal in Shopping, and the payment shows up here live."
-                    )
-                    .padding(.top, 32)
-                } else {
-                    if !log.isEmpty {
-                        let receipts = store.snapshot.spendingReceipts(log)
-                        SpendingTape(log: log, extraBudgets: receipts.unattachedBudgets)
-                            .padding(.top, 28)
-                        receiptStack(receipts)
-                    } else {
-                        Text("No payments of your own yet.").monoMeta().padding(.top, 28)
-                    }
-                    if !room.isEmpty {
-                        // #254: other members' x402 comps for items in rooms you joined. Kept out of your totals.
-                        ListHeader(title: SpendingSplit.roomTag, count: "\(room.entries.count)").padding(.top, 44)
-                        Label(SpendingSplit.roomCaption, systemImage: "person.2")
-                            .monoMeta()
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.vertical, 12)
-                        let receipts = store.snapshot.spendingReceipts(room)
-                        SpendingTape(log: room, extraBudgets: receipts.unattachedBudgets, sharedRoom: true)
-                        receiptStack(receipts, sharedRoom: true)
-                    }
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            ListHeader(title: "Receipts", count: nil)
+            if !log.isEmpty {
+                let receipts = store.snapshot.spendingReceipts(log)
+                SpendingTape(log: log, extraBudgets: receipts.unattachedBudgets)
+                    .padding(.top, 8)
+                receiptStack(receipts)
+            } else {
+                Text("No payments yet. Agents pay to price an item (x402) or buy from your Shopping list (Visa).")
+                    .monoMeta()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .ruled()
             }
-            .frame(maxWidth: 560)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, Theme.gutter)
-            .padding(.top, 16)
-            .padding(.bottom, 48)
+            if !room.isEmpty {
+                // #254: other members' x402 comps for items in rooms you joined. Kept out of your totals.
+                ListHeader(title: SpendingSplit.roomTag, count: "\(room.entries.count)").padding(.top, 44)
+                Label(SpendingSplit.roomCaption, systemImage: "person.2")
+                    .monoMeta()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 12)
+                let receipts = store.snapshot.spendingReceipts(room)
+                SpendingTape(log: room, extraBudgets: receipts.unattachedBudgets, sharedRoom: true)
+                receiptStack(receipts, sharedRoom: true)
+            }
         }
-        .navigationTitle("Spending")
-        .navigationBarTitleDisplayMode(.inline)
-        .mooveScreen()
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity)
         // New lines "print" in; Reduce Motion just shows them.
         .animation(reduceMotion ? nil : .easeOut(duration: 0.45), value: log.entries)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.45), value: room.entries)
@@ -83,6 +72,7 @@ struct SpendingTape: View {
                 .foregroundStyle(ReceiptPalette.muted)
                 .frame(maxWidth: .infinity)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier(sharedRoom ? "spending.totals.room" : "spending.totals")
             LeaderRow(label: "SPENT", value: UsdMicros.format(log.realSpentUsdMicros), size: 16, bold: true)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Spent for real, \(UsdMicros.format(log.realSpentUsdMicros))")
@@ -365,5 +355,5 @@ extension AnyTransition {
 }
 
 #Preview {
-    NavigationStack { SpendingView() }.environment(MooveStore.preview())
+    ScrollView { SpendingSection().padding(.horizontal, Theme.gutter) }.environment(MooveStore.preview())
 }
