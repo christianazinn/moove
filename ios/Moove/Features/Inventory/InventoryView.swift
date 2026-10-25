@@ -372,12 +372,12 @@ struct InventoryView: View {
         // The open tab's color runs along the page edge it's attached to.
         .overlay(alignment: sizeClass == .regular ? .trailing : .top) { tabEdge(tab) }
         .overlay(alignment: .leading) { BinderHoles().padding(.leading, 5) }
-        .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
-        .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 4)
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
+        .mooveShadow(.lifted)
     }
 
     private var pageBackground: some View {
-        RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+        RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
             .fill(LinearGradient(colors: [BinderColors.wall, BinderColors.wallShade], startPoint: .top, endPoint: .bottom))
     }
 
@@ -394,8 +394,7 @@ struct InventoryView: View {
     private func pageHeader(_ hall: FunctionHall, _ items: [Item]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(hall.name)
-                .serifText(26, weight: .semibold)
-                .foregroundStyle(Theme.text)
+                .displayTitle(26)
                 .fixedSize(horizontal: false, vertical: true)
             Text(FunctionHall.subtitle(items)).monoMeta()
         }
@@ -536,7 +535,7 @@ struct InventoryView: View {
         let catalogued = store.snapshot.scanDate(ofRoom: item.roomId) ?? item.updatedAt
         return ExhibitInfo(
             item: item,
-            roomName: room?.name ?? "",
+            roomName: room.map { store.displayName(of: $0) } ?? "",
             story: story,
             autoStory: MuseumLabel.autoStory(item, isTopPiece: isTop),
             catalog: catalog,

@@ -31,7 +31,7 @@ enum BinderColors {
     static let bracket = dynamic(0x8E6841, 0x3F2A1C)
     static let floor = dynamic(0xCDB28A, 0x3B2C20)
     static let floorSeam = dynamic(0xB39670, 0x2C2118)
-    static let tag = dynamic(0xFFFCF5, 0x2E2720)
+    static let tag = Theme.Paper.cream
     static let string = dynamic(0x9C9383, 0x7A7163)
 
     private static func dynamic(_ light: UInt32, _ dark: UInt32) -> Color { Color(uiColor: Theme.dynamicUIColor(light, dark)) }
@@ -128,7 +128,7 @@ struct ShelfPlank: View {
             }
         }
         .frame(height: Self.height)
-        .shadow(color: .black.opacity(0.12), radius: 2, y: 2)
+        .mooveShadow(.paper)
         .accessibilityHidden(true)
     }
 }
@@ -211,17 +211,18 @@ struct ShelfItemColumn: View {
             VStack(spacing: 2) {
                 Text(item.name)
                     .sansText(11.5, weight: .semibold, maxScale: 1.6)
-                    .foregroundStyle(Theme.text)
+                    .foregroundStyle(Theme.Paper.ink)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(price).monoText(11, weight: .bold, maxScale: 1.6).foregroundStyle(Theme.muted).lineLimit(1)
+                Text(price).monoText(11, weight: .bold, maxScale: 1.6).foregroundStyle(Theme.Paper.inkMuted).lineLimit(1)
             }
             .padding(.horizontal, 7)
             .padding(.vertical, 5)
             .frame(maxWidth: 140)
-            .background(BinderColors.tag, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
+            .background(BinderColors.tag, in: RoundedRectangle(cornerRadius: Theme.Radius.tag, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.tag, style: .continuous).strokeBorder(Theme.Paper.rule, lineWidth: 1))
+            .mooveShadow(.contact)
             .overlay(alignment: .topTrailing) {
                 if item.maybeSentimental {
                     Image(systemName: "bookmark.fill")
@@ -294,7 +295,7 @@ struct PlacardSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ExhibitPlinth(item: info.item)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
                     ExhibitPlacard(info: info, onEditStory: onEditStory)
                         .padding(.horizontal, -12)
                     ViewThatFits(in: .horizontal) {
