@@ -23,6 +23,10 @@ final class DevpostShotsTests: XCTestCase {
         // The binder's first page, with its index tabs in view.
         let tabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'inventory.tab.'"))
         scrollTo(tabs.firstMatch)
+        // Bring the tabs near the top so the shelves are in the shot.
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.68))
+        start.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.2)))
+        sleep(1)
         shot("02-items")
 
         // 2b. A second page of the binder (tap its tab).

@@ -293,7 +293,7 @@ struct PlacardSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ExhibitPlinth(item: info.item, featured: true)
+                    ExhibitPlinth(item: info.item)
                         .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
                     ExhibitPlacard(info: info, onEditStory: onEditStory)
                         .padding(.horizontal, -12)
