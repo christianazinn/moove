@@ -124,6 +124,18 @@ export function rejectsBorrowed(similarTo: string, f: Pick<FilterResult, 'claude
   return similarTo !== '' && f.claude === 'failed' && /^kept none/.test(f.error ?? '');
 }
 
+/** How long a generic, photo-less item waits for its photo: the app retries a failed upload for
+ *  up to 15 min (`ScanSession.pendingPhotos`), so give it a minute more. */
+export const PHOTO_WAIT_MS = 16 * 60_000;
+
+/** A catch-all name ("storage", "other") with no photo: vision can't name it until a photo
+ *  arrives, and pricing can't look it up. ms left to wait for the photo, 0 once it's time to stop. */
+export function photoWaitLeftMs(it: Item, nowMs = Date.now()): number | null {
+  if (it.pricingStatus !== 'pending' || !isGenericQuery(it) || it.photoUrls.length > 0 || it.detailsStatus !== 'pending') return null;
+  const created = it.createdAt ? Number(it.createdAt.toMillis()) : nowMs;
+  return Math.max(0, created + PHOTO_WAIT_MS - nowMs);
+}
+
 export function needsPricing(it: Item): boolean {
   if (it.pricingStatus !== 'pending' || inFlight.has(it.id) || coolingDown.has(it.id) || isGenericQuery(it)) return false;
   return it.detailsStatus === 'done' || it.detailsStatus === 'failed' || it.photoUrls.length === 0;
@@ -293,9 +305,32 @@ export const pricingAgent: Agent = {
     };
     // Generic items already being marked failed, so updates still in flight don't log it twice.
     const givingUp = new Set<bigint>();
+    const waitingForPhoto = new Set<bigint>();
     const maybe = (it: Item) => {
       if (it.pricingStatus !== 'pending') givingUp.delete(it.id);
-      else if (isGenericQuery(it) && (it.detailsStatus === 'done' || it.detailsStatus === 'failed')) {
+      const photoLeft = photoWaitLeftMs(it);
+      if (photoLeft !== null) {
+        // A raw "storage" box whose photo never arrived (an upload to an old tunnel): nothing will
+        // name it, so after the app's retry window say so instead of "pricing..." forever. A photo
+        // later still names it (vision), and the rename re-prices it.
+        if (photoLeft > 0) {
+          if (!waitingForPhoto.has(it.id)) {
+            waitingForPhoto.add(it.id);
+            setTimeout(() => {
+              waitingForPhoto.delete(it.id);
+              const row = conn.db.item.id.find(it.id);
+              if (row) maybe(row);
+            }, photoLeft + 1000).unref?.();
+          }
+          return;
+        }
+        if (givingUp.has(it.id)) return;
+        givingUp.add(it.id);
+        conn.reducers.setItemStage({ itemId: it.id, stage: 'failed', field: 'pricing' });
+        logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'result', message: `Not priced: "${it.name || it.category}" has no photo to identify it; add a photo or rename it to price it`, refTable: 'item', refId: it.id, data: { query: queryFor(it), generic: true, noPhoto: true } });
+        return;
+      }
+      if (it.pricingStatus === 'pending' && isGenericQuery(it) && (it.detailsStatus === 'done' || it.detailsStatus === 'failed')) {
         // Vision had its chance and left a catch-all name ("storage", "other"): nothing will name it
         // now, so don't leave it "pricing..." forever (sort waits on pricing). A rename re-prices it.
         if (givingUp.has(it.id)) return;
