@@ -323,6 +323,85 @@ import Testing
         #expect(DesignRole.of(LayoutItem(id: 1, name: "Bathtub", category: "bathtub", widthM: 0.75, depthM: 1.6, heightM: 0.55)) == .bathtub)
     }
 
+    /// A small one-bed, one-bath place with more than fits: leftovers used to spill into the bathroom.
+    static let crowdedPlan = EstimatedFloorPlan.build(beds: 1, baths: 1, sqft: 450)
+    static let crowded: [LayoutItem] = livingSet + [
+        LayoutItem(id: 20, name: "black wall-mounted flat screen TV", category: "tv", widthM: 1.1, depthM: 0.06, heightM: 0.65),
+        LayoutItem(id: 21, name: "black flat screen TV", category: "tv", widthM: 0.5, depthM: 0.16, heightM: 0.41),
+        LayoutItem(id: 22, name: "television", category: "television", widthM: 0.73, depthM: 0.18, heightM: 0.48),
+        LayoutItem(id: 23, name: "Second desk", category: "desk", widthM: 1.4, depthM: 0.7, heightM: 0.75),
+        LayoutItem(id: 24, name: "Loveseat", category: "sofa", widthM: 1.5, depthM: 0.85, heightM: 0.85),
+        LayoutItem(id: 25, name: "Gray cube ottoman", category: "ottoman", widthM: 0.45, depthM: 0.45, heightM: 0.42),
+        LayoutItem(id: 26, name: "Bookshelf", category: "storage", widthM: 0.8, depthM: 0.3, heightM: 1.8),
+        LayoutItem(id: 27, name: "Towel rack", category: "storage", widthM: 0.6, depthM: 0.3, heightM: 1.0),
+    ]
+
+    @Test func onlyBathroomThingsGoInBathrooms() {
+        var cases = Self.solved
+        cases += LayoutSolver(plan: Self.crowdedPlan).solveAll(Self.crowded).map { ("crowded/\($0.name)", Self.crowdedPlan, Self.crowded, $0) }
+        for (label, plan, items, option) in cases {
+            let placed = PropPlacer(plan: plan).place(option.placements, items: items)
+            for p in placed where plan.room(named: p.room)?.kind == .bathroom {
+                let item = items.first { $0.id == p.itemId }!
+                #expect(Designer.belongsInBathroom(item), "\(label): \(item.name) in \(p.room)")
+            }
+        }
+        func item(_ name: String, _ category: String) -> LayoutItem { LayoutItem(id: 1, name: name, category: category, widthM: 0.5, depthM: 0.4, heightM: 0.6) }
+        #expect(!Designer.belongsInBathroom(item("black flat screen TV", "tv")))
+        #expect(!Designer.belongsInBathroom(item("Gray cube ottoman", "ottoman")))
+        #expect(!Designer.belongsInBathroom(item("Writing desk", "desk")))
+        #expect(Designer.belongsInBathroom(item("Towel rack", "storage")))
+        #expect(Designer.belongsInBathroom(item("Bathroom trash can", "trash can")))
+        #expect(Designer.belongsInBathroom(item("Toilet", "toilet")))
+    }
+
+    @Test func seatsStayOnTheFloorAndHoldNothing() {
+        let ottoman = VoxelItemSpec(category: "ottoman", name: "Gray cube ottoman", widthM: 0.45, depthM: 0.45, heightM: 0.42, id: "o")
+        let bench = VoxelItemSpec(category: "bench", name: "Storage bench", widthM: 0.9, depthM: 0.4, heightM: 0.45, id: "b")
+        #expect(PropPlacer.role(of: ottoman) == .furniture)
+        #expect(PropPlacer.role(of: bench) == .furniture)
+        for (label, plan, items, option) in Self.solved + LayoutSolver(plan: Self.crowdedPlan).solveAll(Self.crowded).map({ ("crowded/\($0.name)", Self.crowdedPlan, Self.crowded, $0) }) {
+            for p in PropPlacer(plan: plan).place(option.placements, items: items) {
+                if let under = p.onTopOf, let parent = items.first(where: { $0.id == under }), let item = items.first(where: { $0.id == p.itemId }),
+                   DesignRole.of(item) != .bed { // a mattress laid on its frame (MattressPairing) is fine
+                    #expect(!PropPlacer.seatKinds.contains(VoxelModels.kind(VoxelItemSpec(item))), "\(label): \(item.name) is up on \(parent.name)")
+                    #expect(!PropPlacer.seatKinds.contains(VoxelModels.kind(VoxelItemSpec(parent))), "\(label): \(item.name) sits on \(parent.name)")
+                }
+            }
+        }
+    }
+
+    @Test func aScannedOttomanUnderATableStaysOnTheFloor() {
+        // The scan saw the ottoman tucked under the side table: its spot is inside the table's footprint.
+        let plan = DemoHouse.floorPlan
+        let room = plan.rooms.first { $0.kind == .living }!
+        let c = room.centroid
+        let items = [
+            LayoutItem(id: 1, name: "White square side table", category: "table", widthM: 1.0, depthM: 0.6, heightM: 0.83),
+            LayoutItem(id: 2, name: "Gray cube ottoman", category: "ottoman", widthM: 0.45, depthM: 0.45, heightM: 0.42),
+        ]
+        let placements = [Placement(itemId: 1, room: room.name, x: c.x, y: c.y), Placement(itemId: 2, room: room.name, x: c.x + 0.1, y: c.y)]
+        let after = PropPlacer(plan: plan).place(placements, items: items, scanned: [1, 2])
+        let ottoman = after.first { $0.itemId == 2 }!
+        #expect(ottoman.onTopOf == nil && (ottoman.elevationM ?? 0) == 0)
+    }
+
+    @Test func aWallTVFacesTheSofa() {
+        let items = Self.livingSet.filter { ![7, 8].contains($0.id) }
+            + [LayoutItem(id: 20, name: "black wall-mounted flat screen TV", category: "tv", widthM: 1.1, depthM: 0.06, heightM: 0.65)]
+        for (pn, plan) in Self.plans {
+            let o = LayoutSolver(plan: plan).solve(items, style: .byFunction)
+            let after = PropPlacer(plan: plan).place(o.placements, items: items)
+            guard let tv = after.first(where: { $0.itemId == 20 }), let sofa = after.first(where: { $0.itemId == 1 }) else {
+                Issue.record("\(pn): TV or sofa unplaced"); continue
+            }
+            #expect(tv.wallMounted == true, "\(pn): the TV hangs")
+            #expect(tv.room == sofa.room, "\(pn): the TV is with the sofa")
+            func facing(_ p: Placement) -> PlanPoint { OrientedRect(center: .init(0, 0), halfWidth: 0, halfDepth: 0, rotationDeg: p.rotationDeg).axes.z }
+            #expect(facing(tv).dot(facing(sofa)) < -0.5, "\(pn): the TV faces the sofa, not its back (tv \(tv.x),\(tv.y) rot \(tv.rotationDeg) in \(tv.room); sofa \(sofa.x),\(sofa.y) rot \(sofa.rotationDeg) in \(sofa.room))")
+        }
+    }
+
     @Test func propsSitOnTheirGroup() {
         let items = LayoutFixtures.scan9
         for (pn, plan) in Self.plans {

@@ -231,20 +231,35 @@ extension Designer {
         return placeOnWall(item, role: role, in: room, side: side, score: score) || placeOnWall(item, role: role, in: room, side: side, requireWalk: false, score: score)
     }
 
+    /// What may go in a bathroom: its fixtures, and the few things people really keep there
+    /// (a towel rack or hamper, a plant, a bin, a mirror or a picture). Never a TV, a seat or a desk.
+    static func belongsInBathroom(_ item: LayoutItem) -> Bool {
+        if DesignRole.of(item).isBath { return true }
+        let n = VName(item.name.lowercased())
+        if n.has("towel", "hamper", "laundry basket", "bath mat", "bathmat", "shower", "toiletr") || n.word("scale") { return true }
+        switch VoxelModels.kind(VoxelItemSpec(item)) {
+        case .toilet, .sink, .bathtub, .plant, .trashCan, .basket, .mirror, .art: return true
+        default: return false
+        }
+    }
+
     /// A piece with no group: on a free wall of the room it suits best (the old solver's room
     /// order), keeping the room walkable; then anywhere it fits.
     mutating func placeLeftover(_ item: LayoutItem) -> Bool {
         let role = DesignRole.of(item)
         var order = solver.roomOrder(for: item, rooms: rooms, style: style, used: used)
-        if !role.isBath && rooms.count > 1 { order = order.filter { $0.kind != .bathroom } + order.filter { $0.kind == .bathroom } }
+        // Common sense: a TV, desk or sofa never goes in a bathroom. It waits in storage instead.
+        if rooms.count > 1 && !Self.belongsInBathroom(item) { order = order.filter { $0.kind != .bathroom } }
         // A group's extra pieces stay with the group: spare armchairs by the sofa, chairs by the
-        // table or desk, nightstands and dressers in the bedrooms.
+        // table or desk, nightstands and dressers in the bedrooms, an ottoman by the seats or a
+        // bench at the foot of the bed.
+        let kind = VoxelModels.kind(VoxelItemSpec(item))
         let home: [DesignRole] = switch role {
         case .armchair, .sofa, .sideTable, .coffeeTable, .floorLamp, .rug, .tv, .tvStand: [.sofa]
         case .diningChair: [.diningTable, .desk]
         case .deskChair, .bookshelf: [.desk]
         case .nightstand, .dresser, .wardrobe: [.bed]
-        default: []
+        default: kind == .ottoman ? [.sofa, .armchair, .bed] : kind == .bench ? [.bed, .diningTable, .sofa] : []
         }
         let placedNow = placed
         let anchor = home.compactMap { r in placedNow.first { $0.role == r } }.first
@@ -284,6 +299,23 @@ extension Designer {
         func first(_ roles: [DesignRole], skip: Set<UInt64> = []) -> (room: String, at: PlanPoint)? {
             for r in roles {
                 if let p = placed.first(where: { $0.role == r && !skip.contains($0.item.id) }) { return (p.room, p.rect.center) }
+            }
+            return nil
+        }
+        if role == .wall && kind == .tv {
+            // A wall TV faces the seats: on the wall across from the sofa (or the foot of the bed),
+            // never behind them. PropPlacer hangs it on the wall nearest this spot.
+            if let stand = placed.first(where: { $0.role == .tvStand }) { return (stand.room, stand.rect.center) }
+            for r in [DesignRole.sofa, .armchair, .bed] {
+                guard let p = placed.first(where: { $0.role == r }) else { continue }
+                // Walk out the way the seat faces to the wall across, and stop just short of it.
+                var last = p.rect.center
+                var t = p.rect.halfDepth
+                while t < 12, plan.room(at: p.rect.center + p.rect.axes.z * t)?.name == p.room {
+                    last = p.rect.center + p.rect.axes.z * t
+                    t += 0.1
+                }
+                return (p.room, last - p.rect.axes.z * 0.2)
             }
             return nil
         }

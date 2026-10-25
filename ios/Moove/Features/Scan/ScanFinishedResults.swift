@@ -31,7 +31,7 @@ struct ScanFinishedResults: View {
     var body: some View {
         Group {
             if let room, !items.isEmpty {
-                ScanResultsView(room: room, items: items, comps: store.snapshot.comps, geometry: geometry, colors: shownColors, onSelect: onSelect)
+                ScanResultsView(room: room, items: items, geometry: geometry, colors: shownColors, onSelect: onSelect)
             } else if room != nil {
                 // The room landed with no items (RoomPlan found no furniture, nothing added by photo).
                 Text("No furniture found").blockTitle()

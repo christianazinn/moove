@@ -228,7 +228,7 @@ async function price(conn: Conn, it: Item, retry: (it: Item, delayMs: number) =>
         owner: it.owner,
         agent: 'pricing',
         kind: 'tool_call',
-        message: `${prior.status === 'cached' ? '[REPLAYED] ' : ''}Claude's price guess without comps${sawPhoto ? ', from the photo' : ''}: ~$${Math.round(prior.cents / 100)} ($${Math.round(prior.lowCents / 100)}-$${Math.round(prior.highCents / 100)}) for ${prior.reason}`,
+        message: `${prior.status === 'cached' ? '[REPLAYED] ' : ''}Claude's price guess without comps${sawPhoto ? ', from the photo' : ''}: ~$${Math.round(prior.cents / 100)} for ${prior.reason}`,
         refTable: 'item',
         refId: it.id,
         data: { query: q, priorCents: prior.cents, priorLowCents: prior.lowCents, priorHighCents: prior.highCents, photo: sawPhoto, replayed: prior.status === 'cached' },
