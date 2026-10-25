@@ -1,0 +1,14 @@
+{
+  "94a96c7c6a1b44fe": {
+    "identifiedProduct": "Gray metal twin-over-twin bunk bed frame with ladder (generic, unspecified brand)",
+    "itemForm": "full_product",
+    "specificity": 0.35,
+    "newRetailUsd": 300,
+    "p10": 60,
+    "p50": 120,
+    "p90": 220,
+    "item": "gray metal twin bunk bed with ladder",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

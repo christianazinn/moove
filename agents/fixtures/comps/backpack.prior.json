@@ -1,0 +1,14 @@
+{
+  "f18bbfd8c997dffe": {
+    "identifiedProduct": "Generic backpack (unspecified brand, size, or condition)",
+    "itemForm": "full_product",
+    "specificity": 0.1,
+    "newRetailUsd": 50,
+    "p10": 8,
+    "p50": 20,
+    "p90": 55,
+    "item": "backpack",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

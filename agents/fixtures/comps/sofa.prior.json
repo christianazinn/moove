@@ -1,0 +1,14 @@
+{
+  "1d8a42998890b927": {
+    "identifiedProduct": "Generic sofa (unspecified brand, size, material, or style)",
+    "itemForm": "full_product",
+    "specificity": 0.1,
+    "newRetailUsd": 900,
+    "p10": 60,
+    "p50": 225,
+    "p90": 700,
+    "item": "sofa",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

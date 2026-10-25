@@ -1,0 +1,14 @@
+{
+  "d7299daa71307c66": {
+    "identifiedProduct": "Generic mirror (unspecified type, size, or brand)",
+    "itemForm": "full_product",
+    "specificity": 0.1,
+    "newRetailUsd": 60,
+    "p10": 8,
+    "p50": 30,
+    "p90": 120,
+    "item": "mirror",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

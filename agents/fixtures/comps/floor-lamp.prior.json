@@ -1,0 +1,26 @@
+{
+  "c3445d41cfa63a6b": {
+    "identifiedProduct": "Generic floor lamp, approx. 170 cm tall (slim, ~30 cm base), brand and model unknown",
+    "itemForm": "full_product",
+    "specificity": 0.2,
+    "newRetailUsd": 80,
+    "p10": 12,
+    "p50": 30,
+    "p90": 75,
+    "item": "Floor lamp; category lamp; 0.30 x 1.70 x 0.30 m (W x H x D)",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  },
+  "8ba29f43bba8c186": {
+    "identifiedProduct": "Generic floor lamp (unspecified brand/model)",
+    "itemForm": "full_product",
+    "specificity": 0.15,
+    "newRetailUsd": 80,
+    "p10": 10,
+    "p50": 30,
+    "p90": 90,
+    "item": "floor lamp",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

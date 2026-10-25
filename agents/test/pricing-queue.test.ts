@@ -9,6 +9,7 @@ import type { Item } from "../src/module_bindings/types.js";
 process.env.PRICING_CONCURRENCY = "2";
 process.env.PRICING_RETRY_BASE_MS = "20";
 process.env.PRICING_COMP_FILTER = "0";
+process.env.PRICING_PRIOR = "0"; // the price prior would call Claude (config loads .env.local)
 const { pricingAgent, setCompsSource, isTransientPricingError } = await import("../src/agents/pricing.js");
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));

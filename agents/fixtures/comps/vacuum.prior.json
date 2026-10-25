@@ -1,0 +1,14 @@
+{
+  "5583c5372ab9b329": {
+    "identifiedProduct": "Generic vacuum cleaner (brand and model unspecified)",
+    "itemForm": "full_product",
+    "specificity": 0.1,
+    "newRetailUsd": 250,
+    "p10": 15,
+    "p50": 55,
+    "p90": 200,
+    "item": "vacuum",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

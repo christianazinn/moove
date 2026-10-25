@@ -8,6 +8,7 @@ import type { Item } from "../src/module_bindings/types.js";
 
 // When Apify can't run, pricing borrows the cached real comps of the most similar item (labeled).
 process.env.PRICING_COMP_FILTER = "rules"; // no Claude in tests
+process.env.PRICING_PRIOR = "0"; // the price prior would call Claude (config loads .env.local)
 const { similarCachedComps, isApifyUnavailable, ApifyCapError } = await import("../src/integrations/apify.js");
 const { pricingAgent, setCompsSource } = await import("../src/agents/pricing.js");
 

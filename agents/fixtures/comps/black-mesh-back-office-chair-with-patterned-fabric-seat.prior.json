@@ -1,0 +1,14 @@
+{
+  "0a69b5140704e607": {
+    "identifiedProduct": "Generic black mesh back office chair with patterned fabric seat",
+    "itemForm": "full_product",
+    "specificity": 0.2,
+    "newRetailUsd": 130,
+    "p10": 15,
+    "p50": 40,
+    "p90": 95,
+    "item": "black mesh back office chair with patterned fabric seat",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}
