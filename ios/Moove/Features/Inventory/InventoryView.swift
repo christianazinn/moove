@@ -67,7 +67,7 @@ struct InventoryView: View {
                 }
                 sweepNotes(rooms)
                 binderSection(shown, stories: stories)
-                hiddenRoomsFooter.padding(.top, 40)
+                hiddenRoomsFooter.padding(.top, Theme.Space.section)
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.top, 16)
@@ -236,8 +236,8 @@ struct InventoryView: View {
         }
         .padding(12)
         .frame(minWidth: 180, alignment: .leading)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
             .strokeBorder(focused ? Theme.accentStrong : .clear, lineWidth: 2))
         .opacity(focus.isEmpty || focused ? 1 : 0.55)
         .contextMenu { hideButton(room) }
@@ -636,18 +636,10 @@ struct InventoryView: View {
     }
 
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("No items yet").blockTitle()
-            Text("Scan a room to build your inventory, or join a shared one with its code.").monoMeta()
+        EmptyState(title: "No items yet", detail: "Scan a room to build your inventory, or join a shared one with its code.") {
             Button("Join a room") { showJoin = true }
                 .buttonStyle(.pill(.outline, compact: true))
-                .padding(.top, 12)
         }
-        .padding(.vertical, 28)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .ruled(.top)
-        .ruled()
-        .accessibilityElement(children: .combine)
     }
 
     /// Rooms are mine unless someone shared them with me through a join code (#10).
@@ -663,11 +655,9 @@ struct InventoryView: View {
     private func totals(_ shown: [Item]) -> some View {
         let priced = shown.compactMap(\.saleValueCents)
         return HStack(spacing: 0) {
+            // No "Rooms" figure: the Rooms chips right below show them.
             StatFigure(label: "Items", value: "\(shown.count)")
                 .padding(.vertical, 18).padding(.trailing, 14)
-            Rectangle().fill(Theme.line).frame(width: 1)
-            StatFigure(label: "Rooms", value: "\(store.visibleRooms.count)")
-                .padding(.vertical, 18).padding(.horizontal, 14)
             Rectangle().fill(Theme.line).frame(width: 1)
             StatFigure(label: "Est. value", value: priced.reduce(0, +).usd, tint: Theme.accentStrong)
                 .padding(.vertical, 18).padding(.leading, 14)

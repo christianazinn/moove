@@ -248,16 +248,16 @@ struct ShelfSprite: View {
         if item.origin == .photo, let url = item.photoUrls.first.flatMap(URL.init(string:)) {
             AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { Theme.surface2 }
                 .frame(width: size * 0.62, height: size * 0.62)
-                .clipShape(RoundedRectangle(cornerRadius: 3))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.tag - 1))
                 .padding(4)
-                .background(Theme.bg, in: RoundedRectangle(cornerRadius: 5))
-                .shadow(color: .black.opacity(0.18), radius: 3, y: 2)
+                .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.Radius.tag + 1))
+                .mooveShadow(.paper)
                 .accessibilityHidden(true)
         } else {
             // The sprite's canvas has an inset; nudge it down so the model sits on the wood.
             VoxelThumbnail(item, size: size, tile: false)
                 .offset(y: size * 0.1)
-                .shadow(color: .black.opacity(0.14), radius: 3, y: 2)
+                .mooveShadow(.paper)
         }
     }
 }
