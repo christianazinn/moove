@@ -36,71 +36,6 @@ public enum MuseumLabel {
 
     private static func cm(_ m: Double) -> Int { m > 0 ? Int((m * 100).rounded()) : 0 }
 
-    /// "Catalogued Oct 24, 2026", or "Acquired 1974 · catalogued Oct 24, 2026" when the
-    /// user's story names a year.
-    public static func acquiredLine(cataloguedAt date: Date, story: String?, now: Date = .now,
-                                    calendar: Calendar = .current, locale: Locale = .current) -> String {
-        let f = DateFormatter()
-        f.locale = locale
-        f.calendar = calendar
-        f.timeZone = calendar.timeZone
-        f.setLocalizedDateFormatFromTemplate("yMMMd")
-        let day = f.string(from: date)
-        if let year = story.flatMap({ storyYear($0, now: now, calendar: calendar) }) {
-            return "Acquired \(year) · catalogued \(day)"
-        }
-        return "Catalogued \(day)"
-    }
-
-    /// The first plausible year in the user's story ("Grandma's, 1974" → 1974): 1900
-    /// through this year, as a whole number (not part of "12345" or "1974s" stays 1974).
-    public static func storyYear(_ story: String, now: Date = .now, calendar: Calendar = .current) -> Int? {
-        let thisYear = calendar.component(.year, from: now)
-        let chars = Array(story)
-        var i = 0
-        while i < chars.count {
-            guard chars[i].isASCII, chars[i].isNumber else { i += 1; continue }
-            var j = i
-            while j < chars.count, chars[j].isASCII, chars[j].isNumber { j += 1 }
-            if j - i == 4, let y = Int(String(chars[i..<j])), (1900...thisYear).contains(y) { return y }
-            i = j
-        }
-        return nil
-    }
-
-    /// One honest line about the piece, from what Moove knows. `isTopPiece`: the most
-    /// valuable priced piece in its hall.
-    public static func autoStory(_ item: Item, isTopPiece: Bool = false) -> String {
-        if item.dispositionSource == .user {
-            switch item.disposition {
-            case .keep: return "Coming along: your call."
-            case .sell: return "Headed for sale: your call."
-            case .donate: return "Off to a new home: your call."
-            case .trash: return "Leaving the collection: your call."
-            case .undecided: break
-            }
-        }
-        if item.maybeSentimental { return "Possibly sentimental. Moove leaves this one to you." }
-        if item.isBuiltInFixture { return "Part of the building; it stays." }
-        if item.priceState == .identifying { return "Still being identified from its photo." }
-        if item.origin == .roomPhotos { return "Spotted in the room photos; size estimated." }
-        if case .priced(let v) = item.priceState, v > 0 {
-            if isTopPiece { return "Worth ~\(dollars(v)), the hall's most valuable piece." }
-            if item.origin != .photo {
-                let cost = moveCostCents(item)
-                if v < sellMinCents { return "Worth ~\(dollars(v)), too little to list." }
-                if Double(v) < Double(cost) * keepMargin { return "Worth ~\(dollars(v)), cheaper to sell than to move." }
-            }
-        }
-        if item.fragile { return "Fragile; handle with care." }
-        switch item.origin {
-        case .scan: return "Measured by the LiDAR scan."
-        case .manual: return "Added by hand."
-        case .photo: return "Added from its photo."
-        case .roomPhotos: return "Spotted in the room photos; size estimated."
-        }
-    }
-
     /// "from the Bedroom" under the placard; "my room" / "the attic" keep their own article.
     public static func fromRoom(_ roomName: String) -> String {
         let name = roomName.trimmingCharacters(in: .whitespaces)
@@ -109,12 +44,9 @@ public enum MuseumLabel {
         return lower.hasPrefix("the ") || lower.hasPrefix("my ") ? "from \(name)" : "from the \(name)"
     }
 
-    // The worker's sort rules (agents/src/agents/sort.ts), so the story agrees with the
-    // keep/sell call: $60 per m³ (at least $2), fragile ×1.5, keep only at 1.25× the move.
+    // The worker's sort rules (agents/src/agents/sort.ts): $60 per m³ (at least $2), fragile ×1.5.
     static let moveCentsPerM3: Double = 6000
     static let minMoveCents: Double = 200
-    static let sellMinCents: Int64 = 2500
-    static let keepMargin = 1.25
 
     public static func moveCostCents(_ item: Item) -> Int64 {
         let vol = max(0, item.widthM) * max(0, item.heightM) * max(0, item.depthM)
@@ -140,43 +72,6 @@ public enum MuseumLabel {
                 let va = a.saleValueCents ?? 0, vb = b.saleValueCents ?? 0
                 return va != vb ? va < vb : a.id > b.id
             }?.id
-    }
-}
-
-/// The user's own one-line placard stories ("Grandma's, 1974"), kept on this device in
-/// UserDefaults as a JSON object of item id → story. (A synced `item.story` column would
-/// share them across phones; that's a contract change for later.)
-public enum ItemStories {
-    public static let defaultsKey = "moove.itemStories"
-    public static let maxLength = 60
-
-    public static func decode(_ json: String) -> [UInt64: String] {
-        guard let object = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: String] else { return [:] }
-        var out: [UInt64: String] = [:]
-        for (key, value) in object {
-            if let id = UInt64(key), let story = clean(value) { out[id] = story }
-        }
-        return out
-    }
-
-    public static func encode(_ stories: [UInt64: String]) -> String {
-        let object = Dictionary(uniqueKeysWithValues: stories.compactMap { id, s in clean(s).map { (String(id), $0) } })
-        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else { return "{}" }
-        return String(decoding: data, as: UTF8.self)
-    }
-
-    /// One line, trimmed, at most `maxLength` characters; nil when empty.
-    public static func clean(_ story: String) -> String? {
-        let oneLine = story.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
-        guard !oneLine.isEmpty else { return nil }
-        return String(oneLine.prefix(maxLength))
-    }
-
-    /// `json` with `story` set for `id` (or removed when it cleans to nothing).
-    public static func setting(_ story: String, for id: UInt64, in json: String) -> String {
-        var all = decode(json)
-        all[id] = clean(story)
-        return encode(all)
     }
 }
 
