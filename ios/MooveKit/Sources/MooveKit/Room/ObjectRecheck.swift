@@ -10,11 +10,14 @@ import Foundation
 /// plus `none` (wall, door, floor, clutter...) and fixtures (radiator, shower curtain,
 /// towel rack). `check` fuses that with the detector's category and the LiDAR box:
 /// - **reject** when `none` or a fixture is the classifier's top pick with ≥ 60%;
-/// - **relabel** when its top category beats the detector's by ≥ 0.2 (≥ 0.5 when the
-///   detector's category isn't one the classifier knows), unless the box is clearly the
-///   wrong size for it;
+/// - **relabel** when its top category beats the detector's by the policy's margin (0.2
+///   shipped constant, 0.3 in the bundled policy; ≥ 0.5 when the
+///   detector's category isn't one the classifier knows) and has at least 0.4, unless the box
+///   is clearly the wrong size for it (footprint priors, else RoomPlan's size ranges);
 /// - **unknown** (`other`, for vision to name) when the box clearly can't be the
-///   detector's category and the classifier doesn't back it;
+///   detector's category and the classifier doesn't back it, or the detector said "vacuum"
+///   and the classifier gives that under 0.5 (mops, brooms, dollies and tripods get called
+///   vacuum; real vacuums score 0.57-0.99);
 /// - else keep.
 /// Thresholds were tuned on the public benchmark split (the detector's own picks on
 /// 912 public crops); see the PR for the iPad numbers. They come from the head's fitted
@@ -173,6 +176,13 @@ public enum ObjectRecheck {
     public static let sureProbability = 0.9
     /// Table vs. storage within `relabelMargin`: taller than this is storage.
     public static let tableStorageCutM = 0.9
+    /// A relabel's target needs at least this much (R5): a margin alone let an unsure crop
+    /// (floor lamp: storage 0.32, lamp 0.06) be renamed by whichever group summed the most.
+    /// Picked on public listings + thin-clutter dev photos (highest bar with no new errors there).
+    public static let relabelFloor = 0.4
+    /// Detector categories the classifier must back before they're kept (R5): below this the
+    /// object becomes `other` for vision to name, unless a relabel applies.
+    public static let confirmBelow: [String: Double] = ["vacuum": 0.5]
 
     static func group(_ category: String) -> String { sameAs[category] ?? category }
 
@@ -229,6 +239,11 @@ public enum ObjectRecheck {
             p < sureProbability
                 && ObjectSanity.fitsFootprint(category, width: width, height: height, depth: depth, factor: vetoFactor) == false
         }
+        /// A relabel target is also checked against RoomPlan's size ranges.
+        func targetOff(_ category: String, _ p: Double) -> Bool {
+            p < sureProbability
+                && ObjectSanity.fitsSizePrior(category, width: width, height: height, depth: depth, factor: vetoFactor) == false
+        }
         func percent(_ p: Double) -> String { "\(Int((p * 100).rounded()))%" }
 
         if policy.detector.mass == .top {
@@ -252,7 +267,7 @@ public enum ObjectRecheck {
         if best != d {
             let margin = policy.relabelMarginByDetector[d] ?? relabelMargin
             let beats = pDet.map { pBest - $0 >= margin } ?? (pBest >= unknownCategoryThreshold)
-            if beats, !clearlyOff(best, pBest) {
+            if beats, pBest >= relabelFloor, !targetOff(best, pBest) {
                 // The member the classifier liked more, e.g. monitor vs. television.
                 let category = scores.filter { group($0.key) == best }
                     .max { $0.value != $1.value ? $0.value < $1.value : $0.key > $1.key }?.key ?? best
@@ -262,6 +277,9 @@ public enum ObjectRecheck {
         }
         if clearlyOff(det), (pDet ?? 0) < 0.5 {
             return .unknown(reason: "box can't be a \(det)")
+        }
+        if let bar = confirmBelow[d], (pDet ?? 0) < bar {
+            return .unknown(reason: "doesn't look like a \(det) (\(percent(pDet ?? 0)))")
         }
         return .keep
     }
