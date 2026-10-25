@@ -11,7 +11,7 @@ The app had 10 tabs. iOS shows 4 plus "More", so half the demo script hid behind
 | Scan | Scan home |
 | Items | Inventory · Review |
 | Sell & Buy | Listings · Shopping · Approvals · Spending |
-| Move | New Home · Pack |
+| Move | New Home · Pack (one page since the "Move is one page" addendum) |
 | Summary | Summary |
 
 - `Moove/App/TabGroups.swift` holds the groups. Feature screens are unchanged.
@@ -36,3 +36,13 @@ Lisa: "can we remove the summary page entirely but keep the however many kg save
 - Money (sold, spent, net) already lives on the Agents receipts tape, so it isn't repeated. The agent timeline is gone.
 - The old screen key "summary" maps to "review" (`TabGroup.segment(for:)`), so a stored `moove.tab = "summary"` or `tab = "summary"` lands on Review.
 - Devpost shots: `08-summary` is replaced by `08-agents-safety` and `08b-review-impact`.
+
+## Addendum: Move is one page (Oct 24)
+Lisa: "for the move tab, can we make instead of the 'pieces' on the first page just add the truck and boxes to the first page? idk somehow merge these two tabs and simplify UI" (#335).
+
+- **Move has no segments.** `TabGroup.move` has one screen key, "move" (`Features/Move/MoveView.swift`), one scroll top to bottom:
+  1. **Your new home**: the header (name, size, source, **Change home** and **Paste a Zillow link**), or the picker until a home is chosen; one shared **Moving from** row (or the demo notice when nothing is kept); the 3D stage with the fly-in; layout style + **Save layout**; room shots.
+  2. **Getting there**: the truck card (inline 3D truck, **Load the truck**, **Full screen**, the estimate), then **Boxes** (the card grid by room, **Print labels**), then **Delivered to your new home**.
+  3. Folded at the bottom, closed by default, each a header with its count: **Furniture notes**, **Supplies**, **Schedule** and **Pieces** (the old New Home list).
+- The sections are reusable views in their feature folders (`NewHomeHeader`, `NewHomeStage`, `NewHomePickerContent`, `PiecesList` in `Features/NewHome/`; `TruckCard`, `BoxesSection`, `DeliveredSection`, `FurnitureNotesList`, `SuppliesList`, `ScheduleList` in `Features/Pack/PackSections.swift`). The duplicated headers, eyebrows and second Moving from row are gone.
+- The old keys "newhome" and "pack" map to "move" (`TabGroup.segment(for:)`); "pack" scrolls to Getting there, then the key becomes "move".

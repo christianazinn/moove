@@ -70,8 +70,8 @@ final class DevpostShotsTests: XCTestCase {
             shot("06-desk-chair-deals")
         }
 
-        // 7. Move > New Home > the demo house: what was kept, in the voxel house.
-        open(tab: "Move", segment: "New Home")
+        // 7. Move (one page) > the demo house: what was kept, in the voxel house.
+        open(tab: "Move")
         // The whole demo-house card is one button ("Demo house · 2 bed, 1 bath, …").
         let use = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Demo house'")).firstMatch
         if scrollTo(use) {
