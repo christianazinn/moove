@@ -35,18 +35,15 @@ struct ApprovalsSection: View {
     @ViewBuilder
     private func open(pending: [Approval], shared: [Approval]) -> some View {
         if pending.isEmpty && shared.isEmpty {
-            ListHeader(title: "Needs your OK", count: "0")
-            Label("Nothing waiting",
-                  systemImage: "checkmark.circle")
+            heading("Needs your OK")
+            Text("Nothing waiting")
                 .monoMeta()
-                .fixedSize(horizontal: false, vertical: true)
                 .padding(.vertical, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .ruled()
                 .accessibilityIdentifier("approvals.nothingWaiting")
         }
         if !pending.isEmpty {
-            ListHeader(title: "Needs your OK", count: "\(pending.count)")
+            heading("Needs your OK")
             // Each list in its own VStack: an approval's id is in `pending`, then in `decided`, and
             // sharing one LazyVStack's id space left the stale pending card showing under History.
             VStack(alignment: .leading, spacing: 0) {
@@ -55,19 +52,10 @@ struct ApprovalsSection: View {
                                        deal: store.snapshot.deal(for: approval), item: item(for: approval))
                 }
             }
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: "iphone.radiowaves.left.and.right")
-                    .font(.system(size: 12))
-                    .accessibilityHidden(true)
-                Text("Also sent to your phone (Auth0 Guardian).")
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .monoMeta()
-            .padding(.top, 12)
         }
         if !shared.isEmpty {
             // Shared rooms (#195, #200): any room member may decide a listing approval.
-            ListHeader(title: "Shared rooms", count: "\(shared.count)").padding(.top, pending.isEmpty ? 0 : 40)
+            heading("Shared rooms").padding(.top, pending.isEmpty ? 0 : Theme.Space.section)
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(shared) { approval in
                     PendingApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
@@ -82,7 +70,7 @@ struct ApprovalsSection: View {
     private func decidedList(_ decided: [Approval]) -> some View {
         if !decided.isEmpty {
             let shown = showAllDecided ? decided : Array(decided.prefix(Self.decidedPreview))
-            ListHeader(title: "Decided", count: "\(decided.count)").padding(.top, parts.contains(.open) ? 40 : 0)
+            heading("Decided").padding(.top, parts.contains(.open) ? Theme.Space.section : 0)
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(shown) { approval in
                     DecidedApprovalRow(approval: approval, listing: store.snapshot.listing(for: approval),
@@ -99,6 +87,15 @@ struct ApprovalsSection: View {
                 .accessibilityIdentifier("approvals.decided.showAll")
             }
         }
+    }
+
+    /// A section title alone: no count, no rule.
+    private func heading(_ title: String) -> some View {
+        Text(title)
+            .listHeading()
+            .accessibilityAddTraits(.isHeader)
+            .padding(.bottom, Theme.Space.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func item(for approval: Approval) -> Item? {
@@ -122,63 +119,24 @@ struct PendingApprovalRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 16) {
-                ApprovalThumbnail(approval: approval, item: item)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        ApprovalKindTag(kind: approval.kind)
-                        Spacer(minLength: 8)
-                        if listing?.simulated == true { SimulatedTag() }
-                        // #191: the worker's announced Visa mode; nothing when it didn't announce one.
-                        switch railTag {
-                        case .simulated?: SimulatedBadge(spoken: PurchaseRailTag.simulated.spoken)
-                        case .sandbox?: MonoTag(text: PurchaseRailTag.sandbox.text, tone: Theme.muted)
-                        case nil: EmptyView()
-                        }
-                    }
-                    Text(listing?.title ?? deal?.title ?? approval.summary)
-                        .blockTitle()
-                        .fixedSize(horizontal: false, vertical: true)
-                    AdaptiveLine {
-                        Text(approval.formattedAmount)
-                            .monoText(22, weight: .bold, maxScale: 1.6)
-                            .foregroundStyle(Theme.text)
-                            .amountText()
-                        if let deal { Text("from \(deal.source)").monoMeta() }
-                        Spacer(minLength: 8)
-                        Text(approval.requestedAt, format: .relative(presentation: .named))
-                            .monoMeta()
-                    }
-                }
+            // Item + price (+ SIMULATED). Kind, source, time, re-asks and the Guardian push are spoken only.
+            HStack(alignment: .center, spacing: 14) {
+                ApprovalThumbnail(approval: approval, item: item, size: 44)
+                Text(listing?.title ?? deal?.title ?? approval.summary)
+                    .blockTitle()
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if isSimulated { SimulatedBadge(spoken: "Simulated") }
+                Text(approval.formattedAmount)
+                    .monoText(17, weight: .bold, maxScale: 1.6)
+                    .foregroundStyle(Theme.text)
+                    .amountText()
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(spokenSummary)
             .accessibilityIdentifier("approval.pending.\(approval.id)")
-            // Re-asked after an expiry (#186): ties this card to the expired ask(s) in History.
-            let asks = store.snapshot.asks(for: approval)
-            if let caption = asks.pendingCaption {
-                Label(caption, systemImage: "arrow.clockwise")
-                    .monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(asks.spokenPendingCaption ?? caption)
-            }
-            if let listing, listing.priceCents != approval.amountCents {
-                CommerceProblem(text: "Price changed to \(listing.formattedPrice) since this was requested. Approving won't post it.",
-                                tint: Theme.ochreInk)
-            }
-            if let deal, deal.priceCents != approval.amountCents {
-                CommerceProblem(text: "Price changed to \(deal.formattedPrice) since this was requested. Approving won't buy it.",
-                                tint: Theme.ochreInk)
-            }
-            if let deal, deal.isFraudBlocked {
-                CommerceProblem(text: "The fraud screen flagged this deal. The agent won't buy it even if you approve.",
-                                systemImage: "exclamationmark.shield")
-            }
-            if let sharedOwner {
-                Label("Shared room: \(sharedOwner)'s item. Anyone in the room can decide.", systemImage: "person.2")
-                    .monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
+            if let warning {
+                CommerceProblem(text: warning.text, systemImage: warning.icon, tint: warning.tint)
             }
             if failed {
                 CommerceProblem(text: "Couldn't send your decision. Check the connection and try again.")
@@ -187,7 +145,7 @@ struct PendingApprovalRow: View {
                 Button(role: .destructive) { confirmDeny = true } label: {
                     Label("Deny", systemImage: "xmark").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.pill(.danger))
+                .buttonStyle(.pill(.outline))
                 .accessibilityLabel("Deny \(approval.formattedAmount)")
                 Button { decide(approve: true) } label: {
                     if working {
@@ -203,7 +161,6 @@ struct PendingApprovalRow: View {
             .disabled(working)
         }
         .padding(.vertical, 18)
-        .ruled()
         .confirmationDialog("Deny this request?", isPresented: $confirmDeny, titleVisibility: .visible) {
             Button("Deny \(approval.formattedAmount)", role: .destructive) { decide(approve: false) }
         } message: {
@@ -212,10 +169,27 @@ struct PendingApprovalRow: View {
         .sensoryFeedback(.success, trigger: approvedCount)
     }
 
+    private var isSimulated: Bool { listing?.simulated == true || railTag == .simulated }
+
+    /// The one thing that changes what Approve does, in a few words (the full sentence is spoken).
+    private var warning: (text: String, icon: String, tint: Color)? {
+        if let deal, deal.isFraudBlocked { return ("Flagged as fraud: won't buy", "exclamationmark.shield", Theme.danger) }
+        if let listing, listing.priceCents != approval.amountCents { return ("Price changed: won't post", "exclamationmark.triangle", Theme.danger) }
+        if let deal, deal.priceCents != approval.amountCents { return ("Price changed: won't buy", "exclamationmark.triangle", Theme.danger) }
+        return nil
+    }
+
     private var spokenSummary: String {
         var s = approval.accessibilitySummary
+        if let deal { s += ", from \(deal.source)" }
         if listing?.simulated == true { s += ". Simulated listing, not posted to eBay" }
         if let railTag { s += ". \(railTag.spoken)" }
+        if let sharedOwner { s += ". Shared room: \(sharedOwner)'s item. Anyone in the room can decide" }
+        if let caption = store.snapshot.asks(for: approval).spokenPendingCaption { s += ". \(caption)" }
+        if let listing, listing.priceCents != approval.amountCents { s += ". Price changed to \(listing.formattedPrice) since this was requested. Approving won't post it" }
+        if let deal, deal.priceCents != approval.amountCents { s += ". Price changed to \(deal.formattedPrice) since this was requested. Approving won't buy it" }
+        if let deal, deal.isFraudBlocked { s += ". The fraud screen flagged this deal. The agent won't buy it even if you approve" }
+        if sharedOwner == nil { s += ". Also sent to your phone" }
         return s
     }
 
@@ -241,31 +215,18 @@ struct DecidedApprovalRow: View {
     let item: Item?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
+        // One line: item and amount (status, time and outcome are spoken).
+        HStack(spacing: 14) {
             ApprovalThumbnail(approval: approval, item: item, size: 44)
-            VStack(alignment: .leading, spacing: 5) {
-                Text(listing?.title ?? deal?.title ?? approval.summary)
-                    .blockTitle()
-                    .lineLimit(3)
-                HStack(spacing: 8) {
-                    if approval.status == .expired {
-                        ExpiredBadge()
-                    } else {
-                        ApprovalStatusChip(status: approval.status)
-                    }
-                    Text("·").monoText(12.5).foregroundStyle(Theme.faint).accessibilityHidden(true)
-                    Text(approval.updatedAt, format: .relative(presentation: .named)).monoMeta()
-                }
-                if let outcome = store.snapshot.historyOutcome(for: approval) {
-                    Text(outcome).monoMeta().fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(listing?.title ?? deal?.title ?? approval.summary)
+                .blockTitle()
+                .lineLimit(2)
+                .strikethrough(approval.status == .denied)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text(approval.formattedAmount).rowValue().amountText()
         }
-        .padding(.vertical, 16)
+        .padding(.vertical, 12)
         .frame(minHeight: 44)
-        .ruled()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(store.snapshot.historyAccessibilitySummary(for: approval))
         .accessibilityIdentifier("approval.decided.\(approval.id)")

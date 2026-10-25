@@ -24,8 +24,8 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Report if wrong:** which screen shows the old name.
 
 ### 2. Fresh scan
-- **Taps:** Scan → **Scan a room** → sweep the room slowly → **Done** → **Looks right: check photos** → check the **Room** field at the top (change it with a chip or by typing) → **Add N items**.
-- **Expected:** the Room field is prefilled from what was found (bed → "Bedroom", sofa/TV → "Living room", stove/fridge → "Kitchen", desk + monitor → "Office", nothing telling → "Room"), and says "Bedroom 2" if you already have a Bedroom (a hint offers the number when you type a taken name; keeping it is fine for a re-scan). "Scan · Done" and "N items added". The new room has that name in Inventory, New Home's **Moving from** and Pack. The "Also found: …" chip lists detector finds. If something was impossible, "N objects looked wrong and were skipped" appears.
+- **Taps:** Scan → **Scan a room** → sweep the room slowly → **Done** → **Looks right** → check the **Room** field at the top (change it with a chip or by typing) → **Add N items**.
+- **Expected:** the Room field is prefilled from what was found (bed → "Bedroom", sofa/TV → "Living room", stove/fridge → "Kitchen", desk + monitor → "Office", nothing telling → "Room"), and says "Bedroom 2" if you already have a Bedroom ("Already taken" with a **Use "Bedroom 2"** button when you type a taken name; keeping it is fine for a re-scan). "Scan · Done" and "N items added". The new room has that name in Inventory, New Home's **Moving from** and Pack. The "Also found: …" chip lists detector finds. If something was impossible, "N objects looked wrong and were skipped" appears.
 - **Report if wrong:** the step where it stuck, plus the on-screen message.
 
 ### 3. Scan finished dollhouse
@@ -35,15 +35,12 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
   - Tall walls are one continuous wall: **no strip or rail at 1.1 m** and nothing drawn twice at the corners.
   - Curtains hang at the **top of the window** on tall walls, and at the cut on low walls.
   - Pieces sit **where they stood** in the room, and small things stay on the furniture they were on.
-  - The caption reads "**N placed by estimate**", and N counts only pieces without a scanned spot.
 - **Report if wrong:** the wall or piece, which camera angle, plus a screenshot. For a misplaced piece, say where it really stood.
 
-### 4. Items → room 3D: Voxel vs Plan
-- **Taps:** Items → Inventory → the new room's **3D** pill (on its chip in the Rooms strip). Switch the style picker between **Voxel** and **Plan**.
-- **Expected:** Voxel is the dollhouse from check 3. Plan is the floor plan with RoomPlan's raw boxes, top down. Use the two to tell the errors apart:
-  - The **Plan box is wrong** (wrong size, spot or label): that's a scan error.
-  - The **Plan box is right but the voxel piece is wrong**: that's a model error.
-- **Report if wrong:** the piece, its Plan box (size, spot), what Voxel drew, and which of the two errors it is. Screenshots of both.
+### 4. Items → room 3D (Voxel only)
+- **Taps:** Items → Inventory → the new room's **3D** pill (on its chip in the Rooms strip). There's no style picker: the room is the voxel dollhouse. **Items** (top right) picks a piece and opens its card.
+- **Expected:** the dollhouse from check 3, each piece where it stood. To tell a scan error from a model error, open the piece's **Fix it** menu (long-press it in Inventory, or Item detail): a wrong name or kind there is a scan/vision error; a right name and kind with the wrong voxel shape is a model error.
+- **Report if wrong:** the piece, what Voxel drew, what Fix it says it is, and which of the two errors it is. A screenshot.
 
 ### 5. Inventory: the binder (a page per function, items on shelves)
 - **Taps:** Items → Inventory. Tap each colored index tab, then swipe the page left and right; tap an item on a shelf, then in its placard tap the story line and type "Grandma's, 1974", **Save**; long-press another item. Then rotate the iPad, try dark mode, the largest text size, and Reduce Motion.
@@ -103,7 +100,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 
 ### 13. Sell & Buy at the largest text size
 - **Taps:** iPad Settings → Accessibility → Display & Text Size → **Larger Text** → turn it on and drag to the maximum. In Moove, open Sell & Buy → **Listings**, **Shopping**, **Agents** (scroll all the way down to the receipts).
-- **Expected:** no clipped prices or buttons. Stat strips stack, and SIMULATED pills stay readable. On Listings the posters go to one column and hang straight (no tilt), and the flyer's Live / Listed / Sold stack. Turn Larger Text back off afterwards.
+- **Expected:** no clipped prices or buttons. Stat strips stack, and SIMULATED pills stay readable. On Listings the posters go to one column and hang straight (no tilt), and the flyer shows one total. Turn Larger Text back off afterwards.
 - **Report if wrong:** the screen and element, plus a screenshot.
 
 ### 13b. Listings: the poster wall (Lisa's redesign)

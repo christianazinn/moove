@@ -2,7 +2,8 @@ import SwiftUI
 import MooveKit
 
 /// What a scan found, MoveWise style: the room as a voxel dollhouse with every item in it,
-/// then an inventory ledger with a voxel thumbnail, size, condition and value range per item.
+/// then a quiet ledger: voxel thumbnail, name and value range per item (size and condition are
+/// in the VoiceOver label only).
 /// Takes plain inputs so the Scan page can drop it in with one line.
 ///
 /// Items don't carry scanned positions yet, so the room is a single rectangle sized to hold
@@ -34,7 +35,7 @@ struct ScanResultsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             stage
-            inventory.padding(.top, 40)
+            inventory.padding(.top, Theme.Space.xl)
         }
         .onChange(of: ModelKey(name: roomName, items: items.map { LayoutItem($0, colors: colors) }, geometry: geometry), initial: true) { _, key in
             if let geometry = key.geometry {
@@ -72,31 +73,7 @@ struct ScanResultsView: View {
             .frame(height: 360)
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
 
-            HStack(spacing: 10) {
-                Circle().fill(Theme.accent).frame(width: 8, height: 8).accessibilityHidden(true)
-                Text(caption).monoText(13.5).foregroundStyle(Theme.text)
-            }
-            .padding(.top, 14)
-            if let model, model.scanned, model.estimatedCount > 0 {
-                Text("\(model.estimatedCount) placed by estimate")
-                    .monoMeta()
-                    .padding(.top, 4)
-                    .padding(.leading, 18)
-            }
-            if model?.scanned != true {
-                Text("Estimated layout, not scanned positions.")
-                    .monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 4)
-                    .padding(.leading, 18)
-            }
         }
-    }
-
-    private var caption: String {
-        let objects = "\(items.count) object\(items.count == 1 ? "" : "s")"
-        guard let model else { return objects }
-        return "\(objects) · \(String(format: "%.1f × %.1f m", model.widthM, model.depthM))"
     }
 
     // MARK: Inventory
@@ -106,12 +83,7 @@ struct ScanResultsView: View {
             items.compactMap { item in ValueRange.of(item, comps: comps).map { (item.id, $0) } },
             uniquingKeysWith: { a, _ in a }
         )
-        let priced = Array(ranges.values)
-        let total = priced.isEmpty ? nil : ValueRange(low: priced.reduce(0) { $0 + $1.low }, high: priced.reduce(0) { $0 + $1.high })
         return VStack(alignment: .leading, spacing: 0) {
-            ListHeader(title: "Inventory", count: "\(items.count)") {
-                if let total { Text("est. \(total.text)").monoText(13).foregroundStyle(Theme.muted) }
-            }
             if items.isEmpty {
                 Text("Nothing found yet.").monoMeta().padding(.vertical, 28).frame(maxWidth: .infinity, alignment: .leading).ruled()
             }
@@ -119,18 +91,15 @@ struct ScanResultsView: View {
                 Button { onSelect(item) } label: {
                     LedgerRow(
                         title: item.name,
-                        meta: Self.meta(item),
-                        value: ranges[item.id]?.text ?? "pricing…",
-                        valueTint: ranges[item.id] == nil ? Theme.muted : Theme.text,
-                        chevron: true
+                        value: ranges[item.id]?.text ?? "…",
+                        valueTint: ranges[item.id] == nil ? Theme.muted : Theme.text
                     ) {
-                        VoxelThumbnail(spec: Self.spec(item, colors: colors))
-                    } trailing: {
-                        if item.maybeSentimental { MonoTag(text: "Needs you", tone: Theme.ochreInk) }
+                        VoxelThumbnail(spec: Self.spec(item, colors: colors), size: 44)
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Self.spokenRow(item, value: ranges[item.id]))
                 .accessibilityAddTraits(.isButton)
             }
         }
@@ -145,6 +114,13 @@ struct ScanResultsView: View {
             spec.secondaryColor = c.secondary
         }
         return spec
+    }
+
+    /// The row's full detail for VoiceOver: name, value, size, condition, "needs you".
+    static func spokenRow(_ item: Item, value: ValueRange?) -> String {
+        var parts = [item.name, value?.text ?? "pricing", meta(item)]
+        if item.maybeSentimental { parts.append("needs you") }
+        return parts.joined(separator: ", ")
     }
 
     static func meta(_ item: Item) -> String {

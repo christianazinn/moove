@@ -17,12 +17,8 @@ struct ScanLabelSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Moove keeps your name.")
-                        .monoMeta()
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.bottom, 20)
                     Text("Name").eyebrow()
-                    TextField("e.g. Grandma's rocking chair", text: $name)
+                    TextField("Name", text: $name)
                         .monoText(16, weight: .bold)
                         .foregroundStyle(Theme.text)
                         .textInputAutocapitalization(.sentences)

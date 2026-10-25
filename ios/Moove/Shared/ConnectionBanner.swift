@@ -10,16 +10,19 @@ struct ConnectionBanner: View {
     var body: some View {
         VStack(spacing: 0) {
             if store.backendKind == .fixture {
-                strip("Offline demo", systemImage: "externaldrive", tint: Theme.ochreInk)
+                strip("Offline demo", systemImage: "externaldrive", tint: Theme.muted)
+                    .accessibilityLabel("Offline demo: fixture data, nothing is synced")
             }
             switch store.status {
             case .connecting:
                 strip("Connecting…", systemImage: "antenna.radiowaves.left.and.right", tint: Theme.muted)
             case .reconnecting(let attempt):
-                strip("Reconnecting (attempt \(attempt))…", systemImage: "arrow.clockwise", tint: Theme.ochreInk)
+                strip("Reconnecting…", systemImage: "arrow.clockwise", tint: Theme.muted)
+                    .accessibilityLabel("Reconnecting, attempt \(attempt)")
             case .failed(let why):
                 // The SDK gave up reconnecting (or the first connect failed): tap to try again.
-                strip(retrying ? "Connecting…" : "Offline: \(why). Tap to retry.", systemImage: "wifi.exclamationmark", tint: Theme.danger)
+                strip(retrying ? "Connecting…" : "Offline · Tap to retry", systemImage: "wifi.exclamationmark", tint: Theme.muted)
+                    .accessibilityLabel(retrying ? "Connecting" : "Offline: \(why). Tap to retry.")
                     .onTapGesture { retry() }
                     .accessibilityAddTraits(.isButton)
                     .accessibilityHint("Reconnects to the server")
@@ -42,7 +45,7 @@ struct ConnectionBanner: View {
         }
     }
 
-    /// A quiet notice strip: mono text on the raised surface, a colored edge, a rule below.
+    /// A quiet notice strip: one short mono line on the page color (red only for a failed write).
     private func strip(_ text: String, systemImage: String, tint: Color) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: systemImage)
@@ -57,9 +60,7 @@ struct ConnectionBanner: View {
         .padding(.vertical, 8)
         .padding(.horizontal, Theme.gutter)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.surface)
-        .overlay(alignment: .leading) { Rectangle().fill(tint).frame(width: 3) }
-        .ruled()
+        .background(Theme.bg)
         .accessibilityElement(children: .combine)
     }
 }

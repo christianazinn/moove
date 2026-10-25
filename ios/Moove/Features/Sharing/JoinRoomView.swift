@@ -18,14 +18,9 @@ struct JoinRoomView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    PageHeader(
-                        title: "Join a room.",
-                        lede: store.backendKind == .fixture
-                            ? "Offline demo: try \(DemoFixtures.roommateJoinCode)."
-                            : "Ask the room's owner to tap Share in their Inventory, then enter the 6-character code."
-                    )
-                    Text("Room code").eyebrow().padding(.top, 28)
-                    TextField("ABC123", text: $code)
+                    PageHeader(title: "Join a room.")
+                    // The offline demo's code is the placeholder, so there's nothing to read.
+                    TextField(store.backendKind == .fixture ? DemoFixtures.roommateJoinCode : "ABC123", text: $code)
                         .monoText(32, weight: .bold, maxScale: 1.4)
                         .kerning(6)
                         .multilineTextAlignment(.center)
@@ -43,8 +38,11 @@ struct JoinRoomView: View {
                         }
                         .frame(minHeight: 56)
                         .ruled()
+                        .padding(.top, 28)
                         .accessibilityLabel("Room code")
-                        .accessibilityHint("Six letters and numbers")
+                        .accessibilityHint(store.backendKind == .fixture
+                            ? "Six letters and numbers. Offline demo: try \(DemoFixtures.roommateJoinCode)"
+                            : "Six letters and numbers, from Share in the owner's Inventory")
                         .accessibilityIdentifier("join.code")
 
                     if let error {
@@ -55,9 +53,9 @@ struct JoinRoomView: View {
                             .accessibilityIdentifier("join.error")
                     }
                     if joined {
-                        Label("Joined. The room will appear in your inventory.", systemImage: "checkmark.circle")
+                        Label("Joined", systemImage: "checkmark.circle")
                             .monoText(13.5)
-                            .foregroundStyle(Theme.accentStrong)
+                            .foregroundStyle(Theme.text)
                             .padding(.top, 14)
                     }
 
