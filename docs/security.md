@@ -1,6 +1,6 @@
 # Security & responsible AI
 
-How Moove protects users' data and money, what is built today, and what is still open. Written for judges (Visa "trust & responsibility", Coinbase "controls and known limitations", Anthropic "where it could go wrong", Armadin security) and for the team. Task: #17. Last updated Sat Oct 24 (follow-up pass over everything merged after #38, then the e2e defaults from #133 and the replay guard).
+How Moove protects users' data and money, what is built today, and what is still open. Written for judges (Visa "trust & responsibility", Coinbase "controls and known limitations", Anthropic "where it could go wrong", Armadin security) and for the team. Task: #17. Last updated Sat Oct 24 (follow-up pass over everything merged after #38, then the e2e defaults from #133 and the replay guard; commerce state re-checked through #316).
 
 **Status labels:** ✅ built and tested · 🟡 partly built · ⏳ pending (linked issue).
 
@@ -57,6 +57,7 @@ Out of scope for a hackathon: DoS against maincloud, a compromised laptop, an Au
   - the per-agent budget `AGENT_SPEND_CAP_USDC` (default $5), reserved before signing so concurrent calls can't overspend,
   - an optional payee allowlist, `X402_ALLOWED_PAYEES`.
 - **Budgets survive restarts**: on startup, the rail counts the last 24 h of x402 `payment` rows per agent. `X402_SEED_BUDGETS=0` turns this off (e.g. so rehearsals don't use up the demo-day budget). This covers the pricing agent, which buys each item's comps over x402 by default (`PRICING_PAY_X402`, `agents/src/integrations/paid-comps.ts`), and the `x402:demo`/`x402:e2e` scripts.
+- **Third-party payees** (#318): the opt-in CPSC recall check (`RECALL_CHECK_X402=1`, off on the hosted worker today) pays a service we don't run, $0.002 per brand, through the same rail and limits. With `X402_ALLOWED_PAYEES` set, its payee has to be added by hand, or the call is refused before signing and the listing goes ahead. The recall text never goes into a Claude prompt, and a match only asks the user for approval; it never blocks or posts anything by itself.
 - **Backstop**: CDP `spendControls` (`maxAmountPerPayment`, `maxCumulativeSpend`, `allowedNetworks`, `allowedAssets`).
 - Every attempt, refusal, payment and failure writes an `agent_event` row, and every payment writes a `payment` row with its tx hash, so the app's spending log is a live audit trail.
 - **One team-owned testnet wallet.** We never hold other people's funds (a Coinbase track rule). Testnet only.
@@ -91,6 +92,8 @@ The pricing agent's comp relevance filter (`agents/src/agents/comp-filter.ts`, H
 
 ### Simulated actions are labeled
 Anything not real says so in the data (`simulated: true` on `listing` and `payment`), in event messages (`[SIMULATED]`, `(simulated)`), and in the UI. Today that covers the simulated eBay posts (whenever eBay sandbox keys are absent), and the simulated x402 rail (no CDP keys or `X402_SIMULATE=1`). Visa checkout (#40, #154) is labeled too: simulated payments carry `simulated: true` and every simulated step starts with `[SIMULATED]`; sandbox payments say `[Visa sandbox]`. Real x402 payments link to the Base Sepolia explorer.
+
+On the hosted worker today: x402 settles for real on Base Sepolia (testnet USDC), Visa checkout is a real Authorize.net **sandbox** charge on the public test card (`simulated: false`, `sandbox: true`, no real money), eBay posts are simulated (no `EBAY_*` keys), the Auth0 CIBA push is tested only against stubbed HTTP, and the AI-text fraud signal is off (`PANGRAM_URL` unset). Pricing comps and deal searches are labeled replays while our Apify credit is used up (until Nov 23).
 
 ## Follow-up pass (Sat Oct 24): everything merged after #38
 Scope: the 48 PRs merged after #38 (`b6ee593..origin/main`):
