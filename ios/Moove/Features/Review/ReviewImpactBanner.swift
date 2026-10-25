@@ -3,33 +3,65 @@ import MooveKit
 
 /// The strip on top of Items > Review: roughly how many kg your Sell and Donate decisions keep
 /// out of landfill (`MoveSummary.divertedKg` over the visible items), live as you decide. It
-/// moved here when the Summary tab was removed (decision 0129 addendum). Tap it for how it's estimated.
+/// moved here when the Summary tab was removed (decision 0129 addendum). A small sign: the kg in
+/// serif, big and counting up as you decide (no count-up under Reduce Motion), the items under it.
+/// Tap it for how it's estimated.
 struct ReviewImpactBanner: View {
     let items: [Item]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showInfo = false
 
     var body: some View {
         let summary = MoveSummary(items: items, sales: [], spend: [], events: [])
         let kg = Int(summary.divertedKg.rounded())
         let count = summary.divertedItems
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
         Button { showInfo = true } label: {
-            // One short line (Lisa); the item count and how it's estimated are a tap away.
-            HStack(spacing: 8) {
-                Image(systemName: "leaf")
-                    .font(.system(size: 14, weight: .regular))
+            // A calm sign (Lisa): one big number, a small label, the item count under it; the (i)
+            // opens how it's estimated. Two lines of text at most.
+            HStack(alignment: .center, spacing: 14) {
+                Image(systemName: "leaf.fill")
+                    .font(.system(size: 17, weight: .regular))
                     .foregroundStyle(Theme.accentStrong)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Theme.accentSoft))
                     .accessibilityHidden(true)
-                Text("\(kg) kg kept from landfill")
-                    .monoText(13.5, weight: .semibold)
-                    .foregroundStyle(Theme.text)
-                    .contentTransition(.numericText())
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("\(kg) kg")
+                            .serifType(30, weight: .semibold)
+                            .foregroundStyle(Theme.text)
+                            .contentTransition(reduceMotion ? ContentTransition.identity : .numericText(value: Double(kg)))
+                            .lineLimit(1)
+                        Text("kept out of landfill")
+                            .monoText(12.5, maxScale: 1.6)
+                            .foregroundStyle(Theme.muted)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    Text("\(count) item\(count == 1 ? "" : "s") sold or donated")
+                        .monoText(11.5, maxScale: 1.6)
+                        .foregroundStyle(Theme.faint)
+                        .contentTransition(reduceMotion ? ContentTransition.identity : .numericText(value: Double(count)))
+                        .lineLimit(1)
+                }
                 Spacer(minLength: 0)
+                Image(systemName: "info.circle")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(Theme.muted)
+                    .accessibilityHidden(true)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .contentShape(Rectangle())
+            .background(shape.fill(Theme.surface))
+            .overlay(shape.strokeBorder(Theme.line, lineWidth: 1))
+            .mooveShadow(.paper)
+            .contentShape(shape)
         }
         .buttonStyle(.plain)
-        .animation(.default, value: kg)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.35), value: kg)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.35), value: count)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("About \(kg) kilograms kept out of landfill, \(count) item\(count == 1 ? "" : "s") sold or donated")
         .accessibilityHint("Shows how it's estimated")

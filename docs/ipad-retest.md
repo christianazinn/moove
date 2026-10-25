@@ -43,7 +43,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Report if wrong:** the piece, what Voxel drew, what Fix it says it is, and which of the two errors it is. A screenshot.
 
 ### 5. Inventory: the binder (a page per function, items on shelves)
-- **Taps:** Items → Inventory. Tap each index tab, then swipe the page left and right; tap an item on a shelf to open its placard; long-press another item; open the Rooms ⋯ menu. Then rotate the iPad, try dark mode, the largest text size, and Reduce Motion.
+- **Taps:** Items → Inventory. Tap each index tab, then swipe the page left and right, starting on an item too (the page follows your finger and the next one slides in; at the first and last page it only stretches a little); tap an item on a shelf to open its placard; long-press another item; open the Rooms ⋯ menu. Then rotate the iPad, try dark mode, the largest text size, and Reduce Motion.
 - **Expected:**
   - A **Rooms** strip on top: one chip per room, newest scan first, with item count, scan time ("Today 15:42"), a **Demo** tag for **Load demo scan** rooms and "Shared by …" for joined ones, plus Share / **3D** / **⋯** (Add item here, Rename room, Hide room). Tapping a chip still narrows the binder to that room.
   - A binder: one page per function (Sleep, Work & study, …, biggest first, "Everything else" last). iPad: colored index tabs down the page's right edge; iPhone: folder tabs across the top that scroll sideways. Each tab says the name and count, and keeps its color (Sleep is always slate). The page heading is the name (serif) and "4 pieces · est. $610"; holes along the left edge.
@@ -119,7 +119,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Report if wrong:** the item, plus a screenshot.
 
 ### 15. Review: flip cards and board (Lisa's redesign)
-- **Taps:** Items → Review. The flip cards are always on top: tap the top card to flip it, tap again to flip back. Drag it right and left slowly without letting go, then swipe it for real; tap **Undo**; then decide it with a button under the card. Go through to the end and tap **Start over**. Below, look at **Where it goes**, tap a tile, then drag a row onto one of the small labels at the top of its list.
+- **Taps:** Items → Review. The cards are always on top: tap the top card to open its detail page, then go back. Drag it right and left slowly without letting go, then swipe it for real; tap **Undo**; then decide it with a button under the card. Go through to the end and tap **Start over**. Below, look at **Where it goes**, tap a tile, then drag a row onto one of the small labels at the top of its list.
 - **Expected:**
   - The stack holds every item ("1 of 12"): the ones that need you first, with a **Needs you** badge (a heart when possibly sentimental), then everything the agents sorted, each saying "Moove says: Sell · worth $30, costs ~$24 to move". Items you already decided are skipped until **Start over**.
   - The front is the item's photo, big; if no photo loads, its voxel model. Tapping turns the card in 3D to the back: voxel model, size, value range, condition, the agent's reason and the sentimental note. With Reduce Motion on (Settings → Accessibility → Motion) it crossfades and nothing tilts.

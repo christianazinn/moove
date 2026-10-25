@@ -52,8 +52,11 @@ final class MooveSmokeTests: XCTestCase {
         }
         snap("02-review")
 
-        // Tap flips the card (the details side); swiping still works.
+        // Tap opens the item's detail page; back, and swiping still works.
         card.tap()
+        XCTAssertTrue(app.navigationBars["Yamaha acoustic guitar"].waitForExistence(timeout: slow), "card tap opens the guitar's details")
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(card.waitForExistence(timeout: slow), "back on the deck")
         // Swipe right = Keep: the next card comes up.
         card.swipeRight()
         XCTAssertTrue(byId("review.deck.progress").waitForLabel(containing: "2 of 12", timeout: slow), byId("review.deck.progress").label)

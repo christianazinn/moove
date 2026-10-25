@@ -35,6 +35,10 @@ struct InventoryView: View {
     @State private var turnedForward = true
     /// A horizontal drag in progress on the page.
     @State private var dragX: CGFloat = 0
+    /// The page's width while it's dragged (from `HorizontalPageSwipe`), to place the incoming page.
+    @State private var pageWidth: CGFloat = 400
+    /// A released swipe is snapping to the next page; new drags wait for it.
+    @State private var settling = false
     /// The item whose placard sheet is up, and what to do once it closes.
     @State private var placard: PlacardRef?
     @State private var afterPlacard: AfterPlacard?
@@ -282,7 +286,7 @@ struct InventoryView: View {
         let tab = tabs.first { $0.hall == entry.hall } ?? tabs[0]
         if sizeClass == .regular {
             HStack(alignment: .top, spacing: 0) {
-                pageStack(entry, tab: tab, tabs: tabs)
+                pageStack(entry, tab: tab, tabs: tabs, halls: halls)
                 VStack(spacing: 4) {
                     ForEach(tabs) { t in
                         BinderTabButton(tab: t, selected: t.hall == entry.hall, edge: .trailing) { pick(t.hall, tabs: tabs) }
@@ -311,35 +315,51 @@ struct InventoryView: View {
                         withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo(hall, anchor: .center) }
                     }
                 }
-                pageStack(entry, tab: tab, tabs: tabs)
+                pageStack(entry, tab: tab, tabs: tabs, halls: halls)
             }
         }
     }
 
     /// The open page; slides in from the side it was turned from (a crossfade with Reduce
-    /// Motion), and follows a horizontal swipe.
-    private func pageStack(_ entry: (hall: FunctionHall, items: [Item]), tab: BinderTab, tabs: [BinderTab]) -> some View {
+    /// Motion). A horizontal swipe anywhere on the page, items included (`HorizontalPageSwipe`),
+    /// drags it with the finger while the next or previous page comes in from that side, then
+    /// snaps to whichever page is mostly showing; at the first and last page it rubber-bands.
+    /// Under Reduce Motion the page doesn't follow; a swipe turns it with a crossfade on release.
+    private func pageStack(_ entry: (hall: FunctionHall, items: [Item]), tab: BinderTab, tabs: [BinderTab],
+                           halls: [(hall: FunctionHall, items: [Item])]) -> some View {
         let slide: AnyTransition = reduceMotion ? .opacity : .asymmetric(
             insertion: .move(edge: turnedForward ? .trailing : .leading).combined(with: .opacity),
             removal: .opacity)
+        let peekHall = dragX == 0 ? nil : neighbor(of: entry.hall, by: dragX < 0 ? 1 : -1, tabs: tabs)
+        let peek = peekHall.flatMap { h in halls.first { $0.hall == h } }
+        let peekTab = peekHall.flatMap { h in tabs.first { $0.hall == h } }
+        let side: CGFloat = dragX < 0 ? 1 : -1
         return ZStack(alignment: .top) {
             binderPage(entry.hall, entry.items, tab: tab)
                 .id(entry.hall)
                 .transition(slide)
+                .offset(x: dragX)
+            if let peek, let peekTab {
+                // The page coming in from the side (drawn only while dragging).
+                binderPage(peek.hall, peek.items, tab: peekTab)
+                    .offset(x: dragX + side * (pageWidth + Self.pageGap))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
         }
-        .offset(x: dragX)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 24)
-                .onChanged { v in
-                    guard !reduceMotion, abs(v.translation.width) > abs(v.translation.height) * 1.2 else { return }
-                    dragX = v.translation.width * 0.35
-                }
-                .onEnded { v in
-                    withAnimation(.spring(duration: 0.3)) { dragX = 0 }
-                    let dx = v.translation.width
-                    guard abs(dx) > 60, abs(dx) > abs(v.translation.height) * 1.5 else { return }
-                    turn(dx < 0 ? 1 : -1, tabs: tabs)
-                }
+        // iPad: the tabs sit to the right of the page, so the incoming page is clipped at the
+        // page's edges (a little room is left for its shadow). iPhone: the screen edge clips it.
+        .mask {
+            Rectangle()
+                .padding(.horizontal, sizeClass == .regular ? -10 : -1000)
+                .padding(.vertical, -40)
+        }
+        .background(
+            HorizontalPageSwipe(
+                onChanged: { dx, width in follow(dx, width: width, from: entry.hall, tabs: tabs) },
+                onEnded: { dx, velocity, width in release(dx, velocity: velocity, width: width, from: entry.hall, tabs: tabs) }
+            )
+            .accessibilityHidden(true)
         )
         .accessibilityElement(children: .contain)
         .accessibilityScrollAction { edge in
@@ -349,6 +369,63 @@ struct InventoryView: View {
             case .leading: turn(-1, tabs: tabs)
             default: break
             }
+        }
+    }
+
+    /// Space between the open page and the one sliding in.
+    private static let pageGap: CGFloat = 24
+
+    /// The page `delta` away, or nil at the first or last page.
+    private func neighbor(of hall: FunctionHall, by delta: Int, tabs: [BinderTab]) -> FunctionHall? {
+        guard let next = InventoryBinder.turn(from: hall, by: delta, in: tabs), next != hall else { return nil }
+        return next
+    }
+
+    /// The page follows the finger 1:1, or rubber-bands when there's no page that way.
+    private func follow(_ dx: CGFloat, width: CGFloat, from hall: FunctionHall, tabs: [BinderTab]) {
+        guard !reduceMotion, !settling, width > 0 else { return }
+        pageWidth = width
+        let open = neighbor(of: hall, by: dx < 0 ? 1 : -1, tabs: tabs) != nil
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) { dragX = open ? dx : Self.rubberBand(dx, width: width) }
+    }
+
+    /// UIScrollView-style resistance: never more than about half the width.
+    private static func rubberBand(_ dx: CGFloat, width: CGFloat) -> CGFloat {
+        let c: CGFloat = 0.55
+        let pulled = (1 - 1 / (abs(dx) * c / width + 1)) * width
+        return dx < 0 ? -pulled : pulled
+    }
+
+    /// Turns when the swipe (with its flick) went past a third of the page, else springs back.
+    private func release(_ dx: CGFloat, velocity: CGFloat, width: CGFloat, from hall: FunctionHall, tabs: [BinderTab]) {
+        guard !settling else { return }
+        let delta = dx < 0 ? 1 : -1
+        let next = neighbor(of: hall, by: delta, tabs: tabs)
+        let projected = dx + velocity * 0.2
+        let commit = next != nil && abs(dx) > 24 && abs(projected) > max(width, 1) / 3 && (projected < 0) == (dx < 0)
+        if reduceMotion {
+            dragX = 0
+            if commit { turn(delta, tabs: tabs) }
+            return
+        }
+        guard commit, let next else {
+            withAnimation(.spring(duration: 0.3, bounce: 0.15)) { dragX = 0 }
+            return
+        }
+        settling = true
+        let target = -CGFloat(delta) * (width + Self.pageGap)
+        withAnimation(.spring(duration: 0.3, bounce: 0)) { dragX = target } completion: {
+            // The incoming page is now exactly where the open page sits: swap without a transition.
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) {
+                turnedForward = delta > 0
+                page = next
+                dragX = 0
+            }
+            settling = false
         }
     }
 
