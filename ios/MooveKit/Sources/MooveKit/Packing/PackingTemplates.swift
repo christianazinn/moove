@@ -158,7 +158,10 @@ enum PackingTemplates {
         TypicalLine(kind: .keepWithYou, name: "Spare keys", quantity: 1, litres: 0.1, kg: 0.1),
     ]
 
-    /// Typical everyday contents for a destination room.
+    /// Typical everyday contents for a destination room. These are the estimate for a light move
+    /// (a student or a one-bedroom, Lisa): a shelf of books, a small set of dishes, about two weeks of
+    /// clothes folded rather than on hangers, and a few pieces of decor. A scan replaces a kind's
+    /// estimate with what's really there, so a fuller home shows up as soon as it's scanned.
     static func typical(for kind: RoomKind?) -> [TypicalLine] {
         switch kind ?? .other {
         case .bedroom: return bedroom
@@ -171,41 +174,45 @@ enum PackingTemplates {
         }
     }
 
+    /// A light bedroom: its books (where a student keeps them), desk things, folded clothes, a few
+    /// pairs of shoes, spare bedding and a few small breakables.
     static let bedroom: [TypicalLine] = [
-        TypicalLine(kind: .books, name: "Paperbacks", quantity: 20, litres: 0.5, kg: 0.3),
-        TypicalLine(kind: .books, name: "Hardcover books", quantity: 8, litres: 1.6, kg: 0.8),
-        TypicalLine(kind: .decor, name: "Small picture frames", quantity: 3, litres: 2, kg: 0.6, fragile: true),
-        TypicalLine(kind: .decor, name: "Candles and keepsakes", quantity: 4, litres: 0.8, kg: 0.3, fragile: true),
-        TypicalLine(kind: .desk, name: "Notebooks and papers", quantity: 1, litres: 6, kg: 3),
-        TypicalLine(kind: .desk, name: "Pens, stapler and desk odds", quantity: 1, litres: 2, kg: 0.8),
-        TypicalLine(kind: .desk, name: "Cables and chargers", quantity: 1, litres: 3, kg: 1),
+        TypicalLine(kind: .books, name: "Paperbacks", quantity: 8, litres: 0.5, kg: 0.3),
+        TypicalLine(kind: .books, name: "Hardcover books", quantity: 2, litres: 1.6, kg: 0.8),
+        TypicalLine(kind: .decor, name: "Small picture frames", quantity: 2, litres: 2, kg: 0.6, fragile: true),
+        TypicalLine(kind: .decor, name: "Candles and keepsakes", quantity: 2, litres: 0.8, kg: 0.3, fragile: true),
+        TypicalLine(kind: .desk, name: "Notebooks and papers", quantity: 1, litres: 4, kg: 1.5),
+        TypicalLine(kind: .desk, name: "Pens, stapler and desk odds", quantity: 1, litres: 2, kg: 0.5),
+        TypicalLine(kind: .desk, name: "Cables and chargers", quantity: 1, litres: 3, kg: 0.8),
         TypicalLine(kind: .electronics, name: "Bluetooth speaker", quantity: 1, litres: 3, kg: 1, fragile: true),
         TypicalLine(kind: .electronics, name: "Headphones", quantity: 1, litres: 2, kg: 0.3, fragile: true),
-        TypicalLine(kind: .clothes, name: "Folded shirts and sweaters", quantity: 24, litres: 1.4, kg: 0.3),
-        TypicalLine(kind: .clothes, name: "Jeans and trousers", quantity: 8, litres: 2, kg: 0.6),
-        TypicalLine(kind: .shoes, name: "Shoes (pairs)", quantity: 5, litres: 6, kg: 0.8),
-        TypicalLine(kind: .bedding, name: "Spare sheet sets", quantity: 2, litres: 6, kg: 1),
+        TypicalLine(kind: .clothes, name: "Folded shirts and sweaters", quantity: 12, litres: 1.4, kg: 0.3),
+        TypicalLine(kind: .clothes, name: "Jeans and trousers", quantity: 3, litres: 2, kg: 0.6),
+        TypicalLine(kind: .shoes, name: "Shoes (pairs)", quantity: 2, litres: 6, kg: 0.8),
+        TypicalLine(kind: .bedding, name: "Spare sheet set", quantity: 1, litres: 6, kg: 1),
         TypicalLine(kind: .bedding, name: "Spare blanket", quantity: 1, litres: 15, kg: 1.5),
-        TypicalLine(kind: .bedding, name: "Pillows", quantity: 2, litres: 12, kg: 0.7),
-        TypicalLine(kind: .hanging, name: "Hanging clothes (on hangers)", quantity: 15, litres: 4, kg: 0.45),
+        TypicalLine(kind: .bedding, name: "Spare pillow", quantity: 1, litres: 12, kg: 0.7),
     ]
 
+    /// A light living room: a few breakables, the router, throws and games. No books: a light move's
+    /// books are estimated in the bedroom (or the office), so the living room's breakables can share
+    /// one box padded by the throws.
     static let living: [TypicalLine] = [
-        TypicalLine(kind: .books, name: "Books", quantity: 15, litres: 1, kg: 0.55),
         TypicalLine(kind: .decor, name: "Vases and ceramics", quantity: 2, litres: 5, kg: 0.8, fragile: true),
-        TypicalLine(kind: .decor, name: "Picture frames", quantity: 3, litres: 2, kg: 0.6, fragile: true),
-        TypicalLine(kind: .misc, name: "Board games and media", quantity: 4, litres: 4, kg: 0.8),
+        TypicalLine(kind: .decor, name: "Picture frames", quantity: 2, litres: 2, kg: 0.6, fragile: true),
+        TypicalLine(kind: .misc, name: "Board games and media", quantity: 2, litres: 4, kg: 0.8),
         TypicalLine(kind: .electronics, name: "Remotes, router and cables", quantity: 1, litres: 4, kg: 1.5, fragile: true),
-        TypicalLine(kind: .bedding, name: "Throws and cushions", quantity: 4, litres: 10, kg: 0.6),
+        TypicalLine(kind: .bedding, name: "Throws and cushions", quantity: 2, litres: 10, kg: 0.6),
     ]
 
+    /// A small kitchen for one or two: four place settings and two pans, all in one dish pack.
     static let kitchen: [TypicalLine] = [
-        TypicalLine(kind: .kitchen, name: "Dinner plates", quantity: 6, litres: 2.5, kg: 0.55, fragile: true),
-        TypicalLine(kind: .kitchen, name: "Bowls", quantity: 6, litres: 3, kg: 0.4, fragile: true),
-        TypicalLine(kind: .kitchen, name: "Mugs", quantity: 4, litres: 2.4, kg: 0.35, fragile: true),
-        TypicalLine(kind: .kitchen, name: "Drinking glasses", quantity: 6, litres: 2, kg: 0.25, fragile: true),
-        TypicalLine(kind: .kitchen, name: "Pots and pans", quantity: 3, litres: 6, kg: 1.2),
-        TypicalLine(kind: .kitchen, name: "Cutlery and utensils", quantity: 1, litres: 5, kg: 2),
+        TypicalLine(kind: .kitchen, name: "Dinner plates", quantity: 4, litres: 2.5, kg: 0.55, fragile: true),
+        TypicalLine(kind: .kitchen, name: "Bowls", quantity: 4, litres: 3, kg: 0.4, fragile: true),
+        TypicalLine(kind: .kitchen, name: "Mugs", quantity: 2, litres: 2.4, kg: 0.35, fragile: true),
+        TypicalLine(kind: .kitchen, name: "Drinking glasses", quantity: 3, litres: 2, kg: 0.25, fragile: true),
+        TypicalLine(kind: .kitchen, name: "Pots and pans", quantity: 2, litres: 6, kg: 0.9),
+        TypicalLine(kind: .kitchen, name: "Cutlery and utensils", quantity: 1, litres: 4, kg: 0.8),
     ]
 
     static let bathroom: [TypicalLine] = [

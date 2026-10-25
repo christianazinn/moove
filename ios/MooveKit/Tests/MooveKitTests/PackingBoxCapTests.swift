@@ -73,9 +73,9 @@ import Testing
         checkRules(big)
     }
 
-    /// A whole two-bedroom home can't fit 12 boxes without breaking the weight rules (about 175 kg
-    /// of things, 45 kg of it fragile at 8 kg a box: at least 14 boxes). The cap passes still merge
-    /// what they can, and every box keeps its limits.
+    /// A whole two-bedroom home is over the cap: its fragile things need a box per 8 kg and kitchen,
+    /// books and breakables can't share, so it lands a few boxes over the weight floor. The cap passes
+    /// still merge what they can, and every box keeps its limits.
     @Test func wholeHomeMergesWhatTheRulesAllow() {
         let home = wholeHome
         let p = PackingPlanner.plan(items: home.items, destinationRoom: home.rooms)
@@ -83,7 +83,7 @@ import Testing
         let kg = p.boxes.reduce(0) { $0 + $1.weightKg }
         let fragileKg = p.boxes.filter(\.fragile).reduce(0) { $0 + $1.weightKg }
         let floor = Int((fragileKg / PackingPlanner.fragileMaxKg).rounded(.up)) + Int(((kg - fragileKg) / 20).rounded(.up))
-        #expect(floor > PackingPlanner.boxCap)
+        #expect(p.boxes.count > PackingPlanner.boxCap)
         #expect(p.boxes.count <= floor + 4)
         // Towels share the bathroom box once over the cap.
         #expect(p.boxes.filter { $0.room == "Bathroom" }.count == 1)

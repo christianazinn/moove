@@ -12,7 +12,7 @@ import Foundation
 /// - Small things go in boxes grouped by destination room, then kind, then
 ///   fragility. Each room also gets typical everyday contents (`itemId == nil`,
 ///   `BoxContent.estimated`): an estimate for the truck, not something scanned.
-///   Typical books are counted once per scanned room (living room first), so a
+///   Typical books are counted once per scanned room (living room, office, then bedroom, where the estimate has books), so a
 ///   one-room scan doesn't get a bedroom's and a living room's worth of books.
 /// - Then boxes are filled properly (`consolidate`): within a destination room,
 ///   boxes merge when the combined volume fits one box (moving up a size, small →
@@ -23,7 +23,8 @@ import Foundation
 ///   vases"). Never books with fragile things, never kitchen or bathroom things
 ///   with anything else (except padding around dishes), and only soft things go
 ///   under the hangers in a wardrobe box. A box still under 40% full then joins
-///   another box of its room if the safety rules allow.
+///   another box of its room if the safety rules allow, and then any two boxes of a
+///   room the safety rules allow together share one box when it holds both.
 /// - No box weighs over its size's `maxKg` (all are 20 kg or less). Fragile
 ///   boxes stay at or under 8 kg, so nothing heavy ever shares a box with them.
 /// - There's always an open-first tote and a keep-with-you box (sentimental
@@ -406,6 +407,9 @@ public enum PackingPlanner {
     ///    (small → medium → large), since one bigger box beats two half-empty ones.
     /// 2. Any box still under `sparseFill` joins another box of its room with looser kind rules
     ///    (the safety rules still hold: no books with fragile things, kitchen only with kitchen).
+    /// 3. Fuller boxes: any two boxes of one room that the safety rules allow together and one box
+    ///    holds share it (the smallest such box first), so big boxes fill before another is added.
+    /// 4-5. Only over `cap`: towels join the bathroom box, then small leftovers share a Misc box.
     static func consolidate(_ boxes: [DraftBox], cap: Int = boxCap) -> [DraftBox] {
         var out = boxes
         func capacityOrder(_ ids: [Int]) -> [Int] {
@@ -454,7 +458,10 @@ public enum PackingPlanner {
                 }
             }
         }
-        // 3-4. Over the cap: merge harder (same room, then small leftovers across rooms).
+        // 3. Fuller boxes: any two boxes of one room the safety rules allow together share the
+        //    smallest box that holds both (up to large) instead of riding as two (Lisa: fewer boxes).
+        mergeToCap(&out, cap: 0, acrossRooms: false, overCap: false)
+        // 4-5. Over the cap: merge harder (towels join the bathroom box, then small leftovers across rooms).
         if out.count > cap { mergeToCap(&out, cap: cap, acrossRooms: false) }
         if out.count > cap { mergeToCap(&out, cap: cap, acrossRooms: true) }
         return out
@@ -464,7 +471,8 @@ public enum PackingPlanner {
     /// boxes of one room the safety rules allow together (towels may join the bathroom box), up a
     /// size if needed; 4. (`acrossRooms`) a box under half full into one from another room, which
     /// becomes a Misc box whose lines remember their own room.
-    static func mergeToCap(_ out: inout [DraftBox], cap: Int, acrossRooms: Bool) {
+    /// `overCap` false (the always-on fill pass) keeps the usual kind rules: no towels in the bathroom box.
+    static func mergeToCap(_ out: inout [DraftBox], cap: Int, acrossRooms: Bool, overCap: Bool = true) {
         while out.count > cap {
             var best: (h: Int, g: Int, box: DraftBox)?
             let open = out.indices.filter { !out[$0].special }
@@ -472,7 +480,7 @@ public enum PackingPlanner {
                 for g in open where g != h {
                     let sameRoom = out[h].room == out[g].room
                     guard acrossRooms ? (!sameRoom && out[g].fill < 0.5) : sameRoom else { continue }
-                    guard let merged = out[h].combined(with: out[g], relaxed: true, cap: true, acrossRooms: acrossRooms) else { continue }
+                    guard let merged = out[h].combined(with: out[g], relaxed: true, cap: overCap, acrossRooms: acrossRooms) else { continue }
                     if let b = best, b.box.size.usableLitres < merged.size.usableLitres - 1e-9
                         || (abs(b.box.size.usableLitres - merged.size.usableLitres) < 1e-9 && b.box.litres <= merged.litres) { continue }
                     best = (h, g, merged)
