@@ -125,6 +125,14 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
   - **Blocked for your safety** (the $95 Aeron scam) is its own section at the very end.
 - **Report if wrong:** the section or chip, plus a screenshot.
 
+### 17. Shopping cart (Lisa's ask)
+- **Taps:** Sell & Buy → **Shopping**. Tap the round cart button at the bottom right, drag the sheet up and down, tap the Mattress row, go back, tap **Done**. Repeat in dark mode, at the largest text size and with Reduce Motion on.
+- **Expected:**
+  - The button sits above the tab bar at the bottom right with a **1** badge; scrolled to the very bottom, it doesn't cover the last card.
+  - The sheet opens at half height with a drag handle and rounded corners: **Bought**, "1 thing · $179.99, simulated", the mattress row with its voxel model, Target, $179.99, **Paid (simulated)** and the SIMULATED pill. The row opens the Mattress detail inside the sheet.
+  - On iPad the sheet is a centered card; the button stays at the bottom right of the Shopping screen.
+- **Report if wrong:** a screenshot of the button or sheet.
+
 ## If merged (check `gh pr list` before you start; skip any that are still open)
 - **#286, Pack truck in 3D:** Move → Pack → Truck and crew (the 3D truck is on the card) → **Load the truck**. **Expected:** furniture goes in first against the cab, then boxes, with nothing overlapping. Tapping a piece shows its load order. **Report:** the piece that clips or floats, plus a screenshot. (If the 3D says a 10 ft truck while the card says Cargo van, that's known.)
 - **#285, mover quotes:** Pack → Truck and crew → **Get mover quotes**. **Expected:** three cards, each tagged **Estimate**, plus "Estimates from published rates. Call to book." Offline, they're labeled "Estimated on this phone". **Report:** the card, plus a screenshot.
