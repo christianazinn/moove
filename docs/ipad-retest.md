@@ -95,9 +95,9 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
   - Hidden rooms stay out.
 - **Report if wrong:** the box number, what's off (density, colors, a model that doesn't match), plus a screenshot or the PDF.
 
-### 12. Summary
-- **Taps:** Summary tab → scroll to **Agents kept you safe**.
-- **Expected:** the scam deal blocked, the approvals, sentimental items left to you, and spend against the caps, with **Simulated** tags where simulated.
+### 12. Agents kept you safe and the kg banner
+- **Taps:** Sell & Buy → **Agents** → scroll to **Agents kept you safe** (under "Needs your OK"). Then Items → **Review** and tap the green "kept out of landfill" strip at the top.
+- **Expected:** the scam deal blocked, the approvals, sentimental items left to you, and spend against the caps, with **Simulated** tags where simulated. On Review: "~49 kg kept out of landfill", "4 items sold or donated", and a sheet explaining the estimate with Sell / Donate counts. There is no Summary tab (4 tabs).
 - **Report if wrong:** the line that's wrong or missing, plus a screenshot.
 
 ### 13. Sell & Buy at the largest text size

@@ -80,9 +80,16 @@ final class DevpostShotsTests: XCTestCase {
             shot("07-new-home")
         }
 
-        // 8. Summary.
-        open(tab: "Summary")
-        shot("08-summary")
+        // 8. Sell & Buy > Agents, scrolled to "Agents kept you safe" (the guardrails that fired).
+        open(tab: "Sell & Buy", segment: "Agents")
+        let safety = byId("agents.safety")
+        _ = scrollTo(safety)
+        shot("08-agents-safety")
+
+        // 8b. Items > Review, top: the kg kept out of landfill banner over the deck.
+        open(tab: "Items", segment: "Review")
+        _ = byId("review.impact").waitForExistence(timeout: slow)
+        shot("08b-review-impact")
 
         // 1b. Scan > Load demo scan: the finished page. Last, since it adds a second room.
         open(tab: "Scan")

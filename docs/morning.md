@@ -73,7 +73,7 @@ Everyone: pull `main`, then `cd ios && xcodegen`, then build to your phone.
 ### Lisa: new home / 3D
 1. Settings → Database → **Demo**, then Items → Join a room → **`4RZ9G8`**. **Expected:** the seeded Bedroom appears with prices and decisions: bed frame, Micke desk, mesh chair, Kallax, mini fridge, TV, monitor, floor lamp, guitar (sentimental, left to you) and the Herman Miller chair.
 2. Move tab. **Expected:** the voxel dollhouse renders every item as a recognizable model, and the fly-in, layouts, Save layout and Pack all work.
-3. Summary tab. **Expected:** totals plus the "Agents kept you safe" card.
+3. Sell & Buy > Agents (the Summary tab was removed). **Expected:** the "Agents kept you safe" card under "Needs your OK"; Items > Review shows the kg kept out of landfill on top.
 4. After Rio's real scan on Live: the dollhouse shows the real room shape with items at their scanned spots, and photo-only items are placed by estimate.
 5. Import a new home from a listing link (#89). **Expected:** the address comes from a Zillow/Redfin link and the rooms from a floor-plan screenshot.
 
