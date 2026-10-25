@@ -10,7 +10,11 @@ let package = Package(
         .library(name: "MooveKit", targets: ["MooveKit"]),
     ],
     targets: [
-        .target(name: "MooveKit", resources: [.copy("Resources/demo-house.json")]),
+        .target(name: "MooveKit", resources: [
+            .copy("Resources/demo-house.json"),
+            // PE-Core crop classifier head (ObjectRecheck): label matrix + classes.
+            .copy("Resources/ObjectClassifierLabels.json"), .copy("Resources/ObjectClassifierLabels.f16"),
+        ]),
         .testTarget(name: "MooveKitTests", dependencies: ["MooveKit"], resources: [.copy("Fixtures")]),
     ]
 )

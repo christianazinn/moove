@@ -204,6 +204,11 @@ public enum CropPicker {
     /// Higher is better; 0 = unusable. `typicalSharpness` is the scan's median keyframe sharpness.
     public static func score(_ c: CropCandidate, typicalSharpness: Float) -> Float {
         guard c.visible >= 0.7, c.occluded <= 0.4, c.rect.area >= 0.01, c.distance >= 0.3 else { return 0 }
+        return quality(c, typicalSharpness: typicalSharpness)
+    }
+
+    /// `score` without its hard gates.
+    static func quality(_ c: CropCandidate, typicalSharpness: Float) -> Float {
         let size = min(c.rect.area / 0.2, 1)  // filling a fifth of the frame or more is plenty
         let clip = c.visible * c.visible * c.visible
         let clear = (1 - c.occluded) * (1 - c.occluded)
@@ -215,13 +220,30 @@ public enum CropPicker {
 
     /// The best view of a box across the keyframes, or nil if none shows it well.
     public static func best(size: SIMD3<Float>, transform: RoomTransform, in frames: [Keyframe]) -> CropCandidate? {
+        top(size: size, transform: transform, in: frames, count: 1, relaxed: false).first
+    }
+
+    /// Looser gates for extra classifier views when fewer than wanted pass `score`'s.
+    static func passesRelaxed(_ c: CropCandidate) -> Bool {
+        c.visible >= 0.4 && c.occluded <= 0.7 && c.rect.area >= 0.003 && c.distance >= 0.3
+    }
+
+    /// The `count` best views of a box (best first, one per keyframe), e.g. extra crops for
+    /// the object classifier. With `relaxed`, views that only pass `passesRelaxed` fill up
+    /// the list (after every strict one) when too few pass the strict gates.
+    public static func top(size: SIMD3<Float>, transform: RoomTransform, in frames: [Keyframe], count: Int, relaxed: Bool = true) -> [CropCandidate] {
         let sharp = frames.map(\.sharpness).sorted()
         let typical = sharp.isEmpty ? 0 : sharp[sharp.count / 2]
-        return frames
-            .compactMap { candidate(size: size, transform: transform, in: $0) }
-            .map { ($0, score($0, typicalSharpness: typical)) }
-            .filter { $0.1 > 0 }
-            .max { $0.1 < $1.1 }?.0
+        let all = frames.compactMap { candidate(size: size, transform: transform, in: $0) }
+        let strict = all.map { ($0, score($0, typicalSharpness: typical)) }.filter { $0.1 > 0 }.sorted { $0.1 > $1.1 }.map(\.0)
+        guard relaxed, strict.count < count else { return Array(strict.prefix(count)) }
+        // Rank the rest by the same score with the gates opened up.
+        let taken = Set(strict.map(\.keyframeID))
+        let loose = all.filter { !taken.contains($0.keyframeID) && passesRelaxed($0) }
+            .map { ($0, quality($0, typicalSharpness: typical)) }
+            .sorted { $0.1 > $1.1 }
+            .map(\.0)
+        return Array((strict + loose).prefix(count))
     }
 
     /// The region to cut out: the object plus a margin of context, at least

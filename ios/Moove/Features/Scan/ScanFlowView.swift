@@ -95,7 +95,7 @@ struct ScanFlowView: View {
             .mooveScreen()
         case .finished:
             ScanFinishedScreen(roomName: session.roomName, colors: session.colors, uploadProblem: session.uploadProblem, pendingPhotos: session.pendingPhotos.count,
-                               importedCount: session.objects.count) { dismiss() }
+                               importedCount: session.objects.count, localSkips: session.recheckSkips) { dismiss() }
         case .failed(let why):
             ScanStatusPanel(
                 systemImage: "exclamationmark.triangle",
