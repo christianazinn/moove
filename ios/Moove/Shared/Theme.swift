@@ -446,3 +446,189 @@ struct ChoiceChip: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
+
+// MARK: Shared tokens (#335)
+//
+// One visual language across the redesigned screens: each keeps its metaphor (museum, deck, storefront,
+// receipts, posters, boxes), but corners, shadows, paper, spacing and display titles come from here.
+
+extension Theme {
+    /// Corner radii. Paper things (labels, stamps, tape, photo mats) are nearly square; cards round more.
+    enum Radius {
+        /// Labels, stamps, tape, photo mats.
+        static let tag: CGFloat = 4
+        /// Chips, small tiles, price tags.
+        static let chip: CGFloat = Theme.radiusSmall
+        /// Cards and tiles.
+        static let card: CGFloat = Theme.radiusMedium
+        /// Large panels, banners, sheets.
+        static let panel: CGFloat = Theme.radiusLarge
+        /// The one hero card on a screen (Review's deck).
+        static let hero: CGFloat = 28
+    }
+
+    /// Spacing scale. `gutter` (20) stays the side margin.
+    enum Space {
+        static let xs: CGFloat = 4
+        static let s: CGFloat = 8
+        static let m: CGFloat = 12
+        static let l: CGFloat = 16
+        static let xl: CGFloat = 24
+        /// Above a section header.
+        static let section: CGFloat = 40
+        /// Between a screen's top edge and its first block.
+        static let screenTop: CGFloat = 16
+    }
+
+    /// Three shadow levels, for things lying on the page.
+    enum Shadow {
+        /// Paper flat on paper (a box label on kraft, a sticky note).
+        case contact
+        /// A sheet resting on the page (receipts, photo mats, box labels).
+        case paper
+        /// Something lifted off the page (cards, voxel models on a plinth).
+        case lifted
+
+        var opacity: Double { self == .lifted ? 0.10 : 0.14 }
+        var radius: CGFloat {
+            switch self {
+            case .contact: return 1.5
+            case .paper: return 4
+            case .lifted: return 8
+            }
+        }
+        var y: CGFloat {
+            switch self {
+            case .contact: return 1
+            case .paper: return 2
+            case .lifted: return 4
+            }
+        }
+    }
+
+    /// Printed-paper materials shared by the paper metaphors (box labels, receipts, sticky notes, posters).
+    /// Text colors are at least 4.5:1 on `cream`.
+    enum Paper {
+        /// Cream paper a shade lighter than the page (a warm gray in dark mode).
+        static let cream = Color(uiColor: Theme.dynamicUIColor(0xFBF7EF, 0x2C261F))
+        /// Printed ink and its quieter line, on `cream`.
+        static let ink = Color(uiColor: Theme.dynamicUIColor(0x24201A, 0xEDE5D7))
+        static let inkMuted = Color(uiColor: Theme.dynamicUIColor(0x5F574B, 0xB3AA99))
+        /// Rules, leaders and dashes printed on paper (decorative).
+        static let rule = Color(uiColor: Theme.dynamicUIColor(0xB9AE9B, 0x5E5447))
+        /// Cardboard.
+        static let kraft = Color(uiColor: Theme.dynamicUIColor(0xDDBC8E, 0x5A4632))
+        /// Paper tape.
+        static let tape = Color(uiColor: Theme.dynamicUIColor(0xE4D2AE, 0x5C4E37))
+    }
+}
+
+extension View {
+    /// One of the theme's three shadow levels.
+    func mooveShadow(_ level: Theme.Shadow) -> some View {
+        shadow(color: .black.opacity(level.opacity), radius: level.radius, y: level.y)
+    }
+
+    /// Serif display face for section and display titles (Inventory's halls, Shopping's categories),
+    /// scaled for Dynamic Type up to 2×.
+    func displayTitle(_ size: CGFloat = 24, weight: Font.Weight = .semibold) -> some View {
+        modifier(DisplaySerif(size: size, weight: weight)).foregroundStyle(Theme.text)
+    }
+}
+
+/// Serif at a design size, scaled for Dynamic Type up to 2×.
+private struct DisplaySerif: ViewModifier {
+    var size: CGFloat
+    var weight: Font.Weight
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    func body(content: Content) -> some View {
+        content.font(.system(size: size * min(dynamicTypeSize.textScale, 2), weight: weight, design: .serif))
+    }
+}
+
+/// A screen or section with nothing to show yet: a bold title, a mono line saying what to do, and an
+/// optional next step, between two rules. Every screen's empty state uses it.
+struct EmptyState<Action: View>: View {
+    var title: String
+    var detail: String
+    /// `.combine` reads it as one line; `.contain` keeps an action button separately reachable.
+    var children: AccessibilityChildBehavior = .combine
+    /// Off right under a `ListHeader`, which already draws the top rule.
+    var ruledTop = true
+    @ViewBuilder var action: Action
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            Text(title).blockTitle()
+            Text(detail).monoMeta().fixedSize(horizontal: false, vertical: true)
+            action.padding(.top, Theme.Space.m)
+        }
+        .padding(.vertical, 28)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .top) { if ruledTop { Rectangle().fill(Theme.line).frame(height: 1) } }
+        .ruled()
+        .accessibilityElement(children: children)
+    }
+}
+
+extension EmptyState where Action == EmptyView {
+    init(title: String, detail: String, children: AccessibilityChildBehavior = .combine, ruledTop: Bool = true) {
+        self.init(title: title, detail: detail, children: children, ruledTop: ruledTop) { EmptyView() }
+    }
+}
+
+/// A quiet spinner with a mono line ("Planning…"), for anything still loading.
+struct LoadingLine: View {
+    var text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ProgressView().tint(Theme.muted)
+            Text(text).monoMeta()
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// "Show all N" / "Show fewer" under a list cut to its first few rows. `id` names it (`<id>.showAll`).
+struct ShowAllButton: View {
+    var count: Int
+    @Binding var expanded: Bool
+    var id: String
+
+    /// Cut only when that hides at least two rows (hiding one row saves nothing).
+    static func cuts(_ count: Int, limit: Int) -> Bool { count > limit + 1 }
+
+    var body: some View {
+        Button(expanded ? "Show fewer" : "Show all \(count)") {
+            withAnimation(.default) { expanded.toggle() }
+        }
+        .buttonStyle(.pill(.text, compact: true))
+        .padding(.top, Theme.Space.xs)
+        .accessibilityIdentifier("\(id).showAll")
+    }
+}
+
+/// A long list cut to its first few rows, with "Show all N" under it. Nothing is removed: every
+/// row is one tap away.
+struct CollapsedList<Data: RandomAccessCollection, Row: View>: View where Data.Element: Identifiable {
+    var data: Data
+    var limit = 5
+    var id: String
+    var row: (Data.Element) -> Row
+    @State private var expanded = false
+
+    init(data: Data, limit: Int = 5, id: String, @ViewBuilder row: @escaping (Data.Element) -> Row) {
+        self.data = data
+        self.limit = limit
+        self.id = id
+        self.row = row
+    }
+
+    var body: some View {
+        let cuts = ShowAllButton.cuts(data.count, limit: limit)
+        ForEach(expanded || !cuts ? Array(data) : Array(data.prefix(limit))) { row($0) }
+        if cuts { ShowAllButton(count: data.count, expanded: $expanded, id: id) }
+    }
+}

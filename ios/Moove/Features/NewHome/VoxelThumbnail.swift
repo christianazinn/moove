@@ -48,7 +48,7 @@ struct VoxelThumbnail: View {
             }
         }
         .frame(width: size, height: size)
-        .background(tile ? Theme.surface : .clear, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+        .background(tile ? Theme.surface : .clear, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         .accessibilityHidden(true)
     }
 }

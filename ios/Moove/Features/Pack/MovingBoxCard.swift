@@ -7,7 +7,7 @@ import MooveKit
 enum BoxPalette {
     private static func dynamic(_ light: UInt32, _ dark: UInt32) -> Color { Color(uiColor: Theme.dynamicUIColor(light, dark)) }
 
-    static let kraft = dynamic(0xDDBC8E, 0x5A4632)
+    static let kraft = Theme.Paper.kraft
     static let kraftFlap = dynamic(0xE5C89F, 0x634E38)
     static let kraftEdge = dynamic(0xB08A5A, 0x3E3022)
     static let kraftSeam = dynamic(0xB38D5B, 0x45362A)
@@ -110,10 +110,10 @@ struct MovingBoxCard: View {
             }
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(box.tapeColor.opacity(0.16), in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+            .background(box.tapeColor.opacity(0.16), in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
             .overlay(alignment: .top) {
                 // A band of the room's color across the top of the card.
-                UnevenRoundedRectangle(topLeadingRadius: Theme.radiusMedium, topTrailingRadius: Theme.radiusMedium, style: .continuous)
+                UnevenRoundedRectangle(topLeadingRadius: Theme.Radius.card, topTrailingRadius: Theme.Radius.card, style: .continuous)
                     .fill(box.tapeColor)
                     .frame(height: 5)
                     .accessibilityHidden(true)
@@ -276,8 +276,8 @@ struct BoxArt: View {
         .frame(width: width, alignment: .leading)
         .background(BoxPalette.paper)
         .overlay(alignment: .top) { Rectangle().fill(box.tapeColor).frame(height: large ? 8 : 6) }
-        .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
-        .shadow(color: .black.opacity(0.14), radius: 1.5, y: 1)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.tag, style: .continuous))
+        .mooveShadow(.contact)
     }
 
     private func stampStack(size: CGFloat) -> some View {
