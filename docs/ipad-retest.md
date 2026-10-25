@@ -97,8 +97,18 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 
 ### 13. Sell & Buy at the largest text size
 - **Taps:** iPad Settings → Accessibility → Display & Text Size → **Larger Text** → turn it on and drag to the maximum. In Moove, open Sell & Buy → **Listings**, **Shopping**, **Agents** (scroll all the way down to the receipts).
-- **Expected:** no clipped prices or buttons. Stat strips stack, and SIMULATED pills stay readable. Turn Larger Text back off afterwards.
+- **Expected:** no clipped prices or buttons. Stat strips stack, and SIMULATED pills stay readable. On Listings the posters go to one column and hang straight (no tilt), and the flyer's Live / Listed / Sold stack. Turn Larger Text back off afterwards.
 - **Report if wrong:** the screen and element, plus a screenshot.
+
+### 13b. Listings: the poster wall (Lisa's redesign)
+- **Taps:** Sell & Buy → **Listings**. Look at the wall, tap a poster and go back, long-press one, then pull down. Then turn on Dark Mode (Control Center) and look again.
+- **Expected:**
+  - A flyer at the top with **Live**, **Listed** and **Sold**, then the groups (Needs approval, Live, Drafting, Sold, Not posted), each a tidy **three-column** wall of posters on iPad (two on iPhone). Each poster has a pin or tape, a banner ("FOR SALE", "MUST GO"…), the item's voxel model, a bold title, a big price, a status stamp, the SIMULATED pill and tear-off tabs reading "eBay · simulated". Posters tilt a little (at most 1.5°) but the columns stay aligned.
+  - Stamps: NEEDS YOUR OK, POSTED (never LIVE on a simulated post), DRAFTING (a dashed, faded sketch), a big diagonal SOLD, FAILED (torn corner plus the reason), DENIED (crossed out).
+  - Pressing a poster lifts and straightens it; on iPadOS 18 it zooms open into the listing. Long-press shows Copy listing text, Cross-post, View simulated listing page (and Approve and post / Deny on a NEEDS YOUR OK poster). Pulling down re-pins the posters one after another. With Reduce Motion on they're just there.
+  - Dark Mode: the wall goes near-black and the posters keep their colors.
+  - VoiceOver: each poster is one element, read as title, price, status and "simulated listing, not on eBay".
+- **Report if wrong:** the poster, what's off (overlap, clipped text, a color that's hard to read), plus a screenshot.
 
 ### 14. Optional: close-up ask (#279)
 - **Taps:** Items → Review, then the **A photo would help** section (it shows only for valuable items vision wasn't sure about).
