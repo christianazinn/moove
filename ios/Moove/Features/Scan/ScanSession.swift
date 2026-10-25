@@ -173,9 +173,11 @@ final class ScanSession {
         let policy = ObjectClassifierHead.bundled?.policy ?? .shipped
         for (id, s) in scores {
             guard let object = objects.first(where: { $0.id == id }), object.label == nil, !object.manual else { continue }
+            let history = geometry?.objects.first { $0.id == id.uuidString }?.measured?.labelHistory
             let verdict = detectorObjectIDs.contains(id)
                 ? ObjectRecheck.check(detectorCategory: object.category, scores: s,
-                                      width: object.widthM, height: object.heightM, depth: object.depthM, policy: policy)
+                                      width: object.widthM, height: object.heightM, depth: object.depthM,
+                                      policy: policy, history: history)
                 : ObjectRecheck.checkRoomPlan(category: object.category, scores: s, policy: policy)
             switch verdict {
             case .keep:

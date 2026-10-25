@@ -209,6 +209,88 @@ public enum ObjectRecheck {
         return .keep
     }
 
+    // MARK: The detector's label history as a second opinion (R6 chunk B)
+
+    /// How `check(..., history:)` uses `SightingMerger.LabelHistory`. Picked on CA-1M (31 captures,
+    /// tools: R6B-dethist/method.py, same rules): β = 1 fixed 1-4 objects per population with no
+    /// breaks (β ≥ 2 broke a toaster and a coffee table); the reject gate caught a wall the detector
+    /// called a room divider and threw nothing away at 0.4 (0.3 threw away a mirror). Marking
+    /// unsure objects `other` only broke right answers, so there's no such rule.
+    public struct HistoryPolicy: Sendable, Equatable {
+        /// Weight of the detector's label distribution in the pool (0 = classifier only).
+        public var beta: Double
+        /// Laplace smoothing of that distribution, in confidence units per category.
+        public var alpha: Double
+        /// The flip-gated reject needs at least this many views...
+        public var minViews: Int
+        /// ...the top label on fewer than this share of them...
+        public var consensusBelow: Double
+        /// ...and the classifier's none + fixtures mass at least this (the plain bar is 0.6 on one class).
+        public var nonItemReject: Double
+
+        public init(beta: Double = 1, alpha: Double = 0.5, minViews: Int = 2, consensusBelow: Double = 0.67, nonItemReject: Double = 0.4) {
+            self.beta = beta
+            self.alpha = alpha
+            self.minViews = minViews
+            self.consensusBelow = consensusBelow
+            self.nonItemReject = nonItemReject
+        }
+
+        public static let `default` = HistoryPolicy()
+    }
+
+    /// `check` with the detector's label history (`RoomGeometry.Object.measured?.labelHistory`):
+    /// - **pool**: object categories are reweighted by what the detector said across frames,
+    ///   p(c) ∝ p_classifier(c) · p_detector(c)^β, keeping the classifier's none + fixtures mass as
+    ///   it is (the detector never says "none", so it can't argue for a reject). Detector labels the
+    ///   classifier has no class for ("bin", "stool") add nothing;
+    /// - **reject** when the detector kept changing its mind (top label on < `consensusBelow` of
+    ///   ≥ `minViews` views) and the classifier leans non-item (≥ `nonItemReject`): phantoms flip,
+    ///   real objects mostly don't.
+    /// Without a history (RoomPlan objects, old scans) it's exactly `check`.
+    public static func check(detectorCategory det: String, scores: [String: Double], width: Double, height: Double, depth: Double,
+                             policy: Policy = .shipped, history: SightingMerger.LabelHistory?,
+                             historyPolicy hp: HistoryPolicy = .default) -> Verdict {
+        guard let history, !history.labels.isEmpty, !scores.isEmpty else {
+            return check(detectorCategory: det, scores: scores, width: width, height: height, depth: depth, policy: policy)
+        }
+        let pooledScores = pooled(scores, with: history, beta: hp.beta, alpha: hp.alpha)
+        // The policy's bars (and its doubt band) apply to the pooled scores; pooling leaves the
+        // non-item mass as it is, so a doubt here is the classifier's doubt.
+        let base = check(detectorCategory: det, scores: pooledScores, width: width, height: height, depth: depth, policy: policy)
+        if case .reject = base { return base }
+        guard history.views >= hp.minViews, history.consensus < hp.consensusBelow else { return base }
+        let nonItem = pooledScores.filter { $0.key == notAnObject || fixtures.contains($0.key) }.values.reduce(0, +)
+        guard nonItem >= hp.nonItemReject else { return base }
+        let labels = history.labels.keys.sorted().joined(separator: "/")
+        return .reject(reason: "detector unsure (\(labels), \(Int((history.consensus * 100).rounded()))% agree), "
+            + "\(Int((nonItem * 100).rounded()))% not an object")
+    }
+
+    /// The classifier's object categories reweighted by the detector's label mass (see `check(..., history:)`).
+    static func pooled(_ scores: [String: Double], with history: SightingMerger.LabelHistory, beta: Double, alpha: Double) -> [String: Double] {
+        guard beta > 0 else { return scores }
+        let objects = scores.keys.filter { $0 != notAnObject && !fixtures.contains($0) }
+        var members: [String: [String]] = [:]
+        for c in objects { members[group(c), default: []].append(c) }
+        var mass = Dictionary(uniqueKeysWithValues: objects.map { ($0, 0.0) })
+        var total = 0.0
+        for (label, e) in history.labels {
+            guard let ms = members[group(label)] else { continue }
+            for c in ms { mass[c, default: 0] += Double(e.totalConfidence) / Double(ms.count) }
+            total += Double(e.totalConfidence)
+        }
+        let k = Double(objects.count)
+        var weighted: [String: Double] = [:]
+        for c in objects { weighted[c] = (scores[c] ?? 0) * pow(((mass[c] ?? 0) + alpha) / (total + alpha * k), beta) }
+        let objectMass = objects.map { scores[$0] ?? 0 }.reduce(0, +)
+        let z = weighted.values.reduce(0, +)
+        guard z > 0 else { return scores }
+        var out = scores
+        for (c, w) in weighted { out[c] = w / z * objectMass }
+        return out
+    }
+
     /// `scores`: classifier probability per Moove category (all of its categories, summing
     /// to 1, e.g. `ObjectClassifierHead.scores`). Sizes are the box's width, height, depth (m).
     /// `policy`: thresholds (`ObjectClassifierHead.policy`); `.doubt` only when it has a doubt bar.
