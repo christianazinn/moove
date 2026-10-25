@@ -14,7 +14,6 @@ struct ScanHomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // "How it works" below says how to scan, so no lede here.
                 PageHeader(title: "Scan a room.")
                 ScanHomeHero { openRoom = $0 }.padding(.top, 24)
                 startScan.padding(.top, 24)
@@ -30,7 +29,6 @@ struct ScanHomeView: View {
                         }
                     }
                 }
-                ScanHowItWorks().padding(.top, 40)
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.top, 16)
@@ -114,9 +112,6 @@ struct ScanHomeView: View {
             .buttonStyle(.pill(.outline))
             .disabled(loadingDemo)
             .accessibilityHint("Imports a recorded bedroom, the same way a real scan does")
-            Text("Recorded bedroom, for when a live scan isn't possible.")
-                .monoMeta()
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
