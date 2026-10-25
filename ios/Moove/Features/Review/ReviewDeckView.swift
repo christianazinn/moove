@@ -257,10 +257,11 @@ struct ReviewDeckView: View {
             VStack(spacing: 6) {
                 Image(systemName: ReviewPalette.arrow(d))
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(suggested ? Theme.accentInk : d.tint)
+                    // Neutral circles; only the suggested one takes the accent (Lisa: less color).
+                    .foregroundStyle(suggested ? Theme.accentInk : Theme.text)
                     .frame(width: 56, height: 56)
-                    .background(Circle().fill(suggested ? ReviewPalette.solid(d) : Theme.surface))
-                    .overlay(Circle().strokeBorder(ReviewPalette.solid(d).opacity(0.5), lineWidth: 1))
+                    .background(Circle().fill(suggested ? Theme.accentFill : Theme.surface))
+                    .overlay(Circle().strokeBorder(Theme.line, lineWidth: 1))
                 Text(d.label).monoText(12.5, weight: .bold, maxScale: 1.6).foregroundStyle(Theme.text).lineLimit(1)
             }
             .frame(minWidth: 64, minHeight: 44)
@@ -330,7 +331,6 @@ private struct ReviewCardFront: View {
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
                 }
-                ReviewVerdict(item: item)
             }
             .padding(16)
         }
@@ -362,37 +362,35 @@ private struct ReviewCardBack: View {
                 .serifType(20, weight: .semibold)
                 .foregroundStyle(Theme.text)
                 .lineLimit(2)
-            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
-                fact("Size", Self.size(item))
-                fact("Value", Self.value(item, range))
-                if let condition = item.condition { fact("Condition", "\(condition) / 5") }
-            }
-            if let reason = item.dispositionReason, item.dispositionSource == .auto {
-                Text(reason.capitalizedFirst)
-                    .sansText(14.5)
-                    .foregroundStyle(Theme.muted)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if item.maybeSentimental {
-                Label("Possibly sentimental. Moove leaves it to you.", systemImage: "heart.fill")
-                    .sansText(14)
-                    .foregroundStyle(Theme.danger)
-                    .lineLimit(2)
-            }
+            // One line of why (Lisa: less on the card); size, value and condition are read by VoiceOver.
+            Text(Self.reason(item))
+                .sansText(14.5)
+                .foregroundStyle(Theme.muted)
+                .lineLimit(1)
             Spacer(minLength: 0)
-            ReviewVerdict(item: item)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Self.spoken(item, range))
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(ReviewCardPaper())
     }
 
-    private func fact(_ label: String, _ value: String) -> some View {
-        GridRow {
-            Text(label.uppercased()).monoText(11, weight: .semibold, maxScale: 1.6).tracking(0.6).foregroundStyle(Theme.faint)
-            Text(value).monoText(13.5).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.8)
-        }
+    /// "Possibly sentimental", else the agents' reason, else what Moove suggests or you chose.
+    static func reason(_ item: Item) -> String {
+        if item.maybeSentimental { return "Possibly sentimental" }
+        if let reason = item.dispositionReason, item.dispositionSource == .auto { return reason.capitalizedFirst }
+        if let verdict = Review.verdict(item) { return "Moove says: \(verdict)" }
+        if item.dispositionSource == .user, item.disposition != .undecided { return "You chose \(item.disposition.label)" }
+        return ""
+    }
+
+    static func spoken(_ item: Item, _ range: ClosedRange<Int64>?) -> String {
+        var parts = [item.name.capitalizedFirst, "size \(size(item))", "value \(value(item, range))"]
+        if let condition = item.condition { parts.append("condition \(condition) of 5") }
+        let why = reason(item)
+        if !why.isEmpty { parts.append(why) }
+        return parts.joined(separator: ", ")
     }
 
     static func value(_ item: Item, _ range: ClosedRange<Int64>?) -> String {
@@ -407,22 +405,6 @@ private struct ReviewCardBack: View {
 }
 
 /// "Moove says: Sell · worth $30, costs ~$24 to move", or "You chose Keep" once it's yours.
-private struct ReviewVerdict: View {
-    let item: Item
-
-    var body: some View {
-        if let verdict = Review.verdict(item) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Image(systemName: "sparkles").font(.system(size: 11)).accessibilityHidden(true)
-                Text("Moove says: \(verdict)").monoText(12.5, weight: .semibold).lineLimit(2)
-            }
-            .foregroundStyle(item.disposition.tint)
-        } else if item.dispositionSource == .user, item.disposition != .undecided {
-            Text("You chose \(item.disposition.label)").monoText(12.5, weight: .semibold).foregroundStyle(Theme.muted)
-        }
-    }
-}
-
 /// "Needs you" on the cards only a person can decide (a heart when possibly sentimental).
 private struct ReviewCardBadge: View {
     let item: Item

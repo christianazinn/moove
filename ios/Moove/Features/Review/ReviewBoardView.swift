@@ -75,23 +75,11 @@ struct ReviewPileTile: View {
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(ReviewPalette.solid(d))
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("\(pile.count)")
-                    .serifType(36, weight: .semibold)
-                    .foregroundStyle(Theme.text)
-                Text(pile.count == 1 ? "item" : "items")
-                    .monoText(12.5)
-                    .foregroundStyle(Theme.muted)
-            }
-            ItemFan(items: Array(pile.items.prefix(3)), destination: d)
-                .frame(maxWidth: .infinity)
-                .frame(height: 70)
-            Text(Self.total(pile))
-                .monoText(12.5, maxScale: 1.6)
-                .foregroundStyle(pile.items.isEmpty ? Theme.muted : Theme.text)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
+            .foregroundStyle(Theme.muted)
+            // Label and count only (Lisa: less on screen); the total is in the VoiceOver label.
+            Text("\(pile.count)")
+                .serifType(36, weight: .semibold)
+                .foregroundStyle(Theme.text)
         }
         .padding(.leading, 18)
         .padding(.trailing, 12)
@@ -101,7 +89,8 @@ struct ReviewPileTile: View {
             let shape = RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
             shape.fill(Theme.surface)
                 .overlay(alignment: .leading) {
-                    Rectangle().fill(ReviewPalette.solid(d)).frame(width: 4)
+                    // A small, muted mark of the destination's color.
+                    Rectangle().fill(ReviewPalette.solid(d)).frame(width: 3).saturation(0.6).opacity(0.7)
                 }
                 .clipShape(shape)
                 .overlay(shape.strokeBorder(Theme.line, lineWidth: 1))
@@ -177,11 +166,11 @@ struct ReviewPileScreen: View {
                 Label(d.label.uppercased(), systemImage: d.systemImage)
                     .monoText(12, weight: .semibold, maxScale: 1.6)
                     .tracking(0.6)
-                    .foregroundStyle(ReviewPalette.solid(d))
+                    .foregroundStyle(Theme.text)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous).strokeBorder(ReviewPalette.solid(d).opacity(0.5), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous).strokeBorder(Theme.line, lineWidth: 1))
                     .dropDestination(for: String.self) { ids, _ in
                         let moved = ids.compactMap(UInt64.init)
                         for id in moved {
@@ -296,11 +285,11 @@ struct ReviewBoardRow: View {
                                     .accessibilityLabel("Possibly sentimental")
                             }
                         }
-                        if let why = Self.why(item) {
-                            Text(why).monoText(12, maxScale: 1.8).foregroundStyle(Theme.muted).lineLimit(2)
-                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // One line per row: name and price; the reason is read by VoiceOver.
+                    .accessibilityElement(children: .combine)
+                    .accessibilityHint(Self.why(item) ?? "")
                     Text(item.saleValueCents?.usd ?? "—").monoText(13.5).foregroundStyle(Theme.text).lineLimit(1).layoutPriority(1)
                 }
                 .contentShape(Rectangle())

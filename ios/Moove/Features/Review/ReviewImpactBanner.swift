@@ -13,38 +13,20 @@ struct ReviewImpactBanner: View {
         let kg = Int(summary.divertedKg.rounded())
         let count = summary.divertedItems
         Button { showInfo = true } label: {
-            HStack(spacing: 12) {
+            // One short line (Lisa); the item count and how it's estimated are a tap away.
+            HStack(spacing: 8) {
                 Image(systemName: "leaf")
-                    .font(.system(size: 17, weight: .regular))
+                    .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(Theme.accentStrong)
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(Theme.bg.opacity(0.6)))
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text("~\(kg) kg")
-                            .monoText(16, weight: .bold, maxScale: 1.6)
-                            .foregroundStyle(Theme.accentStrong)
-                            .contentTransition(.numericText())
-                        Text("kept out of landfill").monoText(13).foregroundStyle(Theme.text)
-                    }
-                    Text(count == 0 ? "Sell or donate to keep things out of landfill"
-                                    : "\(count) item\(count == 1 ? "" : "s") sold or donated")
-                        .monoText(12, maxScale: 1.8)
-                        .foregroundStyle(Theme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 4)
-                Image(systemName: "info.circle")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Theme.muted)
-                    .accessibilityHidden(true)
+                Text("\(kg) kg kept from landfill")
+                    .monoText(13.5, weight: .semibold)
+                    .foregroundStyle(Theme.text)
+                    .contentTransition(.numericText())
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .animation(.default, value: kg)
