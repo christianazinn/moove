@@ -1,0 +1,14 @@
+{
+  "df0f8f03cd4ed55c": {
+    "identifiedProduct": "Black flat screen TV (generic, unknown brand, size, or resolution)",
+    "itemForm": "full_product",
+    "specificity": 0.15,
+    "newRetailUsd": 350,
+    "p10": 30,
+    "p50": 90,
+    "p90": 280,
+    "item": "black flat screen tv",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

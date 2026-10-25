@@ -1,0 +1,14 @@
+{
+  "6a2c57a3e062ffc0": {
+    "identifiedProduct": "Generic white over-ear headphones (brand and model unknown)",
+    "itemForm": "full_product",
+    "specificity": 0.15,
+    "newRetailUsd": 90,
+    "p10": 12,
+    "p50": 40,
+    "p90": 150,
+    "item": "white over-ear headphones",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

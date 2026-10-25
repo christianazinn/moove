@@ -1,0 +1,14 @@
+{
+  "bbd2de60f0453bcd": {
+    "identifiedProduct": "Generic white drum shade floor lamp with thin dark metal pole",
+    "itemForm": "full_product",
+    "specificity": 0.25,
+    "newRetailUsd": 70,
+    "p10": 15,
+    "p50": 32,
+    "p90": 70,
+    "item": "white drum shade standing floor lamp with thin dark metal pole",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

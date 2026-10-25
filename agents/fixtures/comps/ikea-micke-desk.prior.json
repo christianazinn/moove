@@ -1,0 +1,26 @@
+{
+  "f8921a0c663a4e76": {
+    "identifiedProduct": "IKEA Micke desk, 105 x 50 cm, 75 cm height",
+    "itemForm": "full_product",
+    "specificity": 0.8,
+    "newRetailUsd": 79,
+    "p10": 20,
+    "p50": 40,
+    "p90": 65,
+    "item": "IKEA Micke desk; category table; 1.05 x 0.75 x 0.50 m (W x H x D)",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  },
+  "cac1c04a47d5cb6d": {
+    "identifiedProduct": "IKEA MICKE desk (standard white, approx. gen. 4 drawer or 1 drawer, 105x50 cm)",
+    "itemForm": "full_product",
+    "specificity": 0.6,
+    "newRetailUsd": 109,
+    "p10": 25,
+    "p50": 50,
+    "p90": 90,
+    "item": "ikea micke desk",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

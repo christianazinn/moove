@@ -7,6 +7,7 @@ import type { Item } from "../src/module_bindings/types.js";
 // old name, and a catch-all name vision couldn't fix must not leave it "pricing..." forever.
 process.env.PRICING_CONCURRENCY = "1";
 process.env.PRICING_COMP_FILTER = "0";
+process.env.PRICING_PRIOR = "0"; // no live Claude price guesses in tests
 const { pricingAgent, setCompsSource } = await import("../src/agents/pricing.js");
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));

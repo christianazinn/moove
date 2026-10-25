@@ -45,6 +45,11 @@ export const DEMO_OBJECTS: DemoObject[] = [
 // it), so the seed sets it to sell as the user, like a student tapping Sell. Size B Aeron: 69 x 104 x 67 cm.
 export const DEMO_COMMERCE_OBJECTS: DemoObject[] = [obj("aeron", "Herman Miller office chair", "chair", [0.69, 1.04, 0.67], false, true)];
 
+// The item as import_scan stores it (no brand, material or condition), for keys like the price prior's.
+export function demoItemDesc(o: ScanObjectInput) {
+  return { name: o.name || o.category, category: o.category, brand: "", material: "", condition: "", widthM: o.widthM, heightM: o.heightM, depthM: o.depthM };
+}
+
 // Exactly the string the pricing agent will look up for a freshly imported object.
 export function demoQuery(o: ScanObjectInput): string {
   return queryFor({ brand: "", name: o.name || o.category, category: o.category } as Item);
