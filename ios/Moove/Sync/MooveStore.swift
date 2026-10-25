@@ -223,9 +223,28 @@ final class MooveStore {
         await run { try await $0.importScan(scan) }
     }
 
+    /// `add_item_photo`. Vision runs again on the new photo and its `set_item_details` replaces the
+    /// name, so a name the user chose (`userNamed`) is kept through it.
     @discardableResult
     func addItemPhoto(itemId: UInt64, url: String) async -> Bool {
-        await run { try await $0.addItemPhoto(itemId: itemId, url: url) }
+        guard await run({ try await $0.addItemPhoto(itemId: itemId, url: url) }) else { return false }
+        if userNamed.contains(itemId), let name = snapshot.items.first(where: { $0.id == itemId })?.name {
+            Task { await keepName(name, forItemId: itemId, once: url) }
+        }
+        return true
+    }
+
+    /// "Wrong item? Reclassify from a photo": attaches the retake marked for vision
+    /// (`ItemReclassify`), which then identifies the item from it and not from the scan's category.
+    /// The user is saying the name and kind are wrong, so their kept name and "What is it?"
+    /// choice are dropped and vision's new answer wins.
+    @discardableResult
+    func reclassifyItem(_ item: Item, photoUrl url: String) async -> Bool {
+        forgetUserName(item.id)
+        guard await run({ try await $0.addItemPhoto(itemId: item.id, url: ItemReclassify.marking(url)) }) else { return false }
+        let attrs = currentAttributes(item)
+        if ItemFix.userKind(in: attrs) != nil { await setItemAttributes(ItemFix.setting(.other, in: attrs), for: item) }
+        return true
     }
 
     /// The scan just imported into room `roomName`, once it reaches the snapshot
@@ -283,6 +302,7 @@ final class MooveStore {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name != item.name else { return true }
         guard await run({ try await $0.renameItem(itemId: item.id, name: name) }) else { return false }
+        markUserNamed([item.id])
         // Vision hasn't answered yet and would replace the name: keep it until it has.
         let current = snapshot.items.first { $0.id == item.id } ?? item
         if ItemLabels.isIdentifying(current) || keptNames[item.id] != nil { keepNames([item.id: name]) }
@@ -357,6 +377,35 @@ final class MooveStore {
         restoreKeptNames()
     }
 
+    /// Items the user named themselves (Rename, the scan checklist). Their name outlives vision's
+    /// answers to later photos too, until they ask for a reclassify. Saved on this device.
+    private(set) var userNamed: Set<UInt64> =
+        Set((UserDefaults.standard.stringArray(forKey: "moove.userNamed") ?? []).compactMap(UInt64.init))
+
+    private func markUserNamed(_ ids: Set<UInt64>) {
+        guard !ids.isSubset(of: userNamed) else { return }
+        userNamed.formUnion(ids)
+        UserDefaults.standard.set(userNamed.map(String.init), forKey: "moove.userNamed")
+    }
+
+    private func forgetUserName(_ id: UInt64) {
+        if userNamed.remove(id) != nil { UserDefaults.standard.set(userNamed.map(String.init), forKey: "moove.userNamed") }
+        if keptNames.removeValue(forKey: id) != nil { saveKeptNames() }
+    }
+
+    /// Keeps `name` through the vision run a new photo (`url`) started. Waits (up to ~5 s) for
+    /// the photo to reach the snapshot first: until then the item still looks done, and the name
+    /// would be settled at once.
+    private func keepName(_ name: String, forItemId id: UInt64, once url: String) async {
+        for attempt in 0..<20 {
+            if let item = snapshot.items.first(where: { $0.id == id }), item.photoUrls.contains(url) {
+                if ItemLabels.isIdentifying(item) { keepNames([id: name]) }
+                return
+            }
+            if attempt < 19 { try? await Task.sleep(for: .milliseconds(250)) }
+        }
+    }
+
     private func saveKeptNames() {
         UserDefaults.standard.set(ItemLabels.encode(keptNames), forKey: ItemLabels.keptNamesDefaultsKey)
     }
@@ -384,7 +433,11 @@ final class MooveStore {
         guard labels.values.contains(where: { $0.cleanName != nil }) else { return }
         for attempt in 0..<20 {
             let names = ItemLabels.keptNames(for: labels, in: items.filter { $0.roomId == roomId })
-            if !names.isEmpty { keepNames(names); return }
+            if !names.isEmpty {
+                keepNames(names)
+                markUserNamed(Set(names.keys))
+                return
+            }
             if attempt < 19 { try? await Task.sleep(for: .milliseconds(250)) }
         }
     }

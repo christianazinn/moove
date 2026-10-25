@@ -40,6 +40,8 @@ struct InventoryView: View {
     @State private var afterPlacard: AfterPlacard?
     /// Placard story being edited.
     @State private var editingStory: Item?
+    /// "Not a vacuum? Take a photo": the camera is open for this item's reclassify retake.
+    @State private var retaking: Item?
     /// The user's own placard stories (item id → line), on this device only.
     @AppStorage(ItemStories.defaultsKey) private var storiesJSON = ""
     /// Rooms Inventory is narrowed to (tap a room card); empty shows every room.
@@ -95,6 +97,20 @@ struct InventoryView: View {
         .sheet(item: $sharing) { ShareRoomView(room: $0) }
         .roomRenameAlert($renamingRoom)
         .sheet(isPresented: $showJoin) { JoinRoomView() }
+        .fullScreenCover(item: $retaking) { item in
+            CameraPicker { jpeg in
+                retaking = nil
+                guard let jpeg else { return }
+                // Item detail shows "Reclassifying from your photo…", then the new name.
+                opened = item.id
+                Task {
+                    if let why = await ItemPhotoUpload.attach(jpeg, to: item, reclassify: true, store: store) {
+                        store.lastError = "Couldn't add the photo: \(why)"
+                    }
+                }
+            }
+            .ignoresSafeArea()
+        }
         .sheet(item: $editingStory) { item in
             StoryEditor(item: item, current: stories[item.id]) { text in
                 storiesJSON = ItemStories.setting(text, for: item.id, in: storiesJSON)
@@ -457,7 +473,7 @@ struct InventoryView: View {
                 Button("Open", systemImage: "info.circle") { opened = item.id }
                 Button(hasStory ? "Edit story" : "Add a story", systemImage: "text.quote") { editingStory = item }
                 Divider()
-                ItemFixMenu(item: item) { startRename(item) }
+                ItemFixMenu(item: item, onRename: { startRename(item) }, onReclassify: { retaking = item })
                 Divider()
                 Button("Delete item", systemImage: "trash", role: .destructive) { deleting = item }
                     .accessibilityIdentifier("inventory.delete.\(item.id)")
@@ -467,6 +483,7 @@ struct InventoryView: View {
             .accessibilityAction(named: "Open details") { opened = item.id }
             .accessibilityAction(named: "Edit story") { editingStory = item }
             .accessibilityAction(named: "Rename") { startRename(item) }
+            .accessibilityAction(named: "Reclassify from a photo") { retaking = item }
             .accessibilityAction(named: "Turn around") { Task { await store.turn(item) } }
             .accessibilityAction(named: "Delete") { deleting = item }
             .accessibilityIdentifier("inventory.item.\(item.id)")

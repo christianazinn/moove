@@ -70,7 +70,7 @@ const ALIASES: Record<string, string> = {
   cushion: 'pillow', 'throw pillow': 'pillow', bookcase: 'bookshelf', shelf: 'bookshelf', shelves: 'bookshelf',
   'bedside table': 'nightstand', 'night stand': 'nightstand', 'chest of drawers': 'dresser',
   cabinet: 'storage', wardrobe: 'storage', 'trash bin': 'trash can', 'floor lamp': 'lamp', 'desk lamp': 'lamp',
-  carpet: 'rug', mat: 'rug', pouf: 'ottoman', footstool: 'ottoman', luggage: 'suitcase', bike: 'bicycle',
+  carpet: 'rug', mat: 'rug', pouf: 'ottoman', footstool: 'ottoman', luggage: 'suitcase', bike: 'bicycle', escooter: 'scooter',
   'coffee table': 'table', 'side table': 'table', 'end table': 'table', 'dining table': 'table',
   'office chair': 'chair', 'desk chair': 'chair', 'tv stand': 'storage', 'media console': 'storage',
 };

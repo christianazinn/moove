@@ -208,7 +208,12 @@ public final class FixtureBackend: SyncBackend, @unchecked Sendable {
     }
 
     public func addItemPhoto(itemId: UInt64, url: String) async throws {
-        try updateOwnedItem(itemId) { $0.photoUrls.append(url) }
+        try updateOwnedItem(itemId) {
+            $0.photoUrls.append(url)
+            // A reclassify retake (`ItemReclassify`) queues vision like `add_item_photo`. There's no
+            // worker offline, so it stays pending and Item detail says it's waiting to reclassify.
+            if ItemReclassify.isMarked(url) { $0.detailsStatus = .pending }
+        }
     }
 
     /// Same checks and status change as `add_scan_photo`. There's no sweep agent
