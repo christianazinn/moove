@@ -96,6 +96,14 @@ final class CommerceUITests: XCTestCase {
         let target = byId("deal.choose.74")
         XCTAssertTrue(scrollTo(target), "no Choose button on the Target chair")
         target.tap()
+        // Under the limit, Choose pays right away, so it asks first (an action sheet on iPhone).
+        let pay = app.buttons.matching(NSPredicate(format: "label == 'Pay $79.99 to target'")).firstMatch
+        XCTAssertTrue(pay.waitForExistence(timeout: 5), "no confirm before paying for the Target chair")
+        let railNote = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS 'SIMULATED: no real card is charged.'")).firstMatch
+        XCTAssertTrue(railNote.waitForExistence(timeout: 2), "the confirm doesn't say the rail is simulated")
+        shot("5b-confirm")
+        pay.tap()
         let paid = app.staticTexts["Paid through the simulated Visa rail. No real card was charged."]
         XCTAssertTrue(scrollTo(paid, up: false), "no paid simulated checkout")
         let visa = app.descendants(matching: .any)
