@@ -113,6 +113,16 @@ async function price(conn: Conn, it: Item, retry: (it: Item, delayMs: number) =>
     });
     // Drop accessories/parts/bundles/other products before they skew the estimate.
     const f = await filterComps(it, raw, { cacheFile: filterCacheFile(q) });
+    // The lookup takes seconds, and the sweep, vision or the user may have renamed (or deleted) the
+    // item meanwhile: comps and a price for the old query would be wrong, so price it again instead.
+    const now = conn.db.item.id.find(it.id);
+    if (!now) return;
+    if (queryFor(now) !== q) {
+      // Its update arrives after `finally` clears inFlight, so onUpdate queues it again.
+      conn.reducers.setItemStage({ itemId: it.id, stage: 'pending', field: 'pricing' });
+      logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'plan', message: `Renamed to "${queryFor(now)}" while pricing "${q}": dropped those comps, re-pricing`, refTable: 'item', refId: it.id, data: { query: q, newQuery: queryFor(now), repriced: true } });
+      return;
+    }
     if (rejectsBorrowed(similarTo, f)) {
       // Borrowed comps that Claude says are all a different product: no price beats a wrong one.
       conn.reducers.setItemStage({ itemId: it.id, stage: 'failed', field: 'pricing' });
@@ -198,8 +208,10 @@ export const pricingAgent: Agent = {
     let running = 0;
     const pump = () => {
       while (running < CONCURRENCY && queue.length > 0) {
-        const it = queue.shift()!;
-        if (!needsPricing(it)) continue;
+        const queued = queue.shift()!;
+        // The row may have been renamed or deleted while queued: price what's there now.
+        const it = conn.db.item.id.find(queued.id);
+        if (!it || !needsPricing(it)) continue;
         running++;
         void price(conn, it, retry).finally(() => {
           running--;
@@ -207,7 +219,19 @@ export const pricingAgent: Agent = {
         });
       }
     };
+    // Generic items already being marked failed, so updates still in flight don't log it twice.
+    const givingUp = new Set<bigint>();
     const maybe = (it: Item) => {
+      if (it.pricingStatus !== 'pending') givingUp.delete(it.id);
+      else if (isGenericQuery(it) && (it.detailsStatus === 'done' || it.detailsStatus === 'failed')) {
+        // Vision had its chance and left a catch-all name ("storage", "other"): nothing will name it
+        // now, so don't leave it "pricing..." forever (sort waits on pricing). A rename re-prices it.
+        if (givingUp.has(it.id)) return;
+        givingUp.add(it.id);
+        conn.reducers.setItemStage({ itemId: it.id, stage: 'failed', field: 'pricing' });
+        logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'result', message: `Not priced: "${it.name || it.category}" is too generic to look up; rename it to price it`, refTable: 'item', refId: it.id, data: { query: queryFor(it), generic: true } });
+        return;
+      }
       if (needsPricing(it) && !queue.some(q => q.id === it.id)) {
         queue.push(it);
         pump();
@@ -237,6 +261,15 @@ export const pricingAgent: Agent = {
     }
     for (const it of conn.db.item.iter()) maybe(it);
     conn.db.item.onInsert((_ctx, it) => maybe(it));
-    conn.db.item.onUpdate((_ctx, _old, it) => maybe(it));
+    conn.db.item.onUpdate((_ctx, old, it) => {
+      // A rename after pricing finished (vision after a new photo, the user's rename_item): the old
+      // price is for another query. Running items are re-checked at the end of price().
+      if (queryFor(old) !== queryFor(it) && (it.pricingStatus === 'done' || it.pricingStatus === 'failed') && !inFlight.has(it.id) && !isBuiltInFixture(it)) {
+        conn.reducers.setItemStage({ itemId: it.id, stage: 'pending', field: 'pricing' });
+        logEvent(conn, { owner: it.owner, agent: 'pricing', kind: 'plan', message: `Name changed, re-pricing: "${queryFor(old)}" is now "${queryFor(it)}"`, refTable: 'item', refId: it.id, data: { query: queryFor(it), oldQuery: queryFor(old), repriced: true } });
+        return;
+      }
+      maybe(it);
+    });
   },
 };

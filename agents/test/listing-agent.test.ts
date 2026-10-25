@@ -26,7 +26,8 @@ const { config } = await import("../src/config.js");
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const owner = { toHexString: () => "owner", isEqual: () => true };
 
-type Opts = { threshold?: bigint; failRequestApproval?: boolean; failCreateDraft?: boolean; claimTaken?: boolean };
+// failClaims: transient failures of the `posting` claim; failStatus: transient failures of a status write.
+type Opts = { threshold?: bigint; failRequestApproval?: boolean; failCreateDraft?: boolean; claimTaken?: boolean; failClaims?: number; failStatus?: Record<string, number> };
 
 function fakeConn(o: Opts = {}) {
   const listings = new Map<bigint, Listing>();
@@ -61,9 +62,24 @@ function fakeConn(o: Opts = {}) {
         calls.push({ reducer: "updateListing", args: a });
         await sleep(1);
         const old = listings.get(a.listingId)!;
+        if (a.status === "posting" && o.claimTaken && old.status !== "posting") {
+          // Another post's claim landed first.
+          const taken = { ...old, status: "posting" };
+          listings.set(old.id, taken);
+          fire("listing.update", old, taken);
+          throw new Error(`SenderError: listing ${a.listingId} is posting, can't start posting`);
+        }
         // Same rule as the module (#144): a post can only be claimed from draft/awaiting_approval.
-        if (a.status === "posting" && (o.claimTaken || (old.status !== "draft" && old.status !== "awaiting_approval"))) {
-          throw new Error(`SenderError: listing ${a.listingId} is ${o.claimTaken ? "posting" : old.status}, can't start posting`);
+        if (a.status === "posting" && old.status !== "draft" && old.status !== "awaiting_approval") {
+          throw new Error(`SenderError: listing ${a.listingId} is ${old.status}, can't start posting`);
+        }
+        if (a.status === "posting" && o.failClaims) {
+          o.failClaims--;
+          throw new Error("not connected");
+        }
+        if (o.failStatus?.[a.status]) {
+          o.failStatus[a.status]--;
+          throw new Error("not connected");
         }
         const l = { ...old, status: a.status, externalId: a.externalId || old.externalId, url: a.url || old.url };
         listings.set(l.id, l);
@@ -83,6 +99,7 @@ function fakeConn(o: Opts = {}) {
   const listing = (id: bigint, priceCents: bigint, status = "draft", simulated = true) => {
     const l = { id, owner, itemId: id * 10n, title: `Thing ${id}`, description: "desc", priceCents, status, externalId: "", url: "", simulated } as unknown as Listing;
     listings.set(id, l);
+    if (!items.has(l.itemId)) item(l.itemId); // its item, sorted to sell
     return l;
   };
   const approval = (refId: bigint, amountCents: bigint, status = "pending") => {
@@ -101,8 +118,14 @@ function fakeConn(o: Opts = {}) {
     items.set(id, it);
     return it;
   };
+  const sortTo = (id: bigint, disposition: string, notify = true) => {
+    const old = items.get(id)!;
+    const it = { ...old, disposition };
+    items.set(id, it);
+    if (notify) fire("item.update", old, it);
+  };
   const named = (r: string) => calls.filter(c => c.reducer === r);
-  return { conn: conn as unknown as Conn, listings, approvals, listing, approval, decide, item, calls, named, events };
+  return { conn: conn as unknown as Conn, listings, approvals, listing, approval, decide, item, sortTo, calls, named, events };
 }
 
 test("listing agent: a draft already asked about before a restart isn't asked about again", async () => {
@@ -250,7 +273,7 @@ test("listing agent (#144): a refused claim means another post owns it, so it do
     await sleep(50);
     assert.equal(p.published.length, 0, "never published");
     assert.deepEqual(statuses(f, 21n), ["posting"], "only the refused claim; not marked failed");
-    assert.equal(f.listings.get(21n)!.status, "draft");
+    assert.equal(f.listings.get(21n)!.status, "posting", "left to the post that owns it");
     assert.ok(f.events.some(e => e.refId === 21n && /already being posted/.test(e.message)));
   } finally {
     setListingDeps({ simulated: simulatedEbay });
@@ -360,4 +383,133 @@ test("listing agent: a probable CPSC recall asks for approval even under the thr
   assert.match(String(asks[0].args.summary), /^Sell "Thing 20" for \$50\.00\. Possible CPSC recall: IKEA Recalls 'MALM' Dressers \(#16221\)$/);
   assert.equal(f.listings.get(20n)!.status, "awaiting_approval");
   assert.ok(f.events.some(e => e.kind === "approval" && /Possible CPSC recall/.test(e.message)));
+});
+
+// ---- the item must still be sorted to sell when the listing is drafted, asked about and posted ----
+
+const writeDraftReplay = (it: Item) =>
+  writeFileSync(
+    path.join(tmp, `${replayKey({ model: config.models.agent, system: LISTING_SYSTEM, text: buildDraftPrompt(it, []), schema: ListingDraft })}.json`),
+    JSON.stringify({ output: { title: "Oak desk, good condition", description: "Solid oak desk.", priceCents: 18000, priceReason: "Below the comps median." } })
+  );
+
+test("listing agent: an item re-sorted to keep while its draft is written isn't listed, and drafts again once back on sell", async () => {
+  const f = fakeConn({ threshold: 10000n });
+  const it = f.item(30n);
+  writeDraftReplay(it);
+  listingAgent.start(f.conn); // draft() is now waiting on Claude
+  f.sortTo(30n, "keep", false);
+  await sleep(50);
+  assert.equal(f.named("createListingDraft").length, 0);
+  assert.ok(f.events.some(e => e.kind === "plan" && e.refId === 30n && /no longer sorted to sell/.test(e.message)));
+  f.sortTo(30n, "sell");
+  await sleep(50);
+  assert.equal(f.named("createListingDraft").length, 1, "a flip back to sell drafts it");
+});
+
+test("listing agent: a listing whose item left sell is rejected, never asked about or posted", async () => {
+  const f = fakeConn({ threshold: 10000n });
+  const p = fakePoster(true);
+  setListingDeps({ simulated: p.poster });
+  try {
+    f.listing(31n, 5000n); // under the threshold: would post right away
+    f.listing(32n, 20000n); // over: would ask
+    f.listing(33n, 20000n, "awaiting_approval");
+    f.approval(33n, 20000n, "approved");
+    for (const id of [310n, 320n, 330n]) f.sortTo(id, "keep", false);
+    listingAgent.start(f.conn);
+    await sleep(50);
+    assert.equal(p.published.length, 0);
+    assert.equal(f.named("requestApproval").length, 0);
+    for (const id of [31n, 32n, 33n]) {
+      assert.deepEqual(statuses(f, id), ["rejected"], `listing ${id}`);
+      assert.ok(f.events.some(e => e.kind === "approval" && e.refId === id && /no longer sorted to sell/.test(e.message)));
+    }
+  } finally {
+    setListingDeps({ simulated: simulatedEbay });
+  }
+});
+
+test("listing agent: tapping Keep on an item awaiting approval withdraws it; approving the old card then posts nothing", async () => {
+  const f = fakeConn({ threshold: 10000n });
+  const p = fakePoster(true);
+  setListingDeps({ simulated: p.poster });
+  try {
+    f.listing(34n, 20000n, "awaiting_approval");
+    const a = f.approval(34n, 20000n);
+    listingAgent.start(f.conn);
+    await sleep(20);
+    f.sortTo(340n, "keep");
+    await sleep(20);
+    assert.equal(f.listings.get(34n)!.status, "rejected");
+    f.decide(a.id, "approved");
+    await sleep(50);
+    assert.equal(p.published.length, 0);
+    assert.deepEqual(statuses(f, 34n), ["rejected"]);
+  } finally {
+    setListingDeps({ simulated: simulatedEbay });
+  }
+});
+
+test("listing agent: a failed awaiting_approval write is retried when the approval is decided, then posts", async () => {
+  const f = fakeConn({ threshold: 10000n, failStatus: { awaiting_approval: 1 } });
+  const p = fakePoster(true);
+  setListingDeps({ simulated: p.poster });
+  try {
+    f.listing(35n, 20000n);
+    listingAgent.start(f.conn);
+    await sleep(30);
+    assert.equal(f.listings.get(35n)!.status, "draft");
+    assert.ok(f.events.some(e => e.kind === "error" && e.refId === 35n && /awaiting_approval/.test(e.message)));
+    assert.ok(!f.events.some(e => e.kind === "approval" && e.refId === 35n), "no 'asking for approval' for a write that failed");
+    const [a] = [...f.approvals.values()];
+    f.decide(a.id, "approved");
+    await sleep(50);
+    assert.equal(f.named("requestApproval").length, 1, "the approval already on file is reused");
+    assert.equal(f.listings.get(35n)!.status, "posted");
+    assert.equal(p.published.length, 1);
+  } finally {
+    setListingDeps({ simulated: simulatedEbay });
+  }
+});
+
+test("listing agent: a posting claim that fails while the listing is still unposted logs an error and retries", async () => {
+  const f = fakeConn({ threshold: 10000n, failClaims: 1 });
+  const p = fakePoster(true);
+  setListingDeps({ simulated: p.poster });
+  try {
+    f.listing(36n, 5000n);
+    listingAgent.start(f.conn);
+    await sleep(50);
+    assert.equal(p.published.length, 0);
+    assert.ok(f.events.some(e => e.kind === "error" && e.refId === 36n && /retrying/.test(e.message)));
+    assert.ok(!f.events.some(e => e.refId === 36n && /already being posted/.test(e.message)));
+    await sleep(5200);
+    assert.equal(p.published.length, 1);
+    assert.deepEqual(statuses(f, 36n), ["posting", "posting", "posted"]);
+  } finally {
+    setListingDeps({ simulated: simulatedEbay });
+  }
+});
+
+test("listing agent: a failed `posted` write is retried once, and a second failure says it is live", async () => {
+  const f = fakeConn({ threshold: 10000n, failStatus: { posted: 1 } });
+  const g = fakeConn({ threshold: 10000n, failStatus: { posted: 2 } });
+  const p = fakePoster(true);
+  setListingDeps({ simulated: p.poster });
+  try {
+    f.listing(37n, 5000n);
+    listingAgent.start(f.conn);
+    await sleep(50);
+    assert.equal(f.listings.get(37n)!.status, "posted");
+    assert.ok(f.events.some(e => e.kind === "result" && e.refId === 37n && /Live as item/.test(e.message)));
+    g.listing(38n, 5000n);
+    listingAgent.start(g.conn);
+    await sleep(50);
+    assert.equal(g.listings.get(38n)!.status, "posting");
+    assert.ok(!g.events.some(e => e.kind === "result" && e.refId === 38n), "no 'Live as item' while the row says posting");
+    assert.ok(g.events.some(e => e.kind === "error" && e.refId === 38n && /Posted as item #X38 .*example\.test.*couldn't be marked posted/.test(e.message)));
+  } finally {
+    setListingDeps({ simulated: simulatedEbay });
+  }
 });

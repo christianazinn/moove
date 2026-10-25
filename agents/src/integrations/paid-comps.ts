@@ -7,6 +7,9 @@
 // any reason, the source falls back to calling the lookup directly and logs that it did. The one
 // exception is when the paywall's own lookup already failed (502 "comps lookup failed"): running the
 // same lookup again would just repeat that failure, so the error goes to pricing, which fails the item.
+// When Apify is known not to run (out of credit, daily cap, no token) and the query has no cache, the
+// paywall's lookup can only fail, so the source doesn't pay at all: it throws the same "comps lookup
+// failed" error up front (no x402 payment row), and pricing borrows a similar item's cached comps.
 
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -18,7 +21,7 @@ import { config } from '../config.js';
 import { logEvent, type EventKind } from '../events.js';
 import { paymentRail } from '../payments.js';
 import { COMPS_ROUTE, createCompsPaywall, type CompsLookup } from '../paywall.js';
-import { lookupComps, type CompsResult } from './apify.js';
+import { cachedComps, compsLiveUnavailable, lookupComps, type CompsResult } from './apify.js';
 import { simulatedLabel } from './simulated.js';
 import { SpendRefusedError, type RailEnv, type X402Rail } from './x402.js';
 
@@ -94,12 +97,16 @@ export interface PaidCompsDeps {
   /** Direct (unpaid) lookup used as the fallback. */
   lookup: CompsLookup;
   log: LogFn;
+  /** Why the paywall's lookup can't succeed for this query right now (checked before paying), or null. */
+  unavailable?: (query: string) => string | null;
 }
 
 /** Testable core of paidCompsSource: no SpacetimeDB needed. */
 export function createPaidCompsSource(deps: PaidCompsDeps, baseUrl: string): CompsSource {
   return async (query: string, item: Item): Promise<CompsResult> => {
     const url = `${baseUrl}${COMPS_ROUTE}?q=${encodeURIComponent(query)}`;
+    const down = deps.unavailable?.(query);
+    if (down) throw new CompsLookupFailedError(`comps lookup failed (x402 payment skipped): ${down}`);
     let simulated = false;
     try {
       const rail = await deps.rail;
@@ -152,5 +159,8 @@ export function createPaidCompsSource(deps: PaidCompsDeps, baseUrl: string): Com
 
 /** CompsSource that buys comps from the paywall at baseUrl through the worker's shared x402 rail. */
 export function paidCompsSource(conn: Conn, baseUrl: string): CompsSource {
-  return createPaidCompsSource({ rail: paymentRail(conn), lookup: lookupComps, log: e => logEvent(conn, e) }, baseUrl);
+  return createPaidCompsSource(
+    { rail: paymentRail(conn), lookup: lookupComps, log: e => logEvent(conn, e), unavailable: q => (cachedComps(q) ? null : compsLiveUnavailable()) },
+    baseUrl,
+  );
 }

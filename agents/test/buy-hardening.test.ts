@@ -64,6 +64,11 @@ const conn = {
     recordPayment: async (p: Row) => void db.payment.insert({ ...p, id: nextId++, createdAt: { toMillis: () => Date.now() } }),
     updatePayment: async ({ paymentId, status }: { paymentId: bigint; status: string }) =>
       void db.payment.update({ ...db.payment.rows.get(paymentId)!, status }),
+    addDeal: async (d: Row & { shoppingItemId: bigint }) => {
+      db.deal.insert({ ...d, id: nextId++, owner, fraudScore: -1, aiTextScore: -1, fraudReasons: [] });
+      const s = db.shoppingItem.rows.get(d.shoppingItemId)!;
+      if (s.status === "open" || s.status === "searching") db.shoppingItem.update({ ...s, status: "found" });
+    },
   },
 } as unknown as Conn;
 buyAgent.start(conn);
@@ -217,6 +222,19 @@ test("the planted demo scam on Desk chair is written, labeled sample data, score
   assert.deepEqual(paymentsFor(row.id), []);
   assert.equal([...db.approval.rows.values()].filter(a => a.refId === row.id).length, 0);
   assert.ok(eventsFor(row.id).some(e => e.kind === "error" && /^Not buying "Herman Miller Aeron, brand new.*fraud screen scored it 0\.\d\d \(asks for payment by Zelle/.test(e.message)));
+});
+
+test("an item an earlier run left 'searching' with no deals is searched again, once", async () => {
+  // The worker restarted between set_shopping_status('searching') and add_deal.
+  const itemId = nextId++;
+  const before = events.length;
+  db.shoppingItem.insert({ id: itemId, owner, name: "Desk", category: "desk", reason: "Office: needs a desk", status: "searching", chosenDealId: 0n });
+  await sleep(80);
+  const deals = [...db.deal.rows.values()].filter(d => d.shoppingItemId === itemId);
+  assert.ok(deals.length > 0, "deals were written");
+  assert.equal(db.shoppingItem.rows.get(itemId)!.status, "found");
+  const searches = events.slice(before).filter(e => e.refId === itemId && /^Looking for deals/.test(e.message));
+  assert.equal(searches.length, 1, "our own 'searching' write doesn't start a second search");
 });
 
 test("pickDealsToWrite keeps the card deal and the planted deal when both are outside the top n", () => {

@@ -1254,6 +1254,8 @@ export const addComps = spacetimedb.reducer(
   (ctx, { itemId, comps }) => {
     requireWorker(ctx);
     getItem(ctx, itemId);
+    // Replaces the item's comps, so a re-price (new name or query) doesn't mix in the old query's comps.
+    for (const old of [...ctx.db.comp.itemId.filter(itemId)]) ctx.db.comp.id.delete(old.id);
     for (const c of comps) ctx.db.comp.insert({ id: 0n, itemId, ...c, fetchedAt: ctx.timestamp });
   }
 );

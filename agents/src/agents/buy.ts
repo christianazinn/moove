@@ -281,10 +281,10 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
 
   // Never ask the user to approve something the card caps would refuse anyway.
   const visa = visaCheckout(conn);
-  const blocked = visa.spendBlocker(AGENT, d.priceCents);
+  const blocked = visa.spendBlocker(AGENT, s.owner, d.priceCents);
   if (blocked) {
     settled.add(key);
-    logEvent(conn, { ...ref, kind: 'error', message: `Not buying "${d.title}": ${blocked}`, data: { refused: true, remainingCents: visa.remaining(AGENT) } });
+    logEvent(conn, { ...ref, kind: 'error', message: `Not buying "${d.title}": ${blocked}`, data: { refused: true, remainingCents: visa.remaining(AGENT, s.owner) } });
     return;
   }
 
@@ -388,7 +388,8 @@ async function releaseStaleHolds(conn: Conn, s: ShoppingItem, d: Deal): Promise<
 }
 
 function step(conn: Conn, s: ShoppingItem): void {
-  if (s.status === 'open' && !searching.has(s.id) && dealsFor(conn, s.id).length === 0) {
+  // 'searching' with no deals and no search in this process: an earlier run stopped mid-search.
+  if ((s.status === 'open' || s.status === 'searching') && !searching.has(s.id) && dealsFor(conn, s.id).length === 0) {
     void search(conn, s);
   } else if (s.status === 'found' && s.chosenDealId !== 0n) {
     void checkout(conn, s);

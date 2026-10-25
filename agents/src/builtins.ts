@@ -5,6 +5,8 @@ const FIXTURE = /\b(toilets?|bathtubs?|bath tubs?|sinks?|washbasins?|fireplaces?
 const ACCESSORY = /\b(caddy|caddies|mats?|organizers?|strainers?|stoppers?|paper|brush(es)?|plungers?|cleaners?|towels?|racks?|shelf|shelves|curtains?|heads?|heaters?|portable|oil|covers?|seats? covers?|tools?|screens?|gates?)\b/i;
 
 export function isBuiltInFixture(it: { name: string; category: string }): boolean {
-  const text = `${it.name} ${it.category}`;
-  return FIXTURE.test(text) && !ACCESSORY.test(text);
+  // Accessory words only count in the head noun phrase: "bathtub with shower curtain" is a tub,
+  // "shower curtain with rod" is a curtain.
+  const head = it.name.split(/\b(?:with|and|plus)\b|[,;(]/i)[0];
+  return FIXTURE.test(`${it.name} ${it.category}`) && !ACCESSORY.test(`${head} ${it.category}`);
 }

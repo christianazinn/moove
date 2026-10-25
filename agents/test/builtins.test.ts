@@ -12,6 +12,11 @@ test("fixtures that stay with the building", () => {
     ["sink", "sink"],
     ["Fireplace", "fireplace"],
     ["Stairs", "stairs"],
+    // accessory words after "with" describe the fixture, they don't make it an accessory
+    ["white built-in alcove bathtub with shower curtain", "appliance"],
+    ["bathtub with shower head", "appliance"],
+    ["stainless kitchen sink with dish rack", "appliance"],
+    ["pedestal sink, towel bar", "appliance"],
   ]) assert.equal(isBuiltInFixture({ name, category }), true, name);
 });
 
@@ -23,6 +28,8 @@ test("things that only mention a fixture are items", () => {
     ["oil-filled radiator heater", "appliance"],
     ["chrome wall-mounted bathroom towel rack shelf", "storage"],
     ["cream fabric shower curtain with rod", "decor"],
+    ["toilet brush and holder", "decor"],
+    ["shower curtain with bathtub print", "decor"],
     ["black mesh office chair", "chair"],
     ["queen bed", "bed"],
   ]) assert.equal(isBuiltInFixture({ name, category }), false, name);

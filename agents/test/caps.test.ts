@@ -78,8 +78,8 @@ test("createVisaCheckout with a negative or non-numeric cap uses the default cap
   const { value: visa, warnings } = await quietly(() =>
     createVisaCheckout(visaSink, { VISA_SPEND_CAP_USD: "-50", VISA_MAX_PER_PURCHASE_USD: "750usd", VISA_SIM_DELAY_MS: "0" }),
   );
-  assert.equal(visa.remaining("buy"), 150_000n);
-  assert.equal(visa.spendBlocker("buy", 75_000n), undefined);
-  assert.match(visa.spendBlocker("buy", 75_001n)!, /per-purchase max/);
+  assert.equal(visa.remaining("buy", "user-1"), 150_000n);
+  assert.equal(visa.spendBlocker("buy", "user-1", 75_000n), undefined);
+  assert.match(visa.spendBlocker("buy", "user-1", 75_001n)!, /per-purchase max/);
   assert.equal(warnings.filter((w) => /WARNING/.test(w)).length, 2);
 });

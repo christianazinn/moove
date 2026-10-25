@@ -26,7 +26,8 @@ while true; do
   child=$!
   url=""
   for _ in $(seq 1 60); do
-    url=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$log" | tail -1)
+    # api.trycloudflare.com shows up in cloudflared's "failed to request quick Tunnel" error; never use it.
+    url=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$log" | grep -vx 'https://api\.trycloudflare\.com' | tail -1)
     [ -n "$url" ] && break
     sleep 1
   done
