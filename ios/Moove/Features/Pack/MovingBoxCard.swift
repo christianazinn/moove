@@ -13,7 +13,7 @@ enum BoxPalette {
     static let kraftSeam = dynamic(0xB38D5B, 0x45362A)
     /// Printed ink on cardboard (arrows, handle slot).
     static let kraftInk = dynamic(0x4A3119, 0xF1E3CC)
-    static let stampRed = dynamic(0x7E2F1B, 0xF5B39C)
+    static let stampRed = dynamic(0x7A3A2C, 0xE5B3A5)
     static let stampGreen = dynamic(0x3D4B30, 0xC9D7B4)
 
     // Plastic tote: grey-blue, ink-colored stamps.
@@ -86,8 +86,8 @@ enum BoxStamp: String, CaseIterable {
 
 // MARK: Card
 
-/// One box in the grid: the drawn cardboard box, then a one-line mono meta under it. Tapping opens
-/// its contents.
+/// One box in Move's grid: just the drawn box (its number and room on the label, a fragile icon).
+/// Tapping opens its contents; VoiceOver reads the detail.
 struct MovingBoxCard: View {
     var box: MovingBox
     /// How many content lines are checked off.
@@ -98,27 +98,9 @@ struct MovingBoxCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                BoxArt(box: box, sealed: sealed)
-                HStack(alignment: .center, spacing: 6) {
-                    Circle().fill(box.tapeColor).frame(width: 9, height: 9).accessibilityHidden(true)
-                    Text(meta)
-                        .monoText(11.5, maxScale: 1.6)
-                        .foregroundStyle(sealed ? Theme.accentStrong : Theme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(box.tapeColor.opacity(0.16), in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
-            .overlay(alignment: .top) {
-                // A band of the room's color across the top of the card.
-                UnevenRoundedRectangle(topLeadingRadius: Theme.Radius.card, topTrailingRadius: Theme.Radius.card, style: .continuous)
-                    .fill(box.tapeColor)
-                    .frame(height: 5)
-                    .accessibilityHidden(true)
-            }
-            .contentShape(Rectangle())
+            BoxArt(box: box, sealed: sealed, minimal: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
         }
         .buttonStyle(BoxPressStyle())
         .accessibilityElement(children: .ignore)
@@ -126,9 +108,6 @@ struct MovingBoxCard: View {
         .accessibilityHint("Opens the box's contents")
         .accessibilityAddTraits(.isButton)
     }
-
-    /// One short line, no figures (the box's label already carries its number): sealed, or its size.
-    private var meta: String { sealed ? "Sealed" : box.size.label }
 
     private var accessibilityText: String {
         var parts = ["Box \(box.id)", box.title, box.roomName, box.size.label, "\(Int(box.weightKg.rounded())) kilograms"]
@@ -162,6 +141,9 @@ struct BoxArt: View {
     var sealed: Bool
     /// The bigger version in the box detail; shows every stamp.
     var large = false
+    /// Move's grid: the label holds only the number and room, a fragile icon instead of stamps,
+    /// no size glyph.
+    var minimal = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -183,7 +165,8 @@ struct BoxArt: View {
             ZStack(alignment: .topLeading) {
                 shape.fill(face)
                 // A wash of the room's color, so boxes for different rooms differ at a glance.
-                if !isTote { shape.fill(box.tapeColor.opacity(0.28)) }
+                // (Not on Move's minimal cards: neutral kraft there, the room is a small mark.)
+                if !isTote && !minimal { shape.fill(box.tapeColor.opacity(0.28)) }
                 // Flaps (or the tote's lid) and their seams.
                 Rectangle().fill(flap).frame(width: w, height: flapH)
                 Path { p in
@@ -200,9 +183,9 @@ struct BoxArt: View {
                         .frame(width: w * 0.3, height: max(5, h * 0.035))
                         .offset(x: w * 0.35, y: flapH * 0.4)
                 }
-                // Room tape down the left of the face.
+                // Room tape down the left of the face (plain kraft tape on the minimal card).
                 Rectangle()
-                    .fill(box.tapeColor)
+                    .fill(minimal ? BoxPalette.sealTape : box.tapeColor)
                     .overlay(alignment: .leading) { Rectangle().fill(.white.opacity(0.22)).frame(width: tapeW * 0.3) }
                     .frame(width: tapeW, height: h)
                     .offset(x: tapeX)
@@ -218,14 +201,26 @@ struct BoxArt: View {
                     .position(x: w * 0.56, y: flapH)
             }
             .overlay(alignment: .topTrailing) {
-                sizeGlyph(size: large ? 30 : 22)
-                    .padding(.top, flapH * 0.5 - (large ? 15 : 11))
-                    .padding(.trailing, large ? 10 : 6)
+                if !minimal {
+                    sizeGlyph(size: large ? 30 : 22)
+                        .padding(.top, flapH * 0.5 - (large ? 15 : 11))
+                        .padding(.trailing, large ? 10 : 6)
+                }
             }
             .overlay(alignment: .bottomLeading) {
-                stampStack(size: large ? 12 : 9.5)
-                    .padding(.leading, tapeX + tapeW + (large ? 12 : 7))
-                    .padding(.bottom, h * 0.08)
+                Group {
+                    if minimal {
+                        if box.fragile {
+                            Image(systemName: "wineglass")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(BoxPalette.stampRed)
+                        }
+                    } else {
+                        stampStack(size: large ? 12 : 9.5)
+                    }
+                }
+                .padding(.leading, tapeX + tapeW + (large ? 12 : 7))
+                .padding(.bottom, h * 0.08)
             }
             .clipShape(shape)
             .overlay(shape.strokeBorder(edge, lineWidth: 1))
@@ -252,20 +247,27 @@ struct BoxArt: View {
                     .tracking(-0.5)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
-                Image(systemName: box.symbol)
-                    .font(.system(size: large ? 15 : 11, weight: .semibold))
-                    .foregroundStyle(BoxPalette.paperMuted)
+                if !minimal {
+                    Image(systemName: box.symbol)
+                        .font(.system(size: large ? 15 : 11, weight: .semibold))
+                        .foregroundStyle(BoxPalette.paperMuted)
+                }
             }
-            Text(box.title)
-                .font(.mono(large ? 13 : 10.5, weight: .medium))
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(box.roomName.uppercased())
-                .font(.mono(large ? 10.5 : 8.5, weight: .bold))
-                .tracking(0.8)
-                .foregroundStyle(BoxPalette.paperMuted)
-                .lineLimit(1)
-                .padding(.top, 1)
+            if !minimal {
+                Text(box.title)
+                    .font(.mono(large ? 13 : 10.5, weight: .medium))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 4) {
+                if minimal { Circle().fill(box.tapeColor).frame(width: 7, height: 7) }
+                Text(box.roomName.uppercased())
+                    .font(.mono(large ? 10.5 : 8.5, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundStyle(BoxPalette.paperMuted)
+                    .lineLimit(1)
+            }
+            .padding(.top, 1)
         }
         .foregroundStyle(BoxPalette.paperInk)
         .padding(.horizontal, large ? 10 : 7)
@@ -273,7 +275,7 @@ struct BoxArt: View {
         .padding(.bottom, large ? 8 : 6)
         .frame(width: width, alignment: .leading)
         .background(BoxPalette.paper)
-        .overlay(alignment: .top) { Rectangle().fill(box.tapeColor).frame(height: large ? 8 : 6) }
+        .overlay(alignment: .top) { if !minimal { Rectangle().fill(box.tapeColor).frame(height: large ? 8 : 6) } }
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.tag, style: .continuous))
         .mooveShadow(.contact)
     }

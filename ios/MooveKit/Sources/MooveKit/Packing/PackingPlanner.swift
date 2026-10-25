@@ -160,7 +160,8 @@ public enum PackingPlanner {
             return DeliveredItem(
                 id: piece.item.id, name: piece.item.name, title: title.isEmpty ? piece.item.name : title,
                 seller: piece.deal.map(seller) ?? "", room: room, reason: Reasons.bought,
-                roomReason: rooms.reason(room, mapped: rooms.isMapped(layout.id)), voxelSpec: VoxelItemSpec(layout)
+                roomReason: rooms.reason(room, mapped: rooms.isMapped(layout.id)), voxelSpec: VoxelItemSpec(layout),
+                priceCents: piece.deal?.priceCents
             )
         }
     }

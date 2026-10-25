@@ -66,7 +66,7 @@ struct RoomShotsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ListHeader(title: "Room shots")
+            MoveHeading(title: "Room shots")
                 .padding(.horizontal, Theme.gutter)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {

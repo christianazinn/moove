@@ -19,7 +19,6 @@ struct MoveView: View {
     /// Shown when the save to `newHome` failed (e.g. live backend not ready), so the demo still works.
     @State private var unsaved: NewHomeChoice.Current?
     @State private var showPicker = false
-    @State private var showImport = false
     @State private var showRooms = false
     /// The layout on the stage, for Pieces.
     @State private var layout: LayoutOption?
@@ -65,7 +64,6 @@ struct MoveView: View {
             plan = next
             truckLoad = TruckLoader.load(plan: next, items: new.items)
         }
-        .sheet(isPresented: $showImport) { importSheet }
         .sheet(isPresented: $showRooms) { MovingRoomsSheet { showRooms = false } }
         .sheet(isPresented: $showPicker) { pickerSheet }
         .sheet(item: $openBox) { box in
@@ -84,14 +82,13 @@ struct MoveView: View {
     @ViewBuilder
     private func homeContent(furniture: Furniture, input: PackInputs) -> some View {
         if let current {
-            NewHomeHeader(current: current, saved: unsaved == nil && store.newHome != nil,
-                          onChange: { showPicker = true }, onImport: { showImport = true })
+            NewHomeHeader(current: current, onChange: { showPicker = true })
                 .padding(.horizontal, Theme.gutter)
-                .padding(.top, 16)
-                .padding(.bottom, 28)
-            movingFrom(input).padding(.bottom, 16)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+            movingFrom(input).padding(.bottom, 20)
             NewHomeStage(name: current.name, plan: current.plan, home: unsaved == nil ? store.newHome : nil,
-                         furniture: furniture, layout: $layout)
+                         furniture: furniture, layout: $layout, demoTag: furniture.isDemo)
         } else {
             NewHomePickerContent(onPick: choose)
                 .padding(.horizontal, Theme.gutter)
@@ -100,14 +97,12 @@ struct MoveView: View {
         }
     }
 
-    /// One shared "Moving from" row (it drives the layout, the boxes and the truck), or the demo
-    /// notice when nothing is kept yet.
+    /// One compact "Moving from" chip (it drives the layout, the boxes and the truck). Nothing for
+    /// the demo items: the small Demo tag on the 3D says so.
     @ViewBuilder
     private func movingFrom(_ input: PackInputs) -> some View {
         Group {
-            if input.demo {
-                PackDemoNotice()
-            } else if !input.choices.isEmpty {
+            if !input.demo && !input.choices.isEmpty {
                 MovingFromRow(movingFrom: MovingFrom(choices: input.choices, itemCount: input.items.count), idPrefix: "pack") {
                     showRooms = true
                 }
@@ -120,24 +115,23 @@ struct MoveView: View {
 
     private func gettingThere(_ input: PackInputs) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            ListHeader(title: "Getting there") {
-                if input.demo { MonoTag(text: "Demo items", tone: Theme.ochreInk) }
-            }
+            MoveHeading(title: "Getting there")
             if let plan {
-                TruckCard(plan: plan, load: truckLoad, items: input.items)
-                    .padding(.top, Theme.Space.l)
+                // The 3D house carries the Demo tag when there is one; else the truck does.
+                TruckCard(plan: plan, load: truckLoad, items: input.items, demoTag: input.demo && current == nil)
+                    .padding(.top, 4)
                 BoxesSection(boxes: plan.boxes) { openBox = $0 }
-                    .padding(.top, Theme.Space.section)
+                    .padding(.top, 56)
                 if !plan.delivered.isEmpty {
                     DeliveredSection(pieces: plan.delivered)
-                        .padding(.top, Theme.Space.section)
+                        .padding(.top, 56)
                 }
             } else {
                 LoadingLine(text: "Planning…").frame(maxWidth: .infinity).padding(.vertical, Theme.Space.section)
             }
         }
         .padding(.horizontal, Theme.gutter)
-        .padding(.top, 48)
+        .padding(.top, 72)
     }
 
     // MARK: 3. Folded
@@ -162,11 +156,11 @@ struct MoveView: View {
             if let current { pieces(current, furniture: furniture) }
         }
         .padding(.horizontal, Theme.gutter)
-        .padding(.top, 48)
+        .padding(.top, 72)
     }
 
     private func pieces(_ current: NewHomeChoice.Current, furniture: Furniture) -> some View {
-        FoldSection(title: "Pieces", tag: furniture.isDemo ? "Demo items" : nil, isOpen: binding(.pieces), id: "newHome.pieces") {
+        FoldSection(title: "Pieces", isOpen: binding(.pieces), id: "newHome.pieces") {
             PiecesList(plan: current.plan, furniture: furniture, layout: layout)
         }
     }
@@ -176,20 +170,6 @@ struct MoveView: View {
     }
 
     // MARK: Sheets and actions
-
-    private var importSheet: some View {
-        NavigationStack {
-            ListingImportView { name, source, plan in
-                showImport = false
-                choose(name, source, plan)
-            }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { showImport = false }.monoText(13, maxScale: 1.4)
-                }
-            }
-        }
-    }
 
     private var pickerSheet: some View {
         NavigationStack {
@@ -231,7 +211,6 @@ struct MoveView: View {
 /// A section folded behind its header (title, chevron; no counts), closed until tapped.
 struct FoldSection<Content: View>: View {
     var title: String
-    var tag: String? = nil
     @Binding var isOpen: Bool
     /// Names the header button (`<id>.fold`).
     var id: String
@@ -258,8 +237,7 @@ struct FoldSection<Content: View>: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(title).listHeading()
-            if let tag { MonoTag(text: tag) }
+            Text(title).sansText(16).foregroundStyle(Theme.text)
             Spacer(minLength: 8)
             Image(systemName: "chevron.down")
                 .font(.system(size: 13, weight: .semibold))
@@ -271,7 +249,21 @@ struct FoldSection<Content: View>: View {
         .frame(minHeight: 44)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .ruled()
+        // A hairline, lighter than a section rule.
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.line.opacity(0.5)).frame(height: 0.5) }
+    }
+}
+
+/// A section heading on Move: the title alone, no rule, no count.
+struct MoveHeading: View {
+    var title: String
+
+    var body: some View {
+        Text(title)
+            .listHeading()
+            .accessibilityAddTraits(.isHeader)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 12)
     }
 }
 
