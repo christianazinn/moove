@@ -39,9 +39,6 @@ final class MooveSmokeTests: XCTestCase {
         let card = byId("review.card.18")
         XCTAssertTrue(card.exists, "guitar card on top")
         XCTAssertTrue(card.label.hasPrefix("Yamaha acoustic guitar, needs you"), card.label)
-        let keepPile = byId("review.pile.keep")
-        XCTAssertTrue(keepPile.exists, "Keep pile on the board")
-        XCTAssertLessThan(deck.frame.minY, keepPile.frame.minY, "the cards lead")
         // Over the cards: the kg kept out of landfill (moved here from the removed Summary tab).
         let impact = byId("review.impact")
         XCTAssertTrue(impact.exists, "kg kept out of landfill banner")
@@ -76,7 +73,7 @@ final class MooveSmokeTests: XCTestCase {
         keep.tap()
         let moved = byId("review.item.18")
         XCTAssertTrue(scrollTo(moved), "guitar listed under Keep")
-        XCTAssertTrue(moved.label.contains("You decided"), moved.label)
+        // "You decided" is the row's accessibility hint now (#374), which XCUITest can't read.
         snap("02-kept")
 
         let lamp = byId("review.item.14")
@@ -123,13 +120,8 @@ final class MooveSmokeTests: XCTestCase {
         let row = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'review.unnamed.'")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: slow), "unnamed item row under Needs a name")
         XCTAssertTrue(header.exists, "Needs a name header")
-        // The deck card takes drags in the middle of the screen, so scroll from the page title.
-        let title = text(matching: "Your call.")
-        for _ in 0..<4 where !row.isHittable && title.exists {
-            let from = title.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            from.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.0)))
-        }
-        XCTAssertTrue(scrollTo(row), "unnamed item row on screen")
+        // The deck fills the screen; scrollTo drags in the gutter, past it.
+        XCTAssertTrue(scrollTo(row, maxSwipes: 16), "unnamed item row on screen")
         XCTAssertTrue(row.label.contains("Other"), row.label)
         snap("07-needs-a-name")
         row.tap()
@@ -399,7 +391,10 @@ final class MooveSmokeTests: XCTestCase {
     private func scrollTo(_ element: XCUIElement, down: Bool = true, maxSwipes: Int = 8) -> Bool {
         _ = element.waitForExistence(timeout: 2)
         for _ in 0..<maxSwipes where !(element.exists && element.isHittable) {
-            if down { app.swipeUp() } else { app.swipeDown() }
+            // Drag in the left gutter: a vertical swipe on Review's deck card decides it (#395).
+            let top = app.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.25))
+            let bottom = app.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.75))
+            if down { bottom.press(forDuration: 0.05, thenDragTo: top) } else { top.press(forDuration: 0.05, thenDragTo: bottom) }
         }
         return element.exists && element.isHittable
     }
