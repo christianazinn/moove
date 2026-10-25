@@ -14,6 +14,8 @@ enum VoxelEntity {
 
     private static var furnitureCache: [VoxelItemSpec: Resources] = [:]
     private static var materialCache: [VoxelColor: PhysicallyBasedMaterial] = [:]
+    /// Furniture models `prepare` is building right now, so a second caller waits for them.
+    private static var preparing: [VoxelItemSpec: Task<Void, Never>] = [:]
 
     /// A model for `mesh`, or nil if it's empty or RealityKit rejects it.
     static func entity(_ mesh: VoxelMesh, name: String) -> ModelEntity? {
@@ -27,7 +29,7 @@ enum VoxelEntity {
     /// `wallMounted`: the flat wall-hung variant (no easel leg / TV feet). Falls back to a plain
     /// box if the model can't be built.
     static func furniture(_ item: LayoutItem, wallMounted: Bool = false) -> ModelEntity {
-        let spec = wallMounted ? VoxelModels.wallVariant(VoxelItemSpec(item)) : VoxelItemSpec(item)
+        let spec = Self.spec(item, wallMounted: wallMounted)
         let r: Resources? = furnitureCache[spec] ?? {
             let made = resources(VoxelMesher.mesh(VoxelModels.build(spec), centered: true), name: spec.name)
             if let made { furnitureCache[spec] = made }
@@ -46,6 +48,46 @@ enum VoxelEntity {
         holder.addChild(body)
         holder.name = item.name
         return holder
+    }
+
+    /// The spec `furniture` builds (and caches) for `item`.
+    nonisolated static func spec(_ item: LayoutItem, wallMounted: Bool) -> VoxelItemSpec {
+        wallMounted ? VoxelModels.wallVariant(VoxelItemSpec(item)) : VoxelItemSpec(item)
+    }
+
+    /// Builds and caches the furniture models `FurnitureLayer` will show for these placements
+    /// (mattresses drawn with their bed skipped), so showing them later costs no meshing.
+    static func prepare(_ items: [LayoutItem], placements: [Placement]) async {
+        let byId = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let onBeds = MattressPairing.drawnWithBed(placements, items: items)
+        await prepare(placements.compactMap { p in
+            onBeds.contains(p.itemId) ? nil : byId[p.itemId].map { Self.spec($0, wallMounted: p.isWallMounted) }
+        })
+    }
+
+    /// Voxelizes and meshes `specs` off the main actor, then makes their MeshResources on it
+    /// one per frame (RealityKit wants them on the main actor), so frames keep drawing meanwhile.
+    static func prepare(_ specs: [VoxelItemSpec]) async {
+        let unique = Array(Set(specs))
+        let waiting = unique.compactMap { preparing[$0] }
+        let todo = unique.filter { furnitureCache[$0] == nil && preparing[$0] == nil }
+        if !todo.isEmpty {
+            let task = Task { @MainActor in
+                let meshes = await Task.detached(priority: .userInitiated) {
+                    todo.map { (spec: $0, mesh: VoxelMesher.mesh(VoxelModels.build($0), centered: true)) }
+                }.value
+                for (i, made) in meshes.enumerated() {
+                    if i > 0 { try? await Task.sleep(for: .milliseconds(16)) }
+                    if Self.furnitureCache[made.spec] == nil, let r = Self.resources(made.mesh, name: made.spec.name) {
+                        Self.furnitureCache[made.spec] = r
+                    }
+                }
+                for spec in todo { Self.preparing[spec] = nil }
+            }
+            for spec in todo { preparing[spec] = task }
+            await task.value
+        }
+        for task in waiting { await task.value }
     }
 
     private static func resources(_ mesh: VoxelMesh, name: String) -> Resources? {
