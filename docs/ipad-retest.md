@@ -96,7 +96,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Report if wrong:** the line that's wrong or missing, plus a screenshot.
 
 ### 13. Sell & Buy at the largest text size
-- **Taps:** iPad Settings → Accessibility → Display & Text Size → **Larger Text** → turn it on and drag to the maximum. In Moove, open Sell & Buy → **Listings**, **Shopping**, **Approvals**, **Spending**.
+- **Taps:** iPad Settings → Accessibility → Display & Text Size → **Larger Text** → turn it on and drag to the maximum. In Moove, open Sell & Buy → **Listings**, **Shopping**, **Agents** (scroll all the way down to the receipts).
 - **Expected:** no clipped prices or buttons. Stat strips stack, and SIMULATED pills stay readable. Turn Larger Text back off afterwards.
 - **Report if wrong:** the screen and element, plus a screenshot.
 

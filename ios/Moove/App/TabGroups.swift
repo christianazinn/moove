@@ -4,9 +4,10 @@ import MooveKit
 /// The five tabs (decision on #129). Each tab groups existing screens behind a
 /// segmented picker; the screens themselves stay in their feature folders.
 ///
-/// `@AppStorage("moove.tab")` stores the *screen* key ("inventory", "approvals"...),
+/// `@AppStorage("moove.tab")` stores the *screen* key ("inventory", "agents"...),
 /// so any screen can still jump with `tab = "<screen>"` and lands on the right
-/// tab and segment.
+/// tab and segment. The old "approvals" and "spending" keys are aliases of
+/// "agents" (Sell & Buy went from four segments to three, decision 0129 addendum).
 enum TabGroup: String, CaseIterable {
     case scan, items, sellBuy, move, summary
 
@@ -15,7 +16,7 @@ enum TabGroup: String, CaseIterable {
         switch self {
         case .scan: ["scan"]
         case .items: ["inventory", "review"]
-        case .sellBuy: ["listings", "shopping", "approvals", "spending"]
+        case .sellBuy: ["listings", "shopping", "agents"]
         case .move: ["newhome", "pack"]
         case .summary: ["summary"]
         }
@@ -41,8 +42,17 @@ enum TabGroup: String, CaseIterable {
         }
     }
 
+    /// The segment a screen key shows: itself, or "agents" for the merged approvals/spending keys.
+    static func segment(for screen: String) -> String {
+        switch screen {
+        case "approvals", "spending": "agents"
+        default: screen
+        }
+    }
+
     static func containing(_ screen: String) -> TabGroup {
-        allCases.first { $0.screens.contains(screen) } ?? .scan
+        let segment = segment(for: screen)
+        return allCases.first { $0.screens.contains(segment) } ?? .scan
     }
 
     static func screenTitle(_ screen: String) -> String {
@@ -51,8 +61,7 @@ enum TabGroup: String, CaseIterable {
         case "review": "Review"
         case "listings": "Listings"
         case "shopping": "Shopping"
-        case "approvals": "Approvals"
-        case "spending": "Spending"
+        case "agents": "Agents"
         case "newhome": "New Home"
         case "pack": "Pack"
         default: screen.capitalized
@@ -71,7 +80,7 @@ struct TabGroupView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 if group.screens.count > 1 {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        PillPicker(options: group.screens, selection: $screen, label: label)
+                        PillPicker(options: group.screens, selection: segment, label: label)
                             .padding(.horizontal, 16)
                     }
                     .padding(.vertical, 8)
@@ -81,14 +90,19 @@ struct TabGroupView: View {
             }
     }
 
+    /// The selected pill; "approvals"/"spending" select Agents (it scrolls to the section itself).
+    private var segment: Binding<String> {
+        Binding(get: { TabGroup.segment(for: screen) }, set: { screen = $0 })
+    }
+
     @ViewBuilder private var content: some View {
-        switch group.screens.contains(screen) ? screen : group.screens[0] {
+        let segment = TabGroup.segment(for: screen)
+        switch group.screens.contains(segment) ? segment : group.screens[0] {
         case "inventory": InventoryView()
         case "review": ReviewView()
         case "listings": ListingsView()
         case "shopping": ShoppingView()
-        case "approvals": ApprovalsView()
-        case "spending": SpendingView()
+        case "agents": AgentsView()
         case "newhome": NewHomeView()
         case "pack": PackView()
         case "summary": SummaryView()
@@ -99,6 +113,6 @@ struct TabGroupView: View {
     private func label(_ screen: String) -> String {
         let title = TabGroup.screenTitle(screen)
         let pending = store.pendingApprovals.count
-        return screen == "approvals" && pending > 0 ? "\(title) · \(pending)" : title
+        return screen == "agents" && pending > 0 ? "\(title) · \(pending)" : title
     }
 }

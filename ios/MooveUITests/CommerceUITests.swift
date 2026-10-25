@@ -16,25 +16,26 @@ final class CommerceUITests: XCTestCase {
     func testSellAndBuyFlowOnOfflineDemo() {
         launchOfflineDemo()
 
-        // Sell & Buy tab and its four segments, in order.
+        // Sell & Buy tab and its three segments, in order. Agents = approvals + spending receipts.
         let sellBuy = app.tabBars.buttons["Sell & Buy"]
         XCTAssertTrue(sellBuy.waitForExistence(timeout: 10), "no Sell & Buy tab")
         select(tab: sellBuy)
         let listingsTab = segment("Listings")
         let shoppingTab = segment("Shopping")
-        let approvalsTab = segment("Approvals")
-        let spendingTab = segment("Spending")
-        for s in [listingsTab, shoppingTab, approvalsTab, spendingTab] {
+        let agentsTab = segment("Agents")
+        for s in [listingsTab, shoppingTab, agentsTab] {
             XCTAssertTrue(s.waitForExistence(timeout: 10), "missing segment \(s)")
         }
-        let xs = [listingsTab, shoppingTab, approvalsTab, spendingTab].map { $0.frame.minX }
+        XCTAssertFalse(segment("Approvals").exists, "Approvals is part of Agents now")
+        XCTAssertFalse(segment("Spending").exists, "Spending is part of Agents now")
+        let xs = [listingsTab, shoppingTab, agentsTab].map { $0.frame.minX }
         XCTAssertEqual(xs, xs.sorted(), "segments out of order: \(xs)")
-        XCTAssertTrue(approvalsTab.label.contains("2"), "Approvals segment should show 2 pending: \(approvalsTab.label)")
+        XCTAssertTrue(agentsTab.label.contains("2"), "Agents segment should show 2 pending: \(agentsTab.label)")
         shot("0-sell-and-buy")
 
-        // Spending: SIMULATED rows and the Basescan link for the one real payment.
-        spendingTab.tap()
-        XCTAssertTrue(app.navigationBars["Spending"].waitForExistence(timeout: 10))
+        // Agents, receipts: SIMULATED rows and the Basescan link for the one real payment.
+        agentsTab.tap()
+        XCTAssertTrue(app.navigationBars["Agents"].waitForExistence(timeout: 10))
         let simulated = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH 'payment.' AND label CONTAINS ', simulated,'")).firstMatch
         XCTAssertTrue(scrollTo(simulated), "no SIMULATED payment row")
@@ -53,9 +54,9 @@ final class CommerceUITests: XCTestCase {
         shot("2-listings")
         assertNoLiveOnEbay()
 
-        // Approvals: 2 pending; approving the Aeron listing moves it to History.
-        approvalsTab.tap()
-        XCTAssertTrue(app.navigationBars["Approvals"].waitForExistence(timeout: 10))
+        // Agents, approvals: 2 pending; approving the Aeron listing moves it to Decided.
+        agentsTab.tap()
+        XCTAssertTrue(app.navigationBars["Agents"].waitForExistence(timeout: 10))
         XCTAssertTrue(byId("approval.pending.300").waitForExistence(timeout: 10), "no pending Aeron approval")
         XCTAssertTrue(scrollTo(byId("approval.pending.85")), "no pending sofa approval")
         XCTAssertEqual(app.descendants(matching: .any)
@@ -66,7 +67,7 @@ final class CommerceUITests: XCTestCase {
         XCTAssertTrue(scrollTo(approve), "no Approve button on the Aeron approval")
         approve.tap()
         let decided = byId("approval.decided.300")
-        XCTAssertTrue(scrollTo(decided), "approved Aeron listing never showed up in History")
+        XCTAssertTrue(scrollTo(decided), "approved Aeron listing never showed up in Decided")
         XCTAssertTrue(decided.label.contains("approved"), decided.label)
         XCTAssertTrue(waitGone(byId("approval.pending.300")), "Aeron approval still pending")
         shot("3-approvals-history")
@@ -112,15 +113,15 @@ final class CommerceUITests: XCTestCase {
         XCTAssertTrue(visa.label.localizedCaseInsensitiveContains("paid"), visa.label)
         shot("6-desk-chair-paid")
 
-        // Back to Spending: the new simulated Visa payment is logged.
+        // Back to Agents: the new simulated Visa payment is on a receipt.
         let back = app.navigationBars.buttons.element(boundBy: 0)
         XCTAssertTrue(back.waitForExistence(timeout: 5))
         back.tap()
-        XCTAssertTrue(spendingTab.waitForExistence(timeout: 10))
-        spendingTab.tap()
+        XCTAssertTrue(agentsTab.waitForExistence(timeout: 10))
+        agentsTab.tap()
         let newRow = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH 'payment.' AND label CONTAINS 'Mesh task chair'")).firstMatch
-        XCTAssertTrue(scrollTo(newRow), "the Target chair payment isn't in Spending")
+        XCTAssertTrue(scrollTo(newRow), "the Target chair payment isn't on the Agents receipts")
         XCTAssertTrue(newRow.label.contains(", simulated,"), newRow.label)
         shot("7-spending-new-payment")
     }
@@ -159,9 +160,9 @@ final class CommerceUITests: XCTestCase {
         let sellBuy = app.tabBars.buttons["Sell & Buy"]
         XCTAssertTrue(sellBuy.waitForExistence(timeout: 10), "no Sell & Buy tab")
         select(tab: sellBuy)
-        let tabs = ["Listings", "Shopping", "Approvals", "Spending"].map(segment)
+        let tabs = ["Listings", "Shopping", "Agents"].map(segment)
         for s in tabs { XCTAssertTrue(s.waitForExistence(timeout: 10), "missing segment \(s)") }
-        let (listingsTab, shoppingTab, approvalsTab, spendingTab) = (tabs[0], tabs[1], tabs[2], tabs[3])
+        let (listingsTab, shoppingTab, agentsTab) = (tabs[0], tabs[1], tabs[2])
         shot("\(prefix)-0-sell-and-buy")
 
         tapSegment(listingsTab)
@@ -186,15 +187,15 @@ final class CommerceUITests: XCTestCase {
         XCTAssertTrue(back.waitForExistence(timeout: 5))
         back.tap()
 
-        XCTAssertTrue(approvalsTab.waitForExistence(timeout: 10))
-        tapSegment(approvalsTab)
-        XCTAssertTrue(app.navigationBars["Approvals"].waitForExistence(timeout: 10))
+        XCTAssertTrue(agentsTab.waitForExistence(timeout: 10))
+        tapSegment(agentsTab)
+        XCTAssertTrue(app.navigationBars["Agents"].waitForExistence(timeout: 10))
         shot("\(prefix)-3-approvals")
         XCTAssertTrue(scrollTo(byId("approval.approve.300")), "Approve not hittable")
         shot("\(prefix)-3-approvals-approve")
 
-        tapSegment(spendingTab)
-        XCTAssertTrue(app.navigationBars["Spending"].waitForExistence(timeout: 10))
+        // Further down the same screen: the spending receipts.
+        XCTAssertTrue(scrollTo(byId("spending.totals")), "spending totals not hittable")
         shot("\(prefix)-4-spending")
         let simulated = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH 'payment.' AND label CONTAINS ', simulated,'")).firstMatch
@@ -237,7 +238,7 @@ final class CommerceUITests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", title, "\(title) ·")).firstMatch
     }
 
-    /// The segment picker scrolls sideways (at large text sizes "Spending" starts off screen), so swipe
+    /// The segment picker scrolls sideways (at large text sizes "Agents" can start off screen), so swipe
     /// it until the segment is fully on screen, then tap. Frames, not `isHittable`: that fails outright
     /// for an element with no on-screen point.
     private func tapSegment(_ s: XCUIElement) {

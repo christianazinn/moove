@@ -27,7 +27,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 ```
 
 - **Use a run from after #280** (merged Sat 12:12 PM PT), so the hero has the tall back walls (#269, #280). Main runs often get cancelled when the next merge supersedes them, so the newest *green* run can be older than the newest commit. Check its date. The last green one before this doc was 40098106518 (Sat 6:25 AM PT, before the wall change).
-- The shots show the **starting state** (Approvals · 2, no purchases yet), so 4 to 6 match the captions as is.
+- The shots show the **starting state** (Agents · 2, no purchases yet), so 4 to 6 match the captions as is.
 - Under XCUITest, the RealityKit dollhouses that don't auto-turn (the scan finished page and the new home) come out **blank**, and the Summary shot stops at "Where everything went". So images 2, 7 and 8 are captured by hand, below. The Scan hero (1) renders fine.
 
 ## Capturing by hand (images 2, 7, 8)
@@ -65,16 +65,16 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 - **Caption:** "Moove suggests keep, sell, donate or trash with a reason for each, and leaves possibly sentimental items like the guitar to you (fixture data)."
 - **Track:** Anthropic (knowing where the model shouldn't decide), Best Planet-First Hack (donate and resell over trash).
 
-### 4. Sell & Buy > Spending: the agent pays over x402
+### 4. Sell & Buy > Agents (receipts): the agent pays over x402
 - **Source:** CI `03-spending`.
-- **State:** Spending as paper receipts in Courier, scrolled to the Pricing agent receipt ("MOOVE · AGENT SPENDING", "PRICING AGENT", "3 lookups"): the line "Premium comps for "Herman Miller Aeron"", `x402`, "$0.01", **"PAID ON BASE SEPOLIA"**, **"TX 0xc794…136c"**, and below it lines with the filled **SIMULATED** mark and no link. CI also saves `03a-spending-top` (the page top: "Where the money went." and the totals tape **SPENT $0.01**, **SIMULATED $180.005**, **REFUSED 1**).
+- **State:** the Agents screen scrolled down to its paper receipts in Courier, scrolled to the Pricing agent receipt ("MOOVE · AGENT SPENDING", "PRICING AGENT", "3 lookups"): the line "Premium comps for "Herman Miller Aeron"", `x402`, "$0.01", **"PAID ON BASE SEPOLIA"**, **"TX 0xc794…136c"**, and below it lines with the filled **SIMULATED** mark and no link. CI also saves `03a-spending-top` (scrolled to the totals tape "TOTALS · YOUR AGENTS": **SPENT $0.01**, **SIMULATED $180.005**, **REFUSED 1**).
 - **Caption:** "The pricing agent pays for its own comps, $0.01 USDC per lookup over x402: the Base Sepolia line is a real transaction, and every SIMULATED line is simulated."
 - **Track:** Coinbase x402 (the headline image), Apify (the comps come from Apify's eBay sold and Marketplace actors), Spacetime (each payment is a `payment` row).
 - Capture this on the Offline demo, whose rows are known in advance. (The hosted worker has CDP keys since Sat ~12:40 PM, but a joined phone's Spending shows only its own payments.)
 
-### 5. Sell & Buy > Approvals: a $410 listing waits for you
+### 5. Sell & Buy > Agents (top): a $410 listing waits for you
 - **Source:** CI `05-approvals`.
-- **State:** "Your go-ahead.", **"Needs you · 2"**: the Sell request "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition", **$410**, with the Sell tag and SIMULATED pill; the Buy request for the "78" upholstered sofa, gray", $429.99 "from wayfair", with its own **SIMULATED** pill; and "Also sent to your phone via Auth0 Guardian when set up. Approving here works too." Further down, History includes the $699 KIVIK sofa with an **EXPIRED** pill ("No answer in 12 h. The agent asked again.").
+- **State:** the Agents screen's top: the Waiting 2 / Decided 4 / Payments strip, then **"Needs your OK · 2"**: the Sell request "Herman Miller Aeron Office Chair, Size B, Graphite - Great Condition", **$410**, with the Sell tag and SIMULATED pill; the Buy request for the "78" upholstered sofa, gray", $429.99 "from wayfair", with its own **SIMULATED** pill; and "Also sent to your phone via Auth0 Guardian when set up. Approving here works too." Further down, Decided (last 3, "Show all 4") includes the $699 KIVIK sofa with an **EXPIRED** pill ("No answer in 12 h. The agent asked again.").
 - **Caption:** "Claude writes the listing, and anything over your $100 limit waits for your OK, by Auth0 push or in the app (the eBay post is simulated)."
 - **Track:** Auth0 (approval over the limit; the in-app inbox is shown, the push isn't verified on a real tenant), Anthropic (the Claude-written listing).
 
@@ -85,7 +85,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 - **Track:** Visa (fraud checks, trust and responsibility), Apify (deal search; fixture deals are labeled Sample).
 
 ### 7. Move > New Home: the fly-in
-- **Source:** by hand, best as a **GIF** (3 to 6 s). On a fresh fixture first do the video's taps so bought pieces fly in too: Sell & Buy > Approvals > **Approve** the Aeron; Shopping > Desk chair > **Choose** the Target "Mesh task chair with arms, black"; back on Shopping, **Approve** the sofa ($429.99). Then Move tab > **New Home** > the **"Demo house · 2 bed, 1 bath"** card > **Use this home**, and tap **Fly in** to replay.
+- **Source:** by hand, best as a **GIF** (3 to 6 s). On a fresh fixture first do the video's taps so bought pieces fly in too: Sell & Buy > Agents > **Approve** the Aeron; Shopping > Desk chair > **Choose** the Target "Mesh task chair with arms, black"; back on Shopping, **Approve** the sofa ($429.99). Then Move tab > **New Home** > the **"Demo house · 2 bed, 1 bath"** card > **Use this home**, and tap **Fly in** to replay.
 - **State:** "New home", "Demo house · 2 bed, 1 bath", "6 rooms · 112 m²", the **DEMO HOUSE** tag, the voxel house with the back walls tall, and the kept pieces flying from the scanned room (drawn beside the house) to their new spots, plus the bought ones ("8" memory foam mattress, Full", "78" upholstered sofa, gray"). **Fly in** and **Save layout** under it.
 - **Caption:** "Everything you kept, plus what the buy agent bought, flies from its old spot into the new home's 3D layout (demo house shown)."
 - **Track:** Visa (bought items land in the new home), Best Planet-First Hack.
