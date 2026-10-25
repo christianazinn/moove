@@ -83,7 +83,7 @@ Each integration is one file in `agents/src/integrations/` behind an interface, 
 
 ### Auth0
 - **Where:** `agents/src/agents/approval.ts` + `agents/src/integrations/auth0.ts` (Auth0 for AI Agents async authorization / CIBA: `/bc-authorize`, Guardian push, poll `/oauth/token`, check `sub`, then the worker-only `record_ciba_decision`, which pins the subject to the owner), and `ios/Moove/Features/Approvals/` (in-app inbox).
-- **Built but not verified:** CIBA has only been tested against stubbed HTTP, not a real tenant. Without Auth0 config, approvals wait in the in-app inbox.
+- **Live:** CIBA is configured on the hosted worker and was tested against our real Auth0 tenant (Guardian push, Sat Oct 24). The push goes to the approval's owner and needs that owner signed in with Auth0. Otherwise (a guest, or the seeded Demo user), and without Auth0 config, approvals wait in the in-app inbox.
 - **Login (#25):** Auth0 Web Auth (Universal Login) in the app (`ios/Moove/Features/Auth/`), with the ID token used as the SpacetimeDB connection token, plus a guest mode. On the live backend, `register_user` is wired (#28) but not yet demoed on a phone.
 
 ### Visa (Reimagining Shopping)
