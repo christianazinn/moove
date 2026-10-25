@@ -76,6 +76,18 @@ import Testing
         #expect(DemoFixtures.scanImport().objects.flatMap(\.attributes).allSatisfy(ScanObject.isValidAttribute))
     }
 
+    /// #347 item 4: on a live database the module names nameless objects after their category
+    /// ("storage"), which pricing refuses to look up, so the demo scan carries its real names.
+    @Test func demoScanCarriesNamesAndSentimentalIds() {
+        let scan = DemoFixtures.scanImport()
+        let items = DemoFixtures.inventory(owner: "demo").items
+        #expect(scan.objects.map(\.name) == items.map(\.name))
+        #expect(scan.objects.allSatisfy { ($0.name ?? "").lowercased() != $0.category.lowercased() })
+        let sentimental = DemoFixtures.sentimentalScanObjectIds
+        #expect(!sentimental.isEmpty)
+        #expect(sentimental.isSubset(of: Set(scan.objects.map(\.scanObjectId))))
+    }
+
     @Test func userOverrideSurvivesAgentRerun() async throws {
         let backend = FixtureBackend.demo()
         _ = try await backend.connect(token: nil)

@@ -48,15 +48,11 @@ struct ItemThumbnail: View {
     var size: CGFloat = 48
 
     var body: some View {
-        Group {
-            if let url = item.photoUrls.first.flatMap(URL.init(string:)) {
-                AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    placeholder
-                }
-            } else {
-                placeholder
+        // ItemPhoto moves photos from an earlier tunnel host onto the current upload URL.
+        ZStack {
+            placeholder
+            if !item.photoUrls.isEmpty {
+                ItemPhoto(urls: item.photoUrls) { $0.resizable().scaledToFill() }
             }
         }
         .frame(width: size, height: size)
