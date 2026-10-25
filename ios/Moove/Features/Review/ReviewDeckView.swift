@@ -20,7 +20,10 @@ struct ReviewDeckView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var drag: CGSize = .zero
+    /// Showing the details side; `turn` is the card's rotation while it flips (0 at rest).
     @State private var flipped = false
+    @State private var turn: Double = 0
+    @State private var turning = false
     /// Set while the top card flies off, so a second swipe can't hit it.
     @State private var leaving: Disposition?
 
@@ -50,7 +53,10 @@ struct ReviewDeckView: View {
                 .padding(.bottom, 22 + 12 * CGFloat(min(cards.count - 1, 2)))
                 .frame(maxWidth: 440)
                 .frame(maxWidth: .infinity)
-                .onChange(of: top.id) { flipped = false }
+                .onChange(of: top.id) {
+                    flipped = false
+                    turn = 0
+                }
                 actions(top)
             }
         }
@@ -92,7 +98,7 @@ struct ReviewDeckView: View {
         let progress = ReviewSwipe.progress(dx: drag.width, dy: drag.height, threshold: Self.threshold)
         let armed = progress >= 1 ? pointing : nil
         let range = Review.valueRange(item, comps: comps)
-        return ReviewFlipCard(flipped: flipped, reduceMotion: reduceMotion,
+        return ReviewFlipCard(flipped: flipped, turn: turn,
                               front: ReviewCardFront(item: item, range: range),
                               back: ReviewCardBack(item: item, range: range))
             .frame(height: cardHeight)
@@ -162,7 +168,23 @@ struct ReviewDeckView: View {
 
     private func flip() {
         guard leaving == nil else { return }
-        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.5, dampingFraction: 0.8)) { flipped.toggle() }
+        if reduceMotion {
+            withAnimation(.easeInOut(duration: 0.2)) { flipped.toggle() }
+            return
+        }
+        // Turn edge-on, swap sides out of sight, then turn the rest of the way.
+        guard !turning else { return }
+        turning = true
+        let direction: Double = flipped ? -1 : 1
+        withAnimation(.easeIn(duration: 0.16)) { turn = 90 * direction } completion: {
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) {
+                flipped.toggle()
+                turn = -90 * direction
+            }
+            withAnimation(.easeOut(duration: 0.2)) { turn = 0 } completion: { turning = false }
+        }
     }
 
     /// "Yamaha acoustic guitar, needs you, possibly sentimental, $109. Moove says keep. <reason>"
@@ -205,6 +227,7 @@ struct ReviewDeckView: View {
         withTransaction(t) {
             drag = .zero
             flipped = false
+            turn = 0
         }
         leaving = nil
     }
@@ -250,40 +273,21 @@ struct ReviewDeckView: View {
     }
 }
 
-/// Turns between `front` and `back` around the vertical axis. The angle is animated frame by
-/// frame (`Animatable`), so the back takes over exactly at 90°. Under Reduce Motion it crossfades.
-private struct ReviewFlipCard<Front: View, Back: View>: View, Animatable {
-    var angle: Double
-    let reduceMotion: Bool
+/// Shows `front` or `back`, turned by `turn` degrees around the vertical axis. The deck turns it
+/// edge-on, swaps sides, and turns it back (so the back never shows mirrored); under Reduce
+/// Motion `turn` stays 0 and the sides crossfade.
+private struct ReviewFlipCard<Front: View, Back: View>: View {
+    let flipped: Bool
+    let turn: Double
     let front: Front
     let back: Back
 
-    init(flipped: Bool, reduceMotion: Bool, front: Front, back: Back) {
-        angle = flipped ? 180 : 0
-        self.reduceMotion = reduceMotion
-        self.front = front
-        self.back = back
-    }
-
-    var animatableData: Double {
-        get { angle }
-        set { angle = newValue }
-    }
-
     var body: some View {
-        if reduceMotion {
-            ZStack {
-                front.opacity(1 - angle / 180)
-                back.opacity(angle / 180)
-            }
-        } else {
-            ZStack {
-                front.opacity(angle < 90 ? 1 : 0)
-                back.opacity(angle < 90 ? 0 : 1)
-                    .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
-            }
-            .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
+        ZStack {
+            front.opacity(flipped ? 0 : 1)
+            back.opacity(flipped ? 1 : 0)
         }
+        .rotation3DEffect(.degrees(turn), axis: (x: 0, y: 1, z: 0), perspective: 0.45)
     }
 }
 
