@@ -7,6 +7,7 @@ struct ListingDetailView: View {
     @Environment(\.openURL) private var openURL
     let listingId: UInt64
     @State private var copied = false
+    @State private var deciding = false
 
     var body: some View {
         if let listing = store.snapshot.listings.first(where: { $0.id == listingId }) {
@@ -26,11 +27,11 @@ struct ListingDetailView: View {
                     notice("Simulated post. Not live on eBay, and no buyer can see it.", systemImage: "info.circle", tint: Theme.ochre)
                         .padding(.bottom, 20)
                 }
-                if let item {
-                    ItemThumbnail(item: item, size: 320)
-                        .frame(maxWidth: .infinity)
-                        .padding(.bottom, 24)
-                }
+                // The poster, up close (iOS 18 zooms into this page from the poster on the wall).
+                ListingPosterHero(listing: listing, item: item,
+                                  style: PosterWall.style(forListingId: listing.id, straight: true))
+                    .padding(.top, 10)
+                    .padding(.bottom, 24)
                 VStack(alignment: .leading, spacing: 10) {
                     Text(listing.title)
                         .monoText(20, weight: .bold, maxScale: 1.6)
@@ -57,13 +58,22 @@ struct ListingDetailView: View {
                 switch listing.status {
                 case .awaitingApproval where store.snapshot.isShared(listing):
                     // Shared-room item someone else owns (#195): any room member may decide it (#200).
-                    notice("Over \(store.snapshot.ownerName(listing.owner))'s approval limit. Anyone in the room can approve it in Approvals to post it.",
+                    notice("Over \(store.snapshot.ownerName(listing.owner))'s approval limit. Anyone in the room can approve it, here or in Agents, to post it.",
                            systemImage: "hourglass", tint: Theme.ochre)
                         .padding(.top, 20)
                 case .awaitingApproval:
-                    notice("Over your approval limit. Approve it in Approvals, or on your phone if Auth0 Guardian is set up, to post it.",
+                    notice("Over your approval limit. Approve it here or in Agents, or on your phone if Auth0 Guardian is set up, to post it.",
                            systemImage: "hand.raised", tint: Theme.ochre)
                         .padding(.top, 20)
+                default:
+                    EmptyView()
+                }
+                if let approval = pendingApproval(for: listing) {
+                    decideButtons(approval).padding(.top, 14)
+                }
+                switch listing.status {
+                case .awaitingApproval:
+                    EmptyView()
                 case .rejected:
                     notice(store.snapshot.problem(for: listing).map { "\($0). Nothing was posted to eBay." } ?? "Not posted: the request was denied or the price changed.",
                            systemImage: "xmark.circle", tint: Theme.danger)
@@ -132,6 +142,40 @@ struct ListingDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .mooveScreen()
         .sensoryFeedback(.success, trigger: listing.status) { _, new in new == .posted || new == .sold }
+    }
+
+    private func pendingApproval(for listing: Listing) -> Approval? {
+        guard listing.status == .awaitingApproval else { return nil }
+        return store.pendingApprovals.first { $0.kind == .listing && $0.refId == listing.id && store.snapshot.canDecide($0) }
+    }
+
+    /// Approve or deny right here (the same `decide_approval` as the Agents inbox).
+    private func decideButtons(_ approval: Approval) -> some View {
+        HStack(spacing: 10) {
+            Button {
+                decide(approval, approve: true)
+            } label: {
+                Label(deciding ? "Posting…" : "Approve and post", systemImage: "checkmark").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.pill(.primary))
+            .accessibilityIdentifier("listing.approve.\(approval.refId)")
+            Button(role: .destructive) {
+                decide(approval, approve: false)
+            } label: {
+                Label("Deny", systemImage: "xmark").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.pill(.outline))
+            .accessibilityIdentifier("listing.deny.\(approval.refId)")
+        }
+        .disabled(deciding)
+    }
+
+    private func decide(_ approval: Approval, approve: Bool) {
+        deciding = true
+        Task {
+            _ = await store.decide(approval, approve: approve)
+            deciding = false
+        }
     }
 
     /// Demo/attention notice: mono text on the raised surface with a colored left edge.
