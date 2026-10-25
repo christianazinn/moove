@@ -68,6 +68,15 @@ const drafting = new Set<bigint>(); // item ids
 const advancing = new Set<bigint>(); // listing ids
 const approvalRequested = new Set<bigint>(); // listing ids; the approval row can arrive before the status update
 const reasked = new Set<bigint>(); // expired approval ids already re-asked this run (#186)
+const claimRetries = new Map<bigint, number>(); // listing id -> failed `posting` claims in a row
+const CLAIM_RETRY_MS = 5000;
+const CLAIM_MAX_RETRIES = 5;
+
+// A listing only goes ahead while its item is still sorted to sell: the user (or a re-sort) can
+// move it to keep/donate at any point between drafting and posting.
+function stillSelling(conn: Conn, l: Pick<Listing, 'itemId'>): boolean {
+  return conn.db.item.id.find(l.itemId)?.disposition === 'sell';
+}
 
 function hasListing(conn: Conn, itemId: bigint): boolean {
   for (const l of conn.db.listing.iter()) if (l.itemId === itemId) return true;
@@ -100,6 +109,12 @@ async function draft(conn: Conn, it: Item): Promise<void> {
     // Comps are scraped (untrusted): cleaned and fenced in the prompt, and the output is checked in code (#17).
     const d = await structuredCall({ model: config.models.agent, system: LISTING_SYSTEM, text: buildDraftPrompt(it, comps), schema: ListingDraft });
     await recallCheck;
+    if (!stillSelling(conn, { itemId: it.id })) {
+      // Re-sorted while Claude wrote it. Dropped from `drafting` so a flip back to sell drafts again.
+      drafting.delete(it.id);
+      logEvent(conn, { owner: it.owner, agent: 'listing', kind: 'plan', message: `Not listing "${it.name}": it is no longer sorted to sell`, refTable: 'item', refId: it.id });
+      return;
+    }
     const price = clampPrice(it, d.priceCents, comps);
     const copy = finalizeCopy(d);
     await conn.reducers.createListingDraft({ itemId: it.id, title: copy.title, description: copy.description, priceCents: price, simulated: ebay.simulated });
@@ -141,6 +156,12 @@ async function askApproval(conn: Conn, l: Listing): Promise<boolean> {
   }
 }
 
+async function rejectUnsold(conn: Conn, l: Listing): Promise<void> {
+  if (await setStatus(conn, l, 'rejected')) {
+    logEvent(conn, { owner: l.owner, agent: 'listing', kind: 'approval', message: 'Not posting: the item is no longer sorted to sell', refTable: 'listing', refId: l.id });
+  }
+}
+
 function approvalFor(conn: Conn, l: Listing): Approval | undefined {
   let latest: Approval | undefined;
   for (const a of conn.db.approval.iter()) {
@@ -151,6 +172,10 @@ function approvalFor(conn: Conn, l: Listing): Approval | undefined {
 
 async function post(conn: Conn, l: Listing): Promise<void> {
   const ref = { owner: l.owner, agent: 'listing', refTable: 'listing', refId: l.id };
+  if (!stillSelling(conn, l)) {
+    await rejectUnsold(conn, l);
+    return;
+  }
   // A listing posts the way it was drafted, so its `simulated` flag stays true to what happened.
   if (!l.simulated && ebay.simulated) {
     await setStatus(conn, l, 'failed');
@@ -163,9 +188,26 @@ async function post(conn: Conn, l: Listing): Promise<void> {
   try {
     await conn.reducers.updateListing({ listingId: l.id, status: 'posting', externalId: '', url: '', priceCents: -1n });
   } catch (err) {
-    logEvent(conn, { ...ref, kind: 'plan', message: `Not posting: this listing is already being posted (${String(err)})` });
+    const cur = conn.db.listing.id.find(l.id);
+    if (!cur || (cur.status !== 'draft' && cur.status !== 'awaiting_approval')) {
+      logEvent(conn, { ...ref, kind: 'plan', message: `Not posting: this listing is already being posted (${String(err)})` });
+      return;
+    }
+    // Still unposted, so the claim failed for another reason (e.g. reconnecting): try again shortly.
+    const tries = (claimRetries.get(l.id) ?? 0) + 1;
+    claimRetries.set(l.id, tries);
+    if (tries > CLAIM_MAX_RETRIES) {
+      logEvent(conn, { ...ref, kind: 'error', message: `Could not start posting after ${CLAIM_MAX_RETRIES} retries: ${String(err)}. A worker restart retries it.` });
+      return;
+    }
+    logEvent(conn, { ...ref, kind: 'error', message: `Could not start posting, retrying in ${CLAIM_RETRY_MS / 1000}s: ${String(err)}` });
+    setTimeout(() => {
+      const next = conn.db.listing.id.find(l.id);
+      if (next) void advance(conn, next);
+    }, CLAIM_RETRY_MS);
     return;
   }
+  claimRetries.delete(l.id);
   await publish(conn, l, poster);
 }
 
@@ -190,7 +232,11 @@ async function publish(conn: Conn, l: Listing, poster: EbayPoster): Promise<void
       },
       s => logEvent(conn, { ...ref, kind: 'tool_call', message: `eBay ${s.call}${poster.simulated ? ' (simulated)' : ''}: ${s.detail}`, data: { ...s, simulated: poster.simulated } })
     );
-    await setStatus(conn, l, 'posted', r.externalId, r.url);
+    // It's live now, so a failed write is retried once rather than left `posting` for a restart to mark failed.
+    if (!(await setStatus(conn, l, 'posted', r.externalId, r.url)) && !(await setStatus(conn, l, 'posted', r.externalId, r.url))) {
+      logEvent(conn, { ...ref, kind: 'error', message: `Posted as item #${r.externalId}${r.simulated ? ' (simulated)' : ''} (${r.url}), but the listing couldn't be marked posted`, data: r });
+      return;
+    }
     logEvent(conn, { ...ref, kind: 'result', message: `Live as item #${r.externalId}${r.simulated ? ' (simulated)' : ''}`, data: r });
     if (r.simulated && SOLD_AFTER_SEC > 0) {
       setTimeout(() => {
@@ -288,6 +334,14 @@ async function recover(conn: Conn, l: Listing): Promise<void> {
 async function advance(conn: Conn, l: Listing): Promise<void> {
   if (advancing.has(l.id)) return;
   const ref = { owner: l.owner, agent: 'listing', refTable: 'listing', refId: l.id };
+  // Re-sorted to keep/donate/... before it posted: withdraw it instead of asking or posting.
+  // (A pending approval card can't be closed by the worker; deciding it later does nothing.)
+  if ((l.status === 'draft' || l.status === 'awaiting_approval') && !stillSelling(conn, l)) {
+    advancing.add(l.id);
+    await rejectUnsold(conn, l);
+    advancing.delete(l.id);
+    return;
+  }
   if (l.status === 'draft') {
     const threshold = thresholdFor(conn, l);
     const recall = recallFor(conn, l);
@@ -298,7 +352,11 @@ async function advance(conn: Conn, l: Listing): Promise<void> {
       const prior = approvalFor(conn, l);
       if (prior?.amountCents === l.priceCents) approvalRequested.add(l.id);
       else if (!(await askApproval(conn, l))) return;
-      await setStatus(conn, l, 'awaiting_approval');
+      if (!(await setStatus(conn, l, 'awaiting_approval'))) {
+        // Forget the ask, so the next advance (e.g. the approval being decided) reuses it and retries.
+        approvalRequested.delete(l.id);
+        return;
+      }
       const why = recall
         ? `Possible CPSC recall (${describeMatch(recall)}), asking for approval before posting`
         : `${dollars(l.priceCents)} is over the ${threshold < 0n ? 'always-ask' : dollars(threshold)} threshold, asking for approval`;
@@ -352,7 +410,15 @@ export const listingAgent: Agent = {
       else maybeAdvance(l);
     }
     conn.db.item.onInsert((_ctx, it) => maybeDraft(it));
-    conn.db.item.onUpdate((_ctx, _old, it) => maybeDraft(it));
+    conn.db.item.onUpdate((_ctx, _old, it) => {
+      maybeDraft(it);
+      // Moved off sell: withdraw its unposted listing right away, not only once someone approves it.
+      if (it.disposition !== 'sell') {
+        for (const l of conn.db.listing.iter()) {
+          if (l.itemId === it.id && (l.status === 'draft' || l.status === 'awaiting_approval')) maybeAdvance(l);
+        }
+      }
+    });
     conn.db.listing.onInsert((_ctx, l) => maybeAdvance(l));
     conn.db.listing.onUpdate((_ctx, _old, l) => maybeAdvance(l));
     conn.db.approval.onInsert((_ctx, a) => {

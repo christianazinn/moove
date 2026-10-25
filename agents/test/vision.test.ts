@@ -184,6 +184,20 @@ test("a Lens failure, an empty result or the cap keeps the first answer", async 
   }
 });
 
+test("Apify out of credit skips Lens with a plain result event, not an error", async () => {
+  setVisionDeps({
+    load: async u => ({ mediaType: "image/jpeg", data: u }),
+    call: async () => laptopFirst,
+    lens: async () => ({ matches: [], replayed: false, costUsd: 0, refused: true, reason: "Apify unavailable (out of credit)" }),
+  });
+  const { conn, calls, events } = fakeConn([item({ id: 23n, photoUrls: ["https://t.trycloudflare.com/files/l.jpg"], ...laptopBox })]);
+  visionAgent.start(conn);
+  await sleep(30);
+  assert.equal(calls.find(c => c.name === "setItemDetails")?.args.name, "silver laptop");
+  assert.ok(events.some(e => e.kind === "result" && e.message === "Skipped the Google Lens search: Apify unavailable (out of credit)"));
+  assert.equal(events.filter(e => e.kind === "error").length, 0);
+});
+
 test("the second look never clears fragile or sentimental", async () => {
   let n = 0;
   setVisionDeps({

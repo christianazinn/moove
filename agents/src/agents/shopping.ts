@@ -159,9 +159,16 @@ function hasShoppingItems(conn: Conn, owner: Identity): boolean {
   return false;
 }
 
-function keptItems(conn: Conn, owner: Identity): KeptItem[] {
+/**
+ * Items the user is keeping: their own, plus those in rooms they own or joined (a shared room's items
+ * belong to its owner), like the kept items the app moves into the new home.
+ */
+export function keptItems(conn: Conn, owner: Identity): KeptItem[] {
+  const roomIds = new Set<bigint>();
+  for (const r of conn.db.workerRoom.iter()) if (r.owner.isEqual(owner)) roomIds.add(r.id);
+  for (const m of conn.db.roomMember.iter()) if (m.member.isEqual(owner)) roomIds.add(m.roomId);
   return [...conn.db.item.iter()]
-    .filter((it: Item) => it.owner.isEqual(owner) && it.disposition === 'keep')
+    .filter((it: Item) => (it.owner.isEqual(owner) || roomIds.has(it.roomId)) && it.disposition === 'keep')
     .map(it => ({ name: it.name || it.category, category: it.category }));
 }
 

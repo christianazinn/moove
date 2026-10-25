@@ -24,7 +24,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
-import { apifySpentToday, reserveApifySpend } from './apify.js';
+import { apifyDownReason, apifySpentToday, isApifyOutOfCredit, markApifyDown, releaseApifySpend, reserveApifySpend } from './apify.js';
 import { fixtureDealSource, sanitizeText, toCandidate, type DealCandidate, type DealQuery, type DealSource } from './deals.js';
 
 type Env = Record<string, string | undefined>;
@@ -372,7 +372,14 @@ export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
       // labeled "sample data") ride along: every item keeps at least one card-checkout option. So does
       // a planted demo scam for this item, if any (also "sample data"), so the fraud block shows live.
       const withRetail = async (found: DealCandidate[]) => [...found, ...(await fallback!.search(dq)).filter(c => c.checkout === 'visa' || c.planted)];
-      if (q && opts.token) {
+      const down = q && opts.token ? apifyDownReason() : null;
+      if (down) {
+        // Apify said it's out of credit a moment ago: don't book or fire runs that can only fail.
+        hooks?.onNotice?.({
+          message: `Apify unavailable (out of credit): skipped the live search for "${q}", using cached replays / sample deals instead.`,
+          data: { apifyError: true, refused: true, query: q, reason: down },
+        });
+      } else if (q && opts.token) {
         // Daily Apify cap shared with pricing comps (#170, #185): each run books its maxTotalChargeUsd
         // before it starts. A run that would pass the cap is skipped, and if all are, this search
         // falls back exactly as with no token (cached replay, then sample data). Replays are free.
@@ -389,10 +396,22 @@ export function createApifyDealSource(opts: ApifyDealOptions = {}): DealSource {
         const settled = await Promise.allSettled(allowed.map(s => runActor(s, q)));
         const rows = dedupe(settled.flatMap(r => (r.status === 'fulfilled' ? r.value : [])));
         const errors = settled.flatMap(r => (r.status === 'rejected' ? [sanitizeText(String(r.reason), 300)] : []));
+        // A run Apify refused up front (HTTP 4xx, e.g. 403 out of credit) never started and cost
+        // nothing: give its booking back so the shared daily cap only counts real spend.
+        settled.forEach((r, i) => {
+          if (r.status === 'rejected' && /HTTP 40[0-4]\b/.test(String(r.reason))) releaseApifySpend(runChargeUsd(allowed[i]), spend);
+        });
         if (rows.length) {
           writeCache(q, rows, errors);
           lastReplay = false;
           return withRetail(toCands(rows, false));
+        }
+        if (errors.length) {
+          if (errors.every(isApifyOutOfCredit)) markApifyDown(errors[0]);
+          hooks?.onNotice?.({
+            message: `Live Apify search for "${q}" failed (${errors[0].slice(0, 160)}), using cached replays / sample deals instead.`,
+            data: { apifyError: true, query: q, errors },
+          });
         }
       }
       const cached = q ? readCache(q) : [];

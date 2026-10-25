@@ -69,7 +69,7 @@ async function refineWithLens(conn: Conn, it: Item, first: Details, images: Imag
   const photo = [...it.photoUrls].reverse().find(isLensablePhoto)!;
   const lens = deps.lens ? await deps.lens(photo) : { matches: [], replayed: false, costUsd: 0 };
   if (lens.refused) {
-    logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'result', message: 'Skipped the Google Lens search: Apify daily spend cap reached', refTable: 'item', refId: it.id, data: { lens: true, refused: true, apifyCap: true } });
+    logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'result', message: `Skipped the Google Lens search: ${lens.reason ?? 'Apify daily spend cap reached'}`, refTable: 'item', refId: it.id, data: { lens: true, refused: true, ...(lens.reason && !/spend cap/.test(lens.reason) ? { apifyUnavailable: true } : { apifyCap: true }) } });
     return null;
   }
   logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'tool_call', message: `${lens.replayed ? '[REPLAYED] ' : ''}Google Lens on the item photo: ${lens.matches.length} visual match(es)`, refTable: 'item', refId: it.id, data: { lens: true, replayed: lens.replayed, costUsd: lens.costUsd, matches: lens.matches.length } });

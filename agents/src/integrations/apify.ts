@@ -160,6 +160,63 @@ export function reserveApifySpend(usd: number, opts: { file?: string; cap?: numb
   return true;
 }
 
+/**
+ * Gives back a reservation for a run that never started (Apify refused it with a 4xx, e.g. 403 out
+ * of credit), so phantom bookings don't fill the daily cap. Same synchronous read/write as reserve.
+ */
+export function releaseApifySpend(usd: number, opts: { file?: string } = {}): void {
+  const file = opts.file ?? config.apify.spendFile;
+  const log = readApifySpend(file);
+  const t = log[apifyDay()];
+  if (!t) return;
+  try {
+    writeFileSync(file, JSON.stringify({ ...log, [apifyDay()]: { usd: Math.max(0, t.usd - usd), runs: Math.max(0, t.runs - 1) } }, null, 2));
+  } catch (err) {
+    console.warn(`[apify] couldn't release spend: ${String(err)}`);
+  }
+}
+
+// ---------- Apify out of credit ----------
+// A 403 "Monthly usage hard limit" (or a 402 that isn't the concurrency limit) means no actor can run
+// on this account until the plan resets or is topped up. Whoever sees it notes it here, and comps,
+// paid comps and deal search skip their live runs for APIFY_DOWN_MS instead of firing (and paying
+// for, or booking) one doomed run per item. Cached replays are unaffected.
+const APIFY_DOWN_MS = 10 * 60_000;
+let apifyDown: { until: number; reason: string } | null = null;
+
+/** Apify refused for lack of credit (not a rate or concurrency limit, which retry). */
+export function isApifyOutOfCredit(err: unknown): boolean {
+  const s = String(err);
+  return !/concurrent-runs-limit|rate.?limit/i.test(s) && /Monthly usage hard limit|platform-feature-disabled|HTTP 40[23]\b/i.test(s);
+}
+
+/** Notes that Apify is out of credit. Returns true the first time in a window (log it once). */
+export function markApifyDown(reason: string, now = Date.now()): boolean {
+  const fresh = !apifyDown || apifyDown.until <= now;
+  apifyDown = { until: now + APIFY_DOWN_MS, reason: reason.slice(0, 200) };
+  if (fresh) console.warn(`[apify] out of credit, skipping live runs for ${APIFY_DOWN_MS / 60_000} min: ${apifyDown.reason}`);
+  return fresh;
+}
+
+/** Why live Apify runs are being skipped right now, or null. */
+export function apifyDownReason(now = Date.now()): string | null {
+  return apifyDown && apifyDown.until > now ? apifyDown.reason : null;
+}
+
+export function clearApifyDown(): void {
+  apifyDown = null;
+}
+
+/** Why an uncached comps lookup can't run live right now (no token, daily cap, out of credit), or null. */
+export function compsLiveUnavailable(): string | null {
+  if (!config.apify.token) return 'APIFY_TOKEN not set and no cached comps for this query';
+  const cap = config.apify.maxUsdPerDay;
+  const spent = apifySpentToday();
+  if (cap > 0 && spent.usd >= cap) return `Apify daily spend cap reached: ~$${spent.usd.toFixed(2)} of $${cap.toFixed(2)} today`;
+  const down = apifyDownReason();
+  return down ? `Apify unavailable (out of credit): ${down}` : null;
+}
+
 // Cache-only read: the comps saved for this query, or null. Never calls Apify, so screens like
 // fraud (#18) can use comps for free without triggering a paid run.
 export function cachedComps(query: string): Comp[] | null {
@@ -218,7 +275,7 @@ export function similarCachedComps(query: string, category = '', dir = path.join
 
 /** Apify can't run at all right now: retrying won't help, but a similar cached query might. */
 export function isApifyUnavailable(err: unknown): boolean {
-  return err instanceof ApifyCapError || /Monthly usage hard limit|platform-feature-disabled|APIFY_TOKEN not set|spend cap reached|HTTP 40[23]\b/i.test(String(err));
+  return err instanceof ApifyCapError || /Monthly usage hard limit|platform-feature-disabled|APIFY_TOKEN not set|spend cap reached|Apify unavailable|HTTP 40[23]\b/i.test(String(err));
 }
 
 // Comps for a free-text item query. Results are cached in fixtures/comps/ (keeps Apify spend
@@ -233,10 +290,16 @@ export async function lookupComps(query: string): Promise<CompsResult> {
   if (cap > 0 && spent.usd >= cap) {
     throw new ApifyCapError(`Apify daily spend cap reached: ~$${spent.usd.toFixed(2)} of $${cap.toFixed(2)} today (${spent.runs} runs); raise APIFY_MAX_USD_PER_DAY to continue`);
   }
+  const down = apifyDownReason();
+  if (down) throw new Error(`Apify unavailable (out of credit): ${down}`);
   const settled = await Promise.allSettled(config.apify.sources.map(s => runActor(SOURCES[s], query)));
   const comps = settled.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
   const errors = settled.flatMap(r => (r.status === 'rejected' ? [String(r.reason)] : []));
-  if (comps.length === 0 && errors.length) throw new Error(errors.join('; '));
+  if (comps.length === 0 && errors.length) {
+    // Every source refused for lack of credit: the account is out, not this query.
+    if (errors.every(isApifyOutOfCredit)) markApifyDown(errors[0]);
+    throw new Error(errors.join('; '));
+  }
   // Save only a complete lookup: a source that failed (concurrency limit, timeout) would
   // otherwise leave the query on one source's comps forever, and an empty result on "$0".
   if (errors.length === 0 && comps.length > 0) {
