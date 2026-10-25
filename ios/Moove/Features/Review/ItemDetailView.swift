@@ -8,6 +8,9 @@ struct ItemDetailView: View {
     let itemId: UInt64
     @State private var takingPhoto = false
     @State private var photoState: PhotoState = .idle
+    /// What the camera's photo is for: another photo, or a reclassify retake.
+    @State private var reclassifying = false
+    @State private var reclassifyState: PhotoState = .idle
 
     enum PhotoState: Equatable { case idle, uploading, added, failed(String) }
 
@@ -44,6 +47,7 @@ struct ItemDetailView: View {
                                 .accessibilityLabel("Possibly sentimental")
                         }
                     }
+                    reclassifyAction(item)
                     let listings = store.snapshot.compCounts[item.id] ?? 0
                     let rough = item.saleValueCents != nil && Item.isRoughEstimate(compCount: listings)
                     Text(item.saleValueCents == nil ? item.priceText.capitalizedFirst : rough ? "≈\(item.priceText)" : item.priceText)
@@ -86,7 +90,7 @@ struct ItemDetailView: View {
         .fullScreenCover(isPresented: $takingPhoto) {
             CameraPicker { jpeg in
                 takingPhoto = false
-                if let jpeg { Task { await addPhoto(jpeg, to: item) } }
+                if let jpeg { Task { await (reclassifying ? reclassify(jpeg, item) : addPhoto(jpeg, to: item)) } }
             }
             .ignoresSafeArea()
         }
@@ -100,6 +104,7 @@ struct ItemDetailView: View {
         VStack(spacing: 6) {
             Button {
                 photoState = .idle
+                reclassifying = false
                 takingPhoto = true
             } label: {
                 Label(photoState == .uploading ? "Uploading…" : item.photoUrls.isEmpty ? "Add photo" : "Add another photo",
@@ -131,21 +136,53 @@ struct ItemDetailView: View {
 
     private func addPhoto(_ jpeg: Data, to item: Item) async {
         photoState = .uploading
-        let file = FileManager.default.temporaryDirectory.appending(path: "item-\(item.id)-\(UUID().uuidString).jpg")
-        do {
-            try jpeg.write(to: file)
-            // Offline demo: keep the file on the device, as the scan does.
-            let uploader: Uploader = store.uploadBaseURL == nil ? LocalUploader() : HTTPUploader()
-            let url = try await uploader.upload(file, contentType: "image/jpeg")
-            if await store.addItemPhoto(itemId: item.id, url: url) {
-                photoState = .added
-            } else {
-                photoState = .failed(store.lastError ?? "not saved")
-                store.lastError = nil
+        let failure = await ItemPhotoUpload.attach(jpeg, to: item, reclassify: false, store: store)
+        photoState = failure.map { .failed($0) } ?? .added
+    }
+
+    // MARK: Reclassify (a misidentified item, from a new photo)
+
+    /// "Wrong item? Reclassify from a photo", under the name: the retake goes to vision marked
+    /// so it identifies the item from that photo, not the scan's category (`ItemReclassify`).
+    /// The name and category update when vision answers; meanwhile the status line says so.
+    @ViewBuilder private func reclassifyAction(_ item: Item) -> some View {
+        let offline = store.backendKind == .fixture
+        VStack(alignment: .leading, spacing: 6) {
+            if let status = ItemReclassify.status(for: item, offline: offline) {
+                HStack(spacing: 8) {
+                    if ItemReclassify.isReclassifying(item) && !offline {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(status)
+                        .monoMeta()
+                        .foregroundStyle(item.detailsStatus == .failed ? Theme.danger : Theme.ochreInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("item.reclassify.status")
             }
-        } catch {
-            photoState = .failed((error as? UploadFailure)?.message ?? error.localizedDescription)
+            Button {
+                reclassifyState = .idle
+                reclassifying = true
+                takingPhoto = true
+            } label: {
+                Label(reclassifyState == .uploading ? "Uploading…" : "Wrong item? Reclassify from a photo",
+                      systemImage: "camera.viewfinder")
+            }
+            .buttonStyle(.pill(.outline, compact: true))
+            .disabled(reclassifyState == .uploading)
+            .accessibilityHint("Take a photo of it. Moove identifies it again from that photo, not from the scan")
+            .accessibilityIdentifier("item.reclassify")
+            if case .failed(let why) = reclassifyState {
+                Text("Couldn't add the photo: \(why)").monoMeta().foregroundStyle(Theme.danger)
+            }
         }
+    }
+
+    private func reclassify(_ jpeg: Data, _ item: Item) async {
+        reclassifyState = .uploading
+        let failure = await ItemPhotoUpload.attach(jpeg, to: item, reclassify: true, store: store)
+        reclassifyState = failure.map { .failed($0) } ?? .added
     }
 
     // MARK: Sections

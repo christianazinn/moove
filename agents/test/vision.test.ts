@@ -6,7 +6,7 @@ import type { Item } from "../src/module_bindings/types.js";
 // The vision agent (#5) against a fake connection: who gets identified, what gets written, the
 // failure paths, and the concurrency cap. Own file so VISION_CONCURRENCY is set before import.
 process.env.VISION_CONCURRENCY = "2";
-const { visionAgent, needsVision, setVisionDeps } = await import("../src/agents/vision.js");
+const { visionAgent, needsVision, setVisionDeps, visionPhotos, RECLASSIFY_TEXT } = await import("../src/agents/vision.js");
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const owner = { toHexString: () => "owner" };
@@ -211,4 +211,72 @@ test("the second look never clears fragile or sentimental", async () => {
   const det = calls.find(c => c.name === "setItemDetails")!;
   assert.equal(det.args.fragile, true);
   assert.equal(det.args.maybeSentimental, true);
+});
+
+// "Wrong item? Reclassify from a photo": the app marks the retake with ?reclassify=1.
+const vacuumBox = { name: "vacuum", category: "vacuum", widthM: 1.0, depthM: 0.95, heightM: 0.66 };
+const scooter = { ...details, name: "black Segway Ninebot e-scooter", category: "scooter", material: "black aluminum", brand: "Segway", identifyConfidence: "high" as const };
+
+test("visionPhotos: the usual order, or a reclassify retake first", () => {
+  const urls = ["https://w/files/a.jpg", "https://w/files/b.jpg", "https://w/files/c.jpg", "https://w/files/d.jpg", "https://w/files/e.jpg"];
+  assert.deepEqual(visionPhotos(urls), { urls: urls.slice(-4), reclassify: false });
+  const retake = [...urls, "https://w/files/f.jpg?reclassify=1"];
+  assert.deepEqual(visionPhotos(retake), { urls: ["https://w/files/f.jpg?reclassify=1", "https://w/files/e.jpg", "https://w/files/d.jpg", "https://w/files/c.jpg"], reclassify: true });
+  // Only the newest photo counts: a later ordinary photo is an ordinary re-identify.
+  assert.equal(visionPhotos([...retake, "https://w/files/g.jpg"]).reclassify, false);
+  assert.equal(visionPhotos(["https://w/files/a.jpg?reclassify=0"]).reclassify, false);
+});
+
+test("the usual prompt is unchanged (LLM replay recordings key on it)", async () => {
+  const texts: string[] = [];
+  setVisionDeps({ load: async u => ({ mediaType: "image/jpeg", data: u }), call: async o => { texts.push(o.text); return details; } });
+  const { conn } = fakeConn([item({ id: 30n })]);
+  visionAgent.start(conn);
+  await sleep(30);
+  assert.deepEqual(texts, ['Scan says: category "chair", 0.60 x 0.60 x 1.00 m (W x D x H). Current name: "chair".']);
+});
+
+test("a reclassify retake goes first, the prompt says the scan may be wrong, and the new name lands", async () => {
+  let sent: { text: string; images: string[] } | undefined;
+  setVisionDeps({
+    load: async u => ({ mediaType: "image/jpeg", data: u }),
+    call: async o => { sent = { text: o.text, images: o.images.map(i => i.data) }; return scooter; },
+  });
+  const photoUrls = ["https://w/files/crop.jpg", "https://w/files/retake.jpg?reclassify=1"];
+  const { conn, calls, events } = fakeConn([item({ id: 31n, photoUrls, ...vacuumBox })]);
+  visionAgent.start(conn);
+  await sleep(30);
+  assert.deepEqual(sent?.images, ["https://w/files/retake.jpg?reclassify=1", "https://w/files/crop.jpg"]);
+  assert.ok(sent!.text.startsWith(`${RECLASSIFY_TEXT}\nScan says: category "vacuum"`), sent!.text);
+  assert.match(RECLASSIFY_TEXT, /retook this photo because the item was misidentified: identify it from the newest photo/);
+  assert.match(RECLASSIFY_TEXT, /the scan's category may be wrong/);
+  const det = calls.find(c => c.name === "setItemDetails")!;
+  assert.equal(det.args.name, "black Segway Ninebot e-scooter");
+  assert.equal(det.args.category, "scooter");
+  assert.ok(events.some(e => e.kind === "plan" && /^Reclassifying "vacuum" from the photo you retook/.test(e.message)));
+  assert.ok(!events.some(e => /doesn't fit/.test(e.message)), "the scooter fits the vacuum's box");
+});
+
+test("a reclassify retake that fails to load falls back to the usual prompt", async () => {
+  let text = "";
+  setVisionDeps({
+    load: async u => {
+      if (u.includes("reclassify")) throw new Error("404");
+      return { mediaType: "image/jpeg", data: u };
+    },
+    call: async o => { text = o.text; return details; },
+  });
+  const { conn, calls } = fakeConn([item({ id: 32n, photoUrls: ["https://w/files/a.jpg", "https://w/files/b.jpg?reclassify=1"] })]);
+  visionAgent.start(conn);
+  await sleep(30);
+  assert.ok(!text.includes(RECLASSIFY_TEXT));
+  assert.ok(calls.some(c => c.name === "setItemDetails"));
+});
+
+test("a reclassify that can't fit the box still keeps the old name", async () => {
+  setVisionDeps({ load: async u => ({ mediaType: "image/jpeg", data: u }), call: async () => ({ ...details, name: "throw pillow", category: "pillow" }) });
+  const { conn, calls } = fakeConn([item({ id: 33n, name: "lamp", category: "lamp", widthM: 0.3, depthM: 0.3, heightM: 1.5, photoUrls: ["https://w/files/a.jpg?reclassify=1"] })]);
+  visionAgent.start(conn);
+  await sleep(30);
+  assert.equal(calls.find(c => c.name === "setItemDetails")!.args.name, "");
 });

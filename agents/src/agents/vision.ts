@@ -7,6 +7,7 @@ import { logEvent } from '../events.js';
 import { renameMisfit } from '../sizefit.js';
 import { loadImage, structuredCall, type ImageInput } from '../integrations/anthropic.js';
 import { isLensablePhoto, lensSearch, type LensResult } from '../integrations/lens.js';
+import { isReclassifyPhoto } from '../integrations/photos.js';
 import { cleanUntrusted, untrustedBlock, UNTRUSTED_RULE } from '../untrusted.js';
 
 const ItemDetails = z.object({
@@ -85,6 +86,21 @@ async function refineWithLens(conn: Conn, it: Item, first: Details, images: Imag
   return { ...second, fragile: first.fragile || second.fragile, maybeSentimental: first.maybeSentimental || second.maybeSentimental };
 }
 
+// Said before the scan's facts when the newest photo is a retake for a misidentified item (the
+// app's "Wrong item? Reclassify from a photo"). Only that path adds it, so the usual prompt (and
+// its LLM replay recordings) stay as they were.
+export const RECLASSIFY_TEXT = `The user retook this photo because the item was misidentified: identify it from the newest photo (the first image); the scan's category may be wrong, and so may the current name.`;
+
+/**
+ * The photos to send, as URLs: the most recent 4, oldest first. A reclassify retake goes first,
+ * then the rest newest first, and `reclassify` says to use RECLASSIFY_TEXT.
+ */
+export function visionPhotos(photoUrls: readonly string[]): { urls: string[]; reclassify: boolean } {
+  const recent = photoUrls.slice(-4);
+  if (!isReclassifyPhoto(recent.at(-1))) return { urls: recent, reclassify: false };
+  return { urls: [...recent].reverse(), reclassify: true };
+}
+
 export function needsVision(it: Item): boolean {
   return it.detailsStatus === 'pending' && it.photoUrls.length > 0 && !inFlight.has(it.id);
 }
@@ -92,17 +108,22 @@ export function needsVision(it: Item): boolean {
 async function identify(conn: Conn, it: Item): Promise<void> {
   inFlight.add(it.id);
   conn.reducers.setItemStage({ itemId: it.id, stage: 'running', field: 'details' });
-  logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'plan', message: `Identifying "${it.name}" from ${it.photoUrls.length} photo(s)`, refTable: 'item', refId: it.id });
+  const photos = visionPhotos(it.photoUrls);
+  const retake = photos.reclassify;
+  logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'plan', message: retake ? `Reclassifying "${it.name}" from the photo you retook (${it.photoUrls.length} photo(s))` : `Identifying "${it.name}" from ${it.photoUrls.length} photo(s)`, refTable: 'item', refId: it.id, ...(retake ? { data: { reclassify: true } } : {}) });
   try {
     // Most recent 4 photos; skip any that fail to load rather than failing the item.
-    const loaded = await Promise.allSettled(it.photoUrls.slice(-4).map(u => deps.load(u)));
+    const loaded = await Promise.allSettled(photos.urls.map(u => deps.load(u)));
     const images = loaded.flatMap(r => (r.status === 'fulfilled' ? [r.value] : []));
     if (images.length === 0) {
       // Say why (e.g. a host outside ALLOWED_PHOTO_HOSTS, #44) so a misconfigured base URL is easy to spot.
       const why = loaded.find(r => r.status === 'rejected')?.reason;
       throw new Error(`none of the photos could be loaded${why ? `: ${why instanceof Error ? why.message : String(why)}` : ''}`);
     }
-    const text = `Scan says: category "${it.category}", ${it.widthM.toFixed(2)} x ${it.depthM.toFixed(2)} x ${it.heightM.toFixed(2)} m (W x D x H). Current name: "${it.name}".`;
+    const scan = `Scan says: category "${it.category}", ${it.widthM.toFixed(2)} x ${it.depthM.toFixed(2)} x ${it.heightM.toFixed(2)} m (W x D x H). Current name: "${it.name}".`;
+    // A retake whose first photo failed to load has nothing new to go on: fall back to the usual text.
+    const reclassify = photos.reclassify && loaded[0].status === 'fulfilled';
+    const text = reclassify ? `${RECLASSIFY_TEXT}\n${scan}` : scan;
     let d = await deps.call({ model: config.models.vision, system: SYSTEM, text, images });
     if (wantsLens(it, d)) {
       // A Lens or second-look failure keeps the first answer; it never fails the item.
