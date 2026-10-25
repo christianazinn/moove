@@ -37,7 +37,7 @@ extension Disposition {
     }
 
     /// Darker slate that reads as text in light mode.
-    private static let slateInk = Color(uiColor: Theme.dynamicUIColor(0x3E6474, 0x9CC4BE))
+    private static let slateInk = Color(uiColor: Theme.dynamicUIColor(0x3E6474, 0xB2D3CE))
 
     static let choices: [Disposition] = [.keep, .sell, .donate, .trash]
 }

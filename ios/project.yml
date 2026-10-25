@@ -52,6 +52,7 @@ targets:
       path: Moove/Resources/Info.plist
       properties:
         CFBundleDisplayName: Moove
+        UIAppFonts: [Forum-Regular.ttf, YsabeauInfant.ttf, CormorantGaramond-Italic.ttf]
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSCameraUsageDescription: Moove uses the camera and LiDAR to scan your room and photograph your belongings.
