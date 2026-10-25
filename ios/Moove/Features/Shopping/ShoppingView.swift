@@ -1,9 +1,10 @@
 import SwiftUI
 import MooveKit
 
-/// What the new home still needs (#15), as a storefront: a hero banner with the best saving,
-/// an asymmetric grid of item cards, and shelves of deals (best, budget, local pickup, and the ones
-/// the fraud screen blocked). The shopping agent writes the list, the user edits it (add, long-press
+/// What the new home still needs (#15), as a storefront: a hero banner with the best saving, then
+/// one section per category (the Inventory museum's function halls, the ones that need you first),
+/// each an asymmetric grid of item cards over a sideways row of its best deals, and last the deals
+/// the fraud screen blocked. Chips at the top jump to a category. The shopping agent writes the list, the user edits it (add, long-press
 /// to remove), the buy agent finds deals, and the chosen deal checks out through Visa after the
 /// user approves anything over their threshold. Layout logic: MooveKit `SyncSnapshot.storefront()`.
 struct ShoppingView: View {
@@ -16,26 +17,32 @@ struct ShoppingView: View {
         let approvals = store.snapshot.pendingPurchaseApprovals
         let state = store.commerceState(hasRows: !items.isEmpty)
         let front = store.snapshot.storefront()
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                if state != .content {
-                    CommercePlaceholder(
-                        state: state,
-                        emptyTitle: "Nothing to buy yet",
-                        emptyDetail: "Set up your new home in New Home and the shopping agent lists what it still needs. You can add things yourself too."
-                    ) {
-                        Button("Add item", systemImage: "plus") { showAdd = true }
-                            .buttonStyle(.pill(.primary, compact: true))
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if state != .content {
+                        CommercePlaceholder(
+                            state: state,
+                            emptyTitle: "Nothing to buy yet",
+                            emptyDetail: "Set up your new home in New Home and the shopping agent lists what it still needs. You can add things yourself too."
+                        ) {
+                            Button("Add item", systemImage: "plus") { showAdd = true }
+                                .buttonStyle(.pill(.primary, compact: true))
+                        }
+                        .padding(.horizontal, Theme.gutter)
+                        .padding(.top, 4)
+                    } else {
+                        storefront(front, items: items, approvals: approvals) { hall in
+                            withAnimation(reduceMotion ? nil : .default) {
+                                proxy.scrollTo(hall.map { "shopping.section.\($0.rawValue)" } ?? "shopping.top", anchor: .top)
+                            }
+                        }
                     }
-                    .padding(.horizontal, Theme.gutter)
-                    .padding(.top, 4)
-                } else {
-                    storefront(front, items: items, approvals: approvals)
                 }
+                .frame(maxWidth: 880)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 40)
             }
-            .frame(maxWidth: 880)
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 40)
         }
         .navigationTitle("Shopping")
         .navigationBarTitleDisplayMode(.inline)
@@ -53,7 +60,8 @@ struct ShoppingView: View {
     }
 
     @ViewBuilder
-    private func storefront(_ front: ShoppingStorefront, items: [ShoppingItem], approvals: [Approval]) -> some View {
+    private func storefront(_ front: ShoppingStorefront, items: [ShoppingItem], approvals: [Approval],
+                            jump: @escaping (FunctionHall?) -> Void) -> some View {
         let heroItem = front.hero.pick.flatMap { p in items.first { $0.id == p.itemId } }
             ?? items.first { $0.status != .bought }
         Group {
@@ -69,6 +77,12 @@ struct ShoppingView: View {
             }
         }
         .padding(.horizontal, Theme.gutter)
+        .id("shopping.top")
+
+        if front.sections.count > 1 {
+            StorefrontCategoryChips(sections: front.sections, onJump: jump)
+                .padding(.top, 16)
+        }
 
         if !approvals.isEmpty {
             ListHeader(title: "Needs you", count: "\(approvals.count)")
@@ -81,17 +95,22 @@ struct ShoppingView: View {
             }
         }
 
-        ListHeader(title: "Still to buy", count: "\(front.hero.stillNeeded)")
-            .padding(.top, 32)
-            .padding(.bottom, 14)
-            .padding(.horizontal, Theme.gutter)
-        StorefrontBento(rows: front.rows) { remove([$0]) }
-            .padding(.horizontal, Theme.gutter)
-
-        ForEach(front.shelves) { shelf in
-            StorefrontShelfView(shelf: shelf).padding(.top, 36)
+        ForEach(front.sections) { section in
+            StorefrontSectionHeader(section: section)
+                .padding(.top, 36)
+                .padding(.bottom, 14)
+                .padding(.horizontal, Theme.gutter)
+                .id("shopping.section.\(section.hall.rawValue)")
+            StorefrontBento(rows: section.rows) { remove([$0]) }
+                .padding(.horizontal, Theme.gutter)
+            if let deals = section.deals {
+                StorefrontShelfView(shelf: deals).padding(.top, 16)
+            }
         }
 
+        if let blocked = front.blocked {
+            StorefrontShelfView(shelf: blocked).padding(.top, 40)
+        }
     }
 
     private func remove(_ doomed: [ShoppingItem]) {

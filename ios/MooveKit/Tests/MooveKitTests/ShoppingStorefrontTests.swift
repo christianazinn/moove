@@ -2,7 +2,8 @@ import Foundation
 import Testing
 @testable import MooveKit
 
-/// The Shopping storefront (hero, bento card sizes, deal shelves) on the Offline demo and on edge cases.
+/// The Shopping storefront (hero, category sections with bento cards and deal rows, the blocked
+/// section) on the Offline demo and on edge cases.
 @Suite struct ShoppingStorefrontTests {
     private let demo = DemoFixtures.demo(owner: "me").storefront()
 
@@ -53,9 +54,78 @@ import Testing
     @Test func demoCardSizesAndOrder() {
         let tiles = demo.tiles
         #expect(tiles.map(\.item.name) == ["Sofa", "Desk chair", "Area rug", "Dining table", "Mattress"])
-        #expect(tiles.map(\.size) == [.feature, .tall, .small, .small, .wide])
-        #expect(demo.rows.count == 3)
-        if case .tall(_, _, let leading) = demo.rows[1] { #expect(leading) } else { Issue.record("row 2 isn't a tall row") }
+        // Each category's most urgent open item gets the feature card; the bought mattress a wide one.
+        #expect(tiles.map(\.size) == [.feature, .feature, .feature, .feature, .wide])
+    }
+
+    // MARK: Sections
+
+    @Test func demoItemsLandInTheirFunctionHalls() {
+        let hall = Dictionary(uniqueKeysWithValues: DemoFixtures.demo(owner: "me").shoppingItems.map { ($0.name, FunctionHall.of($0)) })
+        #expect(hall == ["Mattress": .sleep, "Sofa": .sitAndLounge, "Desk chair": .workAndStudy,
+                         "Dining table": .kitchenAndDining, "Area rug": .lightAndDecor])
+    }
+
+    @Test func demoSectionsNeedYouFirstBoughtLast() throws {
+        #expect(demo.sections.map(\.hall) == [.sitAndLounge, .workAndStudy, .lightAndDecor, .kitchenAndDining, .sleep])
+        #expect(demo.sections.map(\.title) == ["Sit & lounge", "Work & study", "Light & decor", "Kitchen & dining", "Sleep"])
+        #expect(demo.sections.map(\.subtitle) == [
+            "1 to buy · from $150", "1 to buy · from $79.99", "1 to buy · from $64.99", "1 to buy · from $120", "1 bought",
+        ])
+        #expect(demo.sections.map(\.needsYou) == [1, 1, 1, 1, 0])
+        let sleep = try #require(demo.sections.last)
+        #expect(sleep.tiles.map(\.badge.label) == ["Bought (simulated)"])
+        #expect(sleep.deals == nil, "nothing to buy, so no deal row")
+    }
+
+    @Test func demoCategoryDealRowsAreBestFirstAndNeverOfferTheScam() throws {
+        let work = try #require(demo.sections.first { $0.hall == .workAndStudy }?.deals)
+        #expect(work.kind == .best)
+        #expect(work.title == "Work & study deals")
+        // The $95 Aeron scam is blocked, so the chair row only has the two real chairs.
+        #expect(work.deals.map(\.deal.id) == [74, 75])
+        let rug = try #require(demo.sections.first { $0.hall == .lightAndDecor }?.deals)
+        // The Target rug's checkout was declined, so it isn't offered again.
+        #expect(rug.deals.map(\.deal.id) == [82, 81])
+        let sofa = try #require(demo.sections.first { $0.hall == .sitAndLounge }?.deals)
+        #expect(sofa.deals.map(\.deal.id) == [72, 71, 70])
+        #expect(Set(demo.sections.compactMap(\.deals?.id)).count == 4, "shelf ids are unique")
+    }
+
+    @Test func blockedIsItsOwnSectionAtTheEnd() throws {
+        let blocked = try #require(demo.blocked)
+        #expect(blocked.kind == .blocked)
+        #expect(blocked.title == "Blocked for your safety")
+        #expect(blocked.deals.map(\.deal.id) == [76])
+        #expect(blocked.deals.first?.deal.fraudScore == 0.85)
+        #expect(!demo.sections.contains { $0.deals?.deals.contains { $0.deal.isFraudBlocked } == true })
+        #expect(SyncSnapshot(me: "me").storefront().blocked == nil)
+    }
+
+    @Test func sectionsOrderByWhatNeedsYouThenHowMuchIsLeft() {
+        var s = SyncSnapshot(me: "me")
+        s.shoppingItems = [
+            ShoppingItem(id: 1, owner: "me", name: "Lamp", status: .searching),
+            ShoppingItem(id: 2, owner: "me", name: "Floor lamp", status: .searching),
+            ShoppingItem(id: 3, owner: "me", name: "Bookshelf", status: .found),
+            ShoppingItem(id: 4, owner: "me", name: "Dog bed", status: .found),
+            ShoppingItem(id: 5, owner: "me", name: "Toaster", status: .bought),
+            ShoppingItem(id: 6, owner: "me", name: "Kettle", status: .searching),
+        ]
+        s.deals = [
+            Deal(id: 30, owner: "me", shoppingItemId: 3, source: "ikea", title: "BILLY", priceCents: 5_000),
+            Deal(id: 31, owner: "me", shoppingItemId: 4, source: "target", title: "Pet bed", priceCents: 3_000),
+        ]
+        let front = s.storefront()
+        // Storage needs a choice; Light & decor has two still to buy; Kitchen has one open and one
+        // bought; the curiosities (pet things) come last among open categories.
+        #expect(front.sections.map(\.hall) == [.storage, .lightAndDecor, .kitchenAndDining, .everythingElse])
+        let kitchen = front.sections[2]
+        #expect(kitchen.tiles.map(\.item.name) == ["Kettle", "Toaster"], "bought after open")
+        #expect(kitchen.tiles.map(\.size) == [.feature, .wide])
+        #expect(kitchen.subtitle == "1 to buy · 1 bought")
+        #expect(front.sections[1].tiles.map(\.size) == [.feature, .wide])
+        #expect(front.sections.first?.subtitle == "1 to buy · from $50")
     }
 
     @Test func demoBadgesAndRibbons() {
@@ -107,39 +177,7 @@ import Testing
         #expect(tiles.map(\.badge.label) == ["1 deal", "Finding deals…", "Bought"])
     }
 
-    // MARK: Shelves
-
-    @Test func demoShelves() throws {
-        #expect(demo.shelves.map(\.title) == ["Best deals for your new place", "Under $100", "Local pickup", "Blocked for your safety"])
-        let best = try #require(demo.shelves.first { $0.kind == .best })
-        #expect(best.deals.map(\.itemName) == ["Desk chair", "Dining table", "Sofa", "Area rug"])
-        #expect(!best.deals.contains { $0.deal.isFraudBlocked })
-        let budget = try #require(demo.shelves.first { $0.kind == .budget })
-        // The scam ($95) is blocked and the declined Target rug failed checkout, so neither is offered.
-        #expect(budget.deals.map(\.deal.id) == [82, 74, 81])
-        let local = try #require(demo.shelves.first { $0.kind == .local })
-        #expect(local.deals.map(\.deal.id) == [79, 72])
-        #expect(local.deals.map(\.distanceText) == ["7 mi", "4 mi"])
-        let blocked = try #require(demo.shelves.first { $0.kind == .blocked })
-        #expect(blocked.deals.map(\.deal.id) == [76])
-        #expect(blocked.deals.first?.deal.fraudScore == 0.85)
-    }
-
-    @Test func budgetShelfUsesFiftyWhenTwoDealsFit() {
-        var s = SyncSnapshot(me: "me")
-        s.shoppingItems = [ShoppingItem(id: 1, owner: "me", name: "Lamp")]
-        s.deals = [
-            Deal(id: 10, owner: "me", shoppingItemId: 1, source: "target", title: "a", priceCents: 2_000),
-            Deal(id: 11, owner: "me", shoppingItemId: 1, source: "ikea", title: "b", priceCents: 4_999),
-            Deal(id: 12, owner: "me", shoppingItemId: 1, source: "amazon", title: "c", priceCents: 7_000),
-        ]
-        #expect(s.storefront().shelves.first { $0.kind == .budget }?.title == "Under $50")
-        s.deals.removeFirst()
-        // One deal under $50 isn't a shelf; two under $100 are.
-        #expect(s.storefront().shelves.first { $0.kind == .budget }?.title == "Under $100")
-        s.deals.removeFirst()
-        #expect(s.storefront().shelves.first { $0.kind == .budget } == nil)
-    }
+    // MARK: Deals
 
     @Test func pickupDistanceParsing() {
         func deal(_ source: String, _ seller: String) -> Deal {
