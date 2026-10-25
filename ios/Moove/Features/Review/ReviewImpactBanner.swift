@@ -43,8 +43,8 @@ struct ReviewImpactBanner: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         }
         .buttonStyle(.plain)
         .animation(.default, value: kg)
@@ -72,7 +72,7 @@ private struct ReviewImpactInfo: View {
                     .foregroundStyle(Theme.accentStrong)
                     .frame(minHeight: 44)
             }
-            Text("A rough estimate: each item you sell or donate gets a typical weight for its type, scaled by its measured size. Kept and trashed items don't count.")
+            Text("Rough estimate: a typical weight for each item you sell or donate, scaled by its size.")
                 .sansText(15)
                 .lineSpacing(3)
                 .foregroundStyle(Theme.text)

@@ -104,7 +104,7 @@ struct ReviewDeckView: View {
             .frame(height: cardHeight)
             .overlay {
                 if let pointing {
-                    RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
+                    RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
                         .strokeBorder(ReviewPalette.glow(pointing), lineWidth: 3 + 3 * progress)
                         .opacity(progress)
                         .shadow(color: ReviewPalette.glow(pointing).opacity(0.6 * progress), radius: 14)
@@ -314,7 +314,7 @@ private struct ReviewCardFront: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(item.name.capitalizedFirst)
-                        .reviewSerif(22, weight: .semibold)
+                        .serifType(22, weight: .semibold)
                         .foregroundStyle(Theme.text)
                         .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -328,7 +328,7 @@ private struct ReviewCardFront: View {
             .padding(16)
         }
         .background(ReviewCardPaper())
-        .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .task(id: item.photoUrls) {
             let loaded = item.photoUrls.isEmpty ? nil : await ItemPhotoLoader.load(item.photoUrls)
             withAnimation(.easeOut(duration: 0.2)) {
@@ -349,10 +349,10 @@ private struct ReviewCardBack: View {
             ItemArt(item: item, size: 150, photo: .none)
                 .frame(maxWidth: .infinity)
                 .frame(height: 170)
-                .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+                .background(Theme.surface2, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
                 .overlay(alignment: .topLeading) { ReviewCardBadge(item: item).padding(10) }
             Text(item.name.capitalizedFirst)
-                .reviewSerif(20, weight: .semibold)
+                .serifType(20, weight: .semibold)
                 .foregroundStyle(Theme.text)
                 .lineLimit(2)
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
@@ -437,10 +437,10 @@ private struct ReviewCardBadge: View {
 /// The card stock every deck card is printed on.
 private struct ReviewCardPaper: View {
     var body: some View {
-        RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
+        RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
             .fill(Theme.bg)
-            .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
-            .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
+            .mooveShadow(.lifted)
     }
 }
 
@@ -490,7 +490,7 @@ struct ReviewAllDecided: View {
                 .foregroundStyle(Theme.accentStrong)
                 .symbolEffect(.bounce, value: bounce)
                 .accessibilityHidden(true)
-            Text("All done").reviewSerif(26, weight: .semibold).foregroundStyle(Theme.text)
+            Text("All done").serifType(26, weight: .semibold).foregroundStyle(Theme.text)
             HStack(spacing: 0) {
                 figure("\(totals.itemsToMove)", "moving")
                 figure(totals.expectedSaleCents.usd, "to sell")
@@ -508,7 +508,7 @@ struct ReviewAllDecided: View {
         .padding(.vertical, 24)
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
-        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .onAppear { if !reduceMotion { bounce += 1 } }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("review.allDecided")
@@ -516,27 +516,10 @@ struct ReviewAllDecided: View {
 
     private func figure(_ value: String, _ label: String) -> some View {
         VStack(spacing: 4) {
-            Text(value).reviewSerif(20, weight: .semibold).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).serifType(20, weight: .semibold).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.6)
             Text(label.uppercased()).monoText(11, maxScale: 1.5).tracking(0.6).foregroundStyle(Theme.muted)
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
-    }
-}
-
-extension View {
-    /// Serif display type for Review's titles and figures, scaled for Dynamic Type (capped at 2×).
-    func reviewSerif(_ size: CGFloat, weight: Font.Weight = .regular) -> some View {
-        modifier(ReviewSerif(size: size, weight: weight))
-    }
-}
-
-private struct ReviewSerif: ViewModifier {
-    let size: CGFloat
-    let weight: Font.Weight
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    func body(content: Content) -> some View {
-        content.font(.system(size: size * min(dynamicTypeSize.textScale, 2), weight: weight, design: .serif))
     }
 }

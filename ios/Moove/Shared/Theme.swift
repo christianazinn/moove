@@ -532,7 +532,12 @@ extension View {
     /// Serif display face for section and display titles (Inventory's halls, Shopping's categories),
     /// scaled for Dynamic Type up to 2×.
     func displayTitle(_ size: CGFloat = 24, weight: Font.Weight = .semibold) -> some View {
-        modifier(DisplaySerif(size: size, weight: weight)).foregroundStyle(Theme.text)
+        serifType(size, weight: weight).foregroundStyle(Theme.text)
+    }
+
+    /// The same serif face without a color, for display figures (Review's counts) and placards.
+    func serifType(_ size: CGFloat, weight: Font.Weight = .regular, italic: Bool = false) -> some View {
+        modifier(DisplaySerif(size: size, weight: weight, italic: italic))
     }
 }
 
@@ -540,10 +545,12 @@ extension View {
 private struct DisplaySerif: ViewModifier {
     var size: CGFloat
     var weight: Font.Weight
+    var italic: Bool
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     func body(content: Content) -> some View {
-        content.font(.system(size: size * min(dynamicTypeSize.textScale, 2), weight: weight, design: .serif))
+        let font = Font.system(size: size * min(dynamicTypeSize.textScale, 2), weight: weight, design: .serif)
+        content.font(italic ? font.italic() : font)
     }
 }
 

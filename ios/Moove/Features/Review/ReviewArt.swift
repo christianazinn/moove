@@ -20,7 +20,7 @@ struct ItemArt: View {
                     ItemPhoto(urls: item.photoUrls) { image in
                         image.resizable().scaledToFill()
                             .frame(width: size, height: size)
-                            .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
                     }
                 }
             }
