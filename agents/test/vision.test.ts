@@ -6,14 +6,14 @@ import type { Item } from "../src/module_bindings/types.js";
 // The vision agent (#5) against a fake connection: who gets identified, what gets written, the
 // failure paths, and the concurrency cap. Own file so VISION_CONCURRENCY is set before import.
 process.env.VISION_CONCURRENCY = "2";
-const { visionAgent, needsVision, setVisionDeps, visionPhotos, RECLASSIFY_TEXT } = await import("../src/agents/vision.js");
+const { visionAgent, needsVision, setVisionDeps, visionPhotos, RECLASSIFY_TEXT, isDetectorFind, shouldVeto } = await import("../src/agents/vision.js");
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const owner = { toHexString: () => "owner" };
 const item = (o: Partial<Item>): Item =>
   ({ id: 1n, owner, name: "chair", category: "chair", widthM: 0.6, heightM: 1, depthM: 0.6, photoUrls: ["https://w/files/a.jpg"], detailsStatus: "pending", ...o }) as unknown as Item;
 
-const details = { name: "black mesh office chair", category: "chair", material: "black mesh", brand: "", condition: "good" as const, fragile: false, maybeSentimental: false, notes: "", identifyConfidence: "low" as const, closeupHint: "" };
+const details = { name: "black mesh office chair", category: "chair", material: "black mesh", brand: "", condition: "good" as const, fragile: false, maybeSentimental: false, notes: "", identifyConfidence: "low" as const, isItem: true, itemConfidence: "high" as const, closeupHint: "" };
 
 function fakeConn(rows: Item[]) {
   const byId = new Map(rows.map(r => [r.id, r]));
@@ -32,6 +32,7 @@ function fakeConn(rows: Item[]) {
       setItemStage: async (a: Record<string, unknown>) => void calls.push({ name: "setItemStage", args: a }),
       setItemDetails: async (a: Record<string, unknown>) => void calls.push({ name: "setItemDetails", args: a }),
       setItemIdentify: async (a: Record<string, unknown>) => void calls.push({ name: "setItemIdentify", args: a }),
+      deleteItem: async (a: Record<string, unknown>) => void calls.push({ name: "deleteItem", args: a }),
       logAgentEvent: async (e: { kind: string; message: string }) => void events.push(e),
     },
   };
@@ -107,7 +108,7 @@ test("at most VISION_CONCURRENCY identifications run at once", async () => {
 test("writes vision's confidence and close-up hint (#276)", async () => {
   setVisionDeps({
     load: async u => ({ mediaType: "image/jpeg", data: u }),
-    call: async () => ({ ...details, name: "Apple MacBook Pro", brand: "Apple", identifyConfidence: "medium" as const, closeupHint: "model number on the bottom case" }),
+    call: async () => ({ ...details, name: "Apple MacBook Pro", brand: "Apple", identifyConfidence: "medium" as const, isItem: true, itemConfidence: "high" as const, closeupHint: "model number on the bottom case" }),
   });
   const { conn, calls } = fakeConn([item({ id: 9n })]);
   visionAgent.start(conn);
@@ -127,7 +128,7 @@ test("a module without set_item_identify still gets the details", async () => {
 });
 
 // #292: Google Lens refinement for unsure items where the model matters.
-const laptopFirst = { ...details, name: "silver laptop", category: "electronics", identifyConfidence: "low" as const, closeupHint: "model number on the bottom" };
+const laptopFirst = { ...details, name: "silver laptop", category: "electronics", identifyConfidence: "low" as const, isItem: true, itemConfidence: "high" as const, closeupHint: "model number on the bottom" };
 const laptopBox = { category: "other", widthM: 0.32, heightM: 0.02, depthM: 0.22 };
 const lensMatches = { matches: [{ title: "Apple MacBook Pro 14-inch M1 Pro 2021", source: "eBay", price: "$849.00" }], replayed: false, costUsd: 0.02 };
 
@@ -137,7 +138,7 @@ test("an unsure laptop gets a Google Lens look and a sharper name", async () => 
     load: async u => ({ mediaType: "image/jpeg", data: u }),
     call: async o => {
       prompts.push(o.text);
-      return prompts.length === 1 ? laptopFirst : { ...laptopFirst, name: "Apple MacBook Pro 14-inch M1 Pro (2021)", brand: "Apple", identifyConfidence: "high" as const, closeupHint: "", fragile: false };
+      return prompts.length === 1 ? laptopFirst : { ...laptopFirst, name: "Apple MacBook Pro 14-inch M1 Pro (2021)", brand: "Apple", identifyConfidence: "high" as const, isItem: true, itemConfidence: "high" as const, closeupHint: "", fragile: false };
     },
     lens: async () => lensMatches,
   });
@@ -279,4 +280,35 @@ test("a reclassify that can't fit the box still keeps the old name", async () =>
   visionAgent.start(conn);
   await sleep(30);
   assert.equal(calls.find(c => c.name === "setItemDetails")!.args.name, "");
+});
+
+test("#378 detector finds: not RoomPlan-only categories, RoomPlan furniture only without attributes, never sweep items", () => {
+  const f = (category: string, attributesJson = "[]", scanObjectId = "A1B2") => isDetectorFind({ category, attributesJson, scanObjectId });
+  assert.equal(f("vacuum"), true);
+  assert.equal(f("chair"), true, "a chair with no RoomPlan attributes came from the detector");
+  assert.equal(f("chair", '["ChairType.swivel"]'), false);
+  assert.equal(f("bed"), false);
+  assert.equal(f("refrigerator"), false);
+  assert.equal(f("box", "[]", "photo:3"), false);
+  const no = { isItem: false, itemConfidence: "high" as const };
+  assert.equal(shouldVeto({ category: "chair", attributesJson: "[]", scanObjectId: "X" }, no), true);
+  assert.equal(shouldVeto({ category: "chair", attributesJson: "[]", scanObjectId: "X" }, { ...no, itemConfidence: "medium" }), false);
+  assert.equal(shouldVeto({ category: "bed", attributesJson: "[]", scanObjectId: "X" }, no), false);
+  assert.equal(shouldVeto({ category: "vacuum", attributesJson: "[]", scanObjectId: "X" }, { isItem: true, itemConfidence: "high" }), false);
+});
+
+test("#378 a detector find vision clearly says isn't an item is removed, with the reason; a RoomPlan bed is kept", async () => {
+  setVisionDeps({
+    load: async u => ({ mediaType: "image/jpeg", data: u }),
+    call: async () => ({ ...details, isItem: false, itemConfidence: "high", notes: "a person in a black t-shirt, not a chair" }),
+  });
+  const phantom = item({ id: 7n, category: "chair", attributesJson: "[]", scanObjectId: "DET-1" } as Partial<Item>);
+  const bed = item({ id: 8n, category: "bed", attributesJson: "[]", scanObjectId: "RP-1" } as Partial<Item>);
+  const { conn, calls, events } = fakeConn([phantom, bed]);
+  visionAgent.start(conn);
+  await sleep(40);
+  assert.deepEqual(calls.filter(c => c.name === "deleteItem").map(c => c.args.itemId), [7n]);
+  assert.ok(!calls.some(c => c.name === "setItemDetails" && c.args.itemId === 7n), "a removed item gets no details");
+  assert.ok(calls.some(c => c.name === "setItemDetails" && c.args.itemId === 8n), "the RoomPlan bed keeps going");
+  assert.ok(events.some(e => /Removed "chair": .*person/.test(e.message)));
 });

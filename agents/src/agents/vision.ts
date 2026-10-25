@@ -24,6 +24,10 @@ const ItemDetails = z.object({
   identifyConfidence: z
     .enum(['high', 'medium', 'low'])
     .describe('How exactly you know the product: "high" = the exact product (brand and model visible, or an unmistakable design), "medium" = the brand or product line but not the exact model, "low" = only the generic type'),
+  isItem: z
+    .boolean()
+    .describe('true when the photos show a real, movable household object as their subject. false when the subject is a person, pet, wall, floor, door, window, outlet, pillow, blanket, a pile of clothes, a built-in fixture (toilet, sink, bathtub, shower, radiator, ceiling fan, wall-mounted shelf or towel rack), or nothing clear: the scan\'s object detector sometimes photographs things that aren\'t items'),
+  itemConfidence: z.enum(['high', 'medium', 'low']).describe('How sure you are about isItem. "high" only when the photo clearly shows what it is'),
   closeupHint: z
     .string()
     .describe('If one more photo would identify the exact product, what it should show, in a few words, e.g. "model sticker on the back", "label under the seat", "logo on the lid". "" when the exact product is already clear or nothing would help (generic furniture)'),
@@ -101,6 +105,27 @@ export function visionPhotos(photoUrls: readonly string[]): { urls: string[]; re
   return { urls: [...recent].reverse(), reclassify: true };
 }
 
+// #378: categories only RoomPlan produces (its own furniture and built-ins). The scan's YOLOE
+// detector also emits chair/table/sofa/storage, but RoomPlan attaches attributes to those, so one
+// without attributes came from the detector. Only detector finds can be vetoed: RoomPlan rarely
+// invents objects, and on the eval photos its rare "none" calls were a bed seen past a window.
+const ROOMPLAN_ONLY = new Set(['bed', 'refrigerator', 'stove', 'oven', 'dishwasher', 'washerdryer', 'sink', 'toilet', 'bathtub', 'fireplace', 'stairs']);
+const ROOMPLAN_WITH_ATTRIBUTES = new Set(['chair', 'table', 'sofa', 'storage']);
+
+/** Whether an item came from the scan's object detector rather than RoomPlan or the photo sweep. */
+export function isDetectorFind(it: Pick<Item, 'category' | 'scanObjectId'> & { attributesJson?: string }): boolean {
+  if (it.scanObjectId.startsWith('photo:')) return false;
+  const c = it.category.toLowerCase();
+  if (ROOMPLAN_ONLY.has(c)) return false;
+  if (ROOMPLAN_WITH_ATTRIBUTES.has(c)) return (it.attributesJson ?? '[]') === '[]';
+  return true;
+}
+
+/** A detector find whose photos clearly show no item (a person, a wall, a built-in): remove it. */
+export function shouldVeto(it: Pick<Item, 'category' | 'scanObjectId'> & { attributesJson?: string }, d: Pick<Details, 'isItem' | 'itemConfidence'>): boolean {
+  return d.isItem === false && d.itemConfidence === 'high' && isDetectorFind(it);
+}
+
 export function needsVision(it: Item): boolean {
   return it.detailsStatus === 'pending' && it.photoUrls.length > 0 && !inFlight.has(it.id);
 }
@@ -135,6 +160,13 @@ async function identify(conn: Conn, it: Item): Promise<void> {
         logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'result', message: `After Google Lens: "${refined.name}" (${refined.identifyConfidence}, was "${d.name}", ${d.identifyConfidence})`, refTable: 'item', refId: it.id, data: { lens: true, before: d.name, after: refined.name } });
         d = refined;
       }
+    }
+    // #378: Sonnet is right about 90% of the time on scan photos where YOLOE alone is about 55%, so
+    // a detector find it clearly says isn't an item (a person read as a chair) is removed, with the reason.
+    if (shouldVeto(it, d)) {
+      await conn.reducers.deleteItem({ itemId: it.id });
+      logEvent(conn, { owner: it.owner, agent: 'vision', kind: 'result', message: `Removed "${it.name}": the scan's object detector photographed something that isn't an item (${d.notes})`, refTable: 'item', refId: it.id, data: { veto: true, detectorCategory: it.category, notes: d.notes } });
+      return;
     }
     // A name that can't fit the measured box (a 1.5 m "pillow", #267) isn't applied: '' keeps the
     // item's name and category; material, condition and the rest still are.
