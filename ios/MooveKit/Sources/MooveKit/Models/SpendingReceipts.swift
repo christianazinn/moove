@@ -82,7 +82,7 @@ public struct SpendingReceipt: Sendable, Hashable, Identifiable {
     /// "$0.025 of $5.00 budget used", with "(est.)" when the app summed it itself.
     public var budgetUsedLine: String? {
         guard let b = budget else { return nil }
-        let used = b.isEstimate ? b.spentUsdMicros : b.capUsdMicros - b.remainingUsdMicros
+        let used = b.usedUsdMicros
         return "\(UsdMicros.format(used)) of \(UsdMicros.format(b.capUsdMicros)) budget used" + (b.isEstimate ? " (est.)" : "")
     }
 

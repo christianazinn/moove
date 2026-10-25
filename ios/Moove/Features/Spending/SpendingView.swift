@@ -149,7 +149,8 @@ struct SpendingTape: View {
     var sharedRoom = false
 
     var body: some View {
-        let refused = log.budgets.map(\.refusals).reduce(0, +)
+        // Every spend-cap refusal, card ones too, matching the Safety card's count.
+        let refused = log.budgets.map(\.refusals).reduce(0, +) + log.cardRefusals
         VStack(alignment: .leading, spacing: 8) {
             Text(sharedRoom ? "SHARED ROOM · TOTALS" : "TOTALS · YOUR AGENTS")
                 .courier(12.5, bold: true)

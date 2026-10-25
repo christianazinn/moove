@@ -59,6 +59,14 @@ export function dollars(cents: bigint): string {
   return `$${(Number(cents) / 100).toFixed(2)}`;
 }
 
+// The price as the app shows it (MooveKit CentsFormat.usd): thousands separators, and no ".00" on
+// whole dollars, so the demo listing page reads "$1,049" like the poster. dollars() stays as is for
+// agent messages and prompts (LLM replay recordings are keyed on them).
+export function displayDollars(cents: bigint): string {
+  const n = Number(cents) / 100;
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: Number(cents) % 100 === 0 ? 0 : 2, maximumFractionDigits: 2 })}`;
+}
+
 const CONDITION_LABEL: Record<string, string> = {
   new: 'New',
   like_new: 'Like new',
@@ -100,7 +108,7 @@ h2{font-size:18px;margin:24px 0 8px}
 ${hero}
 <div class="thumbs">${thumbs}</div>
 <h1>${esc(l.title)}</h1>
-<div class="price">${dollars(l.priceCents)}</div>
+<div class="price">${displayDollars(l.priceCents)}</div>
 <div class="chips"><span class="chip live">● Live</span><span class="chip">${esc(CONDITION_LABEL[l.condition] ?? 'Used')}</span><span class="chip">Local pickup or shipping</span></div>
 <button class="btn buy" disabled>Buy It Now</button>
 <button class="btn watch" disabled>Add to watchlist</button>

@@ -18,7 +18,7 @@ struct ScanFinishedResults: View {
 
     private var items: [Item] {
         guard let room else { return [] }
-        return store.items.filter { $0.roomId == room.id }
+        return store.items.filter { $0.roomId == room.id && !$0.isBuiltInFixture }
     }
 
     /// Sampled colors, with the demo bedroom's fixture colors filling any gaps for demo items
@@ -85,7 +85,7 @@ struct ScanFinishedScreen: View {
         // Local skips were never sent, so only the module's come off the imported count.
         if let importedCount { return max(importedCount - (moduleSkips?.count ?? 0), 0) }
         guard let room = store.newestRoom(named: roomName) else { return 0 }
-        return store.items.filter { $0.roomId == room.id }.count
+        return store.items.filter { $0.roomId == room.id && !$0.isBuiltInFixture }.count
     }
 
     var body: some View {
