@@ -41,14 +41,30 @@ public enum FunctionHall: String, CaseIterable, Sendable, Hashable, Identifiable
     }
 
     public static func of(_ item: Item) -> FunctionHall {
-        let text = " " + "\(item.name) \(item.category)".lowercased()
+        of(name: item.name, category: item.category, attributes: item.attributes) { VoxelItemSpec(item) }
+    }
+
+    /// A shopping-list item's hall, so Shopping and Inventory share categories. It has no scan,
+    /// so the shape fallback uses the typical size the Shopping thumbnails draw it at.
+    public static func of(_ item: ShoppingItem) -> FunctionHall { of(name: item.name, category: item.category) }
+
+    /// The hall for a thing known only by name and category (a shopping item or a deal).
+    public static func of(name: String, category: String) -> FunctionHall {
+        of(name: name, category: category, attributes: []) {
+            let s = ShoppingThumbnails.size(name: name, category: category)
+            return VoxelItemSpec(category: s.category, name: name, widthM: s.widthM, depthM: s.depthM, heightM: s.heightM)
+        }
+    }
+
+    static func of(name: String, category: String, attributes: [String], spec: () -> VoxelItemSpec) -> FunctionHall {
+        let text = " " + "\(name) \(category)".lowercased()
             .map { $0.isLetter || $0.isNumber ? $0 : " " }
             .reduce(into: "") { $0.append($1) }
             .split(separator: " ").joined(separator: " ") + " "
         func has(_ phrases: String...) -> Bool {
             phrases.contains { text.contains(" \($0) ") || text.contains(" \($0)s ") || text.contains(" \($0)es ") }
         }
-        let attrs = Set(item.attributes.map { $0.lowercased() })
+        let attrs = Set(attributes.map { $0.lowercased() })
 
         // Seats and tables depend on what they're for.
         let isChair = has("chair", "stool") && !has("high chair", "wheelchair", "chair mat")
@@ -101,7 +117,7 @@ public enum FunctionHall: String, CaseIterable, Sendable, Hashable, Identifiable
             return .storage
         }
 
-        switch VoxelModels.kind(VoxelItemSpec(item)) {
+        switch VoxelModels.kind(spec()) {
         case .bed, .mattress, .crib, .quiltRack: return .sleep
         case .sofa, .chair, .beanBag, .bench, .ottoman: return .sitAndLounge
         case .desk, .monitor, .books, .binder: return .workAndStudy
@@ -119,7 +135,7 @@ public enum FunctionHall: String, CaseIterable, Sendable, Hashable, Identifiable
     /// The halls that have items, biggest first (ties in `allCases` order, curiosities
     /// always last), each with its items most valuable first (then by name).
     public static func halls(_ items: [Item]) -> [(hall: FunctionHall, items: [Item])] {
-        let grouped = Dictionary(grouping: items, by: of)
+        let grouped = Dictionary(grouping: items) { of($0) }
         return grouped
             .map { hall, items in
                 (hall: hall, items: items.sorted { a, b in

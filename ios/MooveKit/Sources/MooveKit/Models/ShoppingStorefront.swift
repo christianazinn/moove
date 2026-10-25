@@ -5,10 +5,13 @@ import Foundation
 // same snapshot always gets the same hero, the same card sizes and the same shelves:
 //
 // - `hero`: how many things the new place still needs, plus the best saving on a low-risk deal.
-// - `rows`: a "bento" grid. The most urgent item gets the big feature card, then a repeating
-//   pattern of a tall card beside two small ones (alternating sides), a wide card, and a pair.
-// - `shelves`: horizontal deal rows: best deals, a budget tier, local pickup, and the deals the
-//   fraud screen blocked (kept visible so the refusal is shown, never offered).
+// - `sections`: one per function hall that has shopping items (MooveKit `FunctionHall`, the same
+//   categories as Inventory's museum), the ones that need the user first. Each is a "bento" grid
+//   (the section's most urgent item gets the big feature card, then a repeating pattern of a tall
+//   card beside two small ones, a wide card, and a pair; bought items after, smaller) and a
+//   sideways row of that category's best deals.
+// - `blocked`: the deals the fraud screen blocked, its own section at the end (kept visible so
+//   the refusal is shown, never offered).
 
 /// How big a bento card is drawn.
 public enum StorefrontCardSize: String, Sendable, Hashable {
@@ -109,11 +112,51 @@ public enum StorefrontRow: Sendable, Hashable {
 
 /// A horizontal row of deals with a headline.
 public struct StorefrontShelf: Sendable, Hashable, Identifiable {
-    public enum Kind: String, Sendable, Hashable { case best, budget, local, blocked }
+    /// `best`: a category's deals, best saving first. `blocked`: what the fraud screen refused.
+    public enum Kind: String, Sendable, Hashable { case best, blocked }
     public var kind: Kind
     public var title: String
     public var deals: [StorefrontDeal]
-    public var id: String { kind.rawValue }
+    /// The category a `best` shelf belongs to.
+    public var hall: FunctionHall?
+    public var id: String { hall.map { "\(kind.rawValue).\($0.rawValue)" } ?? kind.rawValue }
+
+    public init(kind: Kind, title: String, deals: [StorefrontDeal], hall: FunctionHall? = nil) {
+        self.kind = kind
+        self.title = title
+        self.deals = deals
+        self.hall = hall
+    }
+}
+
+/// One category of the storefront: its items as bento cards, then its best deals.
+public struct StorefrontSection: Sendable, Hashable, Identifiable {
+    public var hall: FunctionHall
+    public var rows: [StorefrontRow]
+    /// The category's buyable deals for items not bought yet, best saving first (nil when none).
+    public var deals: StorefrontShelf?
+    /// Items not bought yet.
+    public var toBuy: Int
+    /// Items waiting on the user (approve, choose a deal, retry, message a seller).
+    public var needsYou: Int
+    public var bought: Int
+    /// The cheapest buyable deal for an item still to buy.
+    public var fromCents: Int64?
+    public var id: String { hall.rawValue }
+
+    public var tiles: [StorefrontTile] { rows.flatMap(\.tiles) }
+
+    /// "Sleep", "Sit & lounge"; the leftovers are "Everything else".
+    public var title: String { hall.name }
+
+    /// "2 to buy · from $179.99 · 1 bought".
+    public var subtitle: String {
+        var parts: [String] = []
+        if toBuy > 0 { parts.append("\(toBuy) to buy") }
+        if toBuy > 0, let fromCents { parts.append("from \(CentsFormat.usd(fromCents))") }
+        if bought > 0 { parts.append("\(bought) bought") }
+        return parts.joined(separator: " · ")
+    }
 }
 
 public struct StorefrontHero: Sendable, Hashable {
@@ -127,14 +170,12 @@ public struct StorefrontHero: Sendable, Hashable {
 
 public struct ShoppingStorefront: Sendable, Hashable {
     public var hero: StorefrontHero
-    public var rows: [StorefrontRow]
-    public var shelves: [StorefrontShelf]
+    public var sections: [StorefrontSection]
+    /// "Blocked for your safety": every fraud-blocked deal, nil when there are none.
+    public var blocked: StorefrontShelf?
 
-    /// Every card in grid order (the one-column order at accessibility text sizes).
-    public var tiles: [StorefrontTile] { rows.flatMap(\.tiles) }
-
-    /// The budget shelf's ceiling: $50 when at least two deals fit under it, else $100.
-    public static let budgetTiers: [Int64] = [5_000, 10_000]
+    /// Every card in page order (the one-column order at accessibility text sizes).
+    public var tiles: [StorefrontTile] { sections.flatMap(\.tiles) }
 }
 
 extension Deal {
@@ -210,34 +251,49 @@ extension SyncSnapshot {
             return a.tile.item.id < b.tile.item.id
         }.map(\.tile)
 
-        // MARK: Shelves
-        let choosableOpen: [StorefrontDeal] = open.flatMap { item in
-            deals(for: item.id).filter { $0.isChoosable && !hasFailed($0) }.map { storeDeal($0, item) }
-        }
-        var shelves: [StorefrontShelf] = []
-        if !best.isEmpty {
-            shelves.append(StorefrontShelf(kind: .best, title: "Best deals for your new place", deals: best))
-        }
-        for tier in ShoppingStorefront.budgetTiers {
-            let under = choosableOpen.filter { $0.deal.priceCents < tier }
-                .sorted { ($0.deal.priceCents, $0.id) < ($1.deal.priceCents, $1.id) }
-            if under.count >= 2 {
-                shelves.append(StorefrontShelf(kind: .budget, title: "Under \(CentsFormat.usd(tier))", deals: under))
-                break
+        // MARK: Sections
+        let rank = Dictionary(uniqueKeysWithValues: ordered.enumerated().map { ($1.id, $0) })
+        let priority = Dictionary(uniqueKeysWithValues: ranked.map { ($0.tile.id, $0.priority) })
+        let byHall = Dictionary(grouping: ordered) { FunctionHall.of($0.item) }
+        let sections: [StorefrontSection] = byHall.map { hall, tiles in
+            let openTiles = tiles.filter { $0.item.status != .bought }
+            let doneTiles = tiles.filter { $0.item.status == .bought }
+            let offers: [StorefrontDeal] = openTiles.flatMap { tile in
+                deals(for: tile.item.id).filter { $0.isChoosable && !hasFailed($0) }.map { storeDeal($0, tile.item) }
             }
+            .sorted { a, b in
+                if a.savingsPercent != b.savingsPercent { return a.savingsPercent > b.savingsPercent }
+                if a.deal.priceCents != b.deal.priceCents { return a.deal.priceCents < b.deal.priceCents }
+                return a.id < b.id
+            }
+            return StorefrontSection(
+                hall: hall,
+                rows: Self.bentoRows(openTiles) + Self.boughtRows(doneTiles),
+                deals: offers.isEmpty ? nil : StorefrontShelf(kind: .best, title: "\(hall.name) deals", deals: offers, hall: hall),
+                toBuy: openTiles.count,
+                needsYou: openTiles.filter { (priority[$0.id] ?? 9) <= 2 }.count,
+                bought: doneTiles.count,
+                fromCents: offers.map(\.deal.priceCents).min()
+            )
         }
-        let local = choosableOpen.filter(\.isLocalPickup).sorted { ($0.deal.priceCents, $0.id) < ($1.deal.priceCents, $1.id) }
-        if !local.isEmpty {
-            shelves.append(StorefrontShelf(kind: .local, title: "Local pickup", deals: local))
-        }
-        let blocked: [StorefrontDeal] = items.flatMap { item in
-            deals(for: item.id).filter(\.isFraudBlocked).map { storeDeal($0, item) }
-        }
-        if !blocked.isEmpty {
-            shelves.append(StorefrontShelf(kind: .blocked, title: "Blocked for your safety", deals: blocked))
+        .sorted { a, b in
+            // Categories with something to buy first, curiosities last among them; then the ones
+            // that need the user most, then the most still to buy, then the most urgent card.
+            if (a.toBuy > 0) != (b.toBuy > 0) { return a.toBuy > 0 }
+            if (a.hall == .everythingElse) != (b.hall == .everythingElse) { return b.hall == .everythingElse }
+            if a.needsYou != b.needsYou { return a.needsYou > b.needsYou }
+            if a.toBuy != b.toBuy { return a.toBuy > b.toBuy }
+            return (a.tiles.first.flatMap { rank[$0.id] } ?? 0) < (b.tiles.first.flatMap { rank[$0.id] } ?? 0)
         }
 
-        return ShoppingStorefront(hero: hero, rows: Self.bentoRows(ordered), shelves: shelves)
+        // MARK: Blocked
+        let blockedDeals: [StorefrontDeal] = items.flatMap { item in
+            deals(for: item.id).filter(\.isFraudBlocked).map { storeDeal($0, item) }
+        }
+        let blocked = blockedDeals.isEmpty ? nil
+            : StorefrontShelf(kind: .blocked, title: "Blocked for your safety", deals: blockedDeals)
+
+        return ShoppingStorefront(hero: hero, sections: sections, blocked: blocked)
     }
 
     /// The deal a card leads with when none is chosen: one the agent may buy and that hasn't failed
@@ -305,6 +361,22 @@ extension SyncSnapshot {
             if item.status == .bought { return (StorefrontBadge("Bought", .good), 5) }
             return (StorefrontBadge("Finding deals…", .working), 4)
         }
+    }
+
+    /// Bought cards after a category's open ones: small pairs, a leftover wide card.
+    static func boughtRows(_ tiles: [StorefrontTile]) -> [StorefrontRow] {
+        func sized(_ t: StorefrontTile, _ s: StorefrontCardSize) -> StorefrontTile {
+            var t = t
+            t.size = s
+            return t
+        }
+        var rows: [StorefrontRow] = []
+        var rest = tiles[...]
+        while rest.count >= 2 {
+            rows.append(.pair(sized(rest.removeFirst(), .small), sized(rest.removeFirst(), .small)))
+        }
+        if let last = rest.first { rows.append(.single(sized(last, .wide))) }
+        return rows
     }
 
     /// Deterministic bento rows: the first card is the feature, then a repeating
