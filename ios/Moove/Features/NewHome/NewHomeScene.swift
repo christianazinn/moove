@@ -3,8 +3,8 @@ import UIKit
 import MooveKit
 
 /// Builds RealityKit entities for a floor plan: the voxel dollhouse shell (wooden base,
-/// plank floors, tiled walls with door gaps and windows, from `VoxelHouse.buildLayers`) plus
-/// small room labels floating just above the low wall tops. World space matches RoomPlan
+/// plank floors, tiled walls with door gaps and windows, from `VoxelHouse.buildLayers`). No
+/// floating room names (Lisa: removed). World space matches RoomPlan
 /// (meters, Y-up; plan y is world z), so items drop straight in at `VoxelHouse.floorTopM`.
 ///
 /// Dollhouse walls: interior walls are cut at `cutawayHeightM`; each exterior facing (and each
@@ -26,8 +26,6 @@ final class NewHomeScene {
     private var wallPieces: [(layer: VoxelHouse.Layer, entity: Entity)] = []
     /// Horizontal direction from the orbit target to the camera, world (x, z).
     private var viewDirection = SIMD2<Double>(0, 1)
-    /// Floating room names; off for room shots.
-    var showsLabels = true
     /// True once the shell's meshes are in the scene for the current plan.
     private(set) var isBuilt = false
     /// Called each time the shell finishes building (room shots wait for it before a snapshot).
@@ -63,7 +61,6 @@ final class NewHomeScene {
             root.addChild(walls)
             wallPieces.append((piece.layer, walls))
         }
-        if showsLabels { for label in shell.labels { root.addChild(label.clone(recursive: true)) } }
         applyViewDirection()
         isBuilt = true
         onBuilt?()
@@ -81,7 +78,6 @@ final class NewHomeScene {
     private struct Shell {
         var house: ModelEntity
         var pieces: [(layer: VoxelHouse.Layer, entity: ModelEntity)]
-        var labels: [Entity]
     }
 
     private static var shells: [ShellKey: Shell] = [:]
@@ -115,8 +111,7 @@ final class NewHomeScene {
                 walls.position = origin + SIMD3<Float>(layer.offset) * Float(VoxelGrid.voxelSize)
                 pieces.append((layer, walls))
             }
-            let labels = plan.rooms.map(Self.label(for:))
-            Self.shells[key] = Shell(house: house, pieces: pieces, labels: labels)
+            Self.shells[key] = Shell(house: house, pieces: pieces)
             Self.shellOrder.removeAll { $0 == key }
             Self.shellOrder.append(key)
             while Self.shellOrder.count > 6 { Self.shells[Self.shellOrder.removeFirst()] = nil }
@@ -150,38 +145,5 @@ final class NewHomeScene {
         let c = b.center
         let y = Float(VoxelHouse.floorTopM) + cutawayHeightM * 0.4
         return ([Float(c.x), y, Float(c.y)], max(1, Float((b.width * b.width + b.depth * b.depth).squareRoot()) / 2))
-    }
-
-    // MARK: Labels
-
-    /// Small mono label lying flat just above the wall tops, so furniture doesn't hide it.
-    private static func label(for room: FloorPlanRoom) -> Entity {
-        let group = Entity()
-        let c = room.centroid
-        group.position = [Float(c.x), Float(VoxelHouse.floorTopM) + cutawayHeightM + 0.03, Float(c.y)]
-        // Text meshes face +Z; lay them flat, reading upright from the default (front) camera.
-        group.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
-
-        let small = min(room.widthM, room.depthM) < 2
-        let title = text(room.name.uppercased(), size: small ? 0.13 : 0.17, weight: .semibold, color: Theme.uiColor(0x2A241D))
-        group.addChild(title)
-        if room.kind != .hallway {
-            let dims = text(String(format: "%.1f × %.1f m", room.widthM, room.depthM), size: small ? 0.1 : 0.12,
-                            weight: .regular, color: Theme.uiColor(0x5E564B))
-            dims.position.y -= small ? 0.17 : 0.22
-            group.addChild(dims)
-        }
-        return group
-    }
-
-    private static func text(_ string: String, size: CGFloat, weight: UIFont.Weight, color: UIColor) -> ModelEntity {
-        let mesh = MeshResource.generateText(
-            string, extrusionDepth: 0.003, font: .monospacedSystemFont(ofSize: size, weight: weight),
-            containerFrame: .zero, alignment: .center, lineBreakMode: .byTruncatingTail
-        )
-        let entity = ModelEntity(mesh: mesh, materials: [UnlitMaterial(color: color)])
-        let b = mesh.bounds
-        entity.position = [-b.center.x, -b.center.y, 0]
-        return entity
     }
 }
