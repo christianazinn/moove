@@ -231,7 +231,7 @@ struct ScanFlowView: View {
     /// One small chip per kind in a row that scrolls sideways (newest first), so a busy room
     /// doesn't squeeze every name into one line; past `maxFoundChips` it ends in "+N more".
     @ViewBuilder private var foundChips: some View {
-        if !found.isEmpty {
+        if !Self.foundCounts(found).isEmpty {
             let counts = Self.foundCounts(found)
             let shown = counts.prefix(Self.maxFoundChips)
             let more = counts.count - shown.count
@@ -275,15 +275,7 @@ struct ScanFlowView: View {
     static let maxFoundChips = 4
 
     /// Kinds with their counts, newest kind first (the detector reports in the order it confirms).
-    static func foundCounts(_ found: [String]) -> [(name: String, n: Int)] {
-        var order: [String] = []
-        var n: [String: Int] = [:]
-        for f in found {
-            if n[f] == nil { order.append(f) }
-            n[f, default: 0] += 1
-        }
-        return order.reversed().map { (name: $0, n: n[$0]!) }
-    }
+    static func foundCounts(_ found: [String]) -> [(name: String, n: Int)] { FoundChips.counts(found) }
 
     private var uploader: Uploader {
         if store.backendKind == .fixture { return LocalUploader() }
