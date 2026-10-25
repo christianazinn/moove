@@ -57,7 +57,7 @@ struct ListingPoster: View {
                 .frame(maxWidth: .infinity)
                 .background(PosterInk.color(look.artBackground(paper: palette.paper)).opacity(treatment == .split ? 1 : 0))
                 .padding(.horizontal, treatment == .split ? 0 : 10)
-                .padding(.top, treatment == .split ? 10 : 4)
+                .padding(.top, 8)
                 .overlay {
                     if stamp.isBig { BigStamp(stamp: stamp) }
                 }
@@ -65,7 +65,8 @@ struct ListingPoster: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(listing.title)
                     .monoText(13.5, weight: .bold, maxScale: 1.8)
-                    .lineLimit(ax ? 8 : 2)
+                    // Always two lines tall, so every poster on the wall is the same size (Lisa).
+                    .lineLimit(ax ? 8 : 2, reservesSpace: !ax)
                     .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(ink)
                 ViewThatFits(in: .horizontal) {
@@ -80,7 +81,7 @@ struct ListingPoster: View {
                     }
                 }
                 // The reason a post failed is in the VoiceOver label and on the listing's page.
-                if listing.simulated { SimulatedTag() }
+                SimulatedTag().opacity(listing.simulated ? 1 : 0).accessibilityHidden(!listing.simulated)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
@@ -203,7 +204,7 @@ private struct SmallStamp: View {
 private struct TearOffTabs: View {
     let ink: Color
     var count = 3
-    @ScaledMetric(relativeTo: .caption2) private var tabHeight: CGFloat = 40
+    @ScaledMetric(relativeTo: .caption2) private var tabHeight: CGFloat = 26
 
     var body: some View {
         VStack(spacing: 0) {
