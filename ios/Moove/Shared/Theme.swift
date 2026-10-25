@@ -1,45 +1,45 @@
 import SwiftUI
 import UIKit
 
-/// Warm, quiet look (after the MoveWise prototype): cream paper, warm black
-/// ink, sage accent, monospace for headings and numbers, thin rules instead
-/// of cards. Every color has a light and a dark value. Opt in per screen
-/// with `.mooveScreen()`.
+/// Quiet coastal look: cream paper, deep harbor ink, slate and sage accents (Lisa's palette:
+/// #121F26 · #4F7889 · #7FA8A3 · #D1D6C8 · #F4F0D7), one sans family (SF Pro) with tabular
+/// figures, thin rules instead of cards. Every color has a light and a dark value. Opt in per
+/// screen with `.mooveScreen()`.
 ///
 /// Text colors are picked for at least 4.5:1 contrast on `bg` and `surface`
 /// in both modes. `faint` and `accent` are for rules, dots and fills only.
 enum Theme {
     // Surfaces
-    static let bg = dynamic(0xF3EEE5, 0x1C1814)
-    static let surface = dynamic(0xEAE3D7, 0x26211B)
-    static let surface2 = dynamic(0xE1D9CB, 0x302921)
-    static let line = dynamic(0xDAD1C1, 0x352E26)
-    static let lineStrong = dynamic(0xC9BFAE, 0x4A4136)
+    static let bg = dynamic(0xF4F0D7, 0x121F26)
+    static let surface = dynamic(0xE9E8D2, 0x1A2A32)
+    static let surface2 = dynamic(0xDDE0CF, 0x22343D)
+    static let line = dynamic(0xD1D6C8, 0x2A3D46)
+    static let lineStrong = dynamic(0xB4BEB4, 0x3B525C)
     // Ink
-    static let text = dynamic(0x1E1B16, 0xF1EADD)
-    static let muted = dynamic(0x665E52, 0xA89F8F)
+    static let text = dynamic(0x121F26, 0xF4F0D7)
+    static let muted = dynamic(0x45626E, 0xA9B8B4)
     /// Decorative only (chevrons, separators in meta lines); too light for body text.
-    static let faint = dynamic(0x9C9383, 0x7A7163)
+    static let faint = dynamic(0x8FA3A3, 0x5F7A80)
     // Accents
     /// Sage for dots, bars and swatches.
-    static let accent = dynamic(0x8B9A7B, 0x9AAA89)
-    /// Sage that reads as text on `bg` / `surface`.
-    static let accentStrong = dynamic(0x5E6D50, 0xB2C1A0)
-    static let accentSoft = dynamic(0xDCE0D0, 0x343A2C)
+    static let accent = dynamic(0x7FA8A3, 0x7FA8A3)
+    /// Slate that reads as text on `bg` / `surface`.
+    static let accentStrong = dynamic(0x3E6474, 0x9CC4BE)
+    static let accentSoft = dynamic(0xDCE4D8, 0x1F3A3E)
     /// Fill for primary buttons; `accentInk` on top passes 4.5:1 in both modes.
-    static let accentFill = dynamic(0x5E6D50, 0x9AAA89)
-    static let accentFillPressed = dynamic(0x4F5D43, 0x8A9A79)
-    static let accentInk = dynamic(0xFFFFFF, 0x1C1814)
+    static let accentFill = dynamic(0x46707F, 0x7FA8A3)
+    static let accentFillPressed = dynamic(0x3B6170, 0x6F9893)
+    static let accentInk = dynamic(0xF4F0D7, 0x121F26)
     static let danger = dynamic(0xA24D35, 0xD27A5E)
-    static let dangerSoft = dynamic(0xEFD9CD, 0x3D2A22)
+    static let dangerSoft = dynamic(0xEFDCCD, 0x3A2A26)
     /// Ochre for swatches; use `ochreInk` for ochre text.
     static let ochre = dynamic(0xB48A3E, 0xCFA45A)
-    static let ochreInk = dynamic(0x86621F, 0xCFA45A)
-    static let slate = dynamic(0x7B8B99, 0x93A3B1)
-    static let stone = dynamic(0x8F8577, 0xA39887)
+    static let ochreInk = dynamic(0x7E5C1C, 0xCFA45A)
+    static let slate = dynamic(0x4F7889, 0x8FB0BF)
+    static let stone = dynamic(0x8C9690, 0xA0AAA4)
     // Floor plans
-    static let planFloor = dynamic(0xEFE8DC, 0x2A241E)
-    static let planWall = dynamic(0x1E1B16, 0xF1EADD)
+    static let planFloor = dynamic(0xEEEBD4, 0x1A2A32)
+    static let planWall = dynamic(0x121F26, 0xF4F0D7)
 
     static let radiusLarge: CGFloat = 20
     static let radiusMedium: CGFloat = 14
@@ -67,10 +67,16 @@ enum Theme {
 // MARK: Type
 
 extension Font {
-    /// Monospace, for headings, labels and numbers. Fixed size; prefer `.monoText(...)`, which follows Dynamic Type.
+    /// The app's label face (SF Pro with tabular figures; it was monospace before the 2026-10-25 restyle).
+    /// Fixed size; prefer `.monoText(...)`, which follows Dynamic Type.
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
+        .system(size: size, weight: Font.Weight.softened(weight)).monospacedDigit()
     }
+}
+
+extension Font.Weight {
+    /// Bold reads heavy in SF Pro at label sizes; the restyle sets it a step lighter.
+    static func softened(_ weight: Font.Weight) -> Font.Weight { weight == .black ? .bold : (weight == .bold || weight == .heavy ? .semibold : weight) }
 }
 
 extension DynamicTypeSize {
@@ -105,12 +111,14 @@ private struct ScaledFont: ViewModifier {
 
     func body(content: Content) -> some View {
         let s = size * min(dynamicTypeSize.textScale, maxScale)
-        content.font(.system(size: s, weight: weight, design: monospaced ? .monospaced : .default))
+        // One family: "mono" text is SF Pro with tabular figures, so numbers still line up.
+        let font = Font.system(size: s, weight: monospaced ? Font.Weight.softened(weight) : weight)
+        content.font(monospaced ? font.monospacedDigit() : font)
     }
 }
 
 extension View {
-    /// Monospace at a design size, scaled for Dynamic Type.
+    /// The label face (SF Pro, tabular figures) at a design size, scaled for Dynamic Type.
     func monoText(_ size: CGFloat, weight: Font.Weight = .regular, maxScale: CGFloat = 2.2) -> some View {
         modifier(ScaledFont(size: size, weight: weight, monospaced: true, maxScale: maxScale))
     }
@@ -122,12 +130,12 @@ extension View {
 
     /// Small monospace label above a heading or section ("06 — New home").
     func eyebrow() -> some View {
-        monoText(13).tracking(0.4).foregroundStyle(Theme.muted)
+        monoText(12, weight: .medium).tracking(0.8).textCase(.uppercase).foregroundStyle(Theme.muted)
     }
 
     /// Large monospace page heading ("Your current room").
     func pageTitle() -> some View {
-        monoText(28, weight: .bold, maxScale: 1.6).tracking(-0.3).foregroundStyle(Theme.text)
+        sansText(30, weight: .semibold, maxScale: 1.6).tracking(-0.6).foregroundStyle(Theme.text)
     }
 
     /// Short sans paragraph under a page heading.
@@ -137,25 +145,25 @@ extension View {
 
     /// Bold monospace section heading ("Pieces").
     func listHeading() -> some View {
-        monoText(16, weight: .bold).foregroundStyle(Theme.text)
+        sansText(17, weight: .semibold).tracking(-0.2).foregroundStyle(Theme.text)
     }
 
     /// Bold monospace title for a block or row.
     func blockTitle() -> some View {
-        monoText(15.5, weight: .bold).foregroundStyle(Theme.text).lineSpacing(2)
+        sansText(16, weight: .medium).foregroundStyle(Theme.text).lineSpacing(2)
     }
 
     /// Monospace secondary line ("4.5 × 4.0 m · 2 doors").
     func monoMeta() -> some View {
-        monoText(13.5).foregroundStyle(Theme.muted).lineSpacing(2.5)
+        monoText(13.5).foregroundStyle(Theme.muted).lineSpacing(2)
     }
 
     /// Right-aligned monospace figure in a row ("$80–$140").
     func rowValue() -> some View {
-        monoText(14).foregroundStyle(Theme.text).lineLimit(1)
+        monoText(15, weight: .medium).foregroundStyle(Theme.text).lineLimit(1)
     }
 
-    /// Cream background, sage tint, warm ink. Lists and forms drop their gray background.
+    /// Cream background, slate tint, harbor ink. Lists and forms drop their gray background.
     func mooveScreen() -> some View {
         self
             .foregroundStyle(Theme.text)
@@ -167,7 +175,7 @@ extension View {
 
     /// A 1 pt rule under (or over) the view, like a row in a ledger.
     func ruled(_ edge: VerticalEdge = .bottom) -> some View {
-        overlay(alignment: edge == .bottom ? .bottom : .top) { Rectangle().fill(Theme.line.opacity(0.6)).frame(height: 1) }
+        overlay(alignment: edge == .bottom ? .bottom : .top) { Rectangle().fill(Theme.line).frame(height: 0.75) }
     }
 }
 
@@ -376,14 +384,14 @@ struct MonoTag: View {
 
     var body: some View {
         Text(text)
-            .monoText(11, weight: .bold, maxScale: 1.6)
-            .tracking(0.5)
+            .monoText(10.5, weight: .semibold, maxScale: 1.6)
+            .tracking(0.7)
             .textCase(.uppercase)
             .lineLimit(1)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .foregroundStyle(tone)
-            .overlay(Capsule().strokeBorder(tone.opacity(0.55), lineWidth: 1))
+            .background(Capsule().fill(tone.opacity(0.10)))
     }
 }
 
@@ -489,7 +497,7 @@ extension Theme {
         /// Something lifted off the page (cards, voxel models on a plinth).
         case lifted
 
-        var opacity: Double { self == .lifted ? 0.10 : 0.14 }
+        var opacity: Double { self == .lifted ? 0.07 : 0.08 }
         var radius: CGFloat {
             switch self {
             case .contact: return 1.5
@@ -509,27 +517,27 @@ extension Theme {
     /// Printed-paper materials shared by the paper metaphors (box labels, receipts, sticky notes, posters).
     /// Text colors are at least 4.5:1 on `cream`.
     enum Paper {
-        /// Cream paper a shade lighter than the page (a warm gray in dark mode).
-        static let cream = Color(uiColor: Theme.dynamicUIColor(0xFBF7EF, 0x2C261F))
+        /// Cream paper a shade lighter than the page (deep slate in dark mode).
+        static let cream = Color(uiColor: Theme.dynamicUIColor(0xFAF7E6, 0x1C2C34))
         /// Printed ink and its quieter line, on `cream`.
-        static let ink = Color(uiColor: Theme.dynamicUIColor(0x24201A, 0xEDE5D7))
-        static let inkMuted = Color(uiColor: Theme.dynamicUIColor(0x5F574B, 0xB3AA99))
+        static let ink = Color(uiColor: Theme.dynamicUIColor(0x121F26, 0xF4F0D7))
+        static let inkMuted = Color(uiColor: Theme.dynamicUIColor(0x45626E, 0xAEB9B3))
         /// Rules, leaders and dashes printed on paper (decorative).
-        static let rule = Color(uiColor: Theme.dynamicUIColor(0xB9AE9B, 0x5E5447))
+        static let rule = Color(uiColor: Theme.dynamicUIColor(0xB4BEB4, 0x3B525C))
         /// Cardboard.
         static let kraft = Color(uiColor: Theme.dynamicUIColor(0xDDBC8E, 0x5A4632))
         /// Paper tape.
-        static let tape = Color(uiColor: Theme.dynamicUIColor(0xE4D2AE, 0x5C4E37))
+        static let tape = Color(uiColor: Theme.dynamicUIColor(0xE6E2C6, 0x34474C))
     }
 }
 
 extension View {
     /// One of the theme's three shadow levels.
     func mooveShadow(_ level: Theme.Shadow) -> some View {
-        shadow(color: .black.opacity(level.opacity), radius: level.radius, y: level.y)
+        shadow(color: Theme.color(0x121F26).opacity(level.opacity), radius: level.radius, y: level.y)
     }
 
-    /// Serif display face for section and display titles (Inventory's halls, Shopping's categories),
+    /// Display face for section and display titles (SF Pro, tight tracking; it was a serif before the restyle) (Inventory's halls, Shopping's categories),
     /// scaled for Dynamic Type up to 2×.
     func displayTitle(_ size: CGFloat = 24, weight: Font.Weight = .semibold) -> some View {
         serifType(size, weight: weight).foregroundStyle(Theme.text)
@@ -549,8 +557,8 @@ private struct DisplaySerif: ViewModifier {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     func body(content: Content) -> some View {
-        let font = Font.system(size: size * min(dynamicTypeSize.textScale, 2), weight: weight, design: .serif)
-        content.font(italic ? font.italic() : font)
+        let font = Font.system(size: size * min(dynamicTypeSize.textScale, 2), weight: weight == .bold ? .semibold : weight)
+        content.font(italic ? font.italic() : font).tracking(-0.3 * size / 24)
     }
 }
 

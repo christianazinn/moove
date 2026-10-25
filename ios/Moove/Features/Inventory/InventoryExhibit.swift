@@ -13,10 +13,10 @@ extension View {
 
 enum MuseumColors {
     /// Warm light pooling on the gallery wall.
-    static let spotlight = Color(uiColor: Theme.dynamicUIColor(0xFFFBF2, 0x463B2E))
+    static let spotlight = Color(uiColor: Theme.dynamicUIColor(0xFBF9EA, 0x2A3F48))
     /// The plinth's top face and its front.
-    static let plinthTop = Color(uiColor: Theme.dynamicUIColor(0xF7F2E9, 0x3A3229))
-    static let plinthFront = Color(uiColor: Theme.dynamicUIColor(0xDDD4C4, 0x2B241D))
+    static let plinthTop = Color(uiColor: Theme.dynamicUIColor(0xF6F3E0, 0x22343D))
+    static let plinthFront = Color(uiColor: Theme.dynamicUIColor(0xD1D6C8, 0x1A2A32))
 }
 
 /// What one exhibit shows, worked out once by the screen.

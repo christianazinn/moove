@@ -56,7 +56,34 @@ public struct PosterPalette: Sendable, Equatable {
     public func ink(for kind: PosterStamp.Kind) -> UInt32 { stampInk[kind] ?? 0x4A4136 }
 
     /// The palette the app uses. Swap this to restyle every poster.
-    public static let current = PosterPalette.retroCream
+    public static let current = PosterPalette.harbor
+
+    /// The app's restyle palette (#121F26 · #4F7889 · #7FA8A3 · #D1D6C8 · #F4F0D7): slate, sage and mist
+    /// posters on cream paper, against a pale mist wall (harbor ink in dark mode).
+    public static let harbor = PosterPalette(
+        swatches: [
+            Swatch(name: "slate", color: 0x46707F, onColor: 0xF4F0D7, accent: 0x7FA8A3),
+            Swatch(name: "sage", color: 0x7FA8A3, onColor: 0x121F26, accent: 0x46707F),
+            Swatch(name: "mist", color: 0xD1D6C8, onColor: 0x121F26, accent: 0x46707F),
+        ],
+        paper: 0xF4F0D7,
+        paperInk: 0x121F26,
+        wallLight: 0xE3E5D4,
+        wallDark: 0x121F26,
+        wallSpeckleLight: 0xD8DBC9,
+        wallSpeckleDark: 0x1A2A32,
+        tape: 0xE9E4C6,
+        stampInk: [
+            .needsOK: 0x8F5E0A,
+            .drafting: 0x4A5A60,
+            .posting: 0x4A5A60,
+            .live: 0x3E6474,
+            .posted: 0x3E6474,
+            .sold: 0x9A3B2E,
+            .failed: 0xA24D35,
+            .denied: 0x5E4A50,
+        ]
+    )
 
     public static let retroCream = PosterPalette(
         // Three muted, paper-toned swatches (Lisa: "a bit less color overall"): clay, kraft, slate.

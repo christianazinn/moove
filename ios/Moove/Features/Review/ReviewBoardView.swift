@@ -344,7 +344,7 @@ enum ReviewPalette {
         switch d {
         case .keep: Theme.accentFill
         case .sell: Theme.ochreInk
-        case .donate: Theme.color(0x55657A)
+        case .donate: Theme.color(0x46707F)
         case .trash: Theme.stone
         case .undecided: Theme.danger
         }
