@@ -301,26 +301,31 @@ extension Item {
 extension Item {
     /// Fixtures that belong to the building (mirrors the worker's `agents/src/builtins.ts`): never
     /// priced, and left out of sale totals even if an older worker priced them (Rio's hotel
-    /// bathroom: a $48 toilet, a $64 tub, a $32 radiator). A sink caddy or a toilet brush is an item.
+    /// bathroom: a $48 toilet, a $64 tub, a $32 radiator; a door, a ceiling fan). A sink caddy, a door mat
+    /// or a window fan is an item.
     public var isBuiltInFixture: Bool {
-        func words(_ s: String) -> Set<String> { Set(s.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map(String.init)) }
-        let joined = "\(name) \(category)".lowercased()
+        let text = "\(name) \(category)"
+        if Self.matches(Self.alwaysFixture, text) { return true }
         // Accessory words only count in the head noun phrase, as on the worker: "bathtub with
         // shower curtain" is a tub, "shower curtain with rod" is a curtain.
-        let head = name.lowercased()
-            .components(separatedBy: CharacterSet(charactersIn: ",;("))[0]
-            .components(separatedBy: " with ")[0].components(separatedBy: " and ")[0].components(separatedBy: " plus ")[0]
-        let fixture = joined.contains("bath tub") || !words(joined).isDisjoint(with: Self.fixtureWords)
-        return fixture && words("\(head) \(category.lowercased())").isDisjoint(with: Self.accessoryWords)
+        let head = Self.headSplit.firstMatch(in: name, range: NSRange(name.startIndex..., in: name))
+            .flatMap { Range($0.range, in: name) }.map { String(name[..<$0.lowerBound]) } ?? name
+        return Self.matches(Self.fixture, text) && !Self.matches(Self.accessory, "\(head) \(category)")
     }
 
-    private static let fixtureWords: Set<String> = ["toilet", "toilets", "bathtub", "bathtubs", "sink", "sinks", "washbasin", "washbasins",
-                                                    "fireplace", "fireplaces", "stairs", "stair", "staircase", "radiator", "radiators",
-                                                    "shower", "showers", "built-in", "built-ins", "builtin"]
-    private static let accessoryWords: Set<String> = ["caddy", "caddies", "mat", "mats", "organizer", "organizers", "strainer", "strainers",
-                                                      "stopper", "paper", "brush", "brushes", "plunger", "cleaner", "towel", "towels", "rack",
-                                                      "racks", "shelf", "shelves", "curtain", "curtains", "head", "heads", "heater", "heaters",
-                                                      "portable", "oil", "cover", "covers", "tool", "tools", "screen", "gate", "gates"]
+    // The same patterns as `agents/src/builtins.ts`; keep the two in sync.
+    private static let fixture = regex(#"\b(toilets?|bathtubs?|bath tubs?|sinks?|washbasins?|fireplaces?|stairs?|staircases?|radiators?|showers?|shower stalls?|built-?ins?|doors?|windows?|blinds?|shutters?|outlets?|vents?|countertops?)\b"#)
+    private static let alwaysFixture = regex(#"\b(ceiling (fans?|lights?)|light fixtures?|recessed lights?|curtain rods?|smoke detectors?|thermostats?|grab bars?)\b|\bwall[- ]mounted\b[^,;(]*\b(towel (bars?|racks?)|hair ?dryers?|soap dispensers?)\b"#)
+    private static let accessory = regex(#"\b(caddy|caddies|mats?|organizers?|strainers?|stoppers?|paper|brush(es)?|plungers?|cleaners?|towels?|racks?|shelf|shelves|curtains?|heads?|heaters?|portable|oil|covers?|seats? covers?|tools?|screens?|gates?|fans?|ac|air conditioners?|hangers?|hooks?|stops?|wedges?|knobs?|locks?)\b"#)
+    private static let headSplit = regex(#"\b(?:with|and|plus)\b|[,;(]"#)
+
+    private static func regex(_ pattern: String) -> NSRegularExpression {
+        try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+    }
+
+    private static func matches(_ re: NSRegularExpression, _ s: String) -> Bool {
+        re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) != nil
+    }
 
     /// What the item adds to "expected sales" and other totals: nothing for a built-in fixture.
     public var saleValueCents: Int64? { isBuiltInFixture ? nil : estValueCents }

@@ -51,4 +51,16 @@ import Testing
         #expect(!item(2, "shower curtain with rod", "decor").isBuiltInFixture)
         #expect(!item(3, "chrome towel rack shelf", "storage").isBuiltInFixture)
     }
+
+    @Test func doorsFansAndWallMountedFixturesStay() {
+        for (n, c) in [("white paneled interior door with brass knob", "storage"), ("brown wood-blade ceiling fan with frosted glass light kit", "fan"),
+                       ("chrome wall-mounted bathroom towel rack shelf", "storage"), ("white wall-mounted hair dryer", "appliance"),
+                       ("white plantation window shutters", "decor"), ("vertical blinds", "decor")] {
+            #expect(item(1, n, c).isBuiltInFixture, "\(n)")
+        }
+        for (n, c) in [("door mat", "decor"), ("window fan", "fan"), ("window AC unit", "appliance"), ("over-the-door hooks", "storage"),
+                       ("wall-mounted flat screen TV", "tv"), ("box fan", "fan"), ("shower caddy", "decor"), ("toilet paper", "decor")] {
+            #expect(!item(1, n, c).isBuiltInFixture, "\(n)")
+        }
+    }
 }
