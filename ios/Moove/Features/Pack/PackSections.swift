@@ -112,7 +112,7 @@ struct TruckCard: View {
     /// The detail the screen no longer prints, for VoiceOver.
     private var spoken: String {
         let t = plan.truck
-        var parts = [truckLabel, "\(t.movers) movers", "about \(t.costLowCents.usd) to \(t.costHighCents.usd), a rough estimate"]
+        var parts = [truckLabel, "\(t.movers) movers", "about \(((t.costLowCents + t.costHighCents) / 2).usd), a rough estimate"]
         if let note = load?.sizeNote(planned: t.truck) { parts.append(note) }
         return parts.joined(separator: ", ")
     }

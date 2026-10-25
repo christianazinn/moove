@@ -30,7 +30,7 @@ struct ReviewView: View {
                     ReviewImpactBanner(items: items)
                         .padding(.top, 4)
                     if !deck.isEmpty {
-                        ReviewDeckView(cards: deck, comps: store.snapshot.comps, doneCount: history.count,
+                        ReviewDeckView(cards: deck, doneCount: history.count,
                                        canUndo: !history.isEmpty, onDecide: decide, onUndo: undo)
                             .padding(.top, 20)
                     } else {

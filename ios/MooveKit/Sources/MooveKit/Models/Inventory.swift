@@ -123,7 +123,7 @@ public struct Item: Codable, Sendable, Hashable, Identifiable {
     public var condition: Int?
     public var estValueCents: Int64?
     /// The pricing agent's low/high for the estimate (`est_low_cents`/`est_high_cents`). nil when
-    /// the backend doesn't say (fixtures, older rows). Read through `estRange`.
+    /// the backend doesn't say (fixtures, older rows). Not shown: every screen shows the one estimate.
     public var estLowCents: Int64?
     public var estHighCents: Int64?
     public var disposition: Disposition
@@ -336,15 +336,6 @@ extension Item {
 
     /// What the item adds to "expected sales" and other totals: nothing for a built-in fixture.
     public var saleValueCents: Int64? { isBuiltInFixture ? nil : estValueCents }
-
-    /// The agent's low–high around the estimate, only when it actually brackets the estimate, so a
-    /// range shown anywhere never disagrees with the single price shown everywhere else. nil for
-    /// built-in fixtures, unpriced items and degenerate ranges.
-    public var estRange: ClosedRange<Int64>? {
-        guard let est = saleValueCents, let lo = estLowCents, let hi = estHighCents,
-              lo < hi, lo <= est, est <= hi else { return nil }
-        return lo...hi
-    }
 
     /// An estimate from only one or two comparable listings is a rough guess, not a market price.
     /// Zero means none are recorded (seeded or demo rows), which isn't flagged.

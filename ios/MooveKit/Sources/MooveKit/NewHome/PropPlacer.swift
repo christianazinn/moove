@@ -41,11 +41,15 @@ public struct PropPlacer: Sendable {
 
     /// Categories that are props whenever they're small enough.
     static let propCategories: Set<String> = ["decor", "lamp", "light", "lighting", "books", "book", "photos", "electronics", "trading_cards", "plant", "plants"]
-    /// Builders that are furniture (or floor things) at any size.
+    /// Builders that are furniture (or floor things) at any size. Anything you sit on stays on
+    /// the floor, so a small ottoman or bench never ends up on a desk.
     static let floorKinds: Set<VoxelModels.Kind> = [.sofa, .bed, .mattress, .desk, .chair, .table, .dresser, .bookshelf, .rug, .appliance, .beanBag, .quiltRack, .box,
                                                          .guitar, .piano, .keyboard, .drums, .vacuum, .scooter, .bag, .fitness, .board,
                                                          .motorcycle, .stroller, .wheelchair, .grill, .lawnMower, .crib, .ladder, .trunk, .basket,
-                                                         .trashCan, .toolbox, .petCrate, .petBed, .catTree, .rack]
+                                                         .trashCan, .toolbox, .petCrate, .petBed, .catTree, .rack,
+                                                         .ottoman, .bench, .suitcase, .bike, .stove, .dishwasher, .toilet, .sink, .bathtub]
+    /// Pieces whose tops are for sitting or sleeping, never for setting things on.
+    static let seatKinds: Set<VoxelModels.Kind> = [.sofa, .chair, .ottoman, .bench, .beanBag, .bed, .mattress, .crib, .petBed]
 
     /// `elevationM`: a known height (a scanned wall-mounted TV is a wall item whatever its name).
     public static func role(of spec: VoxelItemSpec, elevationM: Double? = nil) -> Role {
@@ -121,7 +125,9 @@ public struct PropPlacer: Sendable {
             let g = m.grid, base = p.elevationM ?? 0
             let rect = OrientedRect(center: PlanPoint(p.x, p.y), halfWidth: Double(g.nx) * Self.V / 2,
                                     halfDepth: Double(g.nz) * Self.V / 2, rotationDeg: p.rotationDeg)
-            if VoxelModels.kind(spec) != .rug { solids[p.room, default: []].append((rect, base, base + Double(g.ny) * Self.V)) }
+            let kind = VoxelModels.kind(spec)
+            if kind != .rug { solids[p.room, default: []].append((rect, base, base + Double(g.ny) * Self.V)) }
+            if Self.seatKinds.contains(kind) { continue }
             for s in m.surfaces {
                 surfaces.append(Surface(parent: p, parentType: Self.parentType(spec, s, grid: g), grid: g, s: s))
             }
