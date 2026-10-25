@@ -41,7 +41,7 @@ struct NewHomePicker: View {
     }
 }
 
-/// The picker's blocks: Paste a Zillow link, the demo house, or room sizes. Move shows them at
+/// The picker's blocks: Paste a Zillow link or the demo house. Move shows them at
 /// the top of the page until a home is chosen.
 struct NewHomePickerContent: View {
     var onPick: (_ name: String, _ source: NewHomeSource, _ plan: FloorPlan) -> Void
@@ -61,15 +61,7 @@ struct NewHomePickerContent: View {
             .accessibilityHint("Zillow, Redfin or Realtor.com")
             .padding(.bottom, 40)
 
-            demoHouse.padding(.bottom, 40)
-
-            NavigationLink {
-                ManualRoomsEditor { name, plan in onPick(name, .manual, plan) }
-            } label: {
-                Label("Enter room sizes", systemImage: "ruler").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.pill(.outline))
-            .accessibilityLabel("Enter room sizes, width by depth")
+            demoHouse
         }
     }
 
@@ -176,9 +168,7 @@ struct NewHomeStage: View {
     var demoTag = false
 
     @State private var options: [LayoutOption] = []
-    @State private var style: LayoutSolver.Style = .byFunction
     @State private var flyInToken = 0
-    @State private var savedStyle: LayoutSolver.Style?
     /// Each piece's scanned spot in its old room, where the fly-in starts it (nil: the pile).
     @State private var starts: FlyInStarts?
     /// False until the layouts are solved and the starts looked up, so the first fly-in starts
@@ -187,8 +177,9 @@ struct NewHomeStage: View {
     /// True while the layouts are being solved off the main thread.
     @State private var arranging = false
 
-    private var saved: Bool { home != nil }
-    private var option: LayoutOption? { options.first { $0.style == style } }
+    /// One style (Lisa): "By function". `LayoutSolver` still solves the others for its tests.
+    private static let style: LayoutSolver.Style = .byFunction
+    private var option: LayoutOption? { options.first { $0.style == Self.style } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -197,10 +188,6 @@ struct NewHomeStage: View {
                 controls
                     .padding(.horizontal, Theme.gutter)
                     .padding(.top, 20)
-            }
-            if !shownPlacements.isEmpty {
-                RoomShotsSection(homeName: name, plan: plan, items: furniture.items, placements: shownPlacements, ready: ready)
-                    .padding(.top, 56)
             }
         }
         .onChange(of: shownOption, initial: true) { _, new in layout = new }
@@ -225,11 +212,12 @@ struct NewHomeStage: View {
             LayoutCache.store(solved, for: key)
         } else { return }
         guard !Task.isCancelled else { return }
-        apply(solved)
+        options = solved
         starts = loaded
         arranging = false
         ready = true
         flyInToken += 1
+        await autoSave()
     }
 
     /// The layout shown, once the fly-in's starts are known.
@@ -238,21 +226,14 @@ struct NewHomeStage: View {
     /// Placements shown in 3D: none until the fly-in's starts are known.
     private var shownPlacements: [Placement] { shownOption?.placements ?? [] }
 
-    /// Shows solved layouts (MooveKit `LayoutSolver.arrangeAll`: every style with the lived-in
-    /// pass, small things on furniture tops and art on the walls under the 1.1 m cut).
-    private func apply(_ solved: [LayoutOption]) {
-        options = solved
-        // Reopen on the layout the user saved last, if any.
-        if let home, let last = store.snapshot.layouts(for: home.id).max(by: { $0.id < $1.id }),
-           let match = LayoutSolver.Style.allCases.first(where: { $0.label == last.name }) {
-            style = match
-            savedStyle = match
-        }
-    }
-
-    private func save() async {
+    /// Saves the arranged layout to the home as soon as it's ready (and again whenever the plan or
+    /// the items change it), so Review and the boxes always see the layout on screen. Skipped when
+    /// the newest saved layout already matches, or while the home is only local.
+    private func autoSave() async {
         guard let home, let option else { return }
-        if await store.saveLayout(option.placements, name: option.name, for: home) { savedStyle = option.style }
+        let last = store.snapshot.layouts(for: home.id).max { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
+        if let last, last.placements == option.placements { return }
+        _ = await store.saveLayout(option.placements, name: option.name, for: home)
     }
 
     // MARK: Stage
@@ -291,24 +272,14 @@ struct NewHomeStage: View {
 
     // MARK: Layout
 
+    /// One button: Rearrange replays the arrangement flying in.
     private var controls: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                PillPicker(options: LayoutSolver.Style.allCases, selection: $style) { $0.label }
-            }
-            HStack(spacing: 10) {
-                Button { flyInToken += 1 } label: {
-                    Label("Fly in", systemImage: "arrow.triangle.2.circlepath")
-                }
-                .buttonStyle(.pill(.outline, compact: true))
-                .accessibilityLabel("Play fly-in again")
-                Button(savedStyle == style ? "Saved" : "Save layout") { Task { await save() } }
-                    .buttonStyle(.pill(.primary, compact: true))
-                    .disabled(!saved || savedStyle == style || option == nil)
-                Spacer(minLength: 0)
-            }
-            .padding(.top, 12)
+        Button { flyInToken += 1 } label: {
+            Label("Rearrange", systemImage: "arrow.triangle.2.circlepath")
         }
+        .buttonStyle(.pill(.outline, compact: true))
+        .accessibilityHint("Plays the pieces flying into place again")
+        .accessibilityIdentifier("newHome.rearrange")
     }
 
 }
