@@ -120,15 +120,7 @@ struct ListingPoster: View {
 
     @ViewBuilder private var art: some View {
         Group {
-            if let item, item.origin == .photo, !item.photoUrls.isEmpty {
-                // Items added by photo have no size, so no voxel model: the photo, taped in.
-                ItemPhoto(urls: item.photoUrls) { $0.resizable().scaledToFill() }
-                    .background(PosterInk.paper.opacity(0.4))
-                    .frame(width: artHeight * 0.8, height: artHeight * 0.8)
-                    .clipShape(Rectangle())
-                    .padding(4)
-                    .background(PosterInk.paper)
-            } else if let item {
+            if let item {
                 VoxelThumbnail(item, size: artHeight, tile: false)
                     .mooveShadow(.lifted)
             } else {
