@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MooveKit
 
 /// Move's "Your new home" part: which home it is, and the furniture that flies into it.
@@ -176,6 +177,8 @@ struct NewHomeStage: View {
     @State private var ready = false
     /// True while the layouts are being solved off the main thread.
     @State private var arranging = false
+    /// "Welcome home" over the stage once the fly-in's finale is done; hidden again on a replay.
+    @State private var welcomed = false
 
     /// One style (Lisa): "By function". `LayoutSolver` still solves the others for its tests.
     private static let style: LayoutSolver.Style = .byFunction
@@ -191,6 +194,7 @@ struct NewHomeStage: View {
             }
         }
         .onChange(of: shownOption, initial: true) { _, new in layout = new }
+        .onChange(of: flyInToken) { welcomed = false }
         // Re-runs (and cancels the previous run) whenever the plan or the items change.
         .task(id: SolveKey(plan: plan, items: furniture.items)) { await solve() }
     }
@@ -241,9 +245,16 @@ struct NewHomeStage: View {
     private var stage: some View {
         VStack(alignment: .leading, spacing: 0) {
             FloorPlan3DView(plan: plan, focusRoom: nil, items: furniture.items, placements: shownPlacements, flyInToken: flyInToken,
-                            flyInStarts: starts)
+                            flyInStarts: starts,
+                            onFlyInFinale: {
+                                withAnimation(.easeOut(duration: 0.9)) { welcomed = true }
+                                UIAccessibility.post(notification: .announcement, argument: "Welcome home")
+                            })
                 .frame(height: 420)
                 .overlay { if arranging { arrangingNotice } }
+                .overlay(alignment: .bottom) {
+                    if welcomed && !arranging { welcomeCaption }
+                }
                 .overlay(alignment: .topLeading) {
                     if demoTag { MonoTag(text: "Demo").padding(12).accessibilityHidden(true) }
                 }
@@ -253,6 +264,17 @@ struct NewHomeStage: View {
                 .accessibilityHint("Drag to orbit, pinch to zoom, double-tap to reset.")
         }
         .padding(.horizontal, Theme.gutter)
+    }
+
+    /// The fly-in's quiet last word. Read by VoiceOver as part of the stage's label.
+    private var welcomeCaption: some View {
+        Text("Welcome home")
+            .monoText(13)
+            .foregroundStyle(Theme.muted)
+            .padding(.bottom, 16)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .transition(.opacity)
     }
 
     /// Over the stage while the layouts solve.
@@ -267,7 +289,7 @@ struct NewHomeStage: View {
     /// "3D view of Maple House: 6 rooms, 14 pieces placed".
     private var stageLabel: String {
         let n = shownPlacements.count
-        return "3D view of \(name): \(plan.rooms.count) rooms, \(n) piece\(n == 1 ? "" : "s") placed\(demoTag ? ", demo items" : "")"
+        return "3D view of \(name): \(plan.rooms.count) rooms, \(n) piece\(n == 1 ? "" : "s") placed\(demoTag ? ", demo items" : "")\(welcomed ? ". Welcome home" : "")"
     }
 
     // MARK: Layout
