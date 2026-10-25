@@ -38,10 +38,10 @@ final class CommerceUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Agents"].waitForExistence(timeout: 10))
         let simulated = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH 'payment.' AND label CONTAINS ', simulated,'")).firstMatch
-        XCTAssertTrue(scrollTo(simulated), "no SIMULATED payment row")
+        XCTAssertTrue(scrollToReceiptLine(simulated), "no SIMULATED payment row")
         shot("1-spending")
         let basescan = byId("payment.basescan.500")
-        XCTAssertTrue(scrollTo(basescan), "no Basescan link row")
+        XCTAssertTrue(scrollToReceiptLine(basescan), "no Basescan link row")
         XCTAssertEqual(basescan.label, "View the transaction on Basescan")
         shot("1-spending-basescan")
 
@@ -121,7 +121,7 @@ final class CommerceUITests: XCTestCase {
         agentsTab.tap()
         let newRow = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH 'payment.' AND label CONTAINS 'Mesh task chair'")).firstMatch
-        XCTAssertTrue(scrollTo(newRow), "the Target chair payment isn't on the Agents receipts")
+        XCTAssertTrue(scrollToReceiptLine(newRow), "the Target chair payment isn't on the Agents receipts")
         XCTAssertTrue(newRow.label.contains(", simulated,"), newRow.label)
         shot("7-spending-new-payment")
     }
@@ -199,9 +199,9 @@ final class CommerceUITests: XCTestCase {
         shot("\(prefix)-4-spending")
         let simulated = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH 'payment.' AND label CONTAINS ', simulated,'")).firstMatch
-        XCTAssertTrue(scrollTo(simulated), "SIMULATED payment row not hittable")
+        XCTAssertTrue(scrollToReceiptLine(simulated), "SIMULATED payment row not hittable")
         shot("\(prefix)-4-spending-simulated")
-        XCTAssertTrue(scrollTo(byId("payment.basescan.500")), "Basescan link not hittable")
+        XCTAssertTrue(scrollToReceiptLine(byId("payment.basescan.500")), "Basescan link not hittable")
         shot("\(prefix)-4-spending-basescan")
     }
 
@@ -255,6 +255,24 @@ final class CommerceUITests: XCTestCase {
 
     private func byId(_ id: String) -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: id).firstMatch
+    }
+
+    /// The receipts are a sideways carousel (one per page): page with Previous/Next until the receipt
+    /// holding `element` is fully on screen, then scroll down to it.
+    private func scrollToReceiptLine(_ element: XCUIElement) -> Bool {
+        let window = app.windows.firstMatch.frame
+        func onPage() -> Bool { element.exists && element.frame.minX >= window.minX && element.frame.maxX <= window.maxX }
+        if onPage() { return scrollTo(element) }
+        let next = byId("receipts.next"), previous = byId("receipts.previous")
+        guard scrollTo(previous) else { return scrollTo(element) }  // a single receipt has no pager
+        for _ in 0..<8 where previous.isEnabled { previous.tap(); sleep(1) }
+        for _ in 0..<8 {
+            if onPage() { return scrollTo(element) }
+            guard next.isEnabled else { break }
+            next.tap()
+            sleep(1)  // the page animation
+        }
+        return onPage() && scrollTo(element)
     }
 
     /// Lazy stacks only build rows near the screen, so swipe until the element is on screen.

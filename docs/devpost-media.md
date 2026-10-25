@@ -67,7 +67,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 
 ### 4. Sell & Buy > Agents (receipts): the agent pays over x402
 - **Source:** CI `03-spending`.
-- **State:** the Agents screen scrolled down to its paper receipts in Courier, scrolled to the Pricing agent receipt ("MOOVE · AGENT SPENDING", "PRICING AGENT", "3 lookups"): the line "Premium comps for "Herman Miller Aeron"", `x402`, "$0.01", **"PAID ON BASE SEPOLIA"**, **"TX 0xc794…136c"**, and below it lines with the filled **SIMULATED** mark and no link. CI also saves `03a-spending-top` (scrolled to the totals tape "TOTALS · YOUR AGENTS": **SPENT $0.01**, **SIMULATED $180.005**, **REFUSED 1**).
+- **State:** the Agents screen scrolled down to its paper receipts in Courier (a sideways carousel, paged to receipt 2 of 3), scrolled to the Pricing agent receipt ("MOOVE · AGENT SPENDING", "PRICING AGENT", "3 lookups"): the line "Premium comps for "Herman Miller Aeron"", `x402`, "$0.01", **"PAID ON BASE SEPOLIA"**, **"TX 0xc794…136c"**, and below it lines with the filled **SIMULATED** mark and no link. CI also saves `03a-spending-top` (scrolled to the totals tape "TOTALS · YOUR AGENTS": **SPENT $0.01**, **SIMULATED $180.005**, **REFUSED 1**).
 - **Caption:** "The pricing agent pays for its own comps, $0.01 USDC per lookup over x402: the Base Sepolia line is a real transaction, and every SIMULATED line is simulated."
 - **Track:** Coinbase x402 (the headline image), Apify (the comps come from Apify's eBay sold and Marketplace actors), Spacetime (each payment is a `payment` row).
 - Capture this on the Offline demo, whose rows are known in advance. (The hosted worker has CDP keys since Sat ~12:40 PM, but a joined phone's Spending shows only its own payments.)
