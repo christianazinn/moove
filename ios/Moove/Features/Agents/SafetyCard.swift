@@ -3,40 +3,41 @@ import MooveKit
 
 /// "Agents kept you safe" (#225, #229), on Sell & Buy > Agents between "Needs your OK" and
 /// "Decided": the guardrails that fired (scams blocked, approvals asked, sentimental items left
-/// alone, spend against the caps). Simulated money says so in the line and gets a tag.
+/// alone, spend against the caps): its first three lines, one short clause each. Simulated money
+/// gets the SIMULATED tag on the header.
 /// It lived on the Summary tab until Summary was removed (decision 0129 addendum).
 struct SafetyCard: View {
     @Environment(MooveStore.self) private var store
 
+    /// At most three short lines (Lisa: less overstimulating): each line's first clause only
+    /// ("1 scam deal blocked"); the rest stays in its VoiceOver label.
+    static let maxLines = 3
+
     var body: some View {
-        let lines = SafetySummary(snapshot: store.snapshot).lines
+        let lines = Array(SafetySummary(snapshot: store.snapshot).lines.prefix(Self.maxLines))
         VStack(alignment: .leading, spacing: 0) {
-            ListHeader(title: "Agents kept you safe") {
-                if lines.contains(where: \.simulated) { MonoTag(text: "Simulated", tone: Theme.ochreInk) }
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Agents kept you safe").listHeading().accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 8)
+                if lines.contains(where: \.simulated) { SimulatedBadge(spoken: "Includes simulated payments") }
             }
+            .padding(.bottom, Theme.Space.s)
             if lines.isEmpty {
-                Text(SafetySummary.emptyText).monoMeta().padding(.top, 16)
+                Text("Nothing to guard yet").monoMeta().padding(.top, Theme.Space.s)
+                    .accessibilityLabel(SafetySummary.emptyText)
             } else {
                 ForEach(lines) { line in
-                    HStack(alignment: .top, spacing: 14) {
+                    HStack(spacing: 14) {
                         Image(systemName: Self.icon(line.kind))
                             .font(.system(size: 14, weight: .light))
-                            .foregroundStyle(Theme.accentStrong)
+                            .foregroundStyle(Theme.muted)
                             .frame(width: 18)
-                            .padding(.top, 2)
                             .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(line.text).monoText(13.5).fixedSize(horizontal: false, vertical: true)
-                            if let detail = line.detail {
-                                Text(detail).monoMeta().lineLimit(2)
-                            }
-                        }
+                        Text(Self.short(line.text)).monoText(13.5).lineLimit(1)
                         Spacer(minLength: 0)
-                        if line.simulated { MonoTag(text: "Sim", tone: Theme.ochreInk) }
                     }
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 10)
                     .frame(minHeight: 44)
-                    .ruled()
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(line.spoken)
                 }
@@ -45,6 +46,11 @@ struct SafetyCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("agents.safety")
+    }
+
+    /// "1 scam deal blocked · fraud score 0.85" -> "1 scam deal blocked".
+    static func short(_ text: String) -> String {
+        text.components(separatedBy: " · ").first ?? text
     }
 
     static func icon(_ kind: SafetySummary.LineKind) -> String {

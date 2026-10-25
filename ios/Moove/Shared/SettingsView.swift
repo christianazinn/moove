@@ -19,7 +19,7 @@ struct SettingsView: View {
                         case .signedIn(let profile):
                             row("Signed in as", profile.email ?? profile.name)
                         case .guest:
-                            row("Signed in as", "Guest (this device only)")
+                            row("Signed in as", "Guest")
                         default:
                             EmptyView()
                         }
@@ -40,31 +40,23 @@ struct SettingsView: View {
                     .accessibilityIdentifier("settings.appearance")
 
                     section("Backend") {
-                        Text("Data source").monoMeta().padding(.top, 14)
                         ForEach(MooveStore.BackendKind.allCases) { kind in
                             backendChoice(kind)
                         }
                         if store.backendKind == .spacetime {
-                            Text("Database").monoMeta().padding(.top, 18)
                             ForEach(DatabaseChoice.allCases) { databaseChoice($0) }
+                                .padding(.top, Theme.Space.xs)
                         }
                         row("Status", statusText)
                         if store.backendKind == .spacetime {
                             row("Server", "\(AppConfig.current.spacetimeHost) / \(store.databaseName)")
-                        }
-                        if let me = store.snapshot.me {
-                            row("Identity", String(me.prefix(16)) + "…")
                         }
                     }
 
                     if store.backendKind == .spacetime {
                         section("Worker") {
                             row("Agents", workerText)
-                            row("Uploads", uploadsText)
-                            budgetRows
                         }
-                    } else if store.snapshot.serviceConfig.spendToday?.settingsRows() != nil {
-                        section("Budget (offline sample)") { budgetRows }
                     }
                 }
                 .padding(.horizontal, Theme.gutter)
@@ -132,11 +124,6 @@ struct SettingsView: View {
                     .font(.system(size: 16, weight: .regular))
                     .foregroundStyle(selected ? Theme.accentStrong : Theme.faint)
                     .accessibilityHidden(true)
-                Image(systemName: choice.systemImage)
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(Theme.muted)
-                    .frame(width: 20)
-                    .accessibilityHidden(true)
                 Text(choice.label)
                     .monoText(13.5, weight: selected ? .bold : .regular)
                     .foregroundStyle(Theme.text)
@@ -152,30 +139,13 @@ struct SettingsView: View {
         .accessibilityIdentifier("settings.appearance.\(choice.rawValue)")
     }
 
-    /// "online · started 12 min ago · 878eead", from the worker's announcement.
+    /// "online · 878eead", from the worker's announcement.
     private var workerText: String {
         let c = store.snapshot.serviceConfig
         guard c.workerVersion != nil || c.workerStartedAt != nil else {
             return store.status == .connected ? "No announcement yet" : "Unknown (not connected)"
         }
-        var parts = ["online"]
-        if let started = c.workerStartedAt {
-            parts.append("started " + started.formatted(.relative(presentation: .named)))
-        }
-        if let v = c.workerVersion { parts.append(v) }
-        return parts.joined(separator: " · ")
-    }
-
-    /// Today's metered spend against the worker's daily caps (#220/#221). Hidden until announced.
-    @ViewBuilder private var budgetRows: some View {
-        if let rows = store.snapshot.serviceConfig.spendToday?.settingsRows() {
-            ForEach(rows, id: \.label) { row($0.label, $0.value) }
-        }
-    }
-
-    private var uploadsText: String {
-        guard let url = store.uploadBaseURL else { return "Not configured (photos stay on this device)" }
-        return (url.host ?? url.absoluteString) + (store.uploadURLIsLive ? " (from worker)" : " (build default)")
+        return ["online", c.workerVersion].compactMap { $0 }.joined(separator: " · ")
     }
 
     private var statusText: String {
@@ -192,7 +162,7 @@ struct SettingsView: View {
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            ListHeader(title: title)
+            Text(title).listHeading().accessibilityAddTraits(.isHeader).padding(.bottom, Theme.Space.xs)
             content()
         }
         .padding(.top, Theme.Space.section)

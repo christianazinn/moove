@@ -14,13 +14,10 @@ struct ScanHomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                PageHeader(title: "Scan a room.")
-                ScanHomeHero { openRoom = $0 }.padding(.top, 24)
-                startScan.padding(.top, 24)
+                ScanHomeHero { openRoom = $0 }
+                startScan.padding(.top, Theme.Space.xl)
                 if !store.visibleRooms.isEmpty {
-                    ListHeader(title: "Your rooms", count: "\(store.visibleRooms.count)")
-                        .padding(.top, 40)
-                    VStack(spacing: 10) {
+                    VStack(spacing: Theme.Space.s) {
                         ForEach(store.visibleRooms) { room in
                             NavigationLink(value: room) {
                                 ScanRoomCard(room: room, items: store.visibleItems.filter { $0.roomId == room.id })
@@ -28,6 +25,7 @@ struct ScanHomeView: View {
                             .buttonStyle(.plain)
                         }
                     }
+                    .padding(.top, Theme.Space.section)
                 }
             }
             .padding(.horizontal, Theme.gutter)
@@ -64,9 +62,9 @@ struct ScanHomeView: View {
             demoScan
             if !RoomCaptureSession.isSupported {
                 ScanNotice(
-                    text: "This device has no LiDAR scanner. Use an iPhone 12 Pro or iPad Pro (2020) or later, or load the demo scan.",
+                    text: "No LiDAR on this device",
                     systemImage: "exclamationmark.triangle",
-                    tint: Theme.danger
+                    tint: Theme.muted
                 )
             }
         }
@@ -120,7 +118,7 @@ struct ScanHomeView: View {
 private struct ScanNotice: View {
     var text: String
     var systemImage: String
-    var tint: Color = Theme.ochre
+    var tint: Color = Theme.muted
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {

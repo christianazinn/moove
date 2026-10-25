@@ -3,8 +3,8 @@ import Foundation
 /// Every color on the Listings poster wall, in one place, so the whole look can be swapped by
 /// editing this file only (colors are 0xRRGGBB; the app turns them into SwiftUI colors).
 ///
-/// The default is a warm, slightly retro poster set that sits on the app's cream/walnut theme:
-/// tomato, mustard, sage, teal, dusty blue and plum, printed on cream paper.
+/// The default is a quiet poster set that sits on the app's cream/walnut theme: three muted,
+/// paper-toned swatches (clay, kraft, slate) printed on cream paper.
 public struct PosterPalette: Sendable, Equatable {
     /// One poster color: the ink printed on it, and a second color it pairs with (price, banner, pin).
     public struct Swatch: Sendable, Equatable {
@@ -59,13 +59,11 @@ public struct PosterPalette: Sendable, Equatable {
     public static let current = PosterPalette.retroCream
 
     public static let retroCream = PosterPalette(
+        // Three muted, paper-toned swatches (Lisa: "a bit less color overall"): clay, kraft, slate.
         swatches: [
-            Swatch(name: "tomato", color: 0xC2452D, onColor: 0xFFF4E2, accent: 0xE8B04A),
-            Swatch(name: "mustard", color: 0xE3A72F, onColor: 0x2B2118, accent: 0xC4482E),
-            Swatch(name: "sage", color: 0x93A882, onColor: 0x1F2A1A, accent: 0x7A4364),
-            Swatch(name: "teal", color: 0x2A746F, onColor: 0xFFF4E2, accent: 0xE3A72F),
-            Swatch(name: "dusty blue", color: 0x86A2BC, onColor: 0x1E2633, accent: 0xC2452D),
-            Swatch(name: "plum", color: 0x7A4364, onColor: 0xFFF4E2, accent: 0xE8B04A),
+            Swatch(name: "clay", color: 0x8C5A4A, onColor: 0xFFF4E2, accent: 0xC9A97C),
+            Swatch(name: "kraft", color: 0xC9A97C, onColor: 0x2B2118, accent: 0x8C5A4A),
+            Swatch(name: "slate", color: 0x5F6670, onColor: 0xFFF4E2, accent: 0xC9A97C),
         ],
         paper: 0xF6EBD5,
         paperInk: 0x2B2118,
@@ -78,11 +76,11 @@ public struct PosterPalette: Sendable, Equatable {
             .needsOK: 0x8F5E0A,
             .drafting: 0x5C554B,
             .posting: 0x5C554B,
-            .live: 0x24706B,
-            .posted: 0x24706B,
-            .sold: 0xB3261E,
+            .live: 0x4F5660,
+            .posted: 0x4F5660,
+            .sold: 0x9A3B2E,
             .failed: 0xA24D35,
-            .denied: 0x6A2E4C,
+            .denied: 0x5E4A50,
         ]
     )
 }

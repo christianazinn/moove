@@ -170,7 +170,7 @@ final class MooveSmokeTests: XCTestCase {
         snap("03-inventory-sweep")
     }
 
-    func testRoomIn3DAndPlan() {
+    func testRoomIn3D() {
         launch()
         open(tab: "Items", segment: "Inventory")
         // Room actions live in the Rooms ⋯ menu (room chips show only the name).
@@ -181,35 +181,23 @@ final class MooveSmokeTests: XCTestCase {
         XCTAssertTrue(view3D.waitForExistence(timeout: slow))
         view3D.tap()
 
-        // Opens on the voxel dollhouse (#236), the app's one 3D look for items.
+        // Voxel only (#236, Lisa): the dollhouse, no Plan / 3D style picker.
         let voxel = app.descendants(matching: .any)["room.voxel"].firstMatch
         XCTAssertTrue(voxel.waitForExistence(timeout: slow), "voxel dollhouse view")
+        XCTAssertFalse(app.buttons["Plan"].exists, "no Plan style")
         sleep(3)  // let RealityKit draw a frame
         snap("04-room-voxel")
 
-        app.buttons["Plan"].firstMatch.tap()
-        let plan = app.descendants(matching: .any)["room.plan"].firstMatch
-        XCTAssertTrue(plan.waitForExistence(timeout: slow), "floor plan view")
-        snap("04-room-plan")
-
-        // Tap around the plan until a piece of furniture is selected.
+        // The Items menu picks a piece and opens its card.
+        let items = app.buttons["room.items"].firstMatch
+        XCTAssertTrue(items.waitForExistence(timeout: slow), "Items menu")
+        items.tap()
+        let piece = app.collectionViews.buttons.firstMatch
+        XCTAssertTrue(piece.waitForExistence(timeout: slow), "a piece in the Items menu")
+        piece.tap()
         let card = app.descendants(matching: .any)["room.selection"].firstMatch
-        search: for y in stride(from: 0.25, through: 0.75, by: 0.1) {
-            for x in stride(from: 0.25, through: 0.75, by: 0.1) {
-                plan.coordinate(withNormalizedOffset: CGVector(dx: x, dy: y)).tap()
-                if card.waitForExistence(timeout: 1) { break search }
-            }
-        }
-        XCTAssertTrue(card.exists, "tapping the plan selects furniture")
-        snap("04-room-plan-selected")
-
-        app.descendants(matching: .any)["room.display"].firstMatch.tap()
-        let labels = app.buttons["Labels"].firstMatch
-        XCTAssertTrue(labels.waitForExistence(timeout: slow), "display menu")
-        snap("04-display-menu")
-        labels.tap()
-        XCTAssertTrue(plan.waitForExistence(timeout: slow))
-        snap("04-room-plan-no-labels")
+        XCTAssertTrue(card.waitForExistence(timeout: slow), "picking a piece shows its card")
+        snap("04-room-selected")
     }
 
     func testShareAndJoinRoom() {
