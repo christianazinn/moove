@@ -167,7 +167,7 @@ struct TruckSceneView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> ARView {
         let view = ARView(frame: .zero, cameraMode: .nonAR, automaticallyConfigureSession: false)
-        view.environment.background = .color(FloorPlan3DView.sceneBackground.resolvedColor(with: view.traitCollection))
+        view.environment.background = .color(FloorPlan3DView.sceneBackgroundColor(for: context.environment.colorScheme))
         let c = context.coordinator
         c.onSelect = { selected = $0 }
         c.attach(to: view, interactive: interactive)
@@ -177,7 +177,7 @@ struct TruckSceneView: UIViewRepresentable {
     }
 
     func updateUIView(_ view: ARView, context: Context) {
-        view.environment.background = .color(FloorPlan3DView.sceneBackground.resolvedColor(with: view.traitCollection))
+        view.environment.background = .color(FloorPlan3DView.sceneBackgroundColor(for: context.environment.colorScheme))
         let c = context.coordinator
         c.onSelect = { selected = $0 }
         c.show(load, items: items)

@@ -18,6 +18,7 @@ struct MooveApp: App {
             defaults.set(false, forKey: AuthService.guestKey)
             defaults.set(MooveStore.BackendKind.spacetime.rawValue, forKey: MooveStore.backendKindKey)
             defaults.removeObject(forKey: HiddenRooms.defaultsKey)
+            defaults.set(Appearance.system.rawValue, forKey: Appearance.storageKey)
         }
         #endif
     }
@@ -47,5 +48,6 @@ struct MooveApp: App {
         AuthGate()
             .environment(auth)
             .environment(store)
+            .followsAppAppearance()
     }
 }

@@ -256,6 +256,15 @@ final class MooveSmokeTests: XCTestCase {
         XCTAssertTrue(fixture.label.contains("Offline demo"), fixture.label)
         XCTAssertTrue(fixture.isSelected, "offline demo is the selected data source")
         snap("06-settings")
+        // Appearance: System by default (UI-test reset); Dark sticks, then back to System.
+        let system = app.buttons["settings.appearance.system"]
+        XCTAssertTrue(scrollTo(system, down: false), "appearance choices shown")
+        XCTAssertTrue(system.isSelected, "System is the default appearance")
+        app.buttons["settings.appearance.dark"].tap()
+        XCTAssertTrue(app.buttons["settings.appearance.dark"].isSelected, "Dark selected")
+        snap("06-settings-dark")
+        system.tap()
+        XCTAssertTrue(system.isSelected, "back to System")
         let signOut = app.buttons["Sign out"]
         XCTAssertTrue(scrollTo(signOut, down: false), "Sign out button")
         XCTAssertTrue(text(containing: "Guest").exists)
