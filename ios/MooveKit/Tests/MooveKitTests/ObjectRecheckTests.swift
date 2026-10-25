@@ -16,17 +16,17 @@ import Testing
 
     @Test func bundledHeadLoads() throws {
         let head = try #require(ObjectClassifierHead.bundled)
-        #expect(head.classes.count == 62)
+        #expect(head.classes.count == 68)  // 62 text rows + 6 image prototypes (5 clutter, 1 hand truck)
         #expect(head.dimension == 512)
         #expect(head.logitScale == 100)
-        for c in ["none", "scooter", "vacuum", "box", "radiator", "shower curtain", "towel rack", "storage"] {
+        for c in ["none", "scooter", "vacuum", "box", "radiator", "shower curtain", "towel rack", "storage", "clutter"] {
             #expect(head.categories.contains(c))
         }
         // Rows are unit vectors, so a class's own row scores highest for itself.
         let row = Array(head.weights[0..<512])
         #expect(abs(row.reduce(0) { $0 + $1 * $1 } - 1) < 0.01)
         let p = head.classProbabilities(row)
-        #expect(p.count == 62)
+        #expect(p.count == 68)
         #expect(abs(p.reduce(0, +) - 1) < 1e-4)
         #expect(head.classProbabilities([1, 2, 3]).isEmpty)
     }
@@ -64,6 +64,7 @@ import Testing
             case let .relabel(cat, _): #expect(c.action == "relabel" && c.category == cat, "\(c.photo): relabel \(cat), expected \(c.action) \(c.category)")
             case .reject: #expect(c.action == "reject", "\(c.photo): rejected, expected \(c.action)")
             case .unknown: #expect(c.action == "unknown", "\(c.photo): unknown, expected \(c.action)")
+            case .doubt: Issue.record("\(c.photo): the shipped policy never doubts")
             }
         }
         // The headline cases.
@@ -131,6 +132,50 @@ import Testing
         guard case .unknown = check("vacuum", scores(["ladder": 0.25, "vacuum": 0.1]), 1.07, 2.08, 0.77) else {
             Issue.record("tall vacuum kept"); return
         }
+    }
+
+    @Test func relabelTargetsAreSizeCheckedAgainstRoomPlanRanges() {
+        // iPad 7B501609: a 9 cm tall backpack the classifier called "table" (0.51).
+        #expect(check("backpack", scores(["table": 0.51, "chair": 0.09]), 0.25, 0.09, 0.16) == .keep)
+        // A whole bed still relabels (iPad FD6CD8DF-like box, short 0.59 / long 0.78 is within 2x).
+        guard case .relabel("bed", _) = check("laptop", scores(["bed": 0.6]), 0.59, 0.52, 0.78) else {
+            Issue.record("bed vetoed"); return
+        }
+        // Sure beats the ranges too.
+        guard case .relabel("table", _) = check("backpack", scores(["table": 0.95]), 0.25, 0.09, 0.16) else {
+            Issue.record("sure table vetoed"); return
+        }
+        #expect(ObjectSanity.fitsSizePrior("table", width: 0.25, height: 0.09, depth: 0.16, factor: 2) == false)
+        #expect(ObjectSanity.fitsSizePrior("table", width: 1.2, height: 0.75, depth: 0.7, factor: 2) == true)
+        #expect(ObjectSanity.fitsSizePrior("scooter", width: 0.5, height: 1.15, depth: 1.1) == true)   // footprint first
+        #expect(ObjectSanity.fitsSizePrior("guitar", width: 0.4, height: 1, depth: 0.1) == nil)
+    }
+
+    @Test func relabelNeedsAFloor() {
+        // iPad 45269E6D: a floor lamp the classifier doesn't know (storage 0.32 summed, lamp 0.06).
+        #expect(check("lamp", scores(["storage": 0.32, "radiator": 0.14, "lamp": 0.06]), 0.26, 0.73, 0.25) == .keep)
+        guard case .relabel("storage", _) = check("lamp", scores(["storage": 0.45, "lamp": 0.06]), 0.26, 0.73, 0.25) else {
+            Issue.record("confident storage not relabeled"); return
+        }
+        // Unknown detector categories need 0.5 anyway.
+        #expect(check("bin", scores(["box": 0.45]), 0.45, 0.4, 0.45) == .keep)
+    }
+
+    @Test func vacuumMustBeConfirmed() {
+        // iPad 4426C67D: a furniture dolly called "vacuum", classifier vacuum 0.00.
+        guard case .unknown = check("vacuum", scores(["none": 0.18, "mirror": 0.11]), 0.4, 0.18, 0.25) else {
+            Issue.record("unconfirmed vacuum kept"); return
+        }
+        // Real vacuums: kept (lowest seen 0.57).
+        #expect(check("vacuum", scores(["vacuum": 0.57, "none": 0.2]), 0.3, 1.1, 0.3) == .keep)
+        // A confident relabel still wins over "unknown".
+        guard case .relabel("ladder", _) = check("vacuum", scores(["ladder": 0.92]), 0.68, 1.1, 0.25) else {
+            Issue.record("ladder not relabeled"); return
+        }
+        // Not a reject: an unsure real thing is never thrown away by this rule.
+        if case .reject = check("vacuum", scores(["none": 0.5, "vacuum": 0.1]), 0.3, 1.1, 0.3) { Issue.record("rejected") }
+        // Other detector categories are unaffected.
+        #expect(check("guitar", scores(["guitar": 0.2, "none": 0.3]), 0.4, 1.0, 0.1) == .keep)
     }
 
     @Test func roomPlanObjectsAreOnlyRejectedWhenVerySure() {

@@ -66,7 +66,8 @@ final class ExtraObjectDetector: @unchecked Sendable {
         }
         var cameras: [String: SIMD3<Float>] = [:]
         let measured = tracks.map { t -> RoomGeometry.Object in
-            let o = RoomGeometry.Object(id: UUID().uuidString, category: t.label, dimensions: t.box.size, transform: t.box.transform)
+            let o = RoomGeometry.Object(id: UUID().uuidString, category: t.label, dimensions: t.box.size, transform: t.box.transform,
+                                        measured: .init(depth: t.box.size.z, camera: t.camera, labelHistory: t.labelHistory))
             cameras[o.id] = t.camera
             return o
         }

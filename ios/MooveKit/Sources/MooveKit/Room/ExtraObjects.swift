@@ -108,6 +108,12 @@ public struct SightingMerger: Sendable {
         public var totalConfidence: Float
         public var points: [SIMD3<Float>]
         public var box: FittedBox
+        /// Every label the detector gave this object, frame by frame. A track starts with its own
+        /// label only; `results()` folds in the labels of the tracks it merges (and of unconfirmed
+        /// tracks under another label in the same space), which used to be thrown away.
+        public var labelHistory = LabelHistory()
+        /// (merger-wide sighting number, label) per sighting, for `labelHistory.flips`.
+        var labelLog: [(order: Int, label: String)] = []
         /// Last counted view (for the distinct-view test).
         var lastView: (time: Double?, camera: SIMD3<Float>?)
         var cameraSum = SIMD3<Float>(repeating: 0)
@@ -122,7 +128,77 @@ public struct SightingMerger: Sendable {
         }
     }
 
+    /// What the detector called one object across the scan's frames: per label, its views,
+    /// sightings and confidence, plus how often the label changed between consecutive sightings.
+    /// A real object mostly keeps one label; phantoms (a window, a wall, plastic sheeting) flip
+    /// between several, so the recheck uses this as a second opinion (`ObjectRecheck.check(..., history:)`).
+    /// Stored with the scan (`RoomGeometry.Object.measured`).
+    public struct LabelHistory: Codable, Sendable, Equatable {
+        public struct Entry: Codable, Sendable, Equatable {
+            public var views: Int
+            public var sightings: Int
+            public var totalConfidence: Float
+            public var bestConfidence: Float
+
+            public init(views: Int, sightings: Int, totalConfidence: Float, bestConfidence: Float) {
+                self.views = views
+                self.sightings = sightings
+                self.totalConfidence = totalConfidence
+                self.bestConfidence = bestConfidence
+            }
+        }
+
+        /// Moove category (the detector's, after `ObjectVocabulary`) → its evidence.
+        public var labels: [String: Entry]
+        /// Label changes between consecutive sightings, in the order they were seen.
+        public var flips: Int
+
+        public init(labels: [String: Entry] = [:], flips: Int = 0) {
+            self.labels = labels
+            self.flips = flips
+        }
+
+        /// Distinct views over every label.
+        public var views: Int { labels.values.map(\.views).reduce(0, +) }
+        public var sightings: Int { labels.values.map(\.sightings).reduce(0, +) }
+        /// How many different labels the detector gave.
+        public var distinct: Int { labels.count }
+        /// The label with the most views (then the most total confidence, then by name).
+        public var top: String? {
+            labels.max { a, b in
+                (a.value.views, a.value.totalConfidence, b.key) < (b.value.views, b.value.totalConfidence, a.key)
+            }?.key
+        }
+        /// Share of the views that carry `top` (1 when the detector never changed its mind).
+        public var consensus: Double {
+            guard let top, let e = labels[top], views > 0 else { return 1 }
+            return Double(e.views) / Double(views)
+        }
+
+        /// Adds `other`'s labels (not its flips: those need the merged sighting order).
+        mutating func absorb(_ other: LabelHistory) {
+            for (label, e) in other.labels {
+                if var mine = labels[label] {
+                    mine.views += e.views
+                    mine.sightings += e.sightings
+                    mine.totalConfidence += e.totalConfidence
+                    mine.bestConfidence = max(mine.bestConfidence, e.bestConfidence)
+                    labels[label] = mine
+                } else {
+                    labels[label] = e
+                }
+            }
+        }
+
+        static func flips(in log: [(order: Int, label: String)]) -> Int {
+            let sorted = log.sorted { $0.order < $1.order }
+            return zip(sorted, sorted.dropFirst()).filter { $0.label != $1.label }.count
+        }
+    }
+
     public private(set) var tracks: [Track] = []
+    /// Sightings added so far (orders the label log across tracks).
+    private var sightingCount = 0
     public var floorY: Float?
     /// Caps memory: keep an even sample of at most this many points per object.
     public var maxPointsPerTrack = 4000
@@ -149,6 +225,7 @@ public struct SightingMerger: Sendable {
     @discardableResult
     public mutating func add(_ s: Sighting) -> Int? {
         guard let box = BoxFit.fit(s.points, floorY: floorY) else { return nil }
+        sightingCount += 1
         // Compare centers after padding each box away from its camera: one view is only
         // the object's near face, so views from two sides would otherwise sit too far apart.
         let minDepth = ObjectVocabulary.minimumDepth[s.label] ?? 0
@@ -161,10 +238,14 @@ public struct SightingMerger: Sendable {
         if let (i, _) = match {
             var t = tracks[i]
             t.sightings += 1
-            if isNewView(s, after: t.lastView, center: t.box.center) {
+            let newView = isNewView(s, after: t.lastView, center: t.box.center)
+            if newView {
                 t.views += 1
                 t.lastView = (s.time, s.camera)
             }
+            t.labelHistory.absorb(LabelHistory(labels: [s.label: .init(views: newView ? 1 : 0, sightings: 1,
+                                                                       totalConfidence: s.confidence, bestConfidence: s.confidence)]))
+            t.labelLog.append((sightingCount, s.label))
             t.noteCamera(s.camera)
             t.bestConfidence = max(t.bestConfidence, s.confidence)
             t.totalConfidence += s.confidence
@@ -175,7 +256,9 @@ public struct SightingMerger: Sendable {
         }
         let id = tracks.count
         var track = Track(id: id, label: s.label, sightings: 1, views: 1, bestConfidence: s.confidence, totalConfidence: s.confidence,
-                          points: Self.thin(s.points, to: maxPointsPerTrack), box: box, lastView: (s.time, s.camera))
+                          points: Self.thin(s.points, to: maxPointsPerTrack), box: box,
+                          labelHistory: LabelHistory(labels: [s.label: .init(views: 1, sightings: 1, totalConfidence: s.confidence, bestConfidence: s.confidence)]),
+                          labelLog: [(sightingCount, s.label)], lastView: (s.time, s.camera))
         track.noteCamera(s.camera)
         tracks.append(track)
         return id
@@ -223,23 +306,40 @@ public struct SightingMerger: Sendable {
     ///   The detection is first padded to its category's minimum depth away from the
     ///   camera (`DetectorPlacement.padDepth`), since LiDAR only saw its front.
     ///   Objects merely standing on a RoomPlan object (a monitor on a table) are kept.
+    /// - Every object's `labelHistory` keeps the labels of the tracks merged into it, and of
+    ///   unconfirmed tracks under another label overlapping it by > 0.5 (a "ladder" glimpsed once
+    ///   on the "vacuum"); `views` and `sightings` still count only the confirmed ones.
     public func results(minSightings: Int = 2, excluding existing: [RoomGeometry.Object] = [], refit: Bool = true) -> [Track] {
-        var kept = tracks.compactMap { t -> Track? in
+        let all = tracks.map { t -> Track in
             var t = t
             if refit { t.box = BoxFit.fit(t.points, floorY: floorY) ?? t.box }
-            return isConfirmed(t, minSightings: minSightings) ? t : nil
+            return t
         }
+        var kept = all.filter { isConfirmed($0, minSightings: minSightings) }
         // Strongest first, so each object keeps its best label.
         func weight(_ t: Track) -> Float { t.totalConfidence * ObjectVocabulary.plausibility(of: t.label, size: t.box.size) }
         kept.sort { weight($0) > weight($1) }
         var resolved: [Track] = []
+        func sameSpace(_ t: Track) -> Int? {
+            resolved.firstIndex { $0.label != t.label && Self.overlap(t.box, $0.box) > 0.5 }
+        }
         for t in kept {
-            if let i = resolved.firstIndex(where: { $0.label != t.label && Self.overlap(t.box, $0.box) > 0.5 }) {
+            if let i = sameSpace(t) {
                 resolved[i].sightings += t.sightings  // the same object under another label
                 resolved[i].views += t.views
+                resolved[i].labelHistory.absorb(t.labelHistory)
+                resolved[i].labelLog += t.labelLog
                 continue
             }
             resolved.append(t)
+        }
+        for t in all where !isConfirmed(t, minSightings: minSightings) {
+            guard let i = sameSpace(t) else { continue }
+            resolved[i].labelHistory.absorb(t.labelHistory)
+            resolved[i].labelLog += t.labelLog
+        }
+        for i in resolved.indices {
+            resolved[i].labelHistory.flips = LabelHistory.flips(in: resolved[i].labelLog)
         }
         return resolved.filter { t in
             let box = DetectorPlacement.padDepth(t.box, to: ObjectVocabulary.minimumDepth[t.label] ?? 0, camera: t.camera)
