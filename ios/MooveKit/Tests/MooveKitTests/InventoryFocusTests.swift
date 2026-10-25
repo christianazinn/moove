@@ -32,3 +32,23 @@ import Testing
         #expect(InventoryFocus.active([9], rooms: rooms).isEmpty, "focus on nothing that exists shows everything")
     }
 }
+
+/// Built-ins stay with the building: out of the app's item lists, but drawn in the 3D room.
+@Suite struct BuiltInListTests {
+    func item(_ id: UInt64, _ name: String, _ category: String) -> Item {
+        Item(id: id, owner: "me", roomId: 1, name: name, category: category, widthM: 0.5, heightM: 0.8, depthM: 0.7)
+    }
+
+    @Test func snapshotsLeaveFixturesOut() {
+        var s = SyncSnapshot()
+        s.items = [item(1, "white two-piece elongated toilet", "appliance"), item(2, "office chair", "chair"),
+                   item(3, "white alcove bathtub with shower curtain", "appliance"), item(4, "cream fabric shower curtain with rod", "decor")]
+        #expect(s.withoutBuiltIns().items.map(\.id) == [2, 4])
+    }
+
+    @Test func accessoriesCountOnlyInTheHeadNoun() {
+        #expect(item(1, "white alcove bathtub with shower curtain", "appliance").isBuiltInFixture)
+        #expect(!item(2, "shower curtain with rod", "decor").isBuiltInFixture)
+        #expect(!item(3, "chrome towel rack shelf", "storage").isBuiltInFixture)
+    }
+}

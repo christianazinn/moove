@@ -28,6 +28,15 @@ extension SyncSnapshot {
         return copy
     }
 
+    /// Without the building's own fixtures (toilets, sinks, tubs, radiators: `isBuiltInFixture`).
+    /// They aren't yours to price, sell, pack or move, so the app's lists leave them out (Rio:
+    /// "don't include them in the inventory"). The scan's 3D room still draws them.
+    public func withoutBuiltIns() -> SyncSnapshot {
+        var copy = self
+        copy.items.removeAll(where: \.isBuiltInFixture)
+        return copy
+    }
+
     /// When the room was last scanned (its newest scan), nil when no scan row is visible.
     public func scanDate(ofRoom roomId: UInt64) -> Date? {
         latestScan(ofRoom: roomId)?.createdAt
