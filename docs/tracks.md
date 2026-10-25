@@ -46,7 +46,7 @@ Source: the Cal Hacks 13.0 Hacker Guide and the live prizes page (local copies a
 
 ## Tier 2
 - **Auth0 (MLH)**: use any Auth0 API. We use login, plus Auth0 for AI Agents async authorization for approvals.
-  - [x] CIBA approvals built (#12, `agents/src/integrations/auth0.ts`) and tested only against stubbed HTTP; not configured on the hosted worker, so demo approvals use the in-app inbox. Restart edge cases (no duplicate requests, no re-push of expired ones, a tap just before expiry still counts) are unit tested (#138).
+  - [x] CIBA approvals built (#12, `agents/src/integrations/auth0.ts`) and tested live against our Auth0 tenant on Saturday evening and configured on the hosted worker (Guardian push to the owner, who must be signed in with Auth0; the seeded Demo room's owner isn't, so its approvals use the in-app inbox). Restart edge cases (no duplicate requests, no re-push of expired ones, a tap just before expiry still counts) are unit tested (#138).
   - [x] Login (#25): Auth0 Web Auth in the app, with the ID token as the SpacetimeDB connection token. `register_user` is wired on the live backend (#28), but login hasn't been demoed end to end on a phone yet. If `MOOVE_BUNDLE_ID` changes, the callback URL must be added in the Auth0 dashboard (`ios/CLAUDE.md`).
 - **CRS Credit**: the Identity/Fraud Innovation prize, if the fraud screening uses the CRS sandbox. Fraud screening is built (#64), but it's rule-based and doesn't call CRS, so we don't qualify as built.
 - **Best Planet-First Hack** (overall prize): the resell / donate-over-trash story. The Summary screen (#16) shows a rough kg-kept-out-of-landfill figure, labeled as an estimate.

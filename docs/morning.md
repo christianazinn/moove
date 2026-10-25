@@ -91,7 +91,7 @@ Everyone: pull `main`, then `cd ios && xcodegen`, then build to your phone.
 See "Needs a human" below, then the Devpost draft (`docs/devpost.md`) and the demo video.
 
 ## Needs a human
-1. **Keys:** ✅ CDP keys are on the worker (12:40 PM): x402 is real on Base Sepolia, and the wallet holds 1.69 testnet USDC (`npm run x402:wallet -- --faucet` tops it up). The same goes for eBay sandbox keys and the Auth0 CIBA config. Everything is labeled simulated today. Put keys in the repo-root `.env.local`; the workers restart themselves when it changes.
+1. **Keys:** ✅ CDP keys are on the worker (12:40 PM): x402 is real on Base Sepolia, and the wallet holds 1.69 testnet USDC (`npm run x402:wallet -- --faucet` tops it up). ✅ Auth0 CIBA is configured (6:30 PM, tested live): approvals push to the owner's phone when they're signed in with Auth0. ✅ Visa runs in the Authorize.net sandbox. eBay sandbox keys are still missing, so listings are labeled simulated. Put keys in the repo-root `.env.local`; the workers restart themselves when it changes.
 2. **Anthropic pitch community:** still a TODO in `docs/devpost.md` (suggestions are there).
 3. **Devpost text, gallery and demo video:**
    - [`docs/devpost.md`](devpost.md) is ready to paste (checked against `main` Sat ~12:30 PM, through #284); its "How to submit" checklist covers screenshots, fields, video, team and tracks.
