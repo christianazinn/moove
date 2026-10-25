@@ -14,12 +14,13 @@ extension String {
 }
 
 extension Item {
-    /// Short label where an item's price goes: "$120", "identifying…", "pricing…", "no price".
+    /// Short label where an item's price goes: "$120", "identifying…", "pricing…", "needs a photo", "no price".
     var priceText: String {
         switch priceState {
         case .priced(let cents): cents.usd
         case .identifying: "identifying…"
         case .pricing: "pricing…"
+        case .needsPhoto: "needs a photo"
         case .unpriced: "no price"
         case .builtIn: "stays with the building"
         }
