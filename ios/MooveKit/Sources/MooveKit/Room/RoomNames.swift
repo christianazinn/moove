@@ -29,31 +29,52 @@ public enum RoomNames {
 
     // MARK: Guess from the scan
 
-    /// What room this probably is, from the objects found in it. Beds win (a studio with a
-    /// kitchenette is still where you sleep), then kitchen appliances, bathroom fixtures,
-    /// laundry, living-room seating, a dining set, a desk setup and garage gear; else "Room".
+    /// What room this probably is, from the objects found in it. Every object votes for the room
+    /// it belongs in, strong signs counting most (a bed, a stove, a toilet, a sofa), and the room
+    /// with the most points wins, so one misread nightstand no longer makes every room a bedroom
+    /// (Lisa). Ties go to the stronger kind: a studio with a kitchenette is still where you sleep.
+    /// Under 2 points, it's just "Room".
     public static func guess(_ objects: [Object]) -> String {
         var counts: [String: Int] = [:]
+        var score: [String: Int] = [:]
+        // Per object: the strongest sign it gives each room (a "washerDryer" counts once).
+        let signs: [(room: String, weight: Int, words: Set<String>)] = [
+            ("Bedroom", 4, ["bed", "crib", "mattress", "bunk"]),
+            ("Bedroom", 2, ["nightstand", "dresser"]),
+            ("Kitchen", 3, ["stove", "oven", "refrigerator", "fridge", "dishwasher", "range", "cooktop"]),
+            ("Bathroom", 4, ["toilet", "bathtub", "tub", "shower"]),
+            ("Laundry", 3, ["washer", "dryer", "laundry"]),
+            ("Living room", 3, ["sofa", "couch"]),
+            ("Living room", 2, ["television", "tv", "fireplace"]),
+            ("Office", 2, ["desk"]),
+            ("Office", 1, ["monitor", "computer", "laptop", "printer", "swivel", "office"]),
+            ("Dining room", 3, ["dining"]),
+            ("Garage", 2, ["bicycle", "bike", "toolbox", "workbench", "mower", "motorcycle", "tools"]),
+        ]
         for object in objects {
-            for word in Set(words(of: object)) { counts[word, default: 0] += 1 }
+            let words = Set(words(of: object))
+            for word in words { counts[word, default: 0] += 1 }
+            var best: [String: Int] = [:]
+            for sign in signs where !sign.words.isDisjoint(with: words) {
+                best[sign.room] = max(best[sign.room] ?? 0, sign.weight)
+            }
+            for (room, weight) in best { score[room, default: 0] += weight }
         }
         func has(_ any: String...) -> Bool { any.contains { (counts[$0] ?? 0) > 0 } }
         func count(_ word: String) -> Int { counts[word] ?? 0 }
 
-        if has("bed", "crib", "mattress", "nightstand", "dresser", "bunk") { return "Bedroom" }
-        let kitchenAppliance = has("stove", "oven", "refrigerator", "fridge", "dishwasher", "range", "cooktop")
-        if kitchenAppliance || (has("sink") && has("counter", "countertop")) { return "Kitchen" }
-        if has("toilet", "bathtub", "tub", "shower") { return "Bathroom" }
-        if has("washer", "dryer", "laundry") { return "Laundry" }
-        if has("sink") { return "Bathroom" }
-        if has("sofa", "couch", "television", "tv", "fireplace") || (has("coffee") && has("table")) { return "Living room" }
-        let desk = has("desk") || (has("table") && has("swivel", "office"))
+        // Signs that take two things together.
+        if has("sink") { score[has("counter", "countertop") ? "Kitchen" : "Bathroom", default: 0] += has("counter", "countertop") ? 3 : 2 }
+        if has("coffee") && has("table") { score["Living room", default: 0] += 2 }
         let screen = has("monitor", "computer", "laptop", "printer")
-        if (desk && (screen || has("swivel", "office"))) || (has("desk") && count("chair") > 0) { return "Office" }
-        if has("dining") || (count("table") >= 1 && count("chair") >= 3) { return "Dining room" }
-        if has("desk") || (screen && has("table", "chair")) { return "Office" }
-        if has("bicycle", "bike", "toolbox", "workbench", "mower", "motorcycle", "tools") { return "Garage" }
-        return fallback
+        if screen && has("table", "chair") { score["Office", default: 0] += 1 }
+        if has("desk") && count("chair") > 0 { score["Office", default: 0] += 1 }
+        if count("table") >= 1 && count("chair") >= 3 { score["Dining room", default: 0] += 3 }
+
+        let order = ["Bedroom", "Kitchen", "Bathroom", "Laundry", "Living room", "Office", "Dining room", "Garage"]
+        guard let top = order.max(by: { (score[$0] ?? 0, order.firstIndex(of: $1)!) < (score[$1] ?? 0, order.firstIndex(of: $0)!) }),
+              (score[top] ?? 0) >= 2 else { return fallback }
+        return top
     }
 
     /// Lowercased words from the object's name, category and attributes, camelCase split too
