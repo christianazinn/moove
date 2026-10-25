@@ -1,0 +1,151 @@
+# Moove crop-classifier labels. Format: label<TAB>phrase1;phrase2 (phrases optional).
+# 127 detector prompts from ios/MooveKit/Sources/MooveKit/Room/ObjectVocabulary.swift:
+kids scooter
+folding e-scooter
+kick scooter
+electric scooter
+bicycle
+motorcycle
+skateboard
+surfboard
+skis
+snowboard
+golf bag
+tennis racket
+treadmill
+exercise bike
+rowing machine
+weight bench
+dumbbell
+kettlebell
+yoga mat
+punching bag
+stroller
+wheelchair
+helmet
+basketball
+soccer ball
+guitar
+electric guitar
+ukulele
+piano
+electronic keyboard
+drum kit
+violin
+cello
+guitar amplifier
+saxophone
+trumpet
+computer monitor
+desktop computer
+laptop
+printer
+speaker
+game console
+projector
+record player
+television
+microwave
+coffee machine
+toaster
+blender
+vacuum cleaner
+upright vacuum cleaner
+cordless stick vacuum
+robot vacuum
+air purifier
+electric fan
+space heater
+humidifier
+portable air conditioner
+sewing machine
+ironing board
+mini fridge
+refrigerator
+washing machine
+water dispenser
+floor lamp
+table lamp
+desk lamp
+office chair
+chair
+armchair
+high chair
+stool
+ottoman
+bean bag
+sofa
+bed
+mattress
+crib
+bench
+desk
+table
+folding table
+nightstand
+dresser
+wardrobe
+bookshelf
+cabinet
+tv stand
+filing cabinet
+shoe rack
+coat rack
+clothes rack
+shelf
+rolling cart
+ladder
+room divider
+trunk
+mirror
+rug
+painting
+framed picture
+poster
+wall clock
+vase
+potted plant
+plant stand
+sculpture
+globe
+christmas tree
+stuffed animal
+dollhouse
+rocking horse
+cardboard box
+storage bin
+suitcase
+backpack
+duffel bag
+laundry basket
+basket
+trash can
+toolbox
+lawn mower
+grill
+workbench
+pet crate
+cat tree
+dog bed
+# extra target classes (size-prior list):
+upright vacuum	upright vacuum cleaner
+canister vacuum	canister vacuum cleaner
+mop	mop;mop and bucket
+broom
+tripod	camera tripod;light stand
+furniture dolly	furniture dolly;moving dolly
+hand truck	hand truck;sack truck
+step ladder	step ladder;folding step stool
+coat stand	coat stand;hall tree
+radiator	radiator;wall radiator
+towel rack	towel rack;heated towel rail
+shower curtain
+# background / reject classes (a crop whose best match is one of these is rejected):
+wall	plain wall;painted wall
+door	door;closed door
+window	window;window with blinds
+curtain	curtain;window curtains
+plastic sheeting	plastic sheeting;plastic wrap
+clothes pile	pile of clothes;clothes on the floor
+floor	bare floor;carpet floor
+ceiling
