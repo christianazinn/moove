@@ -3,9 +3,9 @@
 // weighted as PRICING_PRIOR_WEIGHT comps), so 1-3 comps no longer set the price alone, and an item
 // with no comps still gets one.
 // Claude first names the exact product and whether it's the whole thing or only an accessory, part or
-// set, then gives p10/p50/p90 sold prices for the stated condition. On 300 Mercari sold listings this
-// cut RMSLE 0.687 -> 0.634 (200-row holdout 0.757 -> 0.634) vs a single "used price" answer, and
-// seeing the photo cut it 1.13 -> 0.95 on 173 real classified-listing photos.
+// set, then gives p10/p50/p90 sold prices for the stated condition. Vs a single "used price" answer:
+// RMSLE 0.686 -> 0.675 on 300 Mercari sold listings (a tie; within 2x 69% -> 76%), 0.757 -> 0.634 on
+// a 200-row holdout, and 1.13 -> 0.95 on 173 real classified-listing photos when it sees the photo.
 // The answer is cached in fixtures/comps/<slug>.prior.json, keyed by the prompt + item description +
 // photo + model, so replays don't re-pay. Any failure means no prior (pricing works as before).
 // PRICING_PRIOR=0 turns it off.
