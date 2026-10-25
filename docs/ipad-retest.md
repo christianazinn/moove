@@ -116,7 +116,7 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
 - **Report if wrong:** the poster, what's off (overlap, clipped text, a color that's hard to read), plus a screenshot.
 
 ### 14. Optional: close-up ask (#279)
-- **Taps:** Items → Review, then the **A photo would help** section (it shows only for valuable items vision wasn't sure about).
+- **Taps:** Items → Inventory (or Review), open a valuable item vision wasn't sure about. (Review no longer has an "A photo would help" list; Lisa asked to remove it. The ask lives on Item detail.)
 - **Expected:** the item's detail says "Moove isn't sure which model this is…", and **Add another photo** re-identifies it.
 - **Report if wrong:** the item, plus a screenshot.
 

@@ -53,7 +53,6 @@ struct ReviewView: View {
                         piles: piles,
                         onMove: move
                     )
-                    closeups(items)
                 }
             }
             .padding(.horizontal, Theme.gutter)
@@ -155,18 +154,6 @@ struct ReviewView: View {
                 .accessibilityHint("Opens it to rename it or pick what it is")
                 .accessibilityIdentifier("review.unnamed.\(item.id)")
             }
-        }
-    }
-
-    // MARK: Close-ups (#276)
-
-    @ViewBuilder
-    private func closeups(_ items: [Item]) -> some View {
-        let closeups = Review.wantingCloseups(items)
-        if !closeups.isEmpty {
-            ListHeader(title: "A photo would help", count: "\(closeups.count)")
-                .padding(.top, 40)
-            ForEach(closeups) { ReviewBoardRow(item: $0) }
         }
     }
 }
