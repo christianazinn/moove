@@ -23,6 +23,7 @@
 // Usage (from agents/): npm run e2e [-- --replay | --live] [-- --keep]   (--keep leaves the worker running)
 import "./env.js";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { createServer } from "node:http";
 import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { deflateSync, crc32 } from "node:zlib";
 import path from "node:path";
@@ -125,6 +126,24 @@ function generateRoomPng(): Buffer {
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
 }
 
+// A stub AI-text detector (same wire format as aitext.ts: POST {"text"} -> {"score"}) so the fraud
+// agent's detector path runs without a model: the planted AI-written demo listing scores high, every
+// other text low (under the 0.5 floor, so no other deal's fraud score moves).
+const AITEXT_PORT = Number(process.env.E2E_AITEXT_PORT ?? 8414);
+const aitextStub = createServer((req, res) => {
+  let body = "";
+  req.on("data", c => (body += c));
+  req.on("end", () => {
+    let text = "";
+    try {
+      text = String((JSON.parse(body) as { text?: string }).text ?? "");
+    } catch {}
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ score: /Elevate your living space/.test(text) ? 0.93 : 0.08 }));
+  });
+}).listen(AITEXT_PORT, "127.0.0.1");
+aitextStub.unref();
+
 function startWorker(): { child: ChildProcess; log: string; ready: Promise<void> } {
   mkdirSync(LOG_DIR, { recursive: true });
   const log = path.join(LOG_DIR, "worker.log");
@@ -151,7 +170,7 @@ function startWorker(): { child: ChildProcess; log: string; ready: Promise<void>
     VISA_MAX_PER_PURCHASE_USD: "750",
     BUY_FRAUD_BLOCK: String(FRAUD_BLOCK),
     BUY_AUTO_CHOOSE: "0",
-    PANGRAM_URL: "", // no AI-text detector call: fraud scores stay rule-based and deterministic
+    PANGRAM_URL: `http://127.0.0.1:${AITEXT_PORT}/`, // the stub above, never a real detector
     PANGRAM_TOKEN: "",
     EBAY_CLIENT_SECRET: "", // listings post to the labeled simulated eBay, never the sandbox
     EBAY_REFRESH_TOKEN: "",
@@ -401,6 +420,15 @@ await stage("buy: deals found and fraud-screened", async () => {
   if (planted && (!/sample data$/.test(planted.sellerInfo) || planted.fraudScore < FRAUD_BLOCK)) throw new Error(`planted demo scam: ${planted.fraudScore.toFixed(2)}, "${planted.sellerInfo}"`);
   const plantedNote = planted ? `; planted demo scam scored ${planted.fraudScore.toFixed(2)}` : "";
   return { detail: `${deals.length} deals, ${flagged.length} flagged >= 0.3${flagged[0] ? ` (e.g. "${flagged[0].title}": ${flagged[0].fraudReasons.join("; ")})` : ""}${plantedNote}` };
+});
+
+await stage("fraud: AI-written listing text gets an AI-text reason (stub detector)", async () => {
+  const d = await until("the AI-text demo listing", () =>
+    [...conn!.db.deal.iter()].find(x => me && x.owner.isEqual(me) && x.url.endsWith("/planted-ai-text-sofa") && x.fraudScore >= 0), 30_000);
+  if (!(d.aiTextScore >= 0.9) || !d.fraudReasons.some(r => /AI-generated/.test(r))) throw new Error(`ai_text_score ${d.aiTextScore}, reasons: ${d.fraudReasons.join("; ")}`);
+  const others = [...conn!.db.deal.iter()].filter(x => me && x.owner.isEqual(me) && x.id !== d.id && x.fraudReasons.some(r => /AI-generated/.test(r)));
+  if (others.length) throw new Error(`${others.length} other deal(s) got an AI-text reason`);
+  return { detail: `"${d.title}": ai_text ${d.aiTextScore.toFixed(2)}, fraud ${d.fraudScore.toFixed(2)} (${d.fraudReasons.join("; ")})` };
 });
 
 await stage("purchase: choose card deal -> approve -> simulated Visa payment", async () => {

@@ -3,7 +3,7 @@
 // office chair, and never on dining chairs, armchairs, chair accessories or other furniture.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fixtureDealSource, hasPlantedDeal, nameWords, plantedMatches } from '../src/integrations/deals.js';
+import { fixtureDealSource, fixtureDescription, hasPlantedDeal, nameWords, plantedMatches } from '../src/integrations/deals.js';
 import { createDealSource } from '../src/integrations/deals-apify.js';
 
 const POSITIVE: [string, string][] = [
@@ -81,9 +81,19 @@ test('fixture source serves the planted row only on matching items, and only onc
     assert.equal(planted[0].title, 'Herman Miller Aeron, brand new, $95, Zelle only, ship only');
     assert.ok(planted[0].sample);
   }
-  for (const name of ['Dining chairs', 'Armchair', 'Sofa']) {
+  for (const name of ['Dining chairs', 'Armchair']) {
     assert.ok(!(await src.search({ name, category: 'chair' })).some(d => d.planted), name);
   }
+  // A sofa gets the AI-text demo listing (plantedKind "ai-text"), never the Aeron scam.
+  const sofa = (await src.search({ name: 'Sofa', category: 'sofa' })).filter(d => d.planted);
+  assert.deepEqual(sofa.map(d => d.title), ['Mid-century modern 3-seat sofa, like new']);
+  assert.ok(!hasPlantedDeal({ name: 'Sofa', category: 'sofa' }), 'the AI-text listing is not a planted scam');
+});
+
+test('the AI-text demo listing carries a description for the detector; other deals have none', () => {
+  assert.match(fixtureDescription('https://example.invalid/moove-demo/planted-ai-text-sofa'), /^Elevate your living space/);
+  assert.equal(fixtureDescription('https://example.invalid/moove-demo/planted-scam-aeron'), '');
+  assert.equal(fixtureDescription('https://nowhere.invalid/x'), '');
 });
 
 test('demo path without APIFY_TOKEN: planted row rides along with replayed live chairs and a card deal', async () => {
