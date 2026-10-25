@@ -1,0 +1,12 @@
+{
+  "model": "claude-sonnet-5-5",
+  "output": {
+    "identifiedProduct": "Generic table, approx. 120 cm wide x 75 cm high x 60 cm deep (likely a desk or small dining table)",
+    "itemForm": "full_product",
+    "specificity": 0.2,
+    "newRetailUsd": 180,
+    "p10": 25,
+    "p50": 65,
+    "p90": 160
+  }
+}
