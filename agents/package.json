@@ -14,6 +14,7 @@
     "ebay:setup": "tsx scripts/ebay-setup.ts",
     "spotcheck:injection": "tsx scripts/injection-spotcheck.ts",
     "visa:demo": "tsx scripts/visa-demo.ts",
+    "auth0:ciba-test": "tsx scripts/ciba-test.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "comps:prefetch": "tsx scripts/prefetch-comps.ts",
     "e2e": "tsx scripts/e2e.ts",
