@@ -125,9 +125,10 @@ struct ListingPoster: View {
 
     @ViewBuilder private var art: some View {
         Group {
-            if let item, item.origin == .photo, let url = item.photoUrls.first.flatMap(URL.init(string:)) {
+            if let item, item.origin == .photo, !item.photoUrls.isEmpty {
                 // Items added by photo have no size, so no voxel model: the photo, taped in.
-                AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { PosterInk.paper.opacity(0.4) }
+                ItemPhoto(urls: item.photoUrls) { $0.resizable().scaledToFill() }
+                    .background(PosterInk.paper.opacity(0.4))
                     .frame(width: artHeight * 0.8, height: artHeight * 0.8)
                     .clipShape(Rectangle())
                     .padding(4)
