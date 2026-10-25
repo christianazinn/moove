@@ -122,7 +122,7 @@ struct AddItemView: View {
                     .resizable()
                     .scaledToFill()
                     .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
                     .accessibilityLabel("Photo added")
             }
             Button {

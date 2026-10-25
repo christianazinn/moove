@@ -10,7 +10,7 @@ struct ConnectionBanner: View {
     var body: some View {
         VStack(spacing: 0) {
             if store.backendKind == .fixture {
-                strip("Offline demo: fixture data, nothing is synced", systemImage: "externaldrive", tint: Theme.ochreInk)
+                strip("Offline demo", systemImage: "externaldrive", tint: Theme.ochreInk)
             }
             switch store.status {
             case .connecting:

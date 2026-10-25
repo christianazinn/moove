@@ -25,7 +25,7 @@ struct ShoppingCartButton: View {
                 .frame(width: size, height: size)
                 .background(Theme.accentFill, in: Circle())
                 .overlay(Circle().strokeBorder(Theme.bg.opacity(0.35), lineWidth: 1))
-                .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 3)
+                .mooveShadow(.lifted)
                 .overlay(alignment: .topTrailing) {
                     if cart.count > 0 {
                         Text("\(cart.count)")
@@ -98,22 +98,8 @@ struct ShoppingCartSheet: View {
     }
 
     private var empty: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "cart")
-                .font(.system(size: 34))
-                .foregroundStyle(Theme.faint)
-                .accessibilityHidden(true)
-            Text("Nothing bought yet").blockTitle()
-            Text("What you buy for the new place shows up here.")
-                .sansText(14)
-                .foregroundStyle(Theme.muted)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 36)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("shopping.cart.empty")
+        EmptyState(title: "Nothing bought yet", detail: "What you buy for the new place shows up here.")
+            .accessibilityIdentifier("shopping.cart.empty")
     }
 }
 

@@ -12,8 +12,10 @@ struct ShoppingItemDetailView: View {
         if let item = store.snapshot.shoppingItems.first(where: { $0.id == itemId }) {
             content(item)
         } else {
-            ContentUnavailableView("Removed from the list", systemImage: "cart",
-                                   description: Text("This item is no longer on your shopping list."))
+            EmptyState(title: "Removed from the list", detail: "This item is no longer on your shopping list.")
+                .padding(.horizontal, Theme.gutter)
+                .padding(.top, 32)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .mooveScreen()
         }
     }
@@ -37,14 +39,8 @@ struct ShoppingItemDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
                 ShoppingStatusChip(status: item.status).padding(.top, 10)
-                if !item.reason.isEmpty {
-                    Text(item.reason)
-                        .lede()
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 10)
-                }
 
-                ListHeader(title: "Checkout").padding(.top, 36)
+                ListHeader(title: "Checkout").padding(.top, Theme.Space.section)
                 ShoppingCheckoutView(checkout: checkout, searchProblem: snapshot.dealSearchProblem(for: item),
                                      checkoutProblem: item.chosenDealId.flatMap(snapshot.checkoutProblem(dealId:)))
                     .padding(.vertical, 16)
@@ -52,7 +48,7 @@ struct ShoppingItemDetailView: View {
                     .ruled()
 
                 if !deals.isEmpty {
-                    ListHeader(title: "Deals", count: "\(deals.count)").padding(.top, 40)
+                    ListHeader(title: "Deals", count: "\(deals.count)").padding(.top, Theme.Space.section)
                     let ribbons = snapshot.dealRibbons(for: item)
                     VStack(spacing: 12) {
                         ForEach(deals) { deal in
@@ -99,7 +95,7 @@ struct ShoppingCheckoutView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     step("No deals yet.", systemImage: "magnifyingglass", tint: Theme.ochreInk)
                     Text(searchProblem).monoMeta().fixedSize(horizontal: false, vertical: true)
-                    Text("The buy agent searches again when the list changes. You can also remove this item and add it with a different name.")
+                    Text("The buy agent searches again when the list changes.")
                         .monoMeta().fixedSize(horizontal: false, vertical: true)
                 }
             } else {
@@ -194,8 +190,8 @@ struct DealRow: View {
             actions(large: large, locked: locked)
         }
         .padding(12)
-        .background(cardFill, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
+        .background(cardFill, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
             .strokeBorder(cardBorder, lineWidth: isChosen || !deal.isChoosable ? 1.5 : 1))
     }
 
@@ -210,6 +206,13 @@ struct DealRow: View {
         var text = isChosen ? "Chosen deal. " : ""
         if let ribbon { text += "\(ribbon.label). " }
         text += deal.accessibilitySummary
+        text += deal.supportsCardCheckout ? ". Visa checkout" : ". Message seller"
+        if !deal.sellerDetails.isEmpty { text += ". " + deal.sellerDetails }
+        if let level = deal.fraudLevel, let score = deal.fraudScore {
+            text += ". Fraud check \(level.label), \(score.formatted(.number.precision(.fractionLength(2))))"
+        } else {
+            text += ". Not fraud-screened yet"
+        }
         if !deal.fraudReasons.isEmpty, deal.fraudLevel != .low {
             text += ". " + deal.fraudReasons.joined(separator: ". ")
         }
@@ -230,46 +233,22 @@ struct DealRow: View {
         let tint: Color = deal.isChoosable ? StorefrontTint.color(for: deal.id) : Theme.dangerSoft
         return StorefrontImage(spec: ShoppingThumbnails.spec(for: deal, item: item), tint: tint, height: large ? 160 : 108)
             .frame(width: large ? nil : 108)
-            .overlay(alignment: .topLeading) {
-                if let ribbon { RibbonTag(ribbon: ribbon).scaleEffect(0.85, anchor: .topLeading).padding(4) }
-            }
     }
 
+    /// Price only beside the picture (Lisa); the title, source, seller, checkout kind and fraud
+    /// check are in the VoiceOver label, and a blocked deal says so by its Choose button.
     private func info(large: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if isChosen {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.accentStrong)
-                }
-                Text(deal.title).blockTitle().lineLimit(large ? 8 : 3).fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
-                if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if isChosen {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.accentStrong)
             }
-            AdaptiveLine {
-                priceText()
-                Text(deal.source).monoMeta()
-                Spacer(minLength: 8)
-                Label(deal.supportsCardCheckout ? "Visa checkout" : "Message seller",
-                      systemImage: deal.supportsCardCheckout ? "creditcard" : "envelope")
-                    .monoMeta()
-                    .lineLimit(large ? 2 : 1)
-            }
-            if !deal.sellerDetails.isEmpty {
-                Text(deal.sellerDetails).sansText(14).foregroundStyle(Theme.muted).lineLimit(large ? 8 : 3)
-            }
-            if let level = deal.fraudLevel, let score = deal.fraudScore {
-                FraudChip(level: level, score: score)
-                if level != .low {
-                    ForEach(deal.fraudReasons, id: \.self) { reason in
-                        Text("· \(reason)").monoMeta().fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            } else {
-                Text("Not fraud-screened yet").monoMeta()
-            }
+            priceText()
+            Spacer(minLength: 8)
+            if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func actions(large: Bool, locked: Bool) -> some View {

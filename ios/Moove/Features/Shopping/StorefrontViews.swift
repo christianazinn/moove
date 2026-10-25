@@ -39,7 +39,8 @@ struct StorefrontImage: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: Theme.radiusMedium, style: .continuous).fill(tint)
+            // Neutral tile for every picture (Lisa: less color); `tint` is kept for blocked deals.
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).fill(tint == Theme.dangerSoft ? tint : Theme.surface2)
             VoxelThumbnail(spec: spec, size: height * 0.92, tile: false)
         }
         .frame(maxWidth: .infinity)
@@ -100,8 +101,8 @@ struct PriceChip: View {
             .padding(.horizontal, large ? 12 : 9)
             .padding(.vertical, large ? 6 : 4)
             .foregroundStyle(Theme.text)
-            .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.line))
+            .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous).strokeBorder(Theme.line))
             .accessibilityHidden(true)
     }
 }
@@ -160,26 +161,14 @@ struct StorefrontSectionHeader: View {
     let section: StorefrontSection
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: section.hall.shopSymbol)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(section.hall.shopTint)
-                .frame(width: 38, height: 38)
-                .background(section.hall.shopTint.opacity(0.16),
-                            in: RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(section.title)
-                    .monoText(20, weight: .bold, maxScale: 1.8)
-                    .foregroundStyle(Theme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !section.subtitle.isEmpty {
-                    Text(section.subtitle).monoMeta().fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .accessibilityElement(children: .combine)
+        // Name only, in the serif display face Inventory's pages use (the same categories); the
+        // subtitle is read by VoiceOver.
+        Text(section.title)
+            .displayTitle(22)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(section.subtitle.isEmpty ? section.title : "\(section.title), \(section.subtitle)")
         .accessibilityAddTraits(.isHeader)
         .accessibilityIdentifier("shopping.hall.\(section.hall.rawValue)")
     }
@@ -209,13 +198,7 @@ struct StorefrontCategoryChips: View {
     private func chip(_ title: String, symbol: String?, tint: Color, count: Int?, id: String,
                       action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                if let symbol {
-                    Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(tint)
-                }
-                Text(title).monoText(13, weight: .bold, maxScale: 1.5)
-                if let count { Text("\(count)").monoText(12.5, maxScale: 1.5).foregroundStyle(Theme.muted) }
-            }
+            Text(title).monoText(13, weight: .bold, maxScale: 1.5)
             .lineLimit(1)
             .padding(.horizontal, 12)
             .frame(minHeight: 36)
@@ -243,38 +226,14 @@ struct StorefrontHeroBanner: View {
         let layout = large ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
                            : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
         layout {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(hero.pick == nil ? "Your list" : "Biggest saving").eyebrow()
-                Text(hero.headline)
-                    .monoText(21, weight: .bold, maxScale: 1.6)
-                    .foregroundStyle(Theme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let pick = hero.pick {
-                    Text("\(pick.itemName) · \(pick.deal.formattedPrice) · \(pick.savingsPercent)% under the priciest deal found")
-                        .sansText(14.5)
-                        .foregroundStyle(Theme.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Label("See deals", systemImage: "arrow.right")
-                        .labelStyle(.titleAndIcon)
-                        .monoText(13, weight: .bold, maxScale: 1.5)
-                        .padding(.horizontal, 16)
-                        .frame(minHeight: 36)
-                        .foregroundStyle(Theme.accentInk)
-                        .background(Theme.accentFill, in: Capsule())
-                        .padding(.top, 2)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // One headline (Lisa); the saving and the pick are read by VoiceOver, a tap opens the deals.
+            Text(hero.headline)
+                .monoText(21, weight: .bold, maxScale: 1.6)
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
             if let pick = hero.pick {
                 VoxelThumbnail(spec: ShoppingThumbnails.spec(for: pick.deal, item: item), size: large ? 200 : 150, tile: false)
-                    .overlay(alignment: .topTrailing) {
-                        Text("-\(pick.savingsPercent)%")
-                            .monoText(15, weight: .heavy, maxScale: 1.4)
-                            .foregroundStyle(Theme.accentInk)
-                            .padding(10)
-                            .background(Circle().fill(Theme.ochreInk))
-                            .accessibilityHidden(true)
-                    }
                     .frame(maxWidth: large ? .infinity : nil)
             } else if let item {
                 VoxelThumbnail(spec: ShoppingThumbnails.spec(for: item), size: large ? 180 : 130, tile: false)
@@ -283,8 +242,7 @@ struct StorefrontHeroBanner: View {
         }
         .padding(20)
         .background {
-            RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
-                .fill(LinearGradient(colors: [Theme.accentSoft, Theme.surface], startPoint: .topLeading, endPoint: .bottomTrailing))
+            RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous).fill(Theme.surface)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken)
@@ -383,9 +341,9 @@ struct StorefrontItemCard: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.surface.opacity(0.55), in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous).strokeBorder(Theme.line))
-        .contentShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .background(Theme.surface.opacity(0.55), in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous).strokeBorder(Theme.line))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken(payment: payment))
         .accessibilityHint("Opens the deals")
@@ -401,15 +359,8 @@ struct StorefrontItemCard: View {
     }
 
     private func image(_ spec: VoxelItemSpec, tint: Color, height: CGFloat) -> some View {
+        // Image, name, price (Lisa); the ribbon, status and deal source are in the VoiceOver label.
         StorefrontImage(spec: spec, tint: tint, height: height, bought: tile.item.status == .bought)
-            .overlay(alignment: .topLeading) {
-                if let ribbon = tile.ribbon { RibbonTag(ribbon: ribbon).padding(8) }
-            }
-            .overlay(alignment: .bottomLeading) {
-                if let featured = tile.featured, size != .small {
-                    PriceChip(text: featured.deal.formattedPrice, large: size == .feature).padding(8)
-                }
-            }
     }
 
     private func details(payment: Payment?) -> some View {
@@ -421,17 +372,9 @@ struct StorefrontItemCard: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
-                if size == .small, let featured = tile.featured {
+                if let featured = tile.featured {
                     Text(featured.deal.formattedPrice).rowValue().fontWeight(.bold).amountText()
                 }
-            }
-            StorefrontBadgeView(badge: tile.badge)
-            if let featured = tile.featured, size == .feature || size == .wide || size == .tall {
-                Text(featured.deal.title)
-                    .sansText(13.5)
-                    .foregroundStyle(Theme.muted)
-                    .lineLimit(size == .tall ? 3 : 2)
-                Text(featured.deal.source.uppercased()).monoText(11, weight: .bold).foregroundStyle(Theme.faint)
             }
             if let payment {
                 VisaRailBadge(badge: VisaPaymentBadge(payment))
@@ -468,7 +411,7 @@ struct StorefrontShelfView: View {
         VStack(alignment: .leading, spacing: 12) {
             if shelf.hall != nil {
                 // A category's deal row: a quiet label, since its section header is just above.
-                Text("Deals · \(shelf.deals.count)")
+                Text("Deals")
                     .eyebrow()
                     .accessibilityLabel("\(shelf.title), \(shelf.deals.count)")
                     .accessibilityAddTraits(.isHeader)
@@ -520,41 +463,21 @@ struct StorefrontDealCard: View {
     var body: some View {
         let d = deal.deal
         VStack(alignment: .leading, spacing: 8) {
+            // Image and price (Lisa); title, source, seller and saving are in the VoiceOver label.
+            // A blocked deal keeps its "Blocked" mark on the picture and the struck price.
             picture
-            Text(deal.itemName.uppercased()).monoText(11, weight: .bold).foregroundStyle(Theme.faint).lineLimit(1)
-            Text(d.title)
-                .sansText(14, weight: .medium)
-                .foregroundStyle(Theme.text)
-                .lineLimit(2, reservesSpace: true)
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(d.formattedPrice)
-                    .monoText(18, weight: .bold, maxScale: 1.6)
-                    .foregroundStyle(blocked ? Theme.muted : Theme.text)
-                    .strikethrough(blocked)
-                    .amountText()
-                Text(d.source).monoMeta().lineLimit(1)
-            }
-            if !d.sellerDetails.isEmpty {
-                Text(d.sellerDetails).monoText(11.5).foregroundStyle(Theme.muted).lineLimit(2)
-            }
-            if blocked {
-                if let level = d.fraudLevel, let score = d.fraudScore { FraudChip(level: level, score: score) }
-                if let reason = d.fraudReasons.first {
-                    Text(reason).monoText(11.5).foregroundStyle(Theme.danger).lineLimit(2)
-                }
-            } else if let savings = deal.savingsText {
-                Text(savings)
-                    .monoText(12, weight: .bold)
-                    .foregroundStyle(Theme.accentStrong)
-                    .lineLimit(2)
-            }
+            Text(d.formattedPrice)
+                .monoText(18, weight: .bold, maxScale: 1.6)
+                .foregroundStyle(blocked ? Theme.muted : Theme.text)
+                .strikethrough(blocked)
+                .amountText()
         }
         .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(fill, in: RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous)
+        .background(fill, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
             .strokeBorder(blocked ? Theme.danger : Theme.line, lineWidth: blocked ? 1.5 : 1))
-        .contentShape(RoundedRectangle(cornerRadius: Theme.radiusLarge, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken)
     }
@@ -595,6 +518,7 @@ struct StorefrontDealCard: View {
     private var spoken: String {
         let d = deal.deal
         var parts = ["For \(deal.itemName)", d.accessibilitySummary]
+        if !d.sellerDetails.isEmpty { parts.append(d.sellerDetails) }
         if blocked {
             parts.insert("Blocked, likely fraud. The agent won't buy this deal", at: 0)
             parts += d.fraudReasons
