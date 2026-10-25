@@ -46,3 +46,4 @@ Lanes: ios-capture (capture, review, sync, auth), ios-newhome (new home, fly-in,
   ```sh
   docker run --rm -v <repo>/ios/MooveKit:/src:ro swift:6.2 bash -c 'mkdir /work && cd /src && tar --exclude=.build -cf - . | (cd /work && tar xf -) && cd /work && swift test'
   ```
+- **Appearance** (Settings → Appearance, `Shared/Appearance.swift`): System / Light / Dark, saved in `moove.appearance`, applied at the root (`.followsAppAppearance()` sets `preferredColorScheme` and every window's `overrideUserInterfaceStyle`, so sheets and ARViews follow). The sun/moon button at the top left of Settings flips Light/Dark.

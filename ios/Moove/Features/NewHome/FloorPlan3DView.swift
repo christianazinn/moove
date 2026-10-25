@@ -37,6 +37,12 @@ struct FloorPlan3DView: UIViewRepresentable {
     /// Warm paper in light mode (Theme `surface`), deep walnut in dark mode (Theme `bg`).
     static var sceneBackground: UIColor { Theme.dynamicUIColor(0xEAE3D7, 0x1C1814) }
 
+    /// Resolved for SwiftUI's color scheme rather than the ARView's trait collection, which is
+    /// unset before the view is in a window and can lag an in-app Appearance change.
+    static func sceneBackgroundColor(for scheme: ColorScheme) -> UIColor {
+        sceneBackground.resolvedColor(with: UITraitCollection(userInterfaceStyle: scheme == .dark ? .dark : .light))
+    }
+
     /// The isolated room's own plan, its pieces and the shot's camera yaw.
     private var shot: (plan: FloorPlan, placements: [Placement], yaw: Float)? {
         guard let isolatedRoom, let room = plan.room(named: isolatedRoom), let one = plan.isolating(isolatedRoom) else { return nil }
@@ -45,14 +51,14 @@ struct FloorPlan3DView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> ARView {
         let view = ARView(frame: .zero, cameraMode: .nonAR, automaticallyConfigureSession: false)
-        view.environment.background = .color(Self.sceneBackground.resolvedColor(with: view.traitCollection))
+        view.environment.background = .color(Self.sceneBackgroundColor(for: context.environment.colorScheme))
         context.coordinator.attach(to: view, interactive: interactive)
         update(context.coordinator, animated: false)
         return view
     }
 
     func updateUIView(_ view: ARView, context: Context) {
-        view.environment.background = .color(Self.sceneBackground.resolvedColor(with: view.traitCollection))
+        view.environment.background = .color(Self.sceneBackgroundColor(for: context.environment.colorScheme))
         update(context.coordinator, animated: true)
     }
 
