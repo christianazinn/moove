@@ -235,20 +235,38 @@ struct DealRow: View {
             .frame(width: large ? nil : 108)
     }
 
-    /// Price only beside the picture (Lisa); the title, source, seller, checkout kind and fraud
-    /// check are in the VoiceOver label, and a blocked deal says so by its Choose button.
+    /// Price, then a quiet title and where it's from (Lisa); checkout kind and fraud check are in
+    /// the VoiceOver label, and a blocked deal says so by its Choose button.
     private func info(large: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            if isChosen {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.accentStrong)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                if isChosen {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.accentStrong)
+                }
+                priceText()
+                Spacer(minLength: 8)
+                if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
             }
-            priceText()
-            Spacer(minLength: 8)
-            if deal.isSample { ReplayBadge(sample: true) } else if deal.isReplay { ReplayBadge() }
+            Text(deal.title)
+                .sansText(15)
+                .foregroundStyle(Theme.text)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(Self.storeName(deal.source)).monoMeta().lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Where it's from, by store name only ("Craigslist", "IKEA"); the seller is in the VoiceOver label.
+    private static func storeName(_ source: String) -> String {
+        switch source.lowercased() {
+        case "ebay": "eBay"
+        case "fb", "facebook": "Facebook Marketplace"
+        case "ikea": "IKEA"
+        default: source.prefix(1).uppercased() + source.dropFirst()
+        }
     }
 
     private func actions(large: Bool, locked: Bool) -> some View {
