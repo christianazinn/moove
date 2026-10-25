@@ -83,7 +83,7 @@ Every agent step and every payment is a row in SpacetimeDB, so **Sell & Buy > Ag
 
 ## What's next for Moove
 - Verify live sync and two-phone room sharing on real devices, post to the real eBay sandbox (built; today eBay posts are simulated), and turn the recall check on for the hosted worker. x402 already settles for real there, and Visa checkout already runs in the Authorize.net sandbox (CyberSource's sandbox still returns HTTP 502).
-- Turn on the AI-written-listing signal in fraud screening (the Pangram hook is built but off; an open-source Pangram integration is in progress) and add seller identity checks.
+- Seller identity checks in fraud screening, and a commercially licensed AI-text model. The detector we run today is trained partly on non-commercial data.
 - Buy more data from third-party x402 sellers (the recall check is the first; comps still come from our own paywall), with on-chain per-agent budgets.
 - Keep the scanned wall and floor colors with the room, so saved dollhouses keep them (the just-finished scan already uses them).
 
