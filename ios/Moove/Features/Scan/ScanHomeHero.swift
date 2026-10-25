@@ -66,7 +66,7 @@ struct ScanHomeHero: View {
     }
 
     private var caption: String {
-        guard let room else { return "Recorded bedroom · scan yours to replace it" }
+        guard let room else { return "Demo bedroom" }
         return "\(room.name) · \(items.count) object\(items.count == 1 ? "" : "s")"
     }
 
@@ -127,32 +127,5 @@ struct ScanRoomCard: View {
         let count = "\(items.count) item\(items.count == 1 ? "" : "s")"
         let cents = items.compactMap(\.saleValueCents).reduce(0, +)
         return cents > 0 ? "\(count) · ~$\(cents / 100)" : count
-    }
-}
-
-/// Three steps, each with a small voxel piece.
-struct ScanHowItWorks: View {
-    private var steps: [(VoxelItemSpec, String, String)] {[
-        (VoxelItemSpec(category: "chair", name: "Armchair", widthM: 0.8, depthM: 0.8, heightM: 0.9), "Scan", "Walk the room slowly. Every piece is found and measured."),
-        (VoxelItemSpec(category: "storage", name: "Moving box", widthM: 0.5, depthM: 0.4, heightM: 0.4), "Sort", "Agents price it and suggest keep, sell, donate or trash."),
-        (VoxelItemSpec(category: "bed", name: "Bed", widthM: 1.5, depthM: 2.0, heightM: 0.6), "Move", "What you keep flies into your new home."),
-    ]}
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ListHeader(title: "How it works")
-            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                HStack(spacing: 14) {
-                    VoxelThumbnail(spec: step.0, size: 48)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(index + 1). \(step.1)").sansText(15.5, weight: .semibold).foregroundStyle(Theme.text)
-                        Text(step.2).monoMeta().fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .padding(.vertical, 10)
-                .accessibilityElement(children: .combine)
-            }
-        }
     }
 }
