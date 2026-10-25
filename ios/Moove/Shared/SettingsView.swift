@@ -6,6 +6,8 @@ struct SettingsView: View {
     @Environment(MooveStore.self) private var store
     @Environment(AuthService.self) private var auth
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(Appearance.storageKey) private var appearance: Appearance = .system
 
     var body: some View {
         NavigationStack {
@@ -30,6 +32,12 @@ struct SettingsView: View {
                         .buttonStyle(.pill(.danger))
                         .padding(.top, 16)
                     }
+
+                    section("Appearance") {
+                        ForEach(Appearance.allCases) { appearanceChoice($0) }
+                    }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("settings.appearance")
 
                     section("Backend") {
                         Text("Data source").monoMeta().padding(.top, 14)
@@ -65,7 +73,17 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { Button("Done") { dismiss() } }
+            .toolbar {
+                // Quick light/dark flip; the Appearance section also has System.
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(colorScheme == .dark ? "Light mode" : "Dark mode",
+                           systemImage: colorScheme == .dark ? "sun.max" : "moon") {
+                        appearance = colorScheme == .dark ? .light : .dark
+                    }
+                    .accessibilityIdentifier("settings.appearance.toggle")
+                }
+                ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
+            }
             .mooveScreen()
         }
     }
@@ -101,6 +119,37 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// One radio-style Appearance choice (System / Light / Dark), saved in `moove.appearance`.
+    private func appearanceChoice(_ choice: Appearance) -> some View {
+        let selected = appearance == choice
+        return Button {
+            appearance = choice
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(selected ? Theme.accentStrong : Theme.faint)
+                    .accessibilityHidden(true)
+                Image(systemName: choice.systemImage)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(Theme.muted)
+                    .frame(width: 20)
+                    .accessibilityHidden(true)
+                Text(choice.label)
+                    .monoText(13.5, weight: selected ? .bold : .regular)
+                    .foregroundStyle(Theme.text)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 12)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .ruled()
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("settings.appearance.\(choice.rawValue)")
     }
 
     /// "online · started 12 min ago · 878eead", from the worker's announcement.
