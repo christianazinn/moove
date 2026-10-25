@@ -284,7 +284,7 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
   const blocked = visa.spendBlocker(AGENT, s.owner, d.priceCents);
   if (blocked) {
     settled.add(key);
-    logEvent(conn, { ...ref, kind: 'error', message: `Not buying "${d.title}": ${blocked}`, data: { refused: true, remainingCents: visa.remaining(AGENT, s.owner) } });
+    logEvent(conn, { ...ref, kind: 'error', message: `Not buying "${d.title}": ${blocked}`, data: { rail: 'visa', refused: true, remainingCents: visa.remaining(AGENT, s.owner) } });
     return;
   }
 
