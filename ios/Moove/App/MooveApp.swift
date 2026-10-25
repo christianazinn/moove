@@ -52,5 +52,6 @@ struct MooveApp: App {
             .environment(auth)
             .environment(store)
             .followsAppAppearance()
+            .task { ScanHeroPreload.start(store) }
     }
 }

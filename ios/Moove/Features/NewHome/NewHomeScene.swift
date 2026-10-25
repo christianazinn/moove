@@ -34,6 +34,8 @@ final class NewHomeScene {
     var onBuilt: (() -> Void)?
 
     /// `wallColor` / `floorColor`: colors measured from the scan's photos, when known.
+    /// A shell `prepare` already built goes in at once; otherwise it's built first (meshing off
+    /// the main actor) and appears when done.
     func build(_ plan: FloorPlan, wallColor: VoxelColor? = nil, floorColor: VoxelColor? = nil) {
         guard plan != self.plan || [wallColor, floorColor] != colors else { return }
         self.plan = plan
@@ -42,33 +44,85 @@ final class NewHomeScene {
         root.children.removeAll()
         wallPieces = []
         isBuilt = false
-        if showsLabels { for room in plan.rooms { root.addChild(Self.label(for: room)) } }
 
-        // Voxelizing and meshing the whole house is pure MooveKit work: do it off the main actor.
-        let height = Double(Self.cutawayHeightM)
+        let key = ShellKey(plan: plan, wallColor: wallColor, floorColor: floorColor)
+        if let shell = Self.shells[key] { return apply(shell) }
         houseTask = Task { [weak self] in
+            await Self.prepare(plan, wallColor: wallColor, floorColor: floorColor)
+            guard let self, !Task.isCancelled, self.plan == plan, self.colors == [wallColor, floorColor],
+                  let shell = Self.shells[key] else { return }
+            self.apply(shell)
+        }
+    }
+
+    /// Clones of the prepared shell's entities (they share its MeshResources), so this is cheap.
+    private func apply(_ shell: Shell) {
+        root.addChild(shell.house.clone(recursive: true))
+        for piece in shell.pieces {
+            let walls = piece.entity.clone(recursive: true)
+            root.addChild(walls)
+            wallPieces.append((piece.layer, walls))
+        }
+        if showsLabels { for label in shell.labels { root.addChild(label.clone(recursive: true)) } }
+        applyViewDirection()
+        isBuilt = true
+        onBuilt?()
+    }
+
+    // MARK: Prepared shells
+
+    private struct ShellKey: Hashable {
+        var plan: FloorPlan
+        var wallColor: VoxelColor?
+        var floorColor: VoxelColor?
+    }
+
+    /// A built shell, never in a scene itself: `apply` adds clones.
+    private struct Shell {
+        var house: ModelEntity
+        var pieces: [(layer: VoxelHouse.Layer, entity: ModelEntity)]
+        var labels: [Entity]
+    }
+
+    private static var shells: [ShellKey: Shell] = [:]
+    private static var shellOrder: [ShellKey] = []
+    private static var shellTasks: [ShellKey: Task<Void, Never>] = [:]
+
+    /// Builds the house shell for `plan` ahead of time (e.g. at launch for the Scan hero):
+    /// voxelizing and meshing off the main actor, then one MeshResource per frame on it.
+    /// Keeps the last few shells.
+    static func prepare(_ plan: FloorPlan, wallColor: VoxelColor? = nil, floorColor: VoxelColor? = nil) async {
+        let key = ShellKey(plan: plan, wallColor: wallColor, floorColor: floorColor)
+        if shells[key] != nil { return }
+        if let task = shellTasks[key] { return await task.value }
+        let height = Double(cutawayHeightM)
+        let task = Task { @MainActor in
+            defer { Self.shellTasks[key] = nil }
             let meshes = await Task.detached(priority: .userInitiated) {
                 let layers = VoxelHouse.buildLayers(plan, cutawayHeightM: height, wallColor: wallColor, floorColor: floorColor)
                 return (base: VoxelMesher.mesh(layers.base, centered: false),
                         pieces: layers.layers.map { (layer: $0, mesh: VoxelMesher.mesh($0.grid, centered: false)) })
             }.value
-            guard let self, !Task.isCancelled, self.plan == plan,
-                  let house = VoxelEntity.entity(meshes.base, name: "house") else { return }
+            guard let house = VoxelEntity.entity(meshes.base, name: "house") else { return }
             let o = VoxelHouse.origin(of: plan)
             let origin = SIMD3<Float>(Float(o.x), Float(o.y), Float(o.z))
             house.position = origin
-            self.root.addChild(house)
+            var pieces: [(layer: VoxelHouse.Layer, entity: ModelEntity)] = []
             for (n, piece) in meshes.pieces.enumerated() {
+                try? await Task.sleep(for: .milliseconds(16))
                 let layer = piece.layer
                 guard let walls = VoxelEntity.entity(piece.mesh, name: "walls.\(layer.tall ? "tall" : "low").\(n)") else { continue }
                 walls.position = origin + SIMD3<Float>(layer.offset) * Float(VoxelGrid.voxelSize)
-                self.root.addChild(walls)
-                self.wallPieces.append((layer, walls))
+                pieces.append((layer, walls))
             }
-            self.applyViewDirection()
-            self.isBuilt = true
-            self.onBuilt?()
+            let labels = plan.rooms.map(Self.label(for:))
+            Self.shells[key] = Shell(house: house, pieces: pieces, labels: labels)
+            Self.shellOrder.removeAll { $0 == key }
+            Self.shellOrder.append(key)
+            while Self.shellOrder.count > 6 { Self.shells[Self.shellOrder.removeFirst()] = nil }
         }
+        shellTasks[key] = task
+        await task.value
     }
 
     /// The camera's horizontal direction from its target, world (x, z). Cheap: only toggles
