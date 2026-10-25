@@ -1,3 +1,4 @@
+import Network
 import SwiftUI
 import MooveKit
 
@@ -6,6 +7,8 @@ import MooveKit
 struct AuthGate: View {
     @Environment(AuthService.self) private var auth
     @Environment(MooveStore.self) private var store
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var network = NetworkWatcher()
 
     var body: some View {
         Group {
@@ -21,6 +24,15 @@ struct AuthGate: View {
         .task(id: auth.state) { await sessionChanged() }
         // Register once the connection is up: after sign-in, and again after a
         // banner retry, since a write before that would only fail.
+        // iOS kills the socket when the iPad locks or the app goes to the background, and the
+        // SDK burns its retries while it can't reach the network, then gives up ("Offline").
+        // Coming back (or the network returning) reconnects without a tap.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { reconnectIfNeeded() }
+        }
+        .onChange(of: network.isOnline) { _, online in
+            if online { reconnectIfNeeded() }
+        }
         .onChange(of: store.status) { _, status in
             if status == .connected { Task { await registerUser() } }
             // The SDK retries with the token it started with; an expired ID token is
@@ -28,6 +40,15 @@ struct AuthGate: View {
             if case .reconnecting = status, case .signedIn = auth.state, auth.connectedTokenExpired {
                 Task { await store.connect(token: await auth.spacetimeToken()) }
             }
+        }
+    }
+
+    private func reconnectIfNeeded() {
+        guard store.backendKind == .spacetime, store.status.needsReconnect else { return }
+        switch auth.state {
+        case .signedIn: Task { await store.connect(token: await auth.spacetimeToken()) }
+        case .guest: Task { await store.connect(token: nil) }
+        case .checking, .signedOut: break
         }
     }
 
@@ -66,4 +87,21 @@ struct AuthGate: View {
         }
         #endif
     }
+}
+
+/// Whether the device has a usable network path (Wi-Fi or cellular), for reconnecting.
+@MainActor @Observable
+final class NetworkWatcher {
+    private(set) var isOnline = true
+    private let monitor = NWPathMonitor()
+
+    init() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            let online = path.status == .satisfied
+            Task { @MainActor in self?.isOnline = online }
+        }
+        monitor.start(queue: DispatchQueue(label: "moove.network"))
+    }
+
+    deinit { monitor.cancel() }
 }

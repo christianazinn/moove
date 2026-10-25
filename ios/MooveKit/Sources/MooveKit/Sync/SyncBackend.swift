@@ -115,6 +115,20 @@ public enum SyncStatus: Sendable, Equatable {
     case failed(String)
 }
 
+extension SyncStatus {
+    /// The connection is dead and nothing will bring it back by itself: the SDK gave up
+    /// (`failed`), or it's still retrying a socket iOS killed while the app was in the
+    /// background (error 53) and every retry so far failed. The app reconnects with a fresh
+    /// token when it comes back to the foreground or the network returns.
+    public var needsReconnect: Bool {
+        switch self {
+        case .failed: true
+        case .reconnecting(let attempt): attempt >= 3
+        case .connected, .connecting, .disconnected: false
+        }
+    }
+}
+
 /// The one seam between screens and the backend. The app has a SpacetimeDB
 /// implementation; `FixtureBackend` is the offline/demo/preview one.
 public protocol SyncBackend: AnyObject, Sendable {
