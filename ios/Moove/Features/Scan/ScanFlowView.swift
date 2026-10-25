@@ -28,7 +28,7 @@ struct ScanFlowView: View {
                 }
                 .toolbar(capturing ? .hidden : .automatic, for: .navigationBar)
         }
-        .tint(Theme.accentStrong)
+        .tint(Theme.Tab.accentStrong)
         .fullScreenCover(item: $photographing) { object in
             CameraPicker { jpeg in
                 if let jpeg {
@@ -77,7 +77,7 @@ struct ScanFlowView: View {
                         .padding(.horizontal, Theme.gutter)
                         .padding(.vertical, 16)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Theme.bg)
+                        .background(Theme.Tab.wash)
                         .ruled(.top)
                     }
             }
@@ -264,7 +264,7 @@ struct ScanFlowView: View {
             .buttonStyle(.pill(.primary))
             .padding(.horizontal, Theme.gutter)
             .padding(.vertical, 12)
-            .background(Theme.bg)
+            .background(Theme.Tab.wash)
             .ruled(.top)
         }
     }
@@ -411,13 +411,13 @@ private extension View {
     func chromeRow() -> some View {
         listRowInsets(EdgeInsets(top: 0, leading: Theme.gutter, bottom: 0, trailing: Theme.gutter))
             .listRowSeparator(.hidden)
-            .listRowBackground(Theme.bg)
+            .listRowBackground(Rectangle().fill(Theme.Tab.wash))
     }
 
     /// An item row: page background and a full-width rule-colored separator.
     func ledgerListRow() -> some View {
         listRowInsets(EdgeInsets(top: 0, leading: Theme.gutter, bottom: 0, trailing: Theme.gutter))
-            .listRowBackground(Theme.bg)
+            .listRowBackground(Rectangle().fill(Theme.Tab.wash))
             .listRowSeparatorTint(Theme.line)
             .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
     }

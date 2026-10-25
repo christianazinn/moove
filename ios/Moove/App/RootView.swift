@@ -14,13 +14,14 @@ struct RootView: View {
         // so `tab = "inventory"` from any screen picks the tab and segment.
         TabView(selection: groupBinding) {
             ForEach(TabGroup.allCases, id: \.self) { group in
-                NavigationStack { screen(TabGroupView(group: group, screen: $tab)) }
+                NavigationStack { screen(TabGroupView(group: group, screen: $tab), group: group) }
                     .tag(group)
                     .tabItem { Label(group.title, systemImage: group.systemImage) }
                     .badge(group == .sellBuy ? store.pendingApprovals.count : 0)
             }
         }
-        .tint(Theme.accentStrong)
+        // The selected tab's accent colors the tab bar (decision 0050 addendum).
+        .tint(TabGroup.containing(tab).palette.accentStrong)
         .sheet(isPresented: $showSettings) { SettingsView() }
         #if DEBUG
         // Screenshot/UI-test hook: open Settings on launch.
@@ -40,12 +41,12 @@ struct RootView: View {
         )
     }
 
-    private func screen(_ content: some View) -> some View {
+    private func screen(_ content: some View, group: TabGroup) -> some View {
         content
             .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
             .toolbar { settingsButton }
             // Tab bar styling has to be set from inside each tab.
-            .toolbarBackground(Theme.bg, for: .tabBar)
+            .toolbarBackground(group.palette.wash, for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
     }
 
