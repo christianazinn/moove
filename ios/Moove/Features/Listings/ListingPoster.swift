@@ -57,7 +57,7 @@ struct ListingPoster: View {
                 .frame(maxWidth: .infinity)
                 .background(PosterInk.color(look.artBackground(paper: palette.paper)).opacity(treatment == .split ? 1 : 0))
                 .padding(.horizontal, treatment == .split ? 0 : 10)
-                .padding(.top, treatment == .split ? 10 : 4)
+                .padding(.top, 8)
                 .overlay {
                     if stamp.isBig { BigStamp(stamp: stamp) }
                 }
@@ -65,7 +65,8 @@ struct ListingPoster: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(listing.title)
                     .monoText(13.5, weight: .bold, maxScale: 1.8)
-                    .lineLimit(ax ? 8 : 3)
+                    // Always two lines tall, so every poster on the wall is the same size (Lisa).
+                    .lineLimit(ax ? 8 : 2, reservesSpace: !ax)
                     .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(ink)
                 ViewThatFits(in: .horizontal) {
@@ -79,21 +80,15 @@ struct ListingPoster: View {
                         if !stamp.isBig { SmallStamp(stamp: stamp) }
                     }
                 }
-                if let problem {
-                    Text(problem)
-                        .monoText(11, maxScale: 1.8)
-                        .foregroundStyle(ink.opacity(0.85))
-                        .lineLimit(ax ? 8 : 4)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if listing.simulated { SimulatedTag() }
+                // The reason a post failed is in the VoiceOver label and on the listing's page.
+                SimulatedTag().opacity(listing.simulated ? 1 : 0).accessibilityHidden(!listing.simulated)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.top, 10)
             .padding(.bottom, 10)
 
-            TearOffTabs(ink: ink, count: ax ? 7 : 4)
+            TearOffTabs(ink: ink, count: ax ? 5 : 3)
         }
         .background(sheet)
         .overlay { if stamp.isCrossedOut { CrossOut().stroke(PosterInk.stamp(.denied).opacity(0.75), lineWidth: 3) } }
@@ -208,16 +203,16 @@ private struct SmallStamp: View {
 /// The strip of blank tear-off tabs at the bottom of a poster.
 private struct TearOffTabs: View {
     let ink: Color
-    var count = 4
-    @ScaledMetric(relativeTo: .caption2) private var tabHeight: CGFloat = 84
+    var count = 3
+    @ScaledMetric(relativeTo: .caption2) private var tabHeight: CGFloat = 26
 
     var body: some View {
         VStack(spacing: 0) {
-            Line().stroke(ink.opacity(0.45), style: StrokeStyle(lineWidth: 1, dash: [3, 3])).frame(height: 1)
+            Line().stroke(ink.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [3, 3])).frame(height: 1)
             HStack(spacing: 0) {
                 ForEach(0..<count, id: \.self) { i in
                     if i > 0 {
-                        VLine().stroke(ink.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [3, 3])).frame(width: 1)
+                        VLine().stroke(ink.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [3, 3])).frame(width: 1)
                     }
                     // Blank tabs (Lisa: no "eBay · simulated" text on them); the poster's own
                     // SIMULATED tag still labels simulated listings.
@@ -338,7 +333,7 @@ struct PinIn: ViewModifier {
     }
 }
 
-/// The flyer at the top of the wall: Live, Listed and Sold, on cream paper with tape at the corners.
+/// The flyer at the top of the wall: one total (Sold, else Listed) on cream paper with tape at the corners.
 struct FlyerTotals: View {
     let totals: PosterWall.Totals
     var tilt: Double = -0.6
@@ -346,20 +341,11 @@ struct FlyerTotals: View {
 
     var body: some View {
         let ax = dynamicTypeSize.isAccessibilitySize
-        let figures: [(label: String, value: String, spoken: String, kind: PosterStamp.Kind?)] = [
-            ("LIVE", "\(totals.liveCount)", "\(totals.liveCount) posted", nil),
-            ("LISTED", CentsFormat.usd(totals.listedCents), "Listed, \(CentsFormat.usd(totals.listedCents))", nil),
-            ("SOLD", CentsFormat.usd(totals.soldCents), "Sold, \(CentsFormat.usd(totals.soldCents))", .sold),
-        ]
+        // One key total: what sold, or what's listed before anything sells (the live count is on the posters).
+        let figures: [(label: String, value: String, spoken: String, kind: PosterStamp.Kind?)] = totals.soldCents > 0
+            ? [("SOLD", CentsFormat.usd(totals.soldCents), "Sold, \(CentsFormat.usd(totals.soldCents)). Listed, \(CentsFormat.usd(totals.listedCents)). \(totals.liveCount) posted", nil)]
+            : [("LISTED", CentsFormat.usd(totals.listedCents), "Listed, \(CentsFormat.usd(totals.listedCents)). \(totals.liveCount) posted", nil)]
         VStack(alignment: .leading, spacing: 0) {
-            Rectangle().fill(PosterInk.color(PosterInk.palette.swatches.first?.color ?? PosterInk.palette.paperInk)).frame(height: 6)
-            Text("THE SALE SO FAR")
-                .monoText(11, weight: .heavy, maxScale: 1.6)
-                .tracking(2)
-                .foregroundStyle(PosterInk.paperInk.opacity(0.7))
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .accessibilityHidden(true)
             let layout = ax ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
                             : AnyLayout(HStackLayout(alignment: .top, spacing: 0))
             layout {
@@ -390,8 +376,7 @@ struct FlyerTotals: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, ax ? 16 : 4)
-            .padding(.top, 6)
-            .padding(.bottom, 14)
+            .padding(.vertical, 12)
         }
         .background(PosterInk.paper)
         .compositingGroup()

@@ -34,7 +34,7 @@ struct ScanRoomNameField: View {
     }
 
     private var field: some View {
-        TextField("e.g. Bedroom, Kitchen, Sam's room", text: name)
+        TextField("Room name", text: name)
             .monoText(16, weight: .bold)
             .foregroundStyle(Theme.text)
             .textInputAutocapitalization(.sentences)
@@ -71,9 +71,9 @@ struct ScanRoomNameField: View {
         if RoomNames.isTaken(session.roomName, in: existing) {
             let numbered = RoomNames.numbered(session.roomName, existing: existing)
             VStack(alignment: .leading, spacing: 6) {
-                Text("You already have a room called “\(session.roomName)”. Same room again? Keep the name and this scan replaces it when you move. A different room? Call it “\(numbered)”.")
+                Text("Already taken")
                     .monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("You already have a room called \(session.roomName). Keep the name to replace that scan, or call it \(numbered).")
                 Button("Use “\(numbered)”") {
                     session.roomName = numbered
                     session.roomNameChosen = true

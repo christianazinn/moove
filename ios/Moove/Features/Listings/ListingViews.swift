@@ -19,11 +19,10 @@ extension ListingStatus {
 
     var tint: Color {
         switch self {
+        // Neutrals only, with red for a post that didn't happen (ochre is kept for SIMULATED).
         case .draft, .posting: Theme.muted
-        case .awaitingApproval: Theme.ochreInk
+        case .awaitingApproval, .posted, .sold: Theme.text
         case .rejected, .failed: Theme.danger
-        case .posted: Theme.accentStrong
-        case .sold: Theme.text
         }
     }
 }

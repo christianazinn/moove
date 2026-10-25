@@ -14,7 +14,7 @@ struct SpendingSection: View {
         let split = store.snapshot.spendingSplit()
         let log = split.yours, room = split.room
         VStack(alignment: .leading, spacing: 0) {
-            ListHeader(title: "Receipts", count: nil)
+            Text("Receipts").listHeading().accessibilityAddTraits(.isHeader)
             if !log.isEmpty {
                 let receipts = store.snapshot.spendingReceipts(log)
                 SpendingTape(log: log, extraBudgets: receipts.unattachedBudgets)
@@ -23,18 +23,17 @@ struct SpendingSection: View {
             } else {
                 Text("No payments yet")
                     .monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.vertical, 14)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .ruled()
             }
             if !room.isEmpty {
                 // #254: other members' x402 comps for items in rooms you joined. Kept out of your totals.
-                ListHeader(title: SpendingSplit.roomTag, count: "\(room.entries.count)").padding(.top, 44)
-                Label(SpendingSplit.roomCaption, systemImage: "person.2")
-                    .monoMeta()
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.vertical, 12)
+                Text(SpendingSplit.roomTag)
+                    .listHeading()
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityHint(SpendingSplit.roomCaption)
+                    .padding(.top, Theme.Space.section)
+                    .padding(.bottom, Theme.Space.s)
                 let receipts = store.snapshot.spendingReceipts(room)
                 SpendingTape(log: room, extraBudgets: receipts.unattachedBudgets, sharedRoom: true)
                 receiptStack(receipts, sharedRoom: true)
@@ -142,8 +141,8 @@ struct ReceiptCarousel: View {
     }
 }
 
-/// The totals as a short tape above the receipts: Spent, Simulated, Refused (same figures as
-/// before the receipts, checked by `DemoNumbersTests`), plus any budget without a receipt.
+/// The totals as a short tape above the receipts: Spent and Simulated (same figures as before the
+/// receipts, checked by `DemoNumbersTests`). Refusals and unattached budgets are spoken only.
 struct SpendingTape: View {
     let log: SpendingLog
     var extraBudgets: [AgentBudget] = []
@@ -165,16 +164,18 @@ struct SpendingTape: View {
                       tint: Theme.ochreInk)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Simulated, \(UsdMicros.format(log.simulatedSpentUsdMicros)), no money moved")
-            LeaderRow(label: "REFUSED", value: "\(refused)", size: 16, bold: true, tint: Theme.danger)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(refused) \(refused == 1 ? "payment" : "payments") refused by spend caps")
-            ForEach(extraBudgets) { b in
-                LeaderRow(label: "\(b.agent.agentDisplayName.uppercased()) LEFT", value: UsdMicros.format(b.remainingUsdMicros))
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(b.agent.agentDisplayName), \(UsdMicros.format(b.remainingUsdMicros)) left of \(UsdMicros.format(b.capUsdMicros))")
-            }
         }
         .onReceiptPaper()
+        // Refusals and budgets left are secondary: VoiceOver only.
+        .accessibilityElement(children: .contain)
+        .accessibilityHint(secondarySpoken(refused: refused))
+    }
+}
+
+extension SpendingTape {
+    func secondarySpoken(refused: Int) -> String {
+        let budgets = extraBudgets.map { "\($0.agent.agentDisplayName), \(UsdMicros.format($0.remainingUsdMicros)) left of \(UsdMicros.format($0.capUsdMicros))" }
+        return (["\(refused) \(refused == 1 ? "payment" : "payments") refused by spend caps"] + budgets).joined(separator: ". ")
     }
 }
 
@@ -213,11 +214,6 @@ struct ReceiptCard: View {
             DashedRule()
             footer
             ReceiptBarcode(widths: receipt.barcode).padding(.top, 10)
-            Text("THANK YOU FOR MOVING")
-                .courier(13, bold: true)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 10)
-                .accessibilityHidden(true)
         }
         .onReceiptPaper()
         .accessibilityElement(children: .contain)
@@ -226,19 +222,8 @@ struct ReceiptCard: View {
 
     private var header: some View {
         VStack(spacing: 3) {
-            Text("MOOVE · AGENT SPENDING").courier(14, bold: true)
-            Text("\(ReceiptFormat.day(receipt.startedAt))  \(ReceiptFormat.time(receipt.startedAt))")
-                .courier(12.5).foregroundStyle(ReceiptPalette.muted)
-            Text(receipt.number).courier(12.5).foregroundStyle(ReceiptPalette.muted)
-            if sharedRoom {
-                RailStamp(text: SpendingSplit.roomTag.uppercased()).padding(.top, 4)
-            }
-            DashedRule()
-            VStack(alignment: .leading, spacing: 2) {
-                Text(receipt.title.uppercased()).courier(15.5, bold: true)
-                Text(receipt.subtitle).courier(13).foregroundStyle(ReceiptPalette.muted)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // Just the agent's name: date, receipt number and subtitle are in the VoiceOver label.
+            Text(receipt.title.uppercased()).courier(15.5, bold: true)
         }
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
@@ -262,17 +247,6 @@ struct ReceiptCard: View {
                 LeaderRow(label: "  OF IT SIMULATED", value: UsdMicros.format(receipt.simulatedUsdMicros), size: 13.5,
                           tint: Theme.ochreInk)
             }
-            if receipt.refusals > 0 {
-                LeaderRow(label: "REFUSED", value: "\(receipt.refusals)", size: 13.5, tint: Theme.danger)
-            }
-            if let used = receipt.budgetUsedLine, let left = receipt.budgetRemaining {
-                Text(used.uppercased())
-                    .courier(13)
-                    .foregroundStyle(ReceiptPalette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 4)
-                LeaderRow(label: "REMAINING", value: left, size: 13.5)
-            }
             if let stamp = receipt.simulatedStamp {
                 NoMoneyMovedStamp(text: stamp).padding(.top, 6)
             }
@@ -287,8 +261,7 @@ struct ReceiptCard: View {
     }
 }
 
-/// One printed line: what the agent paid for, then time, rail, SIMULATED and the amount on dotted
-/// leaders, then any status note. One VoiceOver element; the Basescan link is its own button.
+/// One printed line: what the agent paid for, then SIMULATED and the amount on dotted leaders. One VoiceOver element; the Basescan link is its own button.
 struct ReceiptLineView: View {
     let line: ReceiptLine
     var sharedRoom = false
@@ -303,19 +276,8 @@ struct ReceiptLineView: View {
                     .foregroundStyle(line.struck ? ReceiptPalette.muted : ReceiptPalette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(4)
+                // Time, rail, status note and detail are in `line.spoken` only.
                 meta
-                if let note = line.note {
-                    Text(note)
-                        .courier(12.5, bold: true)
-                        .foregroundStyle(noteTint)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let detail = line.detail {
-                    Text(detail)
-                        .courier(12.5)
-                        .foregroundStyle(line.struck ? Theme.danger : ReceiptPalette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
@@ -340,12 +302,10 @@ struct ReceiptLineView: View {
         }
     }
 
-    /// Time, rail, SIMULATED ........ amount. Leaders drop out when it doesn't fit on one line.
+    /// SIMULATED ........ amount. Leaders drop out when it doesn't fit on one line.
     @ViewBuilder
     private var meta: some View {
         let tags = HStack(spacing: 6) {
-            Text(ReceiptFormat.time(line.createdAt)).courier(13).foregroundStyle(ReceiptPalette.muted).fixedSize()
-            RailStamp(text: line.railTag)
             if line.simulated { SimStamp() }
         }
         let amount = Text(line.amount ?? "—")
@@ -356,16 +316,7 @@ struct ReceiptLineView: View {
             .fixedSize()
         if dynamicTypeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: 4) {
-                ViewThatFits(in: .horizontal) {
-                    tags
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(ReceiptFormat.time(line.createdAt)).courier(13).foregroundStyle(ReceiptPalette.muted)
-                        HStack(spacing: 6) {
-                            RailStamp(text: line.railTag)
-                            if line.simulated { SimStamp() }
-                        }
-                    }
-                }
+                tags
                 amount
             }
         } else {
@@ -380,14 +331,6 @@ struct ReceiptLineView: View {
                     amount
                 }
             }
-        }
-    }
-
-    private var noteTint: Color {
-        switch line.kind {
-        case .refused, .payment(.failed): Theme.danger
-        case .failedAttempt, .payment(.pending): Theme.ochreInk
-        case .payment(.settled): Theme.accentStrong
         }
     }
 }
@@ -433,8 +376,8 @@ extension PaymentStatus {
 
     var tint: Color {
         switch self {
-        case .pending: Theme.ochreInk
-        case .settled: Theme.accentStrong
+        case .pending: Theme.muted
+        case .settled: Theme.text
         case .failed: Theme.danger
         }
     }

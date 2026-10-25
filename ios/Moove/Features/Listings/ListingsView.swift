@@ -43,18 +43,15 @@ struct ListingsView: View {
                 ForEach(Self.groups, id: \.title) { group in
                     let rows = listings.filter { group.statuses.contains($0.status) }
                     if !rows.isEmpty {
-                        ListHeader(title: group.title, count: "\(rows.count)")
+                        Text(group.title)
+                            .listHeading()
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityLabel("\(group.title), \(rows.count)")
                             .padding(.top, Theme.Space.section)
                         // Own stack per group, so a listing that changes group (awaiting approval ->
                         // posted) can't collide with its old poster in the LazyVStack (same bug as Approvals).
                         wall(rows).padding(.top, 22)
                     }
-                }
-                if listings.contains(where: \.simulated) {
-                    Text("SIMULATED listings were never sent to eBay.")
-                        .monoMeta()
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 28)
                 }
             }
             .padding(.horizontal, Theme.gutter)
@@ -79,8 +76,8 @@ struct ListingsView: View {
         let columns = PosterWall.columns(regularWidth: sizeClass == .regular,
                                          accessibilitySize: dynamicTypeSize.isAccessibilitySize)
         let order = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, $0) })
-        // A poster with a reason under its price runs taller.
-        let dealt = PosterWall.deal(rows, columns: columns) { store.snapshot.problem(for: $0) == nil ? 1 : 1.3 }
+        // Every poster is the same height.
+        let dealt = PosterWall.deal(rows, columns: columns) { _ in 1 }
         return HStack(alignment: .top, spacing: 18) {
             ForEach(dealt.indices, id: \.self) { c in
                 VStack(spacing: 30) {
