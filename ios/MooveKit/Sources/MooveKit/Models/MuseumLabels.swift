@@ -13,17 +13,15 @@ public enum MuseumLabel {
         return valueCents > 0 ? "\(count) · est. \(dollars(valueCents))" : count
     }
 
-    /// The catalog line under the name: "Oak, IKEA · 140 × 195 cm". Material and brand
-    /// when known (else the category), then the size: footprint (W × D) for low pieces
-    /// like beds and tables, face (W × H) for upright ones. "≈" when the size is an
-    /// estimate (room photos, a hand-added item's typical size); none when unmeasured.
+    /// The short line under the name: "IKEA · 140 × 195 cm", or just the size. Brand only
+    /// when known (no material: Lisa wanted less text), then the size: footprint (W × D) for
+    /// low pieces like beds and tables, face (W × H) for upright ones. "≈" when the size is an
+    /// estimate (room photos, a hand-added item's typical size). Falls back to the category
+    /// when there's no size.
     public static func catalogLine(_ item: Item) -> String {
-        let material = item.material?.trimmingCharacters(in: .whitespaces).nonEmpty.map { $0.prefix(1).uppercased() + $0.dropFirst() }
         let brand = item.brand?.trimmingCharacters(in: .whitespaces).nonEmpty
-        var what = [material, brand].compactMap { $0 }.joined(separator: ", ")
-        if what.isEmpty { what = Item.readableCategory(item.category).capitalizedFirstLetter }
-        guard let size = sizeText(item) else { return what }
-        return what.isEmpty ? size : "\(what) · \(size)"
+        guard let size = sizeText(item) else { return brand ?? Item.readableCategory(item.category).capitalizedFirstLetter }
+        return brand.map { "\($0) · \(size)" } ?? size
     }
 
     static func sizeText(_ item: Item) -> String? {
