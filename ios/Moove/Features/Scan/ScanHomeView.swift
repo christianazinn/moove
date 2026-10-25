@@ -101,6 +101,7 @@ struct ScanHomeView: View {
                     // Same finished screen as a real scan, then the same color write a real
                     // scan does after sampling (here the demo room's fixture colors).
                     demoFinished = true
+                    await store.flagDemoSentimental(roomName: demo.roomName)
                     await store.saveScanColors(DemoFixtures.scanColors(), roomName: demo.roomName)
                     // Offline there's no worker: play the room photo sweep so the demo shows it.
                     await store.simulateSweep(roomName: demo.roomName)

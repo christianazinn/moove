@@ -53,6 +53,31 @@ final class MooveStore {
         let kind = kind ?? stored ?? .spacetime
         self.backendKind = kind
         self.backend = Self.makeBackend(kind, config: config)
+        loadDeviceState()
+    }
+
+    // MARK: Per-database device state
+
+    /// Room and item ids restart at 1 in every database (and the offline demo's Bedroom is
+    /// room 1), so hidden rooms, "Moving from" picks and kept names are saved per backend and
+    /// database. The Live `moove` database keeps the original keys.
+    func scoped(_ key: String) -> String {
+        Self.scopedKey(key, kind: backendKind, database: databaseName)
+    }
+
+    nonisolated static func scopedKey(_ key: String, kind: BackendKind, database: String) -> String {
+        switch kind {
+        case .fixture: return "\(key).offline"
+        case .spacetime: return database.isEmpty || database == "moove" ? key : "\(key).\(database)"
+        }
+    }
+
+    /// Reloads the per-database state for the current backend and database.
+    private func loadDeviceState() {
+        let d = UserDefaults.standard
+        hiddenRoomIds = HiddenRooms.decode(d.stringArray(forKey: scoped(HiddenRooms.defaultsKey)))
+        movingRoomPicks = MovingRooms.decode(d.stringArray(forKey: scoped(MovingRooms.defaultsKey)))
+        keptNames = ItemLabels.decode(d.dictionary(forKey: scoped(ItemLabels.keptNamesDefaultsKey)))
     }
 
     /// Preview/test store backed by the demo fixture, already connected.
@@ -76,12 +101,11 @@ final class MooveStore {
 
     /// Rooms hidden on this device (Inventory > room header > Hide room), e.g. old
     /// test scans. Local only: nothing is deleted from the database.
-    private(set) var hiddenRoomIds: Set<UInt64> =
-        HiddenRooms.decode(UserDefaults.standard.stringArray(forKey: HiddenRooms.defaultsKey))
+    private(set) var hiddenRoomIds: Set<UInt64> = []
 
     func setRoom(_ roomId: UInt64, hidden: Bool) {
         if hidden { hiddenRoomIds.insert(roomId) } else { hiddenRoomIds.remove(roomId) }
-        UserDefaults.standard.set(HiddenRooms.encode(hiddenRoomIds), forKey: HiddenRooms.defaultsKey)
+        UserDefaults.standard.set(HiddenRooms.encode(hiddenRoomIds), forKey: scoped(HiddenRooms.defaultsKey))
     }
 
     /// The snapshot without hidden rooms and their items. Inventory, Review, Scan home,
@@ -96,12 +120,11 @@ final class MooveStore {
     // MARK: Moving rooms (which old rooms move; New Home and Pack)
 
     /// The user's "Moving from" picks (MooveKit `MovingRooms`), saved on this device only.
-    private(set) var movingRoomPicks: [UInt64: Bool] =
-        MovingRooms.decode(UserDefaults.standard.stringArray(forKey: MovingRooms.defaultsKey))
+    private(set) var movingRoomPicks: [UInt64: Bool] = [:]
 
     func setMovingRoomPicks(_ picks: [UInt64: Bool]) {
         movingRoomPicks = MovingRooms.pruned(picks, rooms: snapshot.rooms)
-        UserDefaults.standard.set(MovingRooms.encode(movingRoomPicks), forKey: MovingRooms.defaultsKey)
+        UserDefaults.standard.set(MovingRooms.encode(movingRoomPicks), forKey: scoped(MovingRooms.defaultsKey))
     }
 
     /// Review's Keep pile in visible rooms (before the room picks).
@@ -135,6 +158,7 @@ final class MooveStore {
     /// SpacetimeDB token otherwise (demo fallback from task #1).
     func connect(token: String?) async {
         roomNameOverrides = loadRoomNames()
+        loadDeviceState()
         startListening()
         status = .connecting
         let saved = token ?? Keychain.string(for: .spacetimeToken)
@@ -295,6 +319,22 @@ final class MooveStore {
         await run { try await $0.setSentimental(itemId: item.id, maybeSentimental: value) }
     }
 
+    /// "Load demo scan" on a live database: flag the demo's possibly sentimental items (the
+    /// guitar) like `seed-demo.ts`, so the sort agent leaves them to the user. Offline, the
+    /// fixture backend already copies the flag.
+    func flagDemoSentimental(roomName: String) async {
+        guard backendKind == .spacetime, let room = await importedRoom(named: roomName) else { return }
+        let ids = DemoFixtures.sentimentalScanObjectIds
+        for attempt in 0..<20 {
+            let items = snapshot.items.filter { $0.roomId == room.id && ids.contains($0.scanObjectId ?? "") }
+            if !items.isEmpty {
+                for item in items where !item.maybeSentimental { await setSentimental(true, for: item) }
+                return
+            }
+            if attempt < 19 { try? await Task.sleep(for: .milliseconds(250)) }
+        }
+    }
+
     // MARK: Fix-it (correct a misread scan item; `ItemFix` builds the attributes)
 
     @discardableResult
@@ -366,8 +406,7 @@ final class MooveStore {
     /// Item id → the name the user gave it (scan checklist, or a rename while vision was still
     /// identifying). Vision's `set_item_details` replaces names, so each snapshot puts these back
     /// (`rename_item`) until vision is done with the item. Saved on this device.
-    private(set) var keptNames: [UInt64: String] =
-        ItemLabels.decode(UserDefaults.standard.dictionary(forKey: ItemLabels.keptNamesDefaultsKey))
+    private(set) var keptNames: [UInt64: String] = [:]
     @ObservationIgnored private var restoringNames: Set<UInt64> = []
 
     func keepNames(_ names: [UInt64: String]) {
@@ -407,7 +446,7 @@ final class MooveStore {
     }
 
     private func saveKeptNames() {
-        UserDefaults.standard.set(ItemLabels.encode(keptNames), forKey: ItemLabels.keptNamesDefaultsKey)
+        UserDefaults.standard.set(ItemLabels.encode(keptNames), forKey: scoped(ItemLabels.keptNamesDefaultsKey))
     }
 
     private func restoreKeptNames() {
@@ -635,9 +674,12 @@ final class MooveStore {
     /// Write errors as a person would say them. A write while the connection is down
     /// fails with a bare "disconnected"; module errors (`SenderError`) are already sentences.
     static func describe(_ error: Error, status: SyncStatus) -> String {
-        let raw = String(describing: error)
         switch status {
-        case .connected: return raw
+        case .connected:
+            // The module's own sentence, without SpacetimeBackend's "<reducer> rejected: " prefix.
+            guard let text = (error as? LocalizedError)?.errorDescription else { return String(describing: error) }
+            let message = text.replacingOccurrences(of: #"^[a-z0-9_]+ rejected: "#, with: "", options: .regularExpression)
+            return message.prefix(1).uppercased() + message.dropFirst()
         case .connecting, .reconnecting: return "Not saved: still connecting to the server. Try again in a moment."
         case .disconnected, .failed: return "Not saved: not connected to the server."
         }

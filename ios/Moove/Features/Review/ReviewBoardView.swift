@@ -268,6 +268,7 @@ private struct ItemFan: View {
 
 /// An item on the board: model, name, why it's here, value, and a quick change menu.
 struct ReviewBoardRow: View {
+    @Environment(MooveStore.self) private var store
     let item: Item
     var compact = false
 
@@ -289,7 +290,7 @@ struct ReviewBoardRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     // One line per row: name and price; the reason is read by VoiceOver.
                     .accessibilityElement(children: .combine)
-                    .accessibilityHint(Self.why(item) ?? "")
+                    .accessibilityHint(Self.why(item, me: store.snapshot.me) ?? "")
                     Text(item.saleValueCents?.usd ?? "—").monoText(13.5).foregroundStyle(Theme.text).lineLimit(1).layoutPriority(1)
                 }
                 .contentShape(Rectangle())
@@ -313,9 +314,9 @@ struct ReviewBoardRow: View {
         .contextMenu { DispositionMenu(item: item) }
     }
 
-    /// "You decided", or the sort agent's one-line reason.
-    static func why(_ item: Item) -> String? {
-        if item.dispositionSource == .user { return "You decided" }
+    /// "You decided" ("A room member decided" for someone else's pick), or the sort agent's reason.
+    static func why(_ item: Item, me: IdentityHex?) -> String? {
+        if item.dispositionSource == .user { return me == nil || item.owner == me ? "You decided" : "A room member decided" }
         return item.dispositionReason?.capitalizedFirst
     }
 }
