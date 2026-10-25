@@ -155,56 +155,6 @@ struct ExhibitPlacard: View {
     }
 }
 
-/// One framed exhibit: plinth over placard.
-struct ExhibitCard: View {
-    let info: ExhibitInfo
-    var onEditStory: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ExhibitPlinth(item: info.item, featured: info.featured)
-            Rectangle().fill(Theme.line).frame(height: 1)
-            ExhibitPlacard(info: info, onEditStory: onEditStory)
-        }
-        .background(Theme.bg)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
-    }
-}
-
-/// Masonry: exhibits dealt into `columns` columns, each to the shortest so far (a featured
-/// exhibit counts taller), so a hall reads as a hung wall rather than a grid.
-struct MasonryColumns<Content: View>: View {
-    let infos: [ExhibitInfo]
-    let columns: Int
-    var spacing: CGFloat = 12
-    @ViewBuilder var content: (ExhibitInfo) -> Content
-
-    var body: some View {
-        HStack(alignment: .top, spacing: spacing) {
-            ForEach(Array(Self.deal(infos, columns: columns).enumerated()), id: \.offset) { _, column in
-                LazyVStack(spacing: spacing) {
-                    ForEach(column, id: \.item.id) { content($0) }
-                }
-                .frame(maxWidth: .infinity, alignment: .top)
-            }
-        }
-    }
-
-    static func deal(_ infos: [ExhibitInfo], columns: Int) -> [[ExhibitInfo]] {
-        let n = max(1, columns)
-        var out = Array(repeating: [ExhibitInfo](), count: n)
-        var heights = Array(repeating: 0.0, count: n)
-        for info in infos {
-            let i = heights.indices.min { heights[$0] < heights[$1] } ?? 0
-            out[i].append(info)
-            heights[i] += info.featured ? 1.45 : 1
-        }
-        return out.filter { !$0.isEmpty }
-    }
-}
-
 /// Edit the one-line story on a placard ("Grandma's, 1974"). Kept on this device only.
 struct StoryEditor: View {
     let item: Item

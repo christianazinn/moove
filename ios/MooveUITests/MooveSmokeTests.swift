@@ -160,9 +160,12 @@ final class MooveSmokeTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Inventory"].waitForExistence(timeout: slow), "jumped to Inventory")
         XCTAssertTrue(scrollTo(text(matching: "Demo bedroom")), "new room in Inventory")
         snap("03-inventory")
-        // Offline photo sweep (#181): the room photos "find" a plant RoomPlan missed.
-        let plant = text(matching: "Potted monstera")
-        XCTAssertTrue(plant.waitForExistence(timeout: slow) || scrollTo(plant), "item added by the photo sweep")
+        // Offline photo sweep (#181): the room photos "find" a plant RoomPlan missed. It stands
+        // on the binder's Light & decor page.
+        let plant = inventoryItem(named: "Potted monstera")
+        turnPage("lightAndDecor")
+        XCTAssertTrue(plant.waitForExistence(timeout: slow), "item added by the photo sweep")
+        XCTAssertTrue(plant.isHittable || scrollTo(plant), "plant on its page")
         XCTAssertTrue(text(containing: "from room photos").exists, "sweep item is labeled as found in room photos")
         snap("03-inventory-sweep")
     }
@@ -299,7 +302,9 @@ final class MooveSmokeTests: XCTestCase {
         snap("02-add-item")
         app.buttons["addItem.save"].tap()
         XCTAssertTrue(name.waitForNonExistence(timeout: slow), "sheet closes")
-        XCTAssertTrue(scrollTo(text(matching: "Road bike")), "new item in Inventory")
+        // The binder turns to the new piece's page (Get around & play).
+        turnPage("getAroundAndPlay")
+        XCTAssertTrue(scrollTo(inventoryItem(named: "Road bike")), "new item in Inventory")
         snap("02-add-item-added")
     }
 
@@ -313,8 +318,9 @@ final class MooveSmokeTests: XCTestCase {
         let done = app.buttons["See inventory"]
         XCTAssertTrue(done.waitForExistence(timeout: slow), "scan finished screen")
         done.tap()
-        let plant = text(matching: "Potted monstera")
-        XCTAssertTrue(plant.waitForExistence(timeout: slow) || scrollTo(plant), "sweep item in Inventory")
+        let plant = inventoryItem(named: "Potted monstera")
+        turnPage("lightAndDecor")
+        XCTAssertTrue(plant.waitForExistence(timeout: slow), "sweep item on the Light & decor page")
         app.swipeDown(); app.swipeDown(); app.swipeDown()
         // Focus on the original Bedroom (room 1): the demo bedroom's plant drops out.
         let bedroom = app.buttons["inventory.focus.1"]
@@ -324,7 +330,8 @@ final class MooveSmokeTests: XCTestCase {
         XCTAssertTrue(plant.waitForNonExistence(timeout: slow), "other room's items are hidden")
         snap("02-inventory-focus")
         app.buttons["inventory.showAllRooms"].tap()
-        XCTAssertTrue(plant.waitForExistence(timeout: slow) || scrollTo(plant), "every room again")
+        turnPage("lightAndDecor")
+        XCTAssertTrue(plant.waitForExistence(timeout: slow), "every room again")
     }
 
     func testMoveIsOnePage() {
@@ -394,6 +401,23 @@ final class MooveSmokeTests: XCTestCase {
 
     private func text(matching s: String) -> XCUIElement {
         app.staticTexts.matching(NSPredicate(format: "label ==[c] %@", s)).firstMatch
+    }
+
+    /// An item on Inventory's shelves: one button labeled "<name>, <price>, <origin>".
+    private func inventoryItem(named name: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] %@", name + ",")).firstMatch
+    }
+
+    /// Inventory is a binder with one page per hall: open a page by its index tab
+    /// (`inventory.tab.<hall>`; on iPhone the tab row scrolls sideways).
+    private func turnPage(_ hall: String) {
+        let tab = app.buttons["inventory.tab.\(hall)"]
+        XCTAssertTrue(tab.waitForExistence(timeout: slow), "\(hall) tab")
+        if !tab.isHittable { _ = scrollTo(tab, down: false, maxSwipes: 4) }
+        let row = byId("inventory.tabs")
+        for _ in 0..<6 where !tab.isHittable && row.exists && row.isHittable { row.swipeLeft() }
+        tab.tap()
+        XCTAssertTrue(tab.isSelected || tab.waitForExistence(timeout: 2), "\(hall) page open")
     }
 
     private func text(containing s: String) -> XCUIElement {

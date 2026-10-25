@@ -1,13 +1,15 @@
 import SwiftUI
 import MooveKit
 
-/// The user's things as a small museum (Lisa, #inventory-museum): items hang in halls by
-/// what they're for (MooveKit `FunctionHall`), each a framed voxel exhibit with a placard
-/// (`MuseumLabel`). Room-level actions (share, 3D, hide, add) sit on the Rooms strip on top.
+/// The user's things as a tabbed binder (Lisa, #335): one page per function hall (MooveKit
+/// `FunctionHall`) behind a colored index tab, each page a wall of wooden shelves the items
+/// stand on (`InventoryBinder.shelves`). Tap an item for its placard (`MuseumLabel`).
+/// Room-level actions (share, 3D, hide, add) sit on the Rooms strip on top.
 struct InventoryView: View {
     @Environment(MooveStore.self) private var store
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sharing: Room?
     @State private var showJoin = false
     @State private var showHidden = false
@@ -25,6 +27,15 @@ struct InventoryView: View {
     @State private var renamingRoom: Room?
     /// Item detail, pushed by tapping an exhibit.
     @State private var opened: UInt64?
+    /// The binder page picked (a tab, a swipe); falls back to the first page.
+    @State private var page: FunctionHall?
+    /// Which way the last page turn went, for the slide.
+    @State private var turnedForward = true
+    /// A horizontal drag in progress on the page.
+    @State private var dragX: CGFloat = 0
+    /// The item whose placard sheet is up, and what to do once it closes.
+    @State private var placard: PlacardRef?
+    @State private var afterPlacard: AfterPlacard?
     /// Placard story being edited.
     @State private var editingStory: Item?
     /// The user's own placard stories (item id → line), on this device only.
@@ -48,8 +59,9 @@ struct InventoryView: View {
                     roomsStrip(rooms, focus: focus).padding(.top, 24)
                 }
                 sweepNotes(rooms)
-                ForEach(FunctionHall.halls(shown), id: \.hall) { entry in
-                    hallSection(entry.hall, entry.items, stories: stories)
+                let halls = FunctionHall.halls(shown)
+                if !halls.isEmpty {
+                    binder(halls, stories: stories).padding(.top, 28)
                 }
                 hiddenRoomsFooter.padding(.top, 40)
             }
@@ -73,6 +85,21 @@ struct InventoryView: View {
             }
         }
         .sheet(item: $addingTo) { room in AddItemView(rooms: rooms, roomId: room.id) }
+        .sheet(item: $placard, onDismiss: runAfterPlacard) { ref in
+            if let item = store.visibleItems.first(where: { $0.id == ref.id }) {
+                let hallItems = shown.filter { FunctionHall.of($0) == FunctionHall.of(item) }
+                let isTop = hallItems.count > 1 && MuseumLabel.topPiece(hallItems) == item.id
+                let info = exhibitInfo(item, story: stories[item.id], isTop: isTop, compCounts: store.snapshot.compCounts)
+                PlacardSheet(info: info,
+                             onEditStory: { closePlacard(then: .story(item)) },
+                             onOpen: { closePlacard(then: .open(item.id)) },
+                             onRename: { closePlacard(then: .rename(item)) },
+                             onDelete: { closePlacard(then: .delete(item)) })
+            } else {
+                // Removed while open ("Not a real item"): nothing to show.
+                Color.clear.onAppear { placard = nil }
+            }
+        }
         .sheet(item: $sharing) { ShareRoomView(room: $0) }
         .roomRenameAlert($renamingRoom)
         .sheet(isPresented: $showJoin) { JoinRoomView() }
@@ -110,6 +137,13 @@ struct InventoryView: View {
         .mooveScreen()
         .animation(.default, value: store.items)
         .animation(.default, value: store.hiddenRoomIds)
+        // A piece added by hand or by photo: turn to its page so it's in view.
+        .onChange(of: store.visibleItems.map(\.id)) { old, new in
+            let added = Set(new).subtracting(old)
+            guard !old.isEmpty, let item = store.visibleItems.first(where: { added.contains($0.id) && ($0.origin == .manual || $0.origin == .photo) })
+            else { return }
+            turn(to: FunctionHall.of(item), forward: true)
+        }
     }
 
     // MARK: Rooms strip
@@ -223,32 +257,229 @@ struct InventoryView: View {
         }
     }
 
-    // MARK: Halls
+    // MARK: Binder
 
-    private var columns: Int {
-        if dynamicTypeSize.isAccessibilitySize { return 1 }
-        return sizeClass == .regular ? 3 : 2
+    /// Index tabs (iPhone: folder tabs over the page; iPad: down the page's right edge) and
+    /// the open page.
+    @ViewBuilder
+    private func binder(_ halls: [(hall: FunctionHall, items: [Item])], stories: [UInt64: String]) -> some View {
+        let tabs = InventoryBinder.tabs(halls)
+        let current = InventoryBinder.page(page, in: tabs)
+        let entry = halls.first { $0.hall == current } ?? halls[0]
+        let tab = tabs.first { $0.hall == entry.hall } ?? tabs[0]
+        if sizeClass == .regular {
+            HStack(alignment: .top, spacing: 0) {
+                pageStack(entry, tab: tab, tabs: tabs, stories: stories)
+                VStack(spacing: 4) {
+                    ForEach(tabs) { t in
+                        BinderTabButton(tab: t, selected: t.hall == entry.hall, edge: .trailing) { pick(t.hall, tabs: tabs) }
+                    }
+                }
+                .frame(width: 168)
+                .padding(.top, 24)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Pages")
+            }
+        } else {
+            VStack(spacing: 0) {
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .bottom, spacing: 2) {
+                            ForEach(tabs) { t in
+                                BinderTabButton(tab: t, selected: t.hall == entry.hall) { pick(t.hall, tabs: tabs) }.id(t.hall)
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                    }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Pages")
+                    .accessibilityIdentifier("inventory.tabs")
+                    .onChange(of: entry.hall) { _, hall in
+                        withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo(hall, anchor: .center) }
+                    }
+                }
+                pageStack(entry, tab: tab, tabs: tabs, stories: stories)
+            }
+        }
     }
 
-    @ViewBuilder
-    private func hallSection(_ hall: FunctionHall, _ items: [Item], stories: [UInt64: String]) -> some View {
-        let top = MuseumLabel.topPiece(items)
-        let compCounts = store.snapshot.compCounts
-        let infos = items.map { exhibitInfo($0, story: stories[$0.id], isTop: $0.id == top && items.count > 1, compCounts: compCounts) }
-        VStack(alignment: .leading, spacing: 4) {
-            Text(hall.title)
-                .serifText(24, weight: .semibold)
-                .foregroundStyle(Theme.text)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-            Text(FunctionHall.subtitle(items)).monoMeta()
+    /// The open page; slides in from the side it was turned from (a crossfade with Reduce
+    /// Motion), and follows a horizontal swipe.
+    private func pageStack(_ entry: (hall: FunctionHall, items: [Item]), tab: BinderTab, tabs: [BinderTab],
+                           stories: [UInt64: String]) -> some View {
+        let slide: AnyTransition = reduceMotion ? .opacity : .asymmetric(
+            insertion: .move(edge: turnedForward ? .trailing : .leading).combined(with: .opacity),
+            removal: .opacity)
+        return ZStack(alignment: .top) {
+            binderPage(entry.hall, entry.items, tab: tab, stories: stories)
+                .id(entry.hall)
+                .transition(slide)
         }
-        .padding(.top, 40)
-        .padding(.bottom, 14)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("inventory.hall.\(hall.rawValue)")
-        MasonryColumns(infos: infos, columns: columns) { info in
-            exhibit(info)
+        .offset(x: dragX)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 24)
+                .onChanged { v in
+                    guard !reduceMotion, abs(v.translation.width) > abs(v.translation.height) * 1.2 else { return }
+                    dragX = v.translation.width * 0.35
+                }
+                .onEnded { v in
+                    withAnimation(.spring(duration: 0.3)) { dragX = 0 }
+                    let dx = v.translation.width
+                    guard abs(dx) > 60, abs(dx) > abs(v.translation.height) * 1.5 else { return }
+                    turn(dx < 0 ? 1 : -1, tabs: tabs)
+                }
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityScrollAction { edge in
+            // VoiceOver three-finger swipe turns the page.
+            switch edge {
+            case .trailing: turn(1, tabs: tabs)
+            case .leading: turn(-1, tabs: tabs)
+            default: break
+            }
+        }
+    }
+
+    private func binderPage(_ hall: FunctionHall, _ items: [Item], tab: BinderTab, stories: [UInt64: String]) -> some View {
+        let regular = sizeClass == .regular
+        let shelves = InventoryBinder.shelves(items, capacity: InventoryBinder.capacity(regularWidth: regular),
+                                              maxPerShelf: InventoryBinder.maxPerShelf(regularWidth: regular))
+        let compCounts = store.snapshot.compCounts
+        return VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(hall.name)
+                    .serifText(26, weight: .semibold)
+                    .foregroundStyle(Theme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(FunctionHall.subtitle(items)).monoMeta()
+            }
+            .padding(.horizontal, 8)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("inventory.hall.\(hall.rawValue)")
+            if dynamicTypeSize.isAccessibilitySize {
+                // Largest text sizes: a plain list, one row per item.
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(items) { item in
+                        shelfItem(item, price: priceText(item, compCounts: compCounts), hasStory: stories[item.id] != nil) {
+                            HStack(spacing: 12) {
+                                ShelfSprite(item: item, size: 56)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.name).blockTitle().fixedSize(horizontal: false, vertical: true)
+                                    Text(priceText(item, compCounts: compCounts)).monoMeta()
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .ruled()
+                    }
+                }
+                .padding(.top, 12)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(Array(shelves.enumerated()), id: \.offset) { _, shelf in
+                        ShelfRow(shelf: shelf) { item in
+                            let index = shelf.items.firstIndex(of: item) ?? 0
+                            let price = priceText(item, compCounts: compCounts)
+                            shelfItem(item, price: price, hasStory: stories[item.id] != nil) {
+                                ShelfItemColumn(item: item, tier: shelf.tier, price: price, tilt: index % 2 == 0 ? -2 : 2)
+                            }
+                        }
+                    }
+                }
+                .padding(.top, 8)
+            }
+        }
+        .padding(.leading, 18)
+        .padding(.trailing, 12)
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(colors: [BinderColors.wall, BinderColors.wallShade], startPoint: .top, endPoint: .bottom),
+            in: RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+        )
+        // The open tab's color runs along the page edge it's attached to.
+        .overlay(alignment: sizeClass == .regular ? .trailing : .top) {
+            let tint = BinderColors.tint(tab.tint)
+            if sizeClass == .regular {
+                Rectangle().fill(tint).frame(width: 4).padding(.vertical, 6)
+            } else {
+                Rectangle().fill(tint).frame(height: 4).padding(.horizontal, 6)
+            }
+        }
+        .overlay(alignment: .leading) { BinderHoles().padding(.leading, 5) }
+        .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.lineStrong, lineWidth: 1))
+        .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 4)
+    }
+
+    /// One item: a single button that opens its placard; long-press keeps the fix-it menu.
+    private func shelfItem<Content: View>(_ item: Item, price: String, hasStory: Bool,
+                                         @ViewBuilder label: () -> Content) -> some View {
+        let room = store.snapshot.rooms.first { $0.id == item.roomId }
+        let tag = item.originTag(inSharedRoom: room.map { !isMine($0) } ?? false)
+        return Button { placard = PlacardRef(id: item.id) } label: { label() }
+            .buttonStyle(.plain)
+            // Fix-it (long press): rename, what is it, turn, remove a misread scan item. Delete asks first.
+            .contextMenu {
+                Button("Open", systemImage: "info.circle") { opened = item.id }
+                Button(hasStory ? "Edit story" : "Add a story", systemImage: "text.quote") { editingStory = item }
+                Divider()
+                ItemFixMenu(item: item) { startRename(item) }
+                Divider()
+                Button("Delete item", systemImage: "trash", role: .destructive) { deleting = item }
+                    .accessibilityIdentifier("inventory.delete.\(item.id)")
+            }
+            .accessibilityLabel([item.name, price, tag.accessibilityLabel, item.maybeSentimental ? "Possibly sentimental" : nil]
+                .compactMap { $0 }.joined(separator: ", "))
+            .accessibilityHint("Shows its placard")
+            .accessibilityAction(named: "Open details") { opened = item.id }
+            .accessibilityAction(named: "Edit story") { editingStory = item }
+            .accessibilityAction(named: "Rename") { startRename(item) }
+            .accessibilityAction(named: "Turn around") { Task { await store.turn(item) } }
+            .accessibilityAction(named: "Delete") { deleting = item }
+            .accessibilityIdentifier("inventory.item.\(item.id)")
+    }
+
+    /// "$120", "≈$40" when only one or two comparable listings back it.
+    private func priceText(_ item: Item, compCounts: [UInt64: Int]) -> String {
+        let rough = item.saleValueCents != nil && Item.isRoughEstimate(compCount: compCounts[item.id] ?? 0)
+        return rough ? "≈\(item.priceText)" : item.priceText
+    }
+
+    private func pick(_ hall: FunctionHall, tabs: [BinderTab]) {
+        let from = tabs.firstIndex { $0.hall == InventoryBinder.page(page, in: tabs) } ?? 0
+        let to = tabs.firstIndex { $0.hall == hall } ?? 0
+        turn(to: hall, forward: to >= from)
+    }
+
+    private func turn(_ delta: Int, tabs: [BinderTab]) {
+        let current = InventoryBinder.page(page, in: tabs)
+        guard let next = InventoryBinder.turn(from: current, by: delta, in: tabs), next != current else { return }
+        turn(to: next, forward: delta > 0)
+    }
+
+    private func turn(to hall: FunctionHall, forward: Bool) {
+        turnedForward = forward
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.35)) { page = hall }
+    }
+
+    // MARK: Placard
+
+    private func closePlacard(then action: AfterPlacard) {
+        afterPlacard = action
+        placard = nil
+    }
+
+    private func runAfterPlacard() {
+        guard let action = afterPlacard else { return }
+        afterPlacard = nil
+        switch action {
+        case .open(let id): opened = id
+        case .story(let item): editingStory = item
+        case .rename(let item): startRename(item)
+        case .delete(let item): deleting = item
         }
     }
 
@@ -270,30 +501,6 @@ struct InventoryView: View {
             tag: item.originTag(inSharedRoom: room.map { !isMine($0) } ?? false),
             featured: isTop
         )
-    }
-
-    private func exhibit(_ info: ExhibitInfo) -> some View {
-        let item = info.item
-        return ExhibitCard(info: info) { editingStory = item }
-            .onTapGesture { opened = item.id }
-            // Fix-it (long press): rename, what is it, turn, remove a misread scan item. Delete asks first.
-            .contextMenu {
-                Button("Open", systemImage: "info.circle") { opened = item.id }
-                Button(info.story == nil ? "Add a story" : "Edit story", systemImage: "text.quote") { editingStory = item }
-                Divider()
-                ItemFixMenu(item: item) { startRename(item) }
-                Divider()
-                Button("Delete item", systemImage: "trash", role: .destructive) { deleting = item }
-                    .accessibilityIdentifier("inventory.delete.\(item.id)")
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityAction { opened = item.id }
-            .accessibilityAction(named: "Open details") { opened = item.id }
-            .accessibilityAction(named: "Edit story") { editingStory = item }
-            .accessibilityAction(named: "Rename") { startRename(item) }
-            .accessibilityAction(named: "Turn around") { Task { await store.turn(item) } }
-            .accessibilityAction(named: "Delete") { deleting = item }
-            .accessibilityIdentifier("inventory.item.\(item.id)")
     }
 
     private func startRename(_ item: Item) {
@@ -428,4 +635,17 @@ struct InventoryView: View {
 
 #Preview {
     NavigationStack { InventoryView() }.environment(MooveStore.preview())
+}
+
+/// The item a placard sheet is showing.
+struct PlacardRef: Identifiable, Hashable {
+    let id: UInt64
+}
+
+/// What a placard's button asked for, run once the sheet is gone.
+enum AfterPlacard {
+    case open(UInt64)
+    case story(Item)
+    case rename(Item)
+    case delete(Item)
 }
