@@ -14,17 +14,8 @@ struct ItemArt: View {
     var photo: Photo = .replace
 
     var body: some View {
+        // Voxel only (Lisa): photos stay on the item for the agents, but aren't shown.
         VoxelThumbnail(item, size: size, tile: false)
-            .overlay {
-                if photo == .replace {
-                    ItemPhoto(urls: item.photoUrls) { image in
-                        image.resizable().scaledToFill()
-                            .frame(width: size, height: size)
-                            .clipped()
-                            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
-                    }
-                }
-            }
     }
 }
 

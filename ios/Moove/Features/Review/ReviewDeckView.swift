@@ -3,7 +3,7 @@ import UIKit
 import MooveKit
 
 /// The flip cards at the top of Review: the whole move as a stack (`Review.flipDeck`), the items
-/// that need you first. The front is the item's photo; tap to flip to the voxel model and the
+/// that need you first. The front is the item's voxel model; tap to flip to a smaller model and the
 /// details. Swipe right = Keep, left = Sell (`ReviewSwipe`), on either side, or use the buttons
 /// (Donate and Trash are buttons only, so a vertical scroll never decides). The parent owns the
 /// decisions and the undo stack.
@@ -297,26 +297,17 @@ private struct ReviewFlipCard<Front: View, Back: View>: View {
     }
 }
 
-/// Front: the item's photo, big. While it loads the paper shows; if none loads, the voxel model.
+/// Front: the item's voxel model, big.
 private struct ReviewCardFront: View {
     let item: Item
     let range: ClosedRange<Int64>?
-    @State private var photo: UIImage?
-    @State private var tried = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // The art area takes the space it's given; the photo fills it as an overlay, so a
-            // scaled-to-fill photo can't push the card wider or taller than the deck's frame.
+            // The art area takes the space it's given, with the item's voxel model (Lisa: voxel only).
             Theme.surface2
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay {
-                    if let photo {
-                        Image(uiImage: photo).resizable().scaledToFill().transition(.opacity)
-                    } else if tried {
-                        ItemArt(item: item, size: 230, photo: .none).transition(.opacity)
-                    }
-                }
+                .overlay { ItemArt(item: item, size: 230, photo: .none) }
                 .clipped()
             .overlay(alignment: .topLeading) { ReviewCardBadge(item: item).padding(12) }
             VStack(alignment: .leading, spacing: 6) {
@@ -336,13 +327,6 @@ private struct ReviewCardFront: View {
         }
         .background(ReviewCardPaper())
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
-        .task(id: item.photoUrls) {
-            let loaded = item.photoUrls.isEmpty ? nil : await ItemPhotoLoader.load(item.photoUrls)
-            withAnimation(.easeOut(duration: 0.2)) {
-                photo = loaded
-                tried = true
-            }
-        }
     }
 }
 

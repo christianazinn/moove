@@ -73,19 +73,9 @@ struct ExhibitPlinth: View {
 
     @ViewBuilder
     private func model(size: CGFloat) -> some View {
-        // Items added by photo have no size, so no model: show the photo, framed.
-        if item.origin == .photo, let url = item.photoUrls.first.flatMap(URL.init(string:)) {
-            AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { Theme.surface2 }
-                .frame(width: size * 0.7, height: size * 0.7)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.tag))
-                .padding(5)
-                .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.Radius.tag + 2))
-                .mooveShadow(.paper)
-                .accessibilityHidden(true)
-        } else {
-            VoxelThumbnail(item, size: size, tile: false)
-                .mooveShadow(.lifted)
-        }
+        // Voxel for every item (Lisa); an item added by photo uses its kind's default size.
+        VoxelThumbnail(item, size: size, tile: false)
+            .mooveShadow(.lifted)
     }
 }
 
