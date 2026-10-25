@@ -1,0 +1,14 @@
+{
+  "c238de0a07d48eaa": {
+    "identifiedProduct": "Generic teal insulated stainless steel water bottle (brand and size unspecified)",
+    "itemForm": "full_product",
+    "specificity": 0.25,
+    "newRetailUsd": 30,
+    "p10": 6,
+    "p50": 15,
+    "p90": 30,
+    "item": "teal insulated water bottle",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

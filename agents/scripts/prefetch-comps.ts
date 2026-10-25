@@ -1,17 +1,28 @@
 // Fills fixtures/comps/ with real comps for every demo-room item (scripts/demo-room.ts), so pricing the
 // seeded room replays caches instead of calling Apify during the demo. Cached queries cost nothing;
 // each missing one runs the APIFY_SOURCES actors once (capped by APIFY_MAX_USD_PER_RUN per actor).
-// No Claude calls. Commit the new fixtures/comps/*.json (real data only).
+// It also fills each item's Claude price prior (fixtures/comps/<slug>.prior.json, one Sonnet call per
+// missing one), keyed on the item exactly as import_scan stores it, so the demo prices with no live
+// Claude calls. Commit the new fixtures/comps/*.json (real data only).
 // Usage (from agents/): npm run comps:prefetch [-- --dry]   (--dry lists what's missing, spends nothing)
 import "./env.js";
 import { existsSync } from "node:fs";
 import { cacheFile, lookupComps } from "../src/integrations/apify.js";
 import { estimate } from "../src/agents/pricing.js";
-import { DEMO_OBJECTS, demoQuery } from "./demo-room.js";
+import { pricePrior, priorCacheFile } from "../src/agents/price-prior.js";
+import { DEMO_COMMERCE_OBJECTS, DEMO_OBJECTS, demoItemDesc, demoQuery } from "./demo-room.js";
 
 const dry = process.argv.includes("--dry");
 const queries = [...new Set(DEMO_OBJECTS.map(demoQuery))];
 let failed = 0;
+for (const o of [...DEMO_OBJECTS, ...DEMO_COMMERCE_OBJECTS]) {
+  const q = demoQuery(o);
+  const p = await pricePrior(demoItemDesc(o), { cacheFile: priorCacheFile(q), cacheOnly: dry, enabled: true });
+  if (p.status === "failed") {
+    console.error(`FAILED   prior for "${q}": ${p.error}`);
+    failed++;
+  } else console.log(`${p.status === "missing" ? "MISSING" : p.status === "ok" ? "fetched" : "cached "}  prior "${q}"${"cents" in p ? `: ~$${p.cents / 100}` : ""}`);
+}
 for (const q of queries) {
   const file = cacheFile(q);
   if (dry) {

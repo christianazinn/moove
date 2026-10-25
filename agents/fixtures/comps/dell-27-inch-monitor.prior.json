@@ -1,0 +1,26 @@
+{
+  "367ae84bac547932": {
+    "identifiedProduct": "Dell 27 inch LCD monitor (unspecified model, likely S2721/P2723/SE2722 series)",
+    "itemForm": "full_product",
+    "specificity": 0.35,
+    "newRetailUsd": 200,
+    "p10": 50,
+    "p50": 90,
+    "p90": 170,
+    "item": "Dell 27 inch monitor; category electronics; 0.61 x 0.45 x 0.18 m (W x H x D)",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  },
+  "0baa4b923a20d519": {
+    "identifiedProduct": "Dell 27 inch LCD monitor (model unspecified, likely S2721 / P2722H / SE2722H class)",
+    "itemForm": "full_product",
+    "specificity": 0.35,
+    "newRetailUsd": 220,
+    "p10": 45,
+    "p50": 85,
+    "p90": 170,
+    "item": "dell 27 inch monitor",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "c6b0371bd6e500b1": {
+    "identifiedProduct": "Generic household refrigerator (brand, size, and style unspecified)",
+    "itemForm": "full_product",
+    "specificity": 0.15,
+    "newRetailUsd": 1400,
+    "p10": 100,
+    "p50": 350,
+    "p90": 900,
+    "item": "refrigerator",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

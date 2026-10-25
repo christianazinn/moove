@@ -1,0 +1,14 @@
+{
+  "edbb5cdcea34248b": {
+    "identifiedProduct": "Generic black rectangular plastic wastebasket (small to medium household trash can)",
+    "itemForm": "full_product",
+    "specificity": 0.2,
+    "newRetailUsd": 12,
+    "p10": 1.5,
+    "p50": 4,
+    "p90": 9,
+    "item": "black rectangular plastic wastebasket",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

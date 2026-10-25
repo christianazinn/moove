@@ -7,6 +7,7 @@ import type { Item } from "../src/module_bindings/types.js";
 // set before the modules read it and payments.ts's per-process rail starts fresh.
 process.env.X402_SIMULATE = "1";
 process.env.PRICING_COMP_FILTER = "0";
+process.env.PRICING_PRIOR = "0"; // the price prior would call Claude (config loads .env.local)
 delete process.env.X402_SEED_BUDGETS;
 delete process.env.AGENT_SPEND_CAP_USDC;
 delete process.env.X402_MAX_PER_CALL_USDC;

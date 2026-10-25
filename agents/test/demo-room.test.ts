@@ -5,8 +5,9 @@ import type { Item } from "../src/module_bindings/types.js";
 import { cacheFile, type Comp } from "../src/integrations/apify.js";
 import { estimate, queryFor } from "../src/agents/pricing.js";
 import { preFilter } from "../src/agents/comp-filter.js";
+import { pricePrior, priorCacheFile } from "../src/agents/price-prior.js";
 import { decide } from "../src/agents/sort.js";
-import { DEMO_COMMERCE_OBJECTS, DEMO_OBJECTS as BASE_OBJECTS, demoQuery, freshCommerceApproval, planCommerceReset } from "../scripts/demo-room.js";
+import { DEMO_COMMERCE_OBJECTS, DEMO_OBJECTS as BASE_OBJECTS, demoItemDesc, demoQuery, freshCommerceApproval, planCommerceReset } from "../scripts/demo-room.js";
 
 // Every check covers the opt-in commerce items (SEED_COMMERCE=1) too.
 const DEMO_OBJECTS = [...BASE_OBJECTS, ...DEMO_COMMERCE_OBJECTS];
@@ -37,6 +38,13 @@ test("every demo query has a committed, non-empty real comps cache that prices",
     for (const c of comps) assert.ok(c.title && c.priceCents > 0 && c.url.startsWith("http"), `${file}: bad comp ${JSON.stringify(c)}`);
     const e = estimate(comps, "");
     assert.ok(e && e.est > 0 && e.low <= e.est && e.est <= e.high, `${file}: no usable estimate`);
+  }
+});
+
+test("every demo item has a committed Claude price prior, so pricing it makes no live Claude call", async () => {
+  for (const o of DEMO_OBJECTS) {
+    const p = await pricePrior(demoItemDesc(o), { cacheFile: priorCacheFile(demoQuery(o)), cacheOnly: true, enabled: true });
+    assert.equal(p.status, "cached", `no prior for "${demoQuery(o)}": run npm run comps:prefetch`);
   }
 });
 

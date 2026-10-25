@@ -94,5 +94,7 @@ export const config = {
     vision: env('MODEL_VISION', 'claude-sonnet-5-5'),
     fast: env('MODEL_FAST', 'claude-haiku-5-5'),
     agent: env('MODEL_AGENT', 'claude-opus-5-5'),
+    // Pricing's comps-free price prior (src/agents/price-prior.ts).
+    estimate: env('MODEL_ESTIMATE', 'claude-sonnet-5-5'),
   },
 };

@@ -1,0 +1,26 @@
+{
+  "a6c01036de7b91ff": {
+    "identifiedProduct": "Herman Miller office chair (model unspecified, likely Aeron or Mirra/Embody class ergonomic task chair)",
+    "itemForm": "full_product",
+    "specificity": 0.35,
+    "newRetailUsd": 1200,
+    "p10": 150,
+    "p50": 350,
+    "p90": 750,
+    "item": "Herman Miller office chair; category chair; 0.69 x 1.04 x 0.67 m (W x H x D)",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  },
+  "162d75d5a05cbe4c": {
+    "identifiedProduct": "Herman Miller office chair (model unspecified, likely Aeron or Mirra/Sayl class ergonomic task chair)",
+    "itemForm": "full_product",
+    "specificity": 0.3,
+    "newRetailUsd": 1400,
+    "p10": 150,
+    "p50": 400,
+    "p90": 850,
+    "item": "herman miller office chair",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

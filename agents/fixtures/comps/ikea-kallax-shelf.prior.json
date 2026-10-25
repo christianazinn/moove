@@ -1,0 +1,26 @@
+{
+  "bfb68c6ba48edd2c": {
+    "identifiedProduct": "IKEA Kallax shelf unit, 2x4 cube (77 x147 cm), white or similar",
+    "itemForm": "full_product",
+    "specificity": 0.8,
+    "newRetailUsd": 110,
+    "p10": 30,
+    "p50": 55,
+    "p90": 85,
+    "item": "IKEA Kallax shelf; category storage; 0.77 x 1.47 x 0.39 m (W x H x D)",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  },
+  "6fc5f57aa83ccc17": {
+    "identifiedProduct": "IKEA KALLAX shelf unit (size/color unspecified, likely 4x2 or 2x2 white)",
+    "itemForm": "full_product",
+    "specificity": 0.5,
+    "newRetailUsd": 90,
+    "p10": 25,
+    "p50": 50,
+    "p90": 95,
+    "item": "ikea kallax shelf",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

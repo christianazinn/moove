@@ -1,0 +1,26 @@
+{
+  "38a91ae6e18bc8a6": {
+    "identifiedProduct": "Generic full-size metal bed frame (platform/standard frame, approx. 1.40 m wide)",
+    "itemForm": "full_product",
+    "specificity": 0.3,
+    "newRetailUsd": 150,
+    "p10": 25,
+    "p50": 55,
+    "p90": 110,
+    "item": "Full size metal bed frame; category bed; 1.40 x 0.36 x 1.95 m (W x H x D)",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  },
+  "7468cf45cfdcd6b5": {
+    "identifiedProduct": "Generic full size (double) metal bed frame",
+    "itemForm": "full_product",
+    "specificity": 0.3,
+    "newRetailUsd": 130,
+    "p10": 25,
+    "p50": 55,
+    "p90": 120,
+    "item": "full size metal bed frame",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

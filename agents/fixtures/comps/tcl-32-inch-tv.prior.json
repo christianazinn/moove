@@ -1,0 +1,26 @@
+{
+  "2d13e08b43a20326": {
+    "identifiedProduct": "TCL 32 inch LED TV (likely Roku/Smart 3-Series 32S3xx or similar 720p/1080p)",
+    "itemForm": "full_product",
+    "specificity": 0.45,
+    "newRetailUsd": 140,
+    "p10": 35,
+    "p50": 60,
+    "p90": 95,
+    "item": "TCL 32 inch TV; category television; 0.73 x 0.48 x 0.18 m (W x H x D)",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  },
+  "38df4f093911115e": {
+    "identifiedProduct": "TCL 32 inch LED HD/Smart TV (likely 3-Series or S3 32S327 Roku/Google TV)",
+    "itemForm": "full_product",
+    "specificity": 0.45,
+    "newRetailUsd": 125,
+    "p10": 40,
+    "p50": 70,
+    "p90": 110,
+    "item": "tcl 32 inch tv",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}

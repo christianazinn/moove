@@ -1,0 +1,26 @@
+{
+  "4ff9dcbc1f0b84c2": {
+    "identifiedProduct": "Generic compact mini refrigerator (~3.2 cu ft/90L class, 48x85x50 cm)",
+    "itemForm": "full_product",
+    "specificity": 0.35,
+    "newRetailUsd": 200,
+    "p10": 40,
+    "p50": 85,
+    "p90": 150,
+    "item": "Mini fridge; category refrigerator; 0.48 x 0.85 x 0.50 m (W x H x D)",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  },
+  "d44661a534b630ea": {
+    "identifiedProduct": "Generic compact mini refrigerator (approx. 1.7-3.2 cu ft)",
+    "itemForm": "full_product",
+    "specificity": 0.2,
+    "newRetailUsd": 150,
+    "p10": 25,
+    "p50": 60,
+    "p90": 120,
+    "item": "mini fridge",
+    "model": "claude-sonnet-5-5",
+    "photo": ""
+  }
+}
