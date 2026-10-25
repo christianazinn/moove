@@ -1,10 +1,10 @@
 import SwiftUI
 import MooveKit
 
-// The Shopping storefront's pieces: hero banner, bento item cards and deal shelves. Layout
-// decisions (who gets the big card, which deals go on which shelf) come from MooveKit
-// `SyncSnapshot.storefront()`; these views only draw them. At accessibility text sizes the grid
-// and the shelves turn into one column.
+// The Shopping storefront's pieces: hero banner, category chips and section headers, bento item
+// cards and deal shelves. Layout decisions (the categories and their order, who gets the big card,
+// which deals go on which shelf) come from MooveKit `SyncSnapshot.storefront()`; these views only
+// draw them. At accessibility text sizes the grid and the shelves turn into one column.
 
 /// Soft backdrop colors for item imagery, picked by id so a card keeps its color.
 enum StorefrontTint {
@@ -120,6 +120,113 @@ struct StorefrontBadgeView: View {
             Text(badge.label).monoText(12.5).fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(badge.tone.color)
+    }
+}
+
+// MARK: Categories
+
+extension FunctionHall {
+    /// A small sign for the category's section header and chip.
+    var shopSymbol: String {
+        switch self {
+        case .sleep: "bed.double.fill"
+        case .sitAndLounge: "sofa.fill"
+        case .workAndStudy: "desktopcomputer"
+        case .kitchenAndDining: "fork.knife"
+        case .media: "tv"
+        case .storage: "archivebox.fill"
+        case .lightAndDecor: "lamp.floor.fill"
+        case .music: "music.note"
+        case .bathAndLaundry: "shower.fill"
+        case .getAroundAndPlay: "bicycle"
+        case .everythingElse: "sparkles"
+        }
+    }
+
+    /// The category's color (works in light and dark: the theme colors are dynamic).
+    var shopTint: Color {
+        switch self {
+        case .sleep, .music: Theme.slate
+        case .sitAndLounge, .storage: Theme.ochreInk
+        case .workAndStudy, .getAroundAndPlay: Theme.accentStrong
+        case .kitchenAndDining, .bathAndLaundry: Theme.danger
+        case .media, .lightAndDecor, .everythingElse: Theme.stone
+        }
+    }
+}
+
+/// "Sleep · 1 bought" with the category's sign, over the category's cards.
+struct StorefrontSectionHeader: View {
+    let section: StorefrontSection
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: section.hall.shopSymbol)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(section.hall.shopTint)
+                .frame(width: 38, height: 38)
+                .background(section.hall.shopTint.opacity(0.16),
+                            in: RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(section.title)
+                    .monoText(20, weight: .bold, maxScale: 1.8)
+                    .foregroundStyle(Theme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !section.subtitle.isEmpty {
+                    Text(section.subtitle).monoMeta().fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityIdentifier("shopping.hall.\(section.hall.rawValue)")
+    }
+}
+
+/// All · Sit & lounge · Work & study …: tap one to scroll to its section.
+struct StorefrontCategoryChips: View {
+    let sections: [StorefrontSection]
+    var onJump: (FunctionHall?) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip("All", symbol: nil, tint: Theme.text, count: nil, id: "all") { onJump(nil) }
+                ForEach(sections) { section in
+                    chip(section.title, symbol: section.hall.shopSymbol, tint: section.hall.shopTint,
+                         count: section.toBuy > 0 ? section.toBuy : nil, id: section.hall.rawValue) { onJump(section.hall) }
+                }
+            }
+            .padding(.horizontal, Theme.gutter)
+            .padding(.vertical, 2)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Categories")
+    }
+
+    private func chip(_ title: String, symbol: String?, tint: Color, count: Int?, id: String,
+                      action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let symbol {
+                    Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(tint)
+                }
+                Text(title).monoText(13, weight: .bold, maxScale: 1.5)
+                if let count { Text("\(count)").monoText(12.5, maxScale: 1.5).foregroundStyle(Theme.muted) }
+            }
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 36)
+            .foregroundStyle(Theme.text)
+            .background(Capsule().fill(Theme.surface))
+            .overlay(Capsule().strokeBorder(Theme.line))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(count.map { "\(title), \($0) to buy" } ?? (id == "all" ? "All categories, back to top" : title))
+        .accessibilityIdentifier("shopping.chip.\(id)")
     }
 }
 
@@ -359,14 +466,23 @@ struct StorefrontShelfView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if shelf.kind == .blocked {
-                    Image(systemName: "exclamationmark.shield.fill").foregroundStyle(Theme.danger).accessibilityHidden(true)
+            if shelf.hall != nil {
+                // A category's deal row: a quiet label, since its section header is just above.
+                Text("Deals · \(shelf.deals.count)")
+                    .eyebrow()
+                    .accessibilityLabel("\(shelf.title), \(shelf.deals.count)")
+                    .accessibilityAddTraits(.isHeader)
+                    .padding(.horizontal, Theme.gutter)
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if shelf.kind == .blocked {
+                        Image(systemName: "exclamationmark.shield.fill").foregroundStyle(Theme.danger).accessibilityHidden(true)
+                    }
+                    Text(shelf.title).listHeading().accessibilityAddTraits(.isHeader)
+                    Text("\(shelf.deals.count)").monoText(13.5).foregroundStyle(Theme.muted)
                 }
-                Text(shelf.title).listHeading().accessibilityAddTraits(.isHeader)
-                Text("\(shelf.deals.count)").monoText(13.5).foregroundStyle(Theme.muted)
+                .padding(.horizontal, Theme.gutter)
             }
-            .padding(.horizontal, Theme.gutter)
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(spacing: 12) {
                     ForEach(shelf.deals) { card($0).frame(maxWidth: .infinity) }

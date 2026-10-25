@@ -114,6 +114,15 @@ Each check gives the taps, the **Expected** result, and **Report if wrong**. Pos
   - When nothing needs you, the board is at the top with "Nothing needs you".
 - **Report if wrong:** the card or column, plus a screen recording (the swipe feel is what we can't check in CI).
 
+### 16. Shopping by category (Lisa's ask)
+- **Taps:** Sell & Buy → **Shopping**. Tap each category chip under the banner (All, Sit & lounge, Work & study, …), then scroll the whole page. Repeat in dark mode and at the largest text size.
+- **Expected:**
+  - The banner stays on top. Each chip scrolls to its section (with Reduce Motion on, it jumps without animating).
+  - One section per category that has items (no empty ones), with a small colored sign and a header like "Sit & lounge · 1 to buy · from $150"; the ones that need you come first and Sleep (only the bought mattress, "Bought (simulated)") is last.
+  - Inside a section, the item cards, then a sideways **Deals** row for that category. On iPad the cards stay readable at 880 pt wide; at the largest text size everything is one column.
+  - **Blocked for your safety** (the $95 Aeron scam) is its own section at the very end.
+- **Report if wrong:** the section or chip, plus a screenshot.
+
 ## If merged (check `gh pr list` before you start; skip any that are still open)
 - **#286, Pack truck in 3D:** Move → Pack → Truck and crew (the 3D truck is on the card) → **Load the truck**. **Expected:** furniture goes in first against the cab, then boxes, with nothing overlapping. Tapping a piece shows its load order. **Report:** the piece that clips or floats, plus a screenshot. (If the 3D says a 10 ft truck while the card says Cargo van, that's known.)
 - **#285, mover quotes:** Pack → Truck and crew → **Get mover quotes**. **Expected:** three cards, each tagged **Estimate**, plus "Estimates from published rates. Call to book." Offline, they're labeled "Estimated on this phone". **Report:** the card, plus a screenshot.
