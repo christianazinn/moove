@@ -133,6 +133,16 @@ import Testing
         }
     }
 
+    @Test func roomPlanObjectsAreOnlyRejectedWhenVerySure() {
+        #expect(ObjectRecheck.checkRoomPlan(category: "storage", scores: scores(["chair": 0.9])) == .keep)   // never relabels
+        #expect(ObjectRecheck.checkRoomPlan(category: "storage", scores: scores(["none": 0.65, "storage": 0.35])) == .keep)
+        guard case .reject = ObjectRecheck.checkRoomPlan(category: "storage", scores: scores(["none": 0.5, "towel rack": 0.25])) else {
+            Issue.record("door kept"); return
+        }
+        #expect(ObjectRecheck.checkRoomPlan(category: "sink", scores: scores(["none": 0.95])) == .keep)      // not rechecked
+        #expect(ObjectRecheck.checkRoomPlan(category: "stove", scores: scores(["none": 0.95])) == .keep)
+    }
+
     @Test func emptyScoresKeep() {
         #expect(check("vacuum", [:], 0.3, 1.1, 0.3) == .keep)
     }

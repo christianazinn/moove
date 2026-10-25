@@ -59,6 +59,8 @@ final class ScanSession {
     /// Detector finds the crop classifier rejected (a wall, door, radiator...), shown in the
     /// finished screen's skipped-objects notice with the module's own skips.
     private(set) var recheckSkips: [ScanSkips.Entry] = []
+    /// Objects the extra detector found (the rest came from RoomPlan, or by photo).
+    @ObservationIgnored private var detectorObjectIDs: Set<UUID> = []
     /// Auto photos + the classifier recheck; `submit` waits for it so the import sees its verdicts.
     @ObservationIgnored private var autoPhotoTask: Task<Void, Never>?
     private(set) var geometry: RoomGeometry?
@@ -125,14 +127,20 @@ final class ScanSession {
         objects = Self.sanitized(objects)
         phase = .reviewing
         analyzeColors()
+        detectorObjectIDs = Set(extras.compactMap { UUID(uuidString: $0.id) })
         if let photographer, let geometry = self.geometry {
+            // RoomPlan's own objects only get the reject-only check, and not for categories the
+            // classifier can't express (stove, stairs...) or plumbing (sink, toilet, bathtub).
             let detectorIDs = Set(extras.map(\.id))
-            takeAutoPhotos(of: geometry.objects, recheck: geometry.objects.filter { detectorIDs.contains($0.id) }, with: photographer)
+            let recheck = geometry.objects.filter {
+                detectorIDs.contains($0.id) || !ObjectRecheck.roomPlanUnchecked.contains($0.category)
+            }
+            takeAutoPhotos(of: geometry.objects, recheck: recheck, with: photographer)
         }
     }
 
-    /// Cuts every object's photo, then has the crop classifier recheck the detector's finds
-    /// (`recheck`; RoomPlan's own objects aren't rechecked). Without the model it only cuts photos.
+    /// Cuts every object's photo, then has the crop classifier recheck `recheck` (see
+    /// `applyRecheck`). Without the model it only cuts photos.
     private func takeAutoPhotos(of objects: [RoomGeometry.Object], recheck: [RoomGeometry.Object], with photographer: AutoPhotographer) {
         autoPhotosPending = true
         autoPhotoTask = Task.detached(priority: .userInitiated) { [weak self] in
@@ -151,18 +159,22 @@ final class ScanSession {
                 let s = classifier.scores(crops[object.id] ?? [])
                 if !s.isEmpty { scores[id] = s }
             }
-            print("[recheck] classified \(scores.count) of \(recheck.count) detector objects (\(crops.values.map(\.count).reduce(0, +)) crops) in \(Int(Date().timeIntervalSince(t) * 1000)) ms")
+            print("[recheck] classified \(scores.count) of \(recheck.count) objects (\(crops.values.map(\.count).reduce(0, +)) crops) in \(Int(Date().timeIntervalSince(t) * 1000)) ms")
             await self?.applyRecheck(scores)
         }
     }
 
-    /// `ObjectRecheck` on each classified detector object: rejects are dropped (and listed in
-    /// `recheckSkips`), relabels change the category. A name the user gave wins.
+    /// `ObjectRecheck` on each classified object: detector finds by `check`, RoomPlan's (by
+    /// origin, not category name) by the reject-only `checkRoomPlan`. Rejects are dropped (and
+    /// listed in `recheckSkips`), relabels change the category. A name the user gave wins.
     private func applyRecheck(_ scores: [UUID: [String: Double]]) {
         for (id, s) in scores {
-            guard let object = objects.first(where: { $0.id == id }), object.label == nil else { continue }
-            switch ObjectRecheck.check(detectorCategory: object.category, scores: s,
-                                       width: object.widthM, height: object.heightM, depth: object.depthM) {
+            guard let object = objects.first(where: { $0.id == id }), object.label == nil, !object.manual else { continue }
+            let verdict = detectorObjectIDs.contains(id)
+                ? ObjectRecheck.check(detectorCategory: object.category, scores: s,
+                                      width: object.widthM, height: object.heightM, depth: object.depthM)
+                : ObjectRecheck.checkRoomPlan(category: object.category, scores: s)
+            switch verdict {
             case .keep:
                 break
             case let .relabel(category, reason):

@@ -17,7 +17,9 @@ import Foundation
 ///   detector's category and the classifier doesn't back it;
 /// - else keep.
 /// Thresholds were tuned on the public benchmark split (the detector's own picks on
-/// 912 public crops); see the PR for the iPad numbers. RoomPlan's objects aren't rechecked.
+/// 912 public crops); see the PR for the iPad numbers. Objects RoomPlan found get the
+/// stricter reject-only `checkRoomPlan`. Detector finds can carry RoomPlan's category
+/// names (a door as "storage", a wall as "refrigerator"); they still get `check`.
 public enum ObjectRecheck {
     public enum Verdict: Equatable, Sendable {
         case keep
@@ -48,6 +50,22 @@ public enum ObjectRecheck {
     public static let tableStorageCutM = 0.9
 
     static func group(_ category: String) -> String { sameAs[category] ?? category }
+
+    /// RoomPlan's own objects were right 27 of 28 times on the iPad scans, where the classifier
+    /// alone got ~75%, so for them it may only reject, and only when this sure.
+    public static let roomPlanRejectThreshold = 0.7
+    /// RoomPlan categories the classifier has no class for, or that are fixtures already
+    /// (a sink is plumbing either way): not rechecked.
+    public static let roomPlanUnchecked: Set<String> = ["dishwasher", "oven", "stove", "fireplace", "stairs", "sink", "toilet", "bathtub"]
+
+    /// The recheck for an object RoomPlan found (by origin, not category name): `.reject` when
+    /// `none` + fixtures add up to `roomPlanRejectThreshold`, else `.keep`. Never relabels.
+    public static func checkRoomPlan(category: String, scores: [String: Double]) -> Verdict {
+        guard !roomPlanUnchecked.contains(category) else { return .keep }
+        let p = scores.filter { $0.key == notAnObject || fixtures.contains($0.key) }.values.reduce(0, +)
+        guard p >= roomPlanRejectThreshold else { return .keep }
+        return .reject(reason: "not an object (\(Int((p * 100).rounded()))% sure), RoomPlan said \(category)")
+    }
 
     /// `scores`: classifier probability per Moove category (all of its categories, summing
     /// to 1, e.g. `ObjectClassifierHead.scores`). Sizes are the box's width, height, depth (m).
