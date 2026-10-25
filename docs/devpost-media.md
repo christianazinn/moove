@@ -70,7 +70,7 @@ gh run download <run-id> -R christianazinn/moove -n devpost-screenshots -D ~/Des
 - **State:** Spending as paper receipts in Courier, scrolled to the Pricing agent receipt ("MOOVE · AGENT SPENDING", "PRICING AGENT", "3 lookups"): the line "Premium comps for "Herman Miller Aeron"", `x402`, "$0.01", **"PAID ON BASE SEPOLIA"**, **"TX 0xc794…136c"**, and below it lines with the filled **SIMULATED** mark and no link. CI also saves `03a-spending-top` (the page top: "Where the money went." and the totals tape **SPENT $0.01**, **SIMULATED $180.005**, **REFUSED 1**).
 - **Caption:** "The pricing agent pays for its own comps, $0.01 USDC per lookup over x402: the Base Sepolia line is a real transaction, and every SIMULATED line is simulated."
 - **Track:** Coinbase x402 (the headline image), Apify (the comps come from Apify's eBay sold and Marketplace actors), Spacetime (each payment is a `payment` row).
-- Don't capture this on the Demo backend: its worker has no CDP keys, so there's no real row there.
+- Capture this on the Offline demo, whose rows are known in advance. (The hosted worker has CDP keys since Sat ~12:40 PM, but a joined phone's Spending shows only its own payments.)
 
 ### 5. Sell & Buy > Approvals: a $410 listing waits for you
 - **Source:** CI `05-approvals`.
