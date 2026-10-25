@@ -284,7 +284,9 @@ async function checkoutChosen(conn: Conn, s: ShoppingItem, key: string): Promise
   const blocked = visa.spendBlocker(AGENT, s.owner, d.priceCents);
   if (blocked) {
     settled.add(key);
-    logEvent(conn, { ...ref, kind: 'error', message: `Not buying "${d.title}": ${blocked}`, data: { rail: 'visa', refused: true, remainingCents: visa.remaining(AGENT, s.owner) } });
+    // Labeled like visa.ts's own rail events, so the spending log never shows an unlabeled card step.
+    const tag = visa.simulated ? '[SIMULATED] ' : visa.mode.startsWith('sandbox') ? '[VISA SANDBOX] ' : '';
+    logEvent(conn, { ...ref, kind: 'error', message: `${tag}Not buying "${d.title}": ${blocked}`, data: { rail: 'visa', refused: true, simulated: visa.simulated, remainingCents: visa.remaining(AGENT, s.owner) } });
     return;
   }
 
