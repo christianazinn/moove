@@ -62,24 +62,27 @@ import Testing
 
     @Test func demoPlanUsesFewBoxes() {
         let p = plan
-        // Before consolidation the demo came out as 16 boxes, most of them half empty.
-        #expect(p.boxes.count <= 9)
-        #expect(p.boxes.filter { !$0.openFirst && !$0.keepWithYou }.count <= 7)
+        // Before consolidation the demo came out as 16 boxes, most of them half empty; Lisa wants about 5.
+        // The light-move estimate fills one box per room, except the bedroom: the scanned lamp shade
+        // is fragile (8 kg at most), so the books and clothes ride in a second box.
+        #expect(p.boxes.count <= 6)
+        #expect(p.boxes.filter { !$0.openFirst && !$0.keepWithYou }.count <= 4)
         let living = p.boxes.filter { $0.room == "Living room" }
-        #expect(living.count == 2)
+        #expect(living.count == 1)
         let padded = try! #require(living.first { $0.fragile })
         #expect(padded.reason == "Throws pad the vases, under 8 kg")
         #expect(padded.contents.contains { $0.name == "Throws and cushions" })
         #expect(padded.contents.contains { $0.name == "Vases and ceramics" })
-        // Books are estimated once (one scanned room), in the living room, with the board games.
+        #expect(padded.contents.contains { $0.name == "Board games and media" })
+        // Books are estimated once (one scanned room), in the bedroom, never with the fragile shade.
         let books = p.boxes.filter { $0.kinds.contains("books") }
         #expect(books.count == 1)
-        #expect(books.first?.room == "Living room")
-        #expect(books.first?.contents.contains { $0.name == "Board games and media" } == true)
-        // Bedding and shoes ride under the hanging clothes.
-        let wardrobe = try! #require(p.boxes.first { $0.size == .wardrobe })
-        #expect(wardrobe.kinds.contains("hanging") && wardrobe.kinds.contains("bedding"))
-        #expect(wardrobe.reason == "On hangers, soft things packed below")
+        #expect(books.first?.room == "Bedroom")
+        #expect(books.first?.fragile == false)
+        #expect(p.boxes.filter { $0.room == "Bedroom" }.count == 2)
+        // One dish pack holds the kitchen; a light move folds its clothes (no wardrobe box).
+        #expect(p.boxes.filter { $0.room == "Kitchen" }.map(\.size) == [.dishPack])
+        #expect(!p.boxes.contains { $0.size == .wardrobe })
     }
 
     @Test(arguments: [0, 1, 2]) func consolidatedBoxesKeepTheRules(input: Int) {
@@ -174,15 +177,17 @@ import Testing
     }
 
     @Test func typicalBooksAreCountedOncePerScannedRoom() {
-        // Demo: one scanned bedroom, headed for a bedroom and a living room: one room's worth of books.
+        // Demo: one scanned bedroom, headed for a bedroom and a living room: one room's worth of books
+        // (the light-move living room has none, so they're the bedroom's).
         let rooms = Set(plan.boxes.filter { $0.kinds.contains("books") }.map(\.room))
-        #expect(rooms == ["Living room"])
-        // Two scanned rooms: both get their books.
+        #expect(rooms == ["Bedroom"])
+        // Two scanned rooms headed for a bedroom, a living room and an office: two rooms' worth,
+        // the office's first, then the bedroom's.
         var two = items
         for i in two.indices where two[i].id == 13 { two[i].roomId = 2 } // the Kallax came from a second room
-        let p = PackingPlanner.plan(items: two)
+        let p = PackingPlanner.plan(items: two, destinationRoom: [13: "Office"])
         let bookRooms = Set(p.boxes.filter { $0.kinds.contains("books") }.map(\.room))
-        #expect(bookRooms == ["Bedroom", "Living room"])
+        #expect(bookRooms == ["Bedroom", "Office"])
     }
 
     @Test func estimatedContentsAreMarked() {
