@@ -10,7 +10,19 @@ import MooveKit
 /// items use their flat wall model.
 @MainActor
 final class FurnitureLayer {
+    /// How pieces first appear. `.flyIn` (default, the Move page and scan results) is the arc
+    /// from the old room / pile; `.dropIn` (the Scan hero) builds the room from above.
+    enum Entrance {
+        case flyIn
+        /// Pieces drop a short way onto their spots layer by layer (floor pieces, then things on
+        /// them, wall pieces last), staggered, with a tiny settle; just shown with Reduce Motion.
+        case dropIn
+    }
+
     let root = Entity()
+    /// The house shell; a drop-in waits until it's built, so pieces never fall into nothing.
+    weak var shell: NewHomeScene?
+    private var dropping: Task<Void, Never>?
     private var entities: [UInt64: ModelEntity] = [:]
     /// Items currently shown with their flat wall-hung model.
     private var wallModels: Set<UInt64> = []
@@ -27,7 +39,14 @@ final class FurnitureLayer {
     /// Shows `placements`, flying in if `flyIn` (from `starts` where an item has one, else from the
     /// pile), otherwise gliding from where items are. Returns how long the fly-in takes (0 if none).
     @discardableResult
-    func show(_ placements: [Placement], items list: [LayoutItem], plan: FloorPlan, flyIn: Bool, starts: FlyInStarts? = nil) -> Double {
+    func show(_ placements: [Placement], items list: [LayoutItem], plan: FloorPlan, flyIn: Bool, starts: FlyInStarts? = nil,
+              entrance: Entrance = .flyIn) -> Double {
+        if let dropping {
+            // Interrupted drop: show every piece again (the moves below put them in place).
+            dropping.cancel()
+            self.dropping = nil
+            for e in entities.values { e.isEnabled = true }
+        }
         flight?.cancel()
         oldRoomsTask?.cancel()
         oldRooms.children.removeAll()
@@ -51,6 +70,9 @@ final class FurnitureLayer {
             newcomers.insert(p.itemId)
         }
 
+        if flyIn, entrance == .dropIn {
+            return dropIn(placed)
+        }
         if flyIn {
             // Scanned spot in the old room when known; the pile for the rest (added by photo, no scan).
             let scanned = starts?.placements ?? [:]
@@ -92,6 +114,84 @@ final class FurnitureLayer {
             }
             return 0
         }
+    }
+
+    /// The `.dropIn` entrance: each piece starts hidden a short way above its spot, then
+    /// appears and falls onto it (ease-out), squashes a hair and settles. Floor pieces first
+    /// (biggest first), then things on furniture (lowest first), wall pieces last; ≤ 2 s in all.
+    /// Transform-only: the entities are already built. Returns how long it takes.
+    private func dropIn(_ placed: [Placement]) -> Double {
+        let targets = Dictionary(placed.map { ($0.itemId, transform(for: $0)) }, uniquingKeysWith: { a, _ in a })
+        if Self.showsWithoutMotion {
+            for (id, t) in targets { entities[id]?.transform = t }
+            return 0
+        }
+        func tier(_ p: Placement) -> Int {
+            p.isWallMounted ? 2 : (p.onTopOf != nil || (p.elevationM ?? 0) > 0.05 ? 1 : 0)
+        }
+        let order = placed.sorted { a, b in
+            (tier(a), a.elevationM ?? 0, -area(a), a.itemId) < (tier(b), b.elevationM ?? 0, -area(b), b.itemId)
+        }
+        let fall = 0.42, squash = 0.07, recover = 0.12
+        let lift: [Float] = [0.55, 0.38, 0.3]
+        let stagger = order.count > 1 ? min(0.085, max(0.03, (2.0 - fall - squash - recover) / Double(order.count - 1))) : 0
+
+        struct Step {
+            var at: Double
+            var id: UInt64
+            var appear: Transform?
+            var to: Transform
+            var duration: Double
+            var timing: AnimationTimingFunction
+        }
+        var steps: [Step] = []
+        for (i, p) in order.enumerated() {
+            guard let target = targets[p.itemId] else { continue }
+            let t0 = Double(i) * stagger
+            var from = target
+            from.translation.y += lift[tier(p)]
+            var squashed = target
+            squashed.scale = [1.03, 0.95, 1.03]
+            steps.append(Step(at: t0, id: p.itemId, appear: from, to: target, duration: fall, timing: .easeOut))
+            steps.append(Step(at: t0 + fall, id: p.itemId, to: squashed, duration: squash, timing: .easeOut))
+            steps.append(Step(at: t0 + fall + squash, id: p.itemId, to: target, duration: recover, timing: .easeInOut))
+            entities[p.itemId]?.transform = target
+            entities[p.itemId]?.isEnabled = false
+        }
+        let timeline = steps.sorted { $0.at < $1.at }
+
+        dropping = Task { [weak self] in
+            // Wait for the shell (up to 3 s), so the room is there before anything falls into it.
+            let waitStart = ContinuousClock.now
+            while self?.shell?.isBuilt == false, ContinuousClock.now - waitStart < .seconds(3) {
+                try? await Task.sleep(for: .milliseconds(16))
+                if Task.isCancelled { return }
+            }
+            let start = ContinuousClock.now
+            for step in timeline {
+                let at = start + .milliseconds(Int(step.at * 1000))
+                if at > ContinuousClock.now { try? await Task.sleep(until: at, clock: .continuous) }
+                guard let self, !Task.isCancelled else { return }
+                guard let e = self.entities[step.id] else { continue }
+                if let appear = step.appear {
+                    e.transform = appear
+                    e.isEnabled = true
+                }
+                _ = e.move(to: step.to, relativeTo: self.root, duration: step.duration, timingFunction: step.timing)
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.dropping = nil
+        }
+        return timeline.map { $0.at + $0.duration }.max() ?? 0
+    }
+
+    /// Reduce Motion, and UI tests (screenshots want the finished room): no drop.
+    private static var showsWithoutMotion: Bool {
+        if UIAccessibility.isReduceMotionEnabled { return true }
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["MOOVE_UI_TEST_RESET"] != nil { return true }
+        #endif
+        return false
     }
 
     /// The old rooms as low voxel shells (floor and a short wall stub) where the fly-in starts.

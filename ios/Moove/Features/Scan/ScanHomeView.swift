@@ -14,7 +14,8 @@ struct ScanHomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                ScanHomeHero { openRoom = $0 }
+                PageHeader(title: "Scan a room.")
+                ScanHomeHero { openRoom = $0 }.padding(.top, Theme.Space.xl)
                 startScan.padding(.top, Theme.Space.xl)
                 if !store.visibleRooms.isEmpty {
                     VStack(spacing: Theme.Space.s) {

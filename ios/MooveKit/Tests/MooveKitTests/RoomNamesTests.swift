@@ -49,6 +49,18 @@ import Testing
         #expect(RoomNames.guess([RoomNames.Object(category: "table", name: "Standing desk"), RoomNames.Object(category: "chair")]) == "Office")
     }
 
+    @Test func theRoomWithTheMostSignsWins() {
+        // One misread nightstand in a living room doesn't make it a bedroom.
+        #expect(guess("sofa", "television", "nightstand") == "Living room")
+        // A desk setup with a stray dresser is still an office.
+        #expect(RoomNames.guess([RoomNames.Object(category: "table", name: "Desk"), RoomNames.Object(category: "chair", attributes: ["ChairType.swivel"]),
+                                 RoomNames.Object(category: "monitor"), RoomNames.Object(category: "storage", name: "dresser")]) == "Office")
+        // A kitchen with a sink and no counter found is still a kitchen.
+        #expect(guess("refrigerator", "stove", "sink") == "Kitchen")
+        // A real bed still beats a sofa.
+        #expect(guess("bed", "sofa") == "Bedroom")
+    }
+
     @Test func wordsSplitCamelCase() {
         let words = RoomNames.words(of: RoomNames.Object(category: "washerDryer", attributes: ["ChairType.swivel"]))
         #expect(words.contains("washer") && words.contains("dryer") && words.contains("washerdryer"))

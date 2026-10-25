@@ -21,8 +21,13 @@ struct FloorPlan3DView: UIViewRepresentable {
     var floorColor: VoxelColor? = nil
     /// Turn slowly around the home (Scan home hero). Off with Reduce Motion.
     var autoOrbit = false
+    /// How pieces first appear: the fly-in (default), or `.dropIn` (Scan hero: built from above).
+    var entrance: FurnitureLayer.Entrance = .flyIn
     /// False: no gestures, so a scroll view around it still scrolls (taps pass through).
     var interactive = true
+    /// Called once per fly-in after its finale: one slow turn around the furnished home that
+    /// settles on the default 3/4 view (no turn with Reduce Motion; a touch stops it early).
+    var onFlyInFinale: (@MainActor () -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -49,8 +54,9 @@ struct FloorPlan3DView: UIViewRepresentable {
     }
 
     private func update(_ coordinator: Coordinator, animated: Bool) {
+        coordinator.onFinale = onFlyInFinale
         coordinator.show(plan, focusRoom: focusRoom, animated: animated, wallColor: wallColor, floorColor: floorColor)
-        coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken, starts: flyInStarts)
+        coordinator.showFurniture(placements, items: items, plan: plan, flyInToken: flyInToken, starts: flyInStarts, entrance: entrance)
         coordinator.setAutoOrbit(autoOrbit)
     }
 
@@ -77,6 +83,10 @@ struct FloorPlan3DView: UIViewRepresentable {
         /// Back to the house after a fly-in that framed the old room too.
         private var reframe: Task<Void, Never>?
         private var orbitLoop: Task<Void, Never>?
+        /// The fly-in finale (wait for the last piece, then one slow turn); nil when not pending.
+        private var finale: Task<Void, Never>?
+        var onFinale: (@MainActor () -> Void)?
+        private weak var touchDown: UIGestureRecognizer?
         private var fov: Float { Self.fieldOfView }
 
         func attach(to view: ARView, interactive: Bool = true) {
@@ -85,6 +95,7 @@ struct FloorPlan3DView: UIViewRepresentable {
             anchor.addChild(camera)
             anchor.addChild(scene.root)
             anchor.addChild(furniture.root)
+            furniture.shell = scene
 
             // Warm key light from front-right and above, casting soft shadows into the rooms.
             sun.light.color = Theme.uiColor(0xFFE4C2)
@@ -107,7 +118,13 @@ struct FloorPlan3DView: UIViewRepresentable {
             let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinch(_:)))
             let reset = UITapGestureRecognizer(target: self, action: #selector(reset(_:)))
             reset.numberOfTapsRequired = 2
-            for g in [orbit, pan, pinch, reset] as [UIGestureRecognizer] {
+            // Any touch on the view stops the finale's turn at once (before a drag is recognized).
+            let touch = UILongPressGestureRecognizer(target: self, action: #selector(touched(_:)))
+            touch.minimumPressDuration = 0
+            touch.cancelsTouchesInView = false
+            touch.delaysTouchesEnded = false
+            touchDown = touch
+            for g in [orbit, pan, pinch, reset, touch] as [UIGestureRecognizer] {
                 g.delegate = self
                 view.addGestureRecognizer(g)
             }
@@ -122,15 +139,19 @@ struct FloorPlan3DView: UIViewRepresentable {
             frame(on: focusRoom.flatMap(plan.room(named:))?.bounds ?? plan.bounds, animated: animated && !planChanged)
         }
 
-        func showFurniture(_ placements: [Placement], items: [LayoutItem], plan: FloorPlan, flyInToken: Int, starts: FlyInStarts? = nil) {
+        func showFurniture(_ placements: [Placement], items: [LayoutItem], plan: FloorPlan, flyInToken: Int, starts: FlyInStarts? = nil,
+                           entrance: FurnitureLayer.Entrance = .flyIn) {
             guard placements != shownPlacements || flyInToken != shownFlyIn else { return }
             // Hold the fly-in until there's something to fly.
             let flyIn = flyInToken != shownFlyIn && !placements.isEmpty
             shownPlacements = placements
             if !placements.isEmpty { shownFlyIn = flyInToken }
-            let duration = furniture.show(placements, items: items, plan: plan, flyIn: flyIn, starts: starts)
+            let duration = furniture.show(placements, items: items, plan: plan, flyIn: flyIn, starts: starts, entrance: entrance)
             // Flying from the old room: pull back so it's in view too, then settle on the house.
             reframe?.cancel()
+            finale?.cancel()
+            finale = nil
+            if flyIn { scheduleFinale(after: duration + 0.4) }
             guard flyIn, shownFocus == .some(nil), let old = starts?.bounds,
                   starts?.placements.keys.contains(where: { id in placements.contains { $0.itemId == id } }) == true else { return }
             let b = plan.bounds
@@ -150,18 +171,71 @@ struct FloorPlan3DView: UIViewRepresentable {
             orbitLoop?.cancel()
             orbitLoop = nil
             guard on else { return }
+            // Stepped on every rendered frame by its real duration (a 33 ms timer judders
+            // against 60/120 Hz displays). The task only holds the subscription until cancelled.
             orbitLoop = Task { [weak self] in
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(33))
-                    guard let self, !Task.isCancelled else { return }
-                    self.yaw += 2 * .pi / (60 * 30)
-                    self.updateCamera()
+                let tick = self?.view?.scene.subscribe(to: SceneEvents.Update.self) { [weak self] event in
+                    let dt = Float(min(event.deltaTime, 0.1))
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        self.yaw += 2 * .pi / 60 * dt
+                        self.updateCamera()
+                    }
                 }
+                while !Task.isCancelled, self != nil {
+                    try? await Task.sleep(for: .seconds(1))
+                }
+                tick?.cancel()
             }
         }
 
         private func stopAutoOrbit() {
             orbitLoop?.cancel()
+            endFinale()
+        }
+
+        /// After the last piece lands: one slow turn (~7 s, at least 300°) easing onto the
+        /// default 3/4 view, then `onFinale`. Reduce Motion skips the turn.
+        private func scheduleFinale(after delay: Double) {
+            finale = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(delay))
+                guard let self, !Task.isCancelled else { return }
+                if UIAccessibility.isReduceMotionEnabled || self.orbitLoop != nil || self.view == nil {
+                    self.endFinale()
+                    return
+                }
+                let startYaw = self.yaw, startPitch = self.pitch
+                let full = 2 * Float.pi
+                var turn = (Self.defaultYaw - startYaw).truncatingRemainder(dividingBy: full)
+                if turn < 0 { turn += full }
+                if turn < full * 300 / 360 { turn += full }
+                let seconds = 7.0, frameTime = 1.0 / 30
+                let start = ContinuousClock.now
+                while true {
+                    try? await Task.sleep(for: .seconds(frameTime))
+                    guard !Task.isCancelled else { return }
+                    let t = Float(min((ContinuousClock.now - start) / .seconds(seconds), 1))
+                    let eased = t * t * (3 - 2 * t)
+                    self.yaw = startYaw + turn * eased
+                    self.pitch = startPitch + (Self.defaultPitch - startPitch) * eased
+                    self.updateCamera()
+                    if t >= 1 { break }
+                }
+                self.yaw = Self.defaultYaw
+                self.endFinale()
+            }
+        }
+
+        /// Stops a running finale and reports it done (once); no-op if none is pending.
+        private func endFinale() {
+            guard let task = finale else { return }
+            task.cancel()
+            finale = nil
+            onFinale?()
+        }
+
+        @objc private func touched(_ g: UILongPressGestureRecognizer) {
+            if g.state == .began { endFinale() }
         }
 
         private func frame(on bounds: PlanBounds, animated: Bool) {
@@ -247,7 +321,8 @@ struct FloorPlan3DView: UIViewRepresentable {
         }
 
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-            (g is UIPinchGestureRecognizer) != (other is UIPinchGestureRecognizer)
+            if g === touchDown || other === touchDown { return true }
+            return (g is UIPinchGestureRecognizer) != (other is UIPinchGestureRecognizer)
         }
     }
 }
