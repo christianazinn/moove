@@ -49,10 +49,95 @@ struct SpendingSection: View {
 
     @ViewBuilder
     private func receiptStack(_ receipts: SpendingReceipts, sharedRoom: Bool = false) -> some View {
-        ForEach(receipts.receipts) { receipt in
-            ReceiptCard(receipt: receipt, sharedRoom: sharedRoom)
-                .padding(.top, 28)
-                .transition(AnyTransition.printing(reduceMotion: reduceMotion))
+        if !receipts.receipts.isEmpty {
+            ReceiptCarousel(receipts: receipts.receipts, sharedRoom: sharedRoom)
+                .padding(.top, 24)
+        }
+    }
+}
+
+/// The receipts side by side, one per page (newest first): swipe between them, the next one peeks in
+/// at the edge, and "2 / 3" with previous/next buttons sits under them. Long receipts fold to their
+/// first `ReceiptCard.foldAt` lines.
+struct ReceiptCarousel: View {
+    let receipts: [SpendingReceipt]
+    var sharedRoom = false
+    @State private var current: SpendingReceipt.ID?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var index: Int { current.flatMap { id in receipts.firstIndex { $0.id == id } } ?? 0 }
+    private var prefix: String { sharedRoom ? "receipts.room" : "receipts" }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                // Not lazy: every receipt stays in the accessibility tree, so VoiceOver can reach them.
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(Array(receipts.enumerated()), id: \.element.id) { i, receipt in
+                        ReceiptCard(receipt: receipt, sharedRoom: sharedRoom, position: (i + 1, receipts.count))
+                            .containerRelativeFrame(.horizontal) { width, _ in
+                                receipts.count > 1 ? width * 0.88 : width
+                            }
+                            .padding(.vertical, 8)  // room for the paper's shadow
+                            .id(receipt.id)
+                            .transition(AnyTransition.printing(reduceMotion: reduceMotion))
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: $current)
+            .scrollClipDisabled()
+            if receipts.count > 1 { pager }
+        }
+    }
+
+    private var pager: some View {
+        HStack(spacing: 16) {
+            Button { go(index - 1) } label: { Image(systemName: "chevron.left") }
+                .disabled(index == 0)
+                .accessibilityLabel("Previous receipt")
+                .accessibilityIdentifier("\(prefix).previous")
+            HStack(spacing: 6) {
+                ForEach(receipts.indices, id: \.self) { i in
+                    Circle()
+                        .fill(i == index ? Theme.text : Theme.lineStrong)
+                        .frame(width: 6, height: 6)
+                }
+                Text("\(index + 1) / \(receipts.count)")
+                    .monoText(13)
+                    .foregroundStyle(Theme.muted)
+                    .padding(.leading, 4)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Receipt \(index + 1) of \(receipts.count)")
+            .accessibilityValue(receipts[index].title)
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: go(index + 1)
+                case .decrement: go(index - 1)
+                @unknown default: break
+                }
+            }
+            .accessibilityIdentifier("\(prefix).pager")
+            Button { go(index + 1) } label: { Image(systemName: "chevron.right") }
+                .disabled(index >= receipts.count - 1)
+                .accessibilityLabel("Next receipt")
+                .accessibilityIdentifier("\(prefix).next")
+        }
+        .font(.system(size: 15, weight: .semibold))
+        .buttonStyle(.plain)
+        .foregroundStyle(Theme.text)
+        .frame(minHeight: 44)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func go(_ i: Int) {
+        guard receipts.indices.contains(i) else { return }
+        if reduceMotion {
+            current = receipts[i].id
+        } else {
+            withAnimation(.easeOut(duration: 0.3)) { current = receipts[i].id }
         }
     }
 }
@@ -97,16 +182,32 @@ struct SpendingTape: View {
 struct ReceiptCard: View {
     let receipt: SpendingReceipt
     var sharedRoom = false
+    /// "Receipt 2 of 3" for VoiceOver in the carousel.
+    var position: (Int, Int)? = nil
+    @State private var showAllLines = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// A receipt longer than this shows its first lines and "Show all N lines".
+    static let foldAt = 8
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             DashedRule()
             VStack(alignment: .leading, spacing: 16) {
-                ForEach(receipt.lines) { line in
+                let folded = receipt.lines.count > Self.foldAt && !showAllLines
+                ForEach(folded ? Array(receipt.lines.prefix(Self.foldAt)) : receipt.lines) { line in
                     ReceiptLineView(line: line, sharedRoom: sharedRoom)
                         .transition(AnyTransition.printing(reduceMotion: reduceMotion))
+                }
+                if receipt.lines.count > Self.foldAt {
+                    Button(showAllLines ? "SHOW FEWER LINES" : "SHOW ALL \(receipt.lines.count) LINES") {
+                        if reduceMotion { showAllLines.toggle() } else { withAnimation { showAllLines.toggle() } }
+                    }
+                    .courier(13, bold: true)
+                    .foregroundStyle(Theme.accentStrong)
+                    .frame(minHeight: 44, alignment: .leading)
+                    .accessibilityIdentifier("receipt.showAll.\(receipt.id)")
                 }
             }
             DashedRule()
@@ -149,7 +250,8 @@ struct ReceiptCard: View {
 
     private var headerSpoken: String {
         let when = receipt.startedAt.formatted(date: .abbreviated, time: .shortened)
-        return (sharedRoom ? "\(SpendingSplit.roomTag). " : "")
+        return (position.map { "Receipt \($0.0) of \($0.1). " } ?? "")
+            + (sharedRoom ? "\(SpendingSplit.roomTag). " : "")
             + "Receipt, \(receipt.title), \(receipt.subtitle), \(when)"
     }
 

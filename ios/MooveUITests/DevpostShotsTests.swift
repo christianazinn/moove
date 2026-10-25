@@ -49,7 +49,16 @@ final class DevpostShotsTests: XCTestCase {
         _ = scrollTo(byId("spending.totals"))
         shot("03a-spending-top")
         // The headline image: the pricing agent's receipt with the real Base Sepolia line.
-        _ = scrollTo(byId("payment.basescan.500"))
+        // The receipts page sideways: Next until the pricing receipt is on screen.
+        let basescan = byId("payment.basescan.500")
+        let next = byId("receipts.next")
+        if scrollTo(next) {
+            for _ in 0..<6 where !(basescan.frame.minX >= 0 && basescan.frame.maxX <= app.windows.firstMatch.frame.maxX) && next.isEnabled {
+                next.tap()
+                sleep(1)
+            }
+        }
+        _ = scrollTo(basescan)
         shot("03-spending")
 
         // 6. Sell & Buy > Shopping > Desk chair: the planted scam deal is blocked.
